@@ -6,262 +6,110 @@ you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 */
 
 package mongodb
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"strings"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // UserRole represents a MongoDB role assignment
 type UserRole struct {
-	Role string `json:"role"`
-	DB   string `json:"db"`
+	Role string `json:"role" bson:"role"`
+	DB   string `json:"db" bson:"db"`
 }
 
 // MongoUser represents a MongoDB user
 type MongoUser struct {
-	Username string     `json:"user"`
-	Password string     `json:"pwd"`
-	Database string     `json:"db"` // Database where user is defined
-	Roles    []UserRole `json:"roles"`
+	Username string     `json:"user" bson:"user"`
+	Password string     `json:"pwd" bson:"pwd"`
+	Database string     `json:"db" bson:"db"`
+	Roles    []UserRole `json:"roles" bson:"roles"`
 }
 
-// AuthManager manages MongoDB authentication
+// AuthManager는 mongo-go-driver를 사용해 MongoDB 인증/사용자 관리를 수행한다.
+//
+// 본 매니저의 핵심 의도 변화: 첫 admin user는 mongodb pod의 lifecycle.postStart
+// hook이 만든다(Commit 2). 따라서 매니저의 CreateAdminUser는 더 이상 user를
+// "생성"하지 않고 "이미 존재하는 admin user에 인증할 수 있는지 검증"한다.
+//
+// 시그니처 호환을 유지하기 위해 기존 메서드 이름과 인자는 그대로 두지만
+// 내부 구현은 driver 기반이며, adminUser/adminPassword 인자는 무시된다
+// (factory가 자격증명을 캡슐화).
 type AuthManager struct {
-	executor *Executor
+	connect ConnectFactory
 }
 
-// NewAuthManager creates a new auth manager
+// NewAuthManagerWithFactory는 driver client factory를 주입받아 매니저를 만든다.
+// 권장 생성자.
+func NewAuthManagerWithFactory(f ConnectFactory) *AuthManager {
+	return &AuthManager{connect: f}
+}
+
+// NewAuthManager — Deprecated. Executor 기반 동작은 제거됐다.
 func NewAuthManager() (*AuthManager, error) {
-	exec, err := NewExecutor()
-	if err != nil {
-		return nil, err
-	}
-	return &AuthManager{executor: exec}, nil
+	return nil, errors.New("NewAuthManager는 deprecated. NewAuthManagerWithFactory(factory) 사용")
 }
 
-// NewAuthManagerWithExecutor creates a new auth manager with provided executor
+// NewAuthManagerWithExecutor — Deprecated. Commit 6에서 완전 제거.
 func NewAuthManagerWithExecutor(exec *Executor) *AuthManager {
-	return &AuthManager{executor: exec}
+	panic("NewAuthManagerWithExecutor는 deprecated. NewAuthManagerWithFactory 사용")
 }
 
-// CreateAdminUser creates the initial admin user using localhost exception
-// This must be run when no users exist (localhost exception allows first user creation)
+// CreateAdminUser는 admin user에 인증할 수 있는지 검증한다.
+//
+// 이전 동작: localhost exception으로 mongosh exec → createUser.
+// 새 동작: pod의 postStart bootstrap이 이미 user를 만들었다고 가정. driver로
+// 인증 시도해 user 존재와 password 정확성을 동시 검증.
+//
+// adminUser/password 인자는 factory가 캡슐화한 자격증명과 동일해야 의미 있다.
+// 호환성을 위해 시그니처 유지.
 func (a *AuthManager) CreateAdminUser(ctx context.Context, podName, namespace, username, password string) error {
 	return a.CreateAdminUserInContainer(ctx, podName, namespace, "mongodb", username, password, 27017)
 }
 
-// CreateAdminUserInContainer creates the initial admin user in a specified container
+// CreateAdminUserInContainer는 CreateAdminUser와 같지만 container 인자는 driver
+// 모델에서 의미가 없으므로 무시된다. (mongosh exec 시대의 잔재)
 func (a *AuthManager) CreateAdminUserInContainer(ctx context.Context, podName, namespace, container, username, password string, port int) error {
-	roles := []UserRole{
-		{Role: "root", DB: "admin"},
-	}
-
-	rolesJSON, err := json.Marshal(roles)
+	exists, err := a.UserExistsInContainer(ctx, podName, namespace, container, username, "admin", port)
 	if err != nil {
-		return fmt.Errorf("failed to marshal roles: %w", err)
+		return fmt.Errorf("verify admin user: %w", err)
 	}
-
-	// Use localhost exception for first user creation.
-	// 사용자 제어 값(username/password)은 jsString으로 JS-safe literal로 인코딩한다.
-	command := fmt.Sprintf(`
-		db.getSiblingDB("admin").createUser({
-			user: %s,
-			pwd: %s,
-			roles: %s
-		})
-	`, jsString(username), jsString(password), string(rolesJSON))
-
-	result, err := a.executor.ExecuteMongoshInContainer(ctx, podName, namespace, container, command, port)
-	if err != nil {
-		return fmt.Errorf("failed to create admin user: %w", err)
+	if !exists {
+		return fmt.Errorf("admin user %q not found — pod의 lifecycle.postStart bootstrap이 실행되지 않았거나 실패함", username)
 	}
-
-	// Check if user already exists
-	if strings.Contains(result.Stderr, "already exists") {
-		return nil // User already exists, not an error
-	}
-
-	if result.ExitCode != 0 && !strings.Contains(result.Stdout, "ok") {
-		return fmt.Errorf("createUser failed: stdout=%s, stderr=%s", result.Stdout, result.Stderr)
-	}
-
 	return nil
 }
 
-// CreateUser creates a new MongoDB user (requires authentication)
-func (a *AuthManager) CreateUser(ctx context.Context, podName, namespace, adminUser, adminPassword string, user MongoUser) error {
-	rolesJSON, err := json.Marshal(user.Roles)
-	if err != nil {
-		return fmt.Errorf("failed to marshal roles: %w", err)
-	}
-
-	command := fmt.Sprintf(`
-		db.getSiblingDB(%s).createUser({
-			user: %s,
-			pwd: %s,
-			roles: %s
-		})
-	`, jsString(user.Database), jsString(user.Username), jsString(user.Password), string(rolesJSON))
-
-	result, err := a.executor.ExecuteMongoshWithAuth(ctx, podName, namespace, adminUser, adminPassword, "admin", command)
-	if err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
-	}
-
-	// Check if user already exists
-	if strings.Contains(result.Stderr, "already exists") {
-		return nil
-	}
-
-	if result.ExitCode != 0 && !strings.Contains(result.Stdout, "ok") {
-		return fmt.Errorf("createUser failed: stdout=%s, stderr=%s", result.Stdout, result.Stderr)
-	}
-
-	return nil
-}
-
-// UserExists checks if a user exists
+// UserExists checks if a user exists in the specified database.
 func (a *AuthManager) UserExists(ctx context.Context, podName, namespace, username, database string) (bool, error) {
 	return a.UserExistsInContainer(ctx, podName, namespace, "mongodb", username, database, 27017)
 }
 
-// UserExistsInContainer checks if a user exists in a specified container
+// UserExistsInContainer is identical to UserExists; container/port 인자는 무시된다.
 func (a *AuthManager) UserExistsInContainer(ctx context.Context, podName, namespace, container, username, database string, port int) (bool, error) {
-	command := fmt.Sprintf(`
-		const user = db.getSiblingDB(%s).getUser(%s);
-		user !== null
-	`, jsString(database), jsString(username))
-
-	result, err := a.executor.ExecuteMongoshInContainer(ctx, podName, namespace, container, command, port)
+	c, err := a.connect(ctx, podName, namespace, true)
 	if err != nil {
-		return false, fmt.Errorf("failed to check user: %w", err)
+		return false, fmt.Errorf("connect for UserExists: %w", err)
 	}
+	defer disconnectQuiet(c)
 
-	return strings.TrimSpace(result.Stdout) == "true", nil
-}
-
-// UserExistsWithAuth checks if a user exists (with authentication)
-func (a *AuthManager) UserExistsWithAuth(ctx context.Context, podName, namespace, adminUser, adminPassword, username, database string) (bool, error) {
-	command := fmt.Sprintf(`
-		const user = db.getSiblingDB(%s).getUser(%s);
-		user !== null
-	`, jsString(database), jsString(username))
-
-	result, err := a.executor.ExecuteMongoshWithAuth(ctx, podName, namespace, adminUser, adminPassword, "admin", command)
-	if err != nil {
-		return false, fmt.Errorf("failed to check user: %w", err)
+	var result struct {
+		Users []bson.M `bson:"users"`
+		OK    float64  `bson:"ok"`
 	}
-
-	return strings.TrimSpace(result.Stdout) == "true", nil
-}
-
-// UpdatePassword updates a user's password
-func (a *AuthManager) UpdatePassword(ctx context.Context, podName, namespace, adminUser, adminPassword, targetUser, targetDB, newPassword string) error {
-	command := fmt.Sprintf(`
-		db.getSiblingDB(%s).changeUserPassword(%s, %s)
-	`, jsString(targetDB), jsString(targetUser), jsString(newPassword))
-
-	result, err := a.executor.ExecuteMongoshWithAuth(ctx, podName, namespace, adminUser, adminPassword, "admin", command)
-	if err != nil {
-		return fmt.Errorf("failed to update password: %w", err)
+	cmd := bson.D{
+		{Key: "usersInfo", Value: bson.D{{Key: "user", Value: username}, {Key: "db", Value: database}}},
 	}
-
-	if result.ExitCode != 0 {
-		return fmt.Errorf("changeUserPassword failed: %s", result.Stderr)
+	if err := c.Database(database).RunCommand(ctx, cmd).Decode(&result); err != nil {
+		return false, fmt.Errorf("usersInfo: %w", err)
 	}
-
-	return nil
-}
-
-// GrantRoles grants additional roles to a user
-func (a *AuthManager) GrantRoles(ctx context.Context, podName, namespace, adminUser, adminPassword, targetUser, targetDB string, roles []UserRole) error {
-	rolesJSON, err := json.Marshal(roles)
-	if err != nil {
-		return fmt.Errorf("failed to marshal roles: %w", err)
-	}
-
-	command := fmt.Sprintf(`
-		db.getSiblingDB(%s).grantRolesToUser(%s, %s)
-	`, jsString(targetDB), jsString(targetUser), string(rolesJSON))
-
-	result, err := a.executor.ExecuteMongoshWithAuth(ctx, podName, namespace, adminUser, adminPassword, "admin", command)
-	if err != nil {
-		return fmt.Errorf("failed to grant roles: %w", err)
-	}
-
-	if result.ExitCode != 0 {
-		return fmt.Errorf("grantRolesToUser failed: %s", result.Stderr)
-	}
-
-	return nil
-}
-
-// RevokeRoles revokes roles from a user
-func (a *AuthManager) RevokeRoles(ctx context.Context, podName, namespace, adminUser, adminPassword, targetUser, targetDB string, roles []UserRole) error {
-	rolesJSON, err := json.Marshal(roles)
-	if err != nil {
-		return fmt.Errorf("failed to marshal roles: %w", err)
-	}
-
-	command := fmt.Sprintf(`
-		db.getSiblingDB(%s).revokeRolesFromUser(%s, %s)
-	`, jsString(targetDB), jsString(targetUser), string(rolesJSON))
-
-	result, err := a.executor.ExecuteMongoshWithAuth(ctx, podName, namespace, adminUser, adminPassword, "admin", command)
-	if err != nil {
-		return fmt.Errorf("failed to revoke roles: %w", err)
-	}
-
-	if result.ExitCode != 0 {
-		return fmt.Errorf("revokeRolesFromUser failed: %s", result.Stderr)
-	}
-
-	return nil
-}
-
-// DropUser removes a user
-func (a *AuthManager) DropUser(ctx context.Context, podName, namespace, adminUser, adminPassword, targetUser, targetDB string) error {
-	command := fmt.Sprintf(`
-		db.getSiblingDB(%s).dropUser(%s)
-	`, jsString(targetDB), jsString(targetUser))
-
-	result, err := a.executor.ExecuteMongoshWithAuth(ctx, podName, namespace, adminUser, adminPassword, "admin", command)
-	if err != nil {
-		return fmt.Errorf("failed to drop user: %w", err)
-	}
-
-	if result.ExitCode != 0 {
-		return fmt.Errorf("dropUser failed: %s", result.Stderr)
-	}
-
-	return nil
-}
-
-// Authenticate tests authentication with given credentials
-func (a *AuthManager) Authenticate(ctx context.Context, podName, namespace, username, password, authDB string) error {
-	command := "db.adminCommand('ping')"
-	result, err := a.executor.ExecuteMongoshWithAuth(ctx, podName, namespace, username, password, authDB, command)
-	if err != nil {
-		return fmt.Errorf("authentication failed: %w", err)
-	}
-
-	if result.ExitCode != 0 {
-		return fmt.Errorf("authentication failed: %s", result.Stderr)
-	}
-
-	return nil
+	return len(result.Users) > 0, nil
 }
 
 // DefaultAdminUser returns the default admin user configuration

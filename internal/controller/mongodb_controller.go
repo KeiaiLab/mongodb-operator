@@ -332,26 +332,23 @@ func (r *MongoDBReconciler) reconcileAdminUser(ctx context.Context, mdb *mongodb
 		return fmt.Errorf("failed to get primary pod: %w", err)
 	}
 
-	// Create auth manager
-	authManager, err := mongodb.NewAuthManager()
+	// admin user는 mongodb pod의 lifecycle.postStart bootstrap이 만든다.
+	// operator는 driver로 인증 시도해 user 존재와 password 정합성을 검증만 한다.
+	authManager := mongodb.NewAuthManagerWithFactory(
+		mongodb.NewPodConnectFactory(mdb.Name+"-headless", 27017, "admin", adminPassword, "admin"),
+	)
+
+	exists, err := authManager.UserExists(ctx, primaryPod, mdb.Namespace, "admin", "admin")
 	if err != nil {
-		return fmt.Errorf("failed to create auth manager: %w", err)
+		// 인증 실패 또는 connect 실패는 transient로 보고 requeue. pod의 postStart가
+		// 아직 끝나지 않았을 가능성이 높음.
+		return fmt.Errorf("verify admin user: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("admin user not found — pod의 postStart bootstrap이 실행되지 않았거나 실패함")
 	}
 
-	// Check if admin user already exists
-	exists, _ := authManager.UserExists(ctx, primaryPod, mdb.Namespace, "admin", "admin")
-	if exists {
-		logger.Info("Admin user already exists")
-		mdb.Status.AdminUserCreated = true
-		return updateStatusWithRetry(ctx, r.Client, mdb)
-	}
-
-	// Create admin user using localhost exception
-	if err := authManager.CreateAdminUser(ctx, primaryPod, mdb.Namespace, "admin", adminPassword); err != nil {
-		return fmt.Errorf("failed to create admin user: %w", err)
-	}
-
-	logger.Info("Admin user created successfully")
+	logger.Info("Admin user verified (created by pod bootstrap)")
 	mdb.Status.AdminUserCreated = true
 	return updateStatusWithRetry(ctx, r.Client, mdb)
 }
