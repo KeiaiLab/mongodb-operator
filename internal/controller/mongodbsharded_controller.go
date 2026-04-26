@@ -57,9 +57,6 @@ type MongoDBShardedReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
-// pods/exec — 보안 알림: mongodb_controller.go의 동일 마커 주석 참조.
-// docs/security/rbac-known-limitations.md
-// +kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 
 func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)

@@ -106,6 +106,22 @@ func NewClient(ctx context.Context, opts ConnectOpts) (*mongo.Client, error) {
 	return client, nil
 }
 
+// GetPodFQDN returns the fully qualified domain name for a pod within a
+// StatefulSet headless service.
+func GetPodFQDN(podName, serviceName, namespace string, port int) string {
+	return fmt.Sprintf("%s.%s.%s.svc.cluster.local:%d", podName, serviceName, namespace, port)
+}
+
+// GetPodsFQDN returns FQDNs for multiple pods (statefulset ordinal pattern).
+func GetPodsFQDN(baseName, serviceName, namespace string, replicas int, port int) []string {
+	fqdns := make([]string, replicas)
+	for i := 0; i < replicas; i++ {
+		podName := fmt.Sprintf("%s-%d", baseName, i)
+		fqdns[i] = GetPodFQDN(podName, serviceName, namespace, port)
+	}
+	return fqdns
+}
+
 // buildURI는 ConnectOpts에서 자격증명을 제외한 mongodb:// URI를 만든다.
 // 자격증명은 호출자가 options.Credential로 별도 전달하므로 URI에는 포함하지 않는다.
 func buildURI(hosts []string, replicaSet string, direct bool) string {

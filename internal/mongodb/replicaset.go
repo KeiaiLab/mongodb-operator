@@ -93,16 +93,6 @@ func NewReplicaSetManagerWithPort(port int) (*ReplicaSetManager, error) {
 	return nil, errors.New("NewReplicaSetManagerWithPort는 deprecated. NewReplicaSetManagerWithFactory 사용")
 }
 
-// NewReplicaSetManagerWithExecutor — Deprecated. Executor 기반은 commit 6에서 완전 제거됨.
-func NewReplicaSetManagerWithExecutor(exec *Executor) *ReplicaSetManager {
-	panic("NewReplicaSetManagerWithExecutor는 deprecated. NewReplicaSetManagerWithFactory 사용")
-}
-
-// NewReplicaSetManagerWithExecutorAndPort — Deprecated.
-func NewReplicaSetManagerWithExecutorAndPort(exec *Executor, port int) *ReplicaSetManager {
-	panic("NewReplicaSetManagerWithExecutorAndPort는 deprecated. NewReplicaSetManagerWithFactory 사용")
-}
-
 // notYetInitializedCode는 mongod이 replica set으로 초기화되지 않았을 때
 // replSetGetStatus에서 반환하는 server error code이다.
 const notYetInitializedCode int32 = 94

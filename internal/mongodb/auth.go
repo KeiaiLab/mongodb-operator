@@ -56,11 +56,6 @@ func NewAuthManager() (*AuthManager, error) {
 	return nil, errors.New("NewAuthManager는 deprecated. NewAuthManagerWithFactory(factory) 사용")
 }
 
-// NewAuthManagerWithExecutor — Deprecated. Commit 6에서 완전 제거.
-func NewAuthManagerWithExecutor(exec *Executor) *AuthManager {
-	panic("NewAuthManagerWithExecutor는 deprecated. NewAuthManagerWithFactory 사용")
-}
-
 // CreateAdminUser는 admin user에 인증할 수 있는지 검증한다.
 //
 // 이전 동작: localhost exception으로 mongosh exec → createUser.

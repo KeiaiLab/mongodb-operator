@@ -47,11 +47,6 @@ func NewShardManager() (*ShardManager, error) {
 	return nil, errors.New("NewShardManager는 deprecated. NewShardManagerWithFactory(factory) 사용")
 }
 
-// NewShardManagerWithExecutor — Deprecated. Commit 6에서 완전 제거.
-func NewShardManagerWithExecutor(exec *Executor) *ShardManager {
-	panic("NewShardManagerWithExecutor는 deprecated. NewShardManagerWithFactory 사용")
-}
-
 // AddShard adds a shard to the cluster via mongos. Idempotent: 이미 추가된 shard면
 // "already a shard" server error를 정상 처리.
 func (s *ShardManager) AddShard(ctx context.Context, mongosPod, namespace, shardConnectionString string) error {

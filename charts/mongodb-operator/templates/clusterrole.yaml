@@ -45,7 +45,6 @@ rules:
       - ""
     resources:
       - pods
-      - pods/exec
       - services
       - endpoints
       - persistentvolumeclaims
