@@ -475,11 +475,6 @@ func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh
 		}
 	}
 
-	shardManager, err := mongodb.NewShardManager()
-	if err != nil {
-		return fmt.Errorf("failed to create shard manager: %w", err)
-	}
-
 	// Get admin password for authentication
 	adminPassword, err := r.getAdminPassword(ctx, mdbsh)
 	if err != nil {
@@ -491,6 +486,11 @@ func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh
 	if err != nil {
 		return fmt.Errorf("failed to get mongos pod: %w", err)
 	}
+
+	// ShardManager는 mongos를 향한 driver factory로 만든다.
+	shardManager := mongodb.NewShardManagerWithFactory(
+		mongodb.NewPodConnectFactory(mdbsh.Name+"-mongos", 27017, "admin", adminPassword, "admin"),
+	)
 
 	// reconcileShardsInit과 동일한 사일런트 실패 패턴을 가지고 있어 동일 방식으로 수정.
 	var addErrs []error
