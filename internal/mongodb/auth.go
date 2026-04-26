@@ -73,14 +73,15 @@ func (a *AuthManager) CreateAdminUserInContainer(ctx context.Context, podName, n
 		return fmt.Errorf("failed to marshal roles: %w", err)
 	}
 
-	// Use localhost exception for first user creation
+	// Use localhost exception for first user creation.
+	// 사용자 제어 값(username/password)은 jsString으로 JS-safe literal로 인코딩한다.
 	command := fmt.Sprintf(`
-		db.getSiblingDB('admin').createUser({
-			user: '%s',
-			pwd: '%s',
+		db.getSiblingDB("admin").createUser({
+			user: %s,
+			pwd: %s,
 			roles: %s
 		})
-	`, username, password, string(rolesJSON))
+	`, jsString(username), jsString(password), string(rolesJSON))
 
 	result, err := a.executor.ExecuteMongoshInContainer(ctx, podName, namespace, container, command, port)
 	if err != nil {
@@ -107,12 +108,12 @@ func (a *AuthManager) CreateUser(ctx context.Context, podName, namespace, adminU
 	}
 
 	command := fmt.Sprintf(`
-		db.getSiblingDB('%s').createUser({
-			user: '%s',
-			pwd: '%s',
+		db.getSiblingDB(%s).createUser({
+			user: %s,
+			pwd: %s,
 			roles: %s
 		})
-	`, user.Database, user.Username, user.Password, string(rolesJSON))
+	`, jsString(user.Database), jsString(user.Username), jsString(user.Password), string(rolesJSON))
 
 	result, err := a.executor.ExecuteMongoshWithAuth(ctx, podName, namespace, adminUser, adminPassword, "admin", command)
 	if err != nil {
@@ -139,9 +140,9 @@ func (a *AuthManager) UserExists(ctx context.Context, podName, namespace, userna
 // UserExistsInContainer checks if a user exists in a specified container
 func (a *AuthManager) UserExistsInContainer(ctx context.Context, podName, namespace, container, username, database string, port int) (bool, error) {
 	command := fmt.Sprintf(`
-		const user = db.getSiblingDB('%s').getUser('%s');
+		const user = db.getSiblingDB(%s).getUser(%s);
 		user !== null
-	`, database, username)
+	`, jsString(database), jsString(username))
 
 	result, err := a.executor.ExecuteMongoshInContainer(ctx, podName, namespace, container, command, port)
 	if err != nil {
@@ -154,9 +155,9 @@ func (a *AuthManager) UserExistsInContainer(ctx context.Context, podName, namesp
 // UserExistsWithAuth checks if a user exists (with authentication)
 func (a *AuthManager) UserExistsWithAuth(ctx context.Context, podName, namespace, adminUser, adminPassword, username, database string) (bool, error) {
 	command := fmt.Sprintf(`
-		const user = db.getSiblingDB('%s').getUser('%s');
+		const user = db.getSiblingDB(%s).getUser(%s);
 		user !== null
-	`, database, username)
+	`, jsString(database), jsString(username))
 
 	result, err := a.executor.ExecuteMongoshWithAuth(ctx, podName, namespace, adminUser, adminPassword, "admin", command)
 	if err != nil {
@@ -169,8 +170,8 @@ func (a *AuthManager) UserExistsWithAuth(ctx context.Context, podName, namespace
 // UpdatePassword updates a user's password
 func (a *AuthManager) UpdatePassword(ctx context.Context, podName, namespace, adminUser, adminPassword, targetUser, targetDB, newPassword string) error {
 	command := fmt.Sprintf(`
-		db.getSiblingDB('%s').changeUserPassword('%s', '%s')
-	`, targetDB, targetUser, newPassword)
+		db.getSiblingDB(%s).changeUserPassword(%s, %s)
+	`, jsString(targetDB), jsString(targetUser), jsString(newPassword))
 
 	result, err := a.executor.ExecuteMongoshWithAuth(ctx, podName, namespace, adminUser, adminPassword, "admin", command)
 	if err != nil {
@@ -192,8 +193,8 @@ func (a *AuthManager) GrantRoles(ctx context.Context, podName, namespace, adminU
 	}
 
 	command := fmt.Sprintf(`
-		db.getSiblingDB('%s').grantRolesToUser('%s', %s)
-	`, targetDB, targetUser, string(rolesJSON))
+		db.getSiblingDB(%s).grantRolesToUser(%s, %s)
+	`, jsString(targetDB), jsString(targetUser), string(rolesJSON))
 
 	result, err := a.executor.ExecuteMongoshWithAuth(ctx, podName, namespace, adminUser, adminPassword, "admin", command)
 	if err != nil {
@@ -215,8 +216,8 @@ func (a *AuthManager) RevokeRoles(ctx context.Context, podName, namespace, admin
 	}
 
 	command := fmt.Sprintf(`
-		db.getSiblingDB('%s').revokeRolesFromUser('%s', %s)
-	`, targetDB, targetUser, string(rolesJSON))
+		db.getSiblingDB(%s).revokeRolesFromUser(%s, %s)
+	`, jsString(targetDB), jsString(targetUser), string(rolesJSON))
 
 	result, err := a.executor.ExecuteMongoshWithAuth(ctx, podName, namespace, adminUser, adminPassword, "admin", command)
 	if err != nil {
@@ -233,8 +234,8 @@ func (a *AuthManager) RevokeRoles(ctx context.Context, podName, namespace, admin
 // DropUser removes a user
 func (a *AuthManager) DropUser(ctx context.Context, podName, namespace, adminUser, adminPassword, targetUser, targetDB string) error {
 	command := fmt.Sprintf(`
-		db.getSiblingDB('%s').dropUser('%s')
-	`, targetDB, targetUser)
+		db.getSiblingDB(%s).dropUser(%s)
+	`, jsString(targetDB), jsString(targetUser))
 
 	result, err := a.executor.ExecuteMongoshWithAuth(ctx, podName, namespace, adminUser, adminPassword, "admin", command)
 	if err != nil {

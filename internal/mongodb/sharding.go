@@ -62,7 +62,7 @@ func (s *ShardManager) AddShard(ctx context.Context, mongosPod, namespace, shard
 
 // AddShardInContainer adds a shard to the cluster via mongos in a specified container
 func (s *ShardManager) AddShardInContainer(ctx context.Context, mongosPod, namespace, container, shardConnectionString string, port int) error {
-	command := fmt.Sprintf("sh.addShard('%s')", shardConnectionString)
+	command := fmt.Sprintf("sh.addShard(%s)", jsString(shardConnectionString))
 	result, err := s.executor.ExecuteMongoshInContainer(ctx, mongosPod, namespace, container, command, port)
 	if err != nil {
 		return fmt.Errorf("failed to add shard: %w", err)
@@ -87,7 +87,7 @@ func (s *ShardManager) AddShardWithAuth(ctx context.Context, mongosPod, namespac
 
 // AddShardWithAuthInContainer adds a shard with auth in a specified container
 func (s *ShardManager) AddShardWithAuthInContainer(ctx context.Context, mongosPod, namespace, container, adminUser, adminPassword, shardConnectionString string, port int) error {
-	command := fmt.Sprintf("sh.addShard('%s')", shardConnectionString)
+	command := fmt.Sprintf("sh.addShard(%s)", jsString(shardConnectionString))
 	result, err := s.executor.ExecuteMongoshWithAuthInContainer(ctx, mongosPod, namespace, container, adminUser, adminPassword, "admin", command, port)
 	if err != nil {
 		return fmt.Errorf("failed to add shard: %w", err)
@@ -107,7 +107,7 @@ func (s *ShardManager) AddShardWithAuthInContainer(ctx context.Context, mongosPo
 
 // RemoveShard removes a shard from the cluster
 func (s *ShardManager) RemoveShard(ctx context.Context, mongosPod, namespace, adminUser, adminPassword, shardName string) error {
-	command := fmt.Sprintf("db.adminCommand({ removeShard: '%s' })", shardName)
+	command := fmt.Sprintf("db.adminCommand({ removeShard: %s })", jsString(shardName))
 	result, err := s.executor.ExecuteMongoshWithAuth(ctx, mongosPod, namespace, adminUser, adminPassword, "admin", command)
 	if err != nil {
 		return fmt.Errorf("failed to remove shard: %w", err)
@@ -203,7 +203,7 @@ func (s *ShardManager) GetShardingStatus(ctx context.Context, mongosPod, namespa
 
 // EnableSharding enables sharding on a database
 func (s *ShardManager) EnableSharding(ctx context.Context, mongosPod, namespace, adminUser, adminPassword, database string) error {
-	command := fmt.Sprintf("sh.enableSharding('%s')", database)
+	command := fmt.Sprintf("sh.enableSharding(%s)", jsString(database))
 	result, err := s.executor.ExecuteMongoshWithAuth(ctx, mongosPod, namespace, adminUser, adminPassword, "admin", command)
 	if err != nil {
 		return fmt.Errorf("failed to enable sharding: %w", err)
@@ -228,7 +228,7 @@ func (s *ShardManager) ShardCollection(ctx context.Context, mongosPod, namespace
 		return fmt.Errorf("failed to marshal shard key: %w", err)
 	}
 
-	command := fmt.Sprintf("sh.shardCollection('%s', %s)", collection, string(keyJSON))
+	command := fmt.Sprintf("sh.shardCollection(%s, %s)", jsString(collection), string(keyJSON))
 	result, err := s.executor.ExecuteMongoshWithAuth(ctx, mongosPod, namespace, adminUser, adminPassword, "admin", command)
 	if err != nil {
 		return fmt.Errorf("failed to shard collection: %w", err)

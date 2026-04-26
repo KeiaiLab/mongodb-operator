@@ -215,9 +215,9 @@ func (r *ReplicaSetManager) WaitForPrimary(ctx context.Context, podName, namespa
 func (r *ReplicaSetManager) AddMember(ctx context.Context, podName, namespace, newHost string, arbiterOnly bool) error {
 	var command string
 	if arbiterOnly {
-		command = fmt.Sprintf("rs.addArb('%s')", newHost)
+		command = fmt.Sprintf("rs.addArb(%s)", jsString(newHost))
 	} else {
-		command = fmt.Sprintf("rs.add('%s')", newHost)
+		command = fmt.Sprintf("rs.add(%s)", jsString(newHost))
 	}
 
 	result, err := r.executor.ExecuteMongoshWithPort(ctx, podName, namespace, command, r.port)
@@ -234,7 +234,7 @@ func (r *ReplicaSetManager) AddMember(ctx context.Context, podName, namespace, n
 
 // RemoveMember removes a member from the replica set
 func (r *ReplicaSetManager) RemoveMember(ctx context.Context, podName, namespace, hostToRemove string) error {
-	command := fmt.Sprintf("rs.remove('%s')", hostToRemove)
+	command := fmt.Sprintf("rs.remove(%s)", jsString(hostToRemove))
 	result, err := r.executor.ExecuteMongoshWithPort(ctx, podName, namespace, command, r.port)
 	if err != nil {
 		return fmt.Errorf("failed to remove member: %w", err)
