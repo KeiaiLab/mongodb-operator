@@ -91,7 +91,7 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Update status phase to Initializing if pending
 	if mdb.Status.Phase == "" || mdb.Status.Phase == "Pending" {
 		mdb.Status.Phase = "Initializing"
-		if err := r.Status().Update(ctx, mdb); err != nil {
+		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -256,7 +256,7 @@ func (r *MongoDBReconciler) reconcileReplicaSetInitialization(ctx context.Contex
 	if initialized {
 		logger.Info("Replica set already initialized")
 		mdb.Status.ReplicaSetInitialized = true
-		return r.Status().Update(ctx, mdb)
+		return updateStatusWithRetry(ctx, r.Client, mdb)
 	}
 
 	// Build replica set configuration
@@ -277,7 +277,7 @@ func (r *MongoDBReconciler) reconcileReplicaSetInitialization(ctx context.Contex
 
 	logger.Info("Replica set initialized successfully")
 	mdb.Status.ReplicaSetInitialized = true
-	return r.Status().Update(ctx, mdb)
+	return updateStatusWithRetry(ctx, r.Client, mdb)
 }
 
 func (r *MongoDBReconciler) hasPrimary(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (bool, error) {
@@ -323,7 +323,7 @@ func (r *MongoDBReconciler) reconcileAdminUser(ctx context.Context, mdb *mongodb
 	if exists {
 		logger.Info("Admin user already exists")
 		mdb.Status.AdminUserCreated = true
-		return r.Status().Update(ctx, mdb)
+		return updateStatusWithRetry(ctx, r.Client, mdb)
 	}
 
 	// Create admin user using localhost exception
@@ -333,7 +333,7 @@ func (r *MongoDBReconciler) reconcileAdminUser(ctx context.Context, mdb *mongodb
 
 	logger.Info("Admin user created successfully")
 	mdb.Status.AdminUserCreated = true
-	return r.Status().Update(ctx, mdb)
+	return updateStatusWithRetry(ctx, r.Client, mdb)
 }
 
 func (r *MongoDBReconciler) getAdminPassword(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (string, error) {
@@ -414,7 +414,7 @@ func (r *MongoDBReconciler) updateStatus(ctx context.Context, mdb *mongodbv1alph
 	// Update conditions
 	mdb.Status.Conditions = r.buildConditions(mdb)
 
-	return r.Status().Update(ctx, mdb)
+	return updateStatusWithRetry(ctx, r.Client, mdb)
 }
 
 func (r *MongoDBReconciler) buildConditions(mdb *mongodbv1alpha1.MongoDB) []metav1.Condition {
@@ -494,7 +494,7 @@ func (r *MongoDBReconciler) updateStatusError(ctx context.Context, mdb *mongodbv
 		Message:            fmt.Sprintf("Failed to reconcile %s: %v", component, err),
 	})
 
-	if statusErr := r.Status().Update(ctx, mdb); statusErr != nil {
+	if statusErr := updateStatusWithRetry(ctx, r.Client, mdb); statusErr != nil {
 		logger.Error(statusErr, "Failed to update status")
 	}
 

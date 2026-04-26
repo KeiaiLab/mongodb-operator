@@ -89,7 +89,7 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if backup.Status.Phase == "" {
 		backup.Status.Phase = "Pending"
 		backup.Status.StartTime = &metav1.Time{Time: time.Now()}
-		if err := r.Status().Update(ctx, backup); err != nil {
+		if err := updateStatusWithRetry(ctx, r.Client, backup); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -248,7 +248,7 @@ func (r *MongoDBBackupReconciler) updateBackupStatus(ctx context.Context, backup
 			backup.Name)
 	}
 
-	return r.Status().Update(ctx, backup)
+	return updateStatusWithRetry(ctx, r.Client, backup)
 }
 
 func (r *MongoDBBackupReconciler) updateStatusError(ctx context.Context, backup *mongodbv1alpha1.MongoDBBackup, err error) (ctrl.Result, error) {
@@ -259,7 +259,7 @@ func (r *MongoDBBackupReconciler) updateStatusError(ctx context.Context, backup 
 	backup.Status.Error = err.Error()
 	backup.Status.CompletionTime = &metav1.Time{Time: time.Now()}
 
-	if statusErr := r.Status().Update(ctx, backup); statusErr != nil {
+	if statusErr := updateStatusWithRetry(ctx, r.Client, backup); statusErr != nil {
 		logger.Error(statusErr, "Failed to update status")
 	}
 

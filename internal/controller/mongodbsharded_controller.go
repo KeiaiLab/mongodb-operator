@@ -91,7 +91,7 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// Update status phase to Initializing if pending
 	if mdbsh.Status.Phase == "" || mdbsh.Status.Phase == "Pending" {
 		mdbsh.Status.Phase = "Initializing"
-		if err := r.Status().Update(ctx, mdbsh); err != nil {
+		if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -306,7 +306,7 @@ func (r *MongoDBShardedReconciler) reconcileConfigServerInit(ctx context.Context
 	if initialized {
 		logger.Info("Config server replica set already initialized")
 		mdbsh.Status.ConfigServerInitialized = true
-		return r.Status().Update(ctx, mdbsh)
+		return updateStatusWithRetry(ctx, r.Client, mdbsh)
 	}
 
 	// Build config server replica set configuration
@@ -328,7 +328,7 @@ func (r *MongoDBShardedReconciler) reconcileConfigServerInit(ctx context.Context
 
 	logger.Info("Config server replica set initialized successfully")
 	mdbsh.Status.ConfigServerInitialized = true
-	return r.Status().Update(ctx, mdbsh)
+	return updateStatusWithRetry(ctx, r.Client, mdbsh)
 }
 
 func (r *MongoDBShardedReconciler) reconcileShardsInit(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
@@ -399,7 +399,7 @@ func (r *MongoDBShardedReconciler) reconcileShardsInit(ctx context.Context, mdbs
 
 	// 부분 진행 상태(Initialized 슬라이스)는 항상 status에 반영. status update 자체가
 	// 실패해도 shard 실패가 우선이므로 errors.Join으로 묶어 호출자에게 전달.
-	statusErr := r.Status().Update(ctx, mdbsh)
+	statusErr := updateStatusWithRetry(ctx, r.Client, mdbsh)
 	if len(shardErrs) > 0 {
 		return stderrors.Join(append(shardErrs, statusErr)...)
 	}
@@ -434,7 +434,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedAdminUser(ctx context.Context
 	if exists {
 		logger.Info("Admin user already exists")
 		mdbsh.Status.AdminUserCreated = true
-		return r.Status().Update(ctx, mdbsh)
+		return updateStatusWithRetry(ctx, r.Client, mdbsh)
 	}
 
 	// Create admin user via mongos (container "mongos", port 27017)
@@ -444,7 +444,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedAdminUser(ctx context.Context
 
 	logger.Info("Admin user created successfully")
 	mdbsh.Status.AdminUserCreated = true
-	return r.Status().Update(ctx, mdbsh)
+	return updateStatusWithRetry(ctx, r.Client, mdbsh)
 }
 
 func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
@@ -514,7 +514,7 @@ func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh
 		mdbsh.Status.ShardsAdded[i] = true
 	}
 
-	statusErr := r.Status().Update(ctx, mdbsh)
+	statusErr := updateStatusWithRetry(ctx, r.Client, mdbsh)
 	if len(addErrs) > 0 {
 		return stderrors.Join(append(addErrs, statusErr)...)
 	}
@@ -629,7 +629,7 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 
 	mdbsh.Status.ObservedGeneration = mdbsh.Generation
 
-	return r.Status().Update(ctx, mdbsh)
+	return updateStatusWithRetry(ctx, r.Client, mdbsh)
 }
 
 func (r *MongoDBShardedReconciler) getComponentPhase(ready, total int32) string {
@@ -670,7 +670,7 @@ func (r *MongoDBShardedReconciler) updateStatusError(ctx context.Context, mdbsh 
 		Message:            fmt.Sprintf("Failed to reconcile %s: %v", component, err),
 	})
 
-	if statusErr := r.Status().Update(ctx, mdbsh); statusErr != nil {
+	if statusErr := updateStatusWithRetry(ctx, r.Client, mdbsh); statusErr != nil {
 		logger.Error(statusErr, "Failed to update status")
 	}
 
