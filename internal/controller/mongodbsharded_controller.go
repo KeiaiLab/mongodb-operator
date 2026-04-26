@@ -288,15 +288,25 @@ func (r *MongoDBShardedReconciler) isMongosReady(ctx context.Context, mdbsh *mon
 	return deploy.Status.ReadyReplicas >= 1
 }
 
+// newRSManager는 sharded cluster의 특정 RS(config server 또는 shard)에 대한
+// driver 기반 ReplicaSetManager를 만든다. service name과 port가 RS마다 달라
+// 호출자가 명시적으로 전달한다.
+func (r *MongoDBShardedReconciler) newRSManager(serviceName string, port int, adminPassword string) *mongodb.ReplicaSetManager {
+	return mongodb.NewReplicaSetManagerWithFactory(
+		mongodb.NewPodConnectFactory(serviceName, port, "admin", adminPassword, "admin"),
+	)
+}
+
 func (r *MongoDBShardedReconciler) reconcileConfigServerInit(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Initializing config server replica set")
 
-	// Config servers use port 27019
-	rsManager, err := mongodb.NewReplicaSetManagerWithPort(27019)
+	adminPassword, err := r.getAdminPassword(ctx, mdbsh)
 	if err != nil {
-		return fmt.Errorf("failed to create replica set manager: %w", err)
+		return fmt.Errorf("get admin password: %w", err)
 	}
+	// Config servers use port 27019
+	rsManager := r.newRSManager(mdbsh.Name+"-cfg-headless", 27019, adminPassword)
 
 	// Check if already initialized
 	firstPod := fmt.Sprintf("%s-cfg-0", mdbsh.Name)
@@ -343,16 +353,18 @@ func (r *MongoDBShardedReconciler) reconcileShardsInit(ctx context.Context, mdbs
 		mdbsh.Status.ShardsInitialized = newSlice
 	}
 
-	// Shards use port 27018
-	rsManager, err := mongodb.NewReplicaSetManagerWithPort(27018)
-	if err != nil {
-		return fmt.Errorf("failed to create replica set manager: %w", err)
-	}
-
 	// shardErrs는 각 shard별 실패를 누적한다. 이전 구현은 continue로 에러를 삼키고
 	// 루프 종료 후 Status().Update로 항상 nil error를 반환해 호출자에게 "성공"
 	// 신호를 보냈음. 그 결과 운영자는 클러스터가 깨진 것을 알지 못했다.
 	var shardErrs []error
+
+	// 각 shard마다 service name이 다르므로 매 iteration에서 factory를 새로 만든다.
+	// admin password는 한 번만 fetch.
+	adminPassword, err := r.getAdminPassword(ctx, mdbsh)
+	if err != nil {
+		return fmt.Errorf("get admin password: %w", err)
+	}
+
 	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
 		if mdbsh.Status.ShardsInitialized[i] {
 			continue
@@ -363,6 +375,9 @@ func (r *MongoDBShardedReconciler) reconcileShardsInit(ctx context.Context, mdbs
 		serviceName := shardName + "-headless"
 
 		logger.Info("Initializing shard replica set", "shard", shardName)
+
+		// Shards use port 27018
+		rsManager := r.newRSManager(serviceName, 27018, adminPassword)
 
 		// Check if already initialized
 		initialized, err := rsManager.IsInitialized(ctx, firstPod, mdbsh.Namespace)

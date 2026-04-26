@@ -241,12 +241,27 @@ func (r *MongoDBReconciler) areAllPodsReady(ctx context.Context, mdb *mongodbv1a
 	return sts.Status.ReadyReplicas == mdb.Spec.Members, nil
 }
 
+// newRSManager는 mongo-go-driver 기반 ReplicaSetManager를 만든다.
+// admin password는 매 호출마다 Secret에서 fetch한다 (보안: in-memory 캐싱하지 않음).
+//
+// 주의: 이 함수는 admin user가 mongodb pod의 lifecycle.postStart에서 이미
+// 만들어졌다고 가정한다. pod ready ≠ bootstrap done 이므로 호출 직후 인증
+// 실패할 수 있고, 호출자는 reconcile requeue로 대응한다.
+func (r *MongoDBReconciler) newRSManager(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (*mongodb.ReplicaSetManager, error) {
+	pw, err := r.getAdminPassword(ctx, mdb)
+	if err != nil {
+		return nil, fmt.Errorf("get admin password: %w", err)
+	}
+	return mongodb.NewReplicaSetManagerWithFactory(
+		mongodb.NewPodConnectFactory(mdb.Name+"-headless", 27017, "admin", pw, "admin"),
+	), nil
+}
+
 func (r *MongoDBReconciler) reconcileReplicaSetInitialization(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Initializing replica set")
 
-	// Create replica set manager
-	rsManager, err := mongodb.NewReplicaSetManager()
+	rsManager, err := r.newRSManager(ctx, mdb)
 	if err != nil {
 		return fmt.Errorf("failed to create replica set manager: %w", err)
 	}
@@ -287,11 +302,10 @@ func (r *MongoDBReconciler) reconcileReplicaSetInitialization(ctx context.Contex
 }
 
 func (r *MongoDBReconciler) hasPrimary(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (bool, error) {
-	rsManager, err := mongodb.NewReplicaSetManager()
+	rsManager, err := r.newRSManager(ctx, mdb)
 	if err != nil {
 		return false, err
 	}
-
 	firstPod := fmt.Sprintf("%s-0", mdb.Name)
 	return rsManager.HasPrimary(ctx, firstPod, mdb.Namespace)
 }
@@ -307,7 +321,7 @@ func (r *MongoDBReconciler) reconcileAdminUser(ctx context.Context, mdb *mongodb
 	}
 
 	// Find the primary pod
-	rsManager, err := mongodb.NewReplicaSetManager()
+	rsManager, err := r.newRSManager(ctx, mdb)
 	if err != nil {
 		return fmt.Errorf("failed to create replica set manager: %w", err)
 	}
@@ -401,7 +415,7 @@ func (r *MongoDBReconciler) updateStatus(ctx context.Context, mdb *mongodbv1alph
 
 	// Get current primary if replica set is initialized
 	if mdb.Status.ReplicaSetInitialized {
-		rsManager, err := mongodb.NewReplicaSetManager()
+		rsManager, err := r.newRSManager(ctx, mdb)
 		if err == nil {
 			firstPod := fmt.Sprintf("%s-0", mdb.Name)
 			if primaryPod, err := rsManager.GetPrimaryPod(ctx, firstPod, mdb.Namespace); err == nil {

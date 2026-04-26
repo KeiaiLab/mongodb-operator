@@ -234,8 +234,10 @@ func TestReplicaSetMemberStatus(t *testing.T) {
 	}
 }
 
-func TestNewReplicaSetManagerWithExecutor(t *testing.T) {
-	// Create a manager with nil executor for testing
-	manager := NewReplicaSetManagerWithExecutor(nil)
+// TestNewReplicaSetManagerWithFactory는 driver factory 주입 패턴을 검증한다.
+// (이전 NewReplicaSetManagerWithExecutor 테스트는 Executor 제거로 폐기됨.)
+func TestNewReplicaSetManagerWithFactory(t *testing.T) {
+	// nil factory도 일단 생성은 가능 (호출 시점에 panic). 단순 not-nil 검증.
+	manager := NewReplicaSetManagerWithFactory(nil)
 	assert.NotNil(t, manager)
 }

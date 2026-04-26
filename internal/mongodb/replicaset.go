@@ -18,299 +18,350 @@ package mongodb
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
+
+// ConnectFactory는 podName/namespace 기반으로 mongo.Client를 만드는 함수다.
+// 호출자(controller)가 cluster context(serviceName, port, 자격증명)를 closure로
+// 캡슐화해 주입한다. 매니저는 host FQDN 빌드와 자격증명을 알 필요가 없다.
+//
+// direct=true는 replica set discovery를 비활성화하고 단일 호스트에 직접
+// 붙는다. 용도: replSetInitiate처럼 replica set이 아직 형성되지 않은 단계.
+type ConnectFactory func(ctx context.Context, podName, namespace string, direct bool) (*mongo.Client, error)
 
 // ReplicaSetConfig represents a MongoDB replica set configuration
 type ReplicaSetConfig struct {
-	ID      string             `json:"_id"`
-	Members []ReplicaSetMember `json:"members"`
-	Version int                `json:"version,omitempty"`
+	ID      string             `json:"_id" bson:"_id"`
+	Members []ReplicaSetMember `json:"members" bson:"members"`
+	Version int                `json:"version,omitempty" bson:"version,omitempty"`
 }
 
 // ReplicaSetMember represents a member in a replica set
 type ReplicaSetMember struct {
-	ID          int     `json:"_id"`
-	Host        string  `json:"host"`
-	Priority    float64 `json:"priority,omitempty"`
-	Votes       int     `json:"votes,omitempty"`
-	ArbiterOnly bool    `json:"arbiterOnly,omitempty"`
-	Hidden      bool    `json:"hidden,omitempty"`
+	ID          int     `json:"_id" bson:"_id"`
+	Host        string  `json:"host" bson:"host"`
+	Priority    float64 `json:"priority,omitempty" bson:"priority,omitempty"`
+	Votes       int     `json:"votes,omitempty" bson:"votes,omitempty"`
+	ArbiterOnly bool    `json:"arbiterOnly,omitempty" bson:"arbiterOnly,omitempty"`
+	Hidden      bool    `json:"hidden,omitempty" bson:"hidden,omitempty"`
 }
 
 // ReplicaSetStatus represents the status of a replica set
 type ReplicaSetStatus struct {
-	Set     string                   `json:"set"`
-	MyState int                      `json:"myState"`
-	Members []ReplicaSetMemberStatus `json:"members"`
-	OK      int                      `json:"ok"`
+	Set     string                   `json:"set" bson:"set"`
+	MyState int                      `json:"myState" bson:"myState"`
+	Members []ReplicaSetMemberStatus `json:"members" bson:"members"`
+	OK      int                      `json:"ok" bson:"ok"`
 }
 
 // ReplicaSetMemberStatus represents the status of a replica set member
 type ReplicaSetMemberStatus struct {
-	ID       int    `json:"_id"`
-	Name     string `json:"name"`
-	Health   int    `json:"health"`
-	State    int    `json:"state"`
-	StateStr string `json:"stateStr"`
-	Uptime   int64  `json:"uptime"`
-	Self     bool   `json:"self,omitempty"`
+	ID       int    `json:"_id" bson:"_id"`
+	Name     string `json:"name" bson:"name"`
+	Health   int    `json:"health" bson:"health"`
+	State    int    `json:"state" bson:"state"`
+	StateStr string `json:"stateStr" bson:"stateStr"`
+	Uptime   int64  `json:"uptime" bson:"uptime"`
+	Self     bool   `json:"self,omitempty" bson:"self,omitempty"`
 }
 
-// ReplicaSetManager manages MongoDB replica set operations
+// ReplicaSetManager manages MongoDB replica set operations via mongo-go-driver.
 type ReplicaSetManager struct {
-	executor *Executor
-	port     int
+	connect ConnectFactory
 }
 
-// NewReplicaSetManager creates a new replica set manager with default port 27017
+// NewReplicaSetManagerWithFactory는 driver client factory를 주입받아 매니저를 만든다.
+// 권장 생성자.
+func NewReplicaSetManagerWithFactory(f ConnectFactory) *ReplicaSetManager {
+	return &ReplicaSetManager{connect: f}
+}
+
+// NewReplicaSetManager — Deprecated: Executor 기반 동작은 제거됐다.
+// NewReplicaSetManagerWithFactory를 사용하라. 이 함수는 호출 시 항상 에러.
 func NewReplicaSetManager() (*ReplicaSetManager, error) {
-	return NewReplicaSetManagerWithPort(27017)
+	return nil, errors.New("NewReplicaSetManager는 deprecated. NewReplicaSetManagerWithFactory(factory) 사용")
 }
 
-// NewReplicaSetManagerWithPort creates a new replica set manager with specified port
+// NewReplicaSetManagerWithPort — Deprecated.
 func NewReplicaSetManagerWithPort(port int) (*ReplicaSetManager, error) {
-	exec, err := NewExecutor()
-	if err != nil {
-		return nil, err
-	}
-	return &ReplicaSetManager{executor: exec, port: port}, nil
+	return nil, errors.New("NewReplicaSetManagerWithPort는 deprecated. NewReplicaSetManagerWithFactory 사용")
 }
 
-// NewReplicaSetManagerWithExecutor creates a new replica set manager with provided executor
+// NewReplicaSetManagerWithExecutor — Deprecated. Executor 기반은 commit 6에서 완전 제거됨.
 func NewReplicaSetManagerWithExecutor(exec *Executor) *ReplicaSetManager {
-	return &ReplicaSetManager{executor: exec, port: 27017}
+	panic("NewReplicaSetManagerWithExecutor는 deprecated. NewReplicaSetManagerWithFactory 사용")
 }
 
-// NewReplicaSetManagerWithExecutorAndPort creates a new replica set manager with provided executor and port
+// NewReplicaSetManagerWithExecutorAndPort — Deprecated.
 func NewReplicaSetManagerWithExecutorAndPort(exec *Executor, port int) *ReplicaSetManager {
-	return &ReplicaSetManager{executor: exec, port: port}
+	panic("NewReplicaSetManagerWithExecutorAndPort는 deprecated. NewReplicaSetManagerWithFactory 사용")
 }
 
-// IsInitialized checks if the replica set is already initialized
-func (r *ReplicaSetManager) IsInitialized(ctx context.Context, podName, namespace string) (bool, error) {
-	result, err := r.executor.ExecuteMongoshWithPort(ctx, podName, namespace, "rs.status().ok", r.port)
-	if err != nil {
-		return false, nil // Not initialized or error
-	}
+// notYetInitializedCode는 mongod이 replica set으로 초기화되지 않았을 때
+// replSetGetStatus에서 반환하는 server error code이다.
+const notYetInitializedCode int32 = 94
 
-	// If we get "1" back, it's initialized
-	if strings.TrimSpace(result.Stdout) == "1" {
+// IsInitialized checks if the replica set is already initialized.
+func (r *ReplicaSetManager) IsInitialized(ctx context.Context, podName, namespace string) (bool, error) {
+	c, err := r.connect(ctx, podName, namespace, true)
+	if err != nil {
+		// 인증 실패 등 connect 자체의 에러는 not-initialized로 단정할 수 없으므로 error 전파.
+		return false, fmt.Errorf("connect for IsInitialized: %w", err)
+	}
+	defer disconnectQuiet(c)
+
+	var result bson.M
+	err = c.Database("admin").RunCommand(ctx, bson.D{{Key: "replSetGetStatus", Value: 1}}).Decode(&result)
+	if err != nil {
+		var cmdErr mongo.ServerError
+		if errors.As(err, &cmdErr) && cmdErr.HasErrorCode(int(notYetInitializedCode)) {
+			return false, nil
+		}
+		return false, fmt.Errorf("replSetGetStatus: %w", err)
+	}
+	if okFloat(result["ok"]) == 1 {
 		return true, nil
 	}
-
-	// Check stderr for "no replset config" which means not initialized
-	if strings.Contains(result.Stderr, "no replset config") ||
-		strings.Contains(result.Stderr, "NotYetInitialized") {
-		return false, nil
-	}
-
 	return false, nil
 }
 
-// Initiate initializes a new replica set
+// Initiate initializes a new replica set with the given config (idempotent).
 func (r *ReplicaSetManager) Initiate(ctx context.Context, podName, namespace string, config ReplicaSetConfig) error {
-	// Check if already initialized
 	initialized, err := r.IsInitialized(ctx, podName, namespace)
 	if err != nil {
-		return fmt.Errorf("failed to check initialization status: %w", err)
+		return fmt.Errorf("check init: %w", err)
 	}
 	if initialized {
-		return nil // Already initialized
+		return nil
 	}
 
-	// Build the rs.initiate() command
-	configJSON, err := json.Marshal(config)
+	c, err := r.connect(ctx, podName, namespace, true)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
+		return fmt.Errorf("connect for Initiate: %w", err)
 	}
+	defer disconnectQuiet(c)
 
-	command := fmt.Sprintf("rs.initiate(%s)", string(configJSON))
-	result, err := r.executor.ExecuteMongoshWithPort(ctx, podName, namespace, command, r.port)
+	var result bson.M
+	err = c.Database("admin").RunCommand(ctx, bson.D{{Key: "replSetInitiate", Value: config}}).Decode(&result)
 	if err != nil {
-		return fmt.Errorf("failed to initiate replica set: %w", err)
+		return fmt.Errorf("replSetInitiate: %w", err)
 	}
-
-	if result.ExitCode != 0 {
-		return fmt.Errorf("rs.initiate failed: %s", result.Stderr)
-	}
-
 	return nil
 }
 
-// GetStatus returns the current replica set status
+// GetStatus returns the current replica set status.
 func (r *ReplicaSetManager) GetStatus(ctx context.Context, podName, namespace string) (*ReplicaSetStatus, error) {
-	result, err := r.executor.ExecuteMongoshJSONWithPort(ctx, podName, namespace, "rs.status()", r.port)
+	c, err := r.connect(ctx, podName, namespace, true)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get replica set status: %w", err)
+		return nil, fmt.Errorf("connect for GetStatus: %w", err)
 	}
-
-	if result.ExitCode != 0 {
-		return nil, fmt.Errorf("rs.status() failed: %s", result.Stderr)
-	}
+	defer disconnectQuiet(c)
 
 	var status ReplicaSetStatus
-	if err := json.Unmarshal([]byte(result.Stdout), &status); err != nil {
-		return nil, fmt.Errorf("failed to parse replica set status: %w", err)
+	if err := c.Database("admin").RunCommand(ctx, bson.D{{Key: "replSetGetStatus", Value: 1}}).Decode(&status); err != nil {
+		return nil, fmt.Errorf("replSetGetStatus: %w", err)
 	}
-
 	return &status, nil
 }
 
-// GetPrimaryPod returns the name of the primary pod
+// GetPrimaryPod returns the pod name of the primary member.
+// host 형식 "<pod>.<service>.<ns>.svc.cluster.local:<port>"의 첫 segment를 pod name으로 본다.
 func (r *ReplicaSetManager) GetPrimaryPod(ctx context.Context, podName, namespace string) (string, error) {
 	status, err := r.GetStatus(ctx, podName, namespace)
 	if err != nil {
 		return "", err
 	}
-
-	for _, member := range status.Members {
-		if member.StateStr == "PRIMARY" {
-			// Extract pod name from host (e.g., "my-mongodb-0.my-mongodb-headless.ns.svc.cluster.local:27017")
-			parts := strings.Split(member.Name, ".")
+	for _, m := range status.Members {
+		if m.StateStr == "PRIMARY" {
+			parts := strings.Split(m.Name, ".")
 			if len(parts) > 0 {
 				return parts[0], nil
 			}
 		}
 	}
-
 	return "", fmt.Errorf("no primary found")
 }
 
-// HasPrimary checks if the replica set has an elected primary
+// HasPrimary checks if the replica set has an elected primary.
 func (r *ReplicaSetManager) HasPrimary(ctx context.Context, podName, namespace string) (bool, error) {
 	status, err := r.GetStatus(ctx, podName, namespace)
 	if err != nil {
 		return false, err
 	}
-
-	for _, member := range status.Members {
-		if member.StateStr == "PRIMARY" && member.Health == 1 {
+	for _, m := range status.Members {
+		if m.StateStr == "PRIMARY" && m.Health == 1 {
 			return true, nil
 		}
 	}
-
 	return false, nil
 }
 
-// WaitForPrimary waits until a primary is elected (using context for timeout)
+// WaitForPrimary waits until a primary is elected (uses context for timeout).
+// busy-loop 방지를 위해 2초 ticker로 폴링.
 func (r *ReplicaSetManager) WaitForPrimary(ctx context.Context, podName, namespace string) error {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		default:
-			hasPrimary, err := r.HasPrimary(ctx, podName, namespace)
-			if err == nil && hasPrimary {
+		case <-ticker.C:
+			has, err := r.HasPrimary(ctx, podName, namespace)
+			if err == nil && has {
 				return nil
 			}
-			// Continue waiting
 		}
 	}
 }
 
-// AddMember adds a new member to the replica set
+// AddMember adds a new member to the replica set via replSetReconfig.
 func (r *ReplicaSetManager) AddMember(ctx context.Context, podName, namespace, newHost string, arbiterOnly bool) error {
-	var command string
-	if arbiterOnly {
-		command = fmt.Sprintf("rs.addArb(%s)", jsString(newHost))
-	} else {
-		command = fmt.Sprintf("rs.add(%s)", jsString(newHost))
-	}
-
-	result, err := r.executor.ExecuteMongoshWithPort(ctx, podName, namespace, command, r.port)
+	cfg, err := r.GetConfig(ctx, podName, namespace)
 	if err != nil {
-		return fmt.Errorf("failed to add member: %w", err)
+		return fmt.Errorf("get config: %w", err)
 	}
-
-	if result.ExitCode != 0 {
-		return fmt.Errorf("rs.add failed: %s", result.Stderr)
+	maxID := -1
+	for _, m := range cfg.Members {
+		if m.Host == newHost {
+			return nil // 이미 멤버 — idempotent
+		}
+		if m.ID > maxID {
+			maxID = m.ID
+		}
 	}
-
-	return nil
+	cfg.Members = append(cfg.Members, ReplicaSetMember{
+		ID:          maxID + 1,
+		Host:        newHost,
+		ArbiterOnly: arbiterOnly,
+	})
+	cfg.Version++
+	return r.Reconfigure(ctx, podName, namespace, *cfg, false)
 }
 
-// RemoveMember removes a member from the replica set
+// RemoveMember removes a member from the replica set via replSetReconfig.
 func (r *ReplicaSetManager) RemoveMember(ctx context.Context, podName, namespace, hostToRemove string) error {
-	command := fmt.Sprintf("rs.remove(%s)", jsString(hostToRemove))
-	result, err := r.executor.ExecuteMongoshWithPort(ctx, podName, namespace, command, r.port)
+	cfg, err := r.GetConfig(ctx, podName, namespace)
 	if err != nil {
-		return fmt.Errorf("failed to remove member: %w", err)
+		return fmt.Errorf("get config: %w", err)
 	}
-
-	if result.ExitCode != 0 {
-		return fmt.Errorf("rs.remove failed: %s", result.Stderr)
+	filtered := cfg.Members[:0]
+	removed := false
+	for _, m := range cfg.Members {
+		if m.Host == hostToRemove {
+			removed = true
+			continue
+		}
+		filtered = append(filtered, m)
 	}
-
-	return nil
+	if !removed {
+		return nil // 이미 없음 — idempotent
+	}
+	cfg.Members = filtered
+	cfg.Version++
+	return r.Reconfigure(ctx, podName, namespace, *cfg, false)
 }
 
-// Reconfigure updates the replica set configuration
+// Reconfigure updates the replica set configuration.
 func (r *ReplicaSetManager) Reconfigure(ctx context.Context, podName, namespace string, config ReplicaSetConfig, force bool) error {
-	configJSON, err := json.Marshal(config)
+	c, err := r.connect(ctx, podName, namespace, true)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
+		return fmt.Errorf("connect for Reconfigure: %w", err)
 	}
+	defer disconnectQuiet(c)
 
-	command := fmt.Sprintf("rs.reconfig(%s, {force: %t})", string(configJSON), force)
-	result, err := r.executor.ExecuteMongoshWithPort(ctx, podName, namespace, command, r.port)
+	var result bson.M
+	err = c.Database("admin").RunCommand(ctx, bson.D{
+		{Key: "replSetReconfig", Value: config},
+		{Key: "force", Value: force},
+	}).Decode(&result)
 	if err != nil {
-		return fmt.Errorf("failed to reconfigure replica set: %w", err)
+		return fmt.Errorf("replSetReconfig: %w", err)
 	}
-
-	if result.ExitCode != 0 {
-		return fmt.Errorf("rs.reconfig failed: %s", result.Stderr)
-	}
-
 	return nil
 }
 
-// GetConfig returns the current replica set configuration
+// GetConfig returns the current replica set configuration.
 func (r *ReplicaSetManager) GetConfig(ctx context.Context, podName, namespace string) (*ReplicaSetConfig, error) {
-	result, err := r.executor.ExecuteMongoshJSONWithPort(ctx, podName, namespace, "rs.conf()", r.port)
+	c, err := r.connect(ctx, podName, namespace, true)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get replica set config: %w", err)
+		return nil, fmt.Errorf("connect for GetConfig: %w", err)
 	}
+	defer disconnectQuiet(c)
 
-	if result.ExitCode != 0 {
-		return nil, fmt.Errorf("rs.conf() failed: %s", result.Stderr)
+	type confResult struct {
+		Config ReplicaSetConfig `bson:"config"`
+		OK     float64          `bson:"ok"`
 	}
-
-	var config ReplicaSetConfig
-	if err := json.Unmarshal([]byte(result.Stdout), &config); err != nil {
-		return nil, fmt.Errorf("failed to parse replica set config: %w", err)
+	var res confResult
+	if err := c.Database("admin").RunCommand(ctx, bson.D{{Key: "replSetGetConfig", Value: 1}}).Decode(&res); err != nil {
+		return nil, fmt.Errorf("replSetGetConfig: %w", err)
 	}
-
-	return &config, nil
+	return &res.Config, nil
 }
 
-// BuildReplicaSetConfig builds a replica set configuration for initialization
+// disconnectQuiet은 client.Disconnect의 에러를 무시한다. defer 안에서 사용.
+// 진행 중인 작업의 결과 에러를 덮어쓰지 않기 위함.
+func disconnectQuiet(c *mongo.Client) {
+	_ = c.Disconnect(context.Background())
+}
+
+// okFloat는 bson 응답의 "ok" 필드가 float64/int32/int64 등 다양한 타입으로
+// 디코드될 수 있는 점을 흡수해 정수로 정규화한다.
+func okFloat(v interface{}) int {
+	switch x := v.(type) {
+	case float64:
+		return int(x)
+	case int32:
+		return int(x)
+	case int64:
+		return int(x)
+	case int:
+		return x
+	}
+	return 0
+}
+
+// BuildReplicaSetConfig builds a replica set configuration for initialization.
 func BuildReplicaSetConfig(rsName, baseName, serviceName, namespace string, members int, port int) ReplicaSetConfig {
 	config := ReplicaSetConfig{
 		ID:      rsName,
 		Members: make([]ReplicaSetMember, members),
 	}
-
 	for i := 0; i < members; i++ {
 		podName := fmt.Sprintf("%s-%d", baseName, i)
 		host := GetPodFQDN(podName, serviceName, namespace, port)
-		config.Members[i] = ReplicaSetMember{
-			ID:   i,
-			Host: host,
-		}
+		config.Members[i] = ReplicaSetMember{ID: i, Host: host}
 	}
-
 	return config
 }
 
-// BuildConfigServerReplicaSetConfig builds a config server replica set configuration
+// BuildConfigServerReplicaSetConfig builds a config server replica set configuration.
 func BuildConfigServerReplicaSetConfig(rsName, baseName, serviceName, namespace string, members int, port int) ReplicaSetConfig {
 	return BuildReplicaSetConfig(rsName, baseName, serviceName, namespace, members, port)
 }
 
-// BuildShardReplicaSetConfig builds a shard replica set configuration
+// BuildShardReplicaSetConfig builds a shard replica set configuration.
 func BuildShardReplicaSetConfig(shardName, baseName, serviceName, namespace string, members int, port int) ReplicaSetConfig {
 	return BuildReplicaSetConfig(shardName, baseName, serviceName, namespace, members, port)
+}
+
+// NewPodConnectFactory는 controller가 흔히 만드는 ConnectFactory를 한 줄로 만든다.
+// serviceName/port/자격증명을 closure에 캡슐화해 podName, namespace만 받는 형태로 노출한다.
+func NewPodConnectFactory(serviceName string, port int, username, password, authDB string) ConnectFactory {
+	return func(ctx context.Context, podName, namespace string, direct bool) (*mongo.Client, error) {
+		host := GetPodFQDN(podName, serviceName, namespace, port)
+		return NewClient(ctx, ConnectOpts{
+			Hosts:    []string{host},
+			Username: username,
+			Password: password,
+			AuthDB:   authDB,
+			Direct:   direct,
+		})
+	}
 }
