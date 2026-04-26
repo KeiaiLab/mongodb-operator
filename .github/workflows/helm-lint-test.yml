@@ -201,12 +201,12 @@ jobs:
           mkdir -p /tmp/extracted-chart
           tar -xzf "$PACKAGE_FILE" -C /tmp/extracted-chart/
           echo "Package contents:"
-          ls -lh /tmp/extracted-chart/
-          if [ ! -f /tmp/extracted-chart/Chart.yaml ]; then
+          ls -lh /tmp/extracted-chart/mongodb-operator/
+          if [ ! -f /tmp/extracted-chart/mongodb-operator/Chart.yaml ]; then
             echo "ERROR: Chart.yaml missing from package"
             exit 1
           fi
-          if [ ! -f /tmp/extracted-chart/values.yaml ]; then
+          if [ ! -f /tmp/extracted-chart/mongodb-operator/values.yaml ]; then
             echo "ERROR: values.yaml missing from package"
             exit 1
           fi
