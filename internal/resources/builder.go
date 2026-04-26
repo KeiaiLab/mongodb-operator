@@ -123,11 +123,54 @@ func BuildShardedKeyfileSecret(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.Se
 	}
 }
 
-// BuildMongoDBConfigMap creates a ConfigMap for MongoDB configuration
+// BuildMongoDBConfigMap creates a ConfigMap for MongoDB configuration.
+//
+// 포함 스크립트:
+//   - readiness-probe.sh: mongod이 ping에 응답하는지 확인.
+//   - bootstrap-admin.sh: pod 자체가 자기 mongod에 localhost connection으로
+//     첫 admin user를 생성. operator는 더 이상 pods/exec을 수행하지 않는다.
 func BuildMongoDBConfigMap(mdb *mongodbv1alpha1.MongoDB) *corev1.ConfigMap {
 	readinessScript := `#!/bin/bash
 set -e
 mongosh --quiet --eval "db.adminCommand('ping')" > /dev/null 2>&1
+`
+
+	// localhost exception을 활용한 첫 admin user 부트스트랩.
+	// 실행 컨텍스트: lifecycle.postStart hook (mongodb container 내부).
+	// 같은 pod의 mongod에 대해 source=localhost이므로 user 0명일 때 인증 우회 가능.
+	//
+	// password는 process.env로 노출하지 않고 Secret Volume mount(/etc/mongodb-admin/password)
+	// 에서 fs.readFileSync로 읽는다 → ps/env 노출 차단.
+	bootstrapScript := `#!/bin/bash
+set -eu
+
+# mongod이 응답할 때까지 최대 120초 대기 (60회 × 2초).
+for i in $(seq 1 60); do
+  if mongosh --quiet --port 27017 --eval "db.adminCommand('ping').ok" > /dev/null 2>&1; then
+    break
+  fi
+  sleep 2
+done
+
+# 이미 user가 있으면 idempotent no-op.
+EXISTING=$(mongosh --quiet --port 27017 admin --eval "db.system.users.countDocuments({user:'admin'})" 2>/dev/null || echo 0)
+if [ "$EXISTING" != "0" ]; then
+  echo "admin user already exists, skipping bootstrap"
+  exit 0
+fi
+
+# password는 mongosh stdin으로 fs.readFileSync로 읽어 직접 createUser에 전달.
+# JS literal에 password 문자열이 들어가지 않으므로 인젝션 위험도 없다.
+mongosh --quiet --port 27017 admin <<'EOF'
+const fs = require('fs');
+const pw = fs.readFileSync('/etc/mongodb-admin/password', 'utf8').trim();
+db.createUser({
+  user: 'admin',
+  pwd: pw,
+  roles: [{ role: 'root', db: 'admin' }],
+});
+EOF
+echo "admin user bootstrap complete"
 `
 
 	return &corev1.ConfigMap{
@@ -137,7 +180,8 @@ mongosh --quiet --eval "db.adminCommand('ping')" > /dev/null 2>&1
 			Labels:    buildLabels(mdb.Name, "scripts"),
 		},
 		Data: map[string]string{
-			"readiness-probe.sh": readinessScript,
+			"readiness-probe.sh":  readinessScript,
+			"bootstrap-admin.sh":  bootstrapScript,
 		},
 	}
 }
@@ -228,6 +272,26 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 		{Name: "scripts", MountPath: "/scripts", ReadOnly: true},
 	}
 
+	// admin credentials Secret을 file로 마운트한다. lifecycle.postStart의 bootstrap
+	// 스크립트가 /etc/mongodb-admin/password를 읽어 첫 admin user를 생성한다.
+	// envvar로 노출하지 않으므로 ps/audit에 password가 보이지 않는다.
+	if mdb.Spec.Auth.AdminCredentialsSecretRef.Name != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: "admin-credentials",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  mdb.Spec.Auth.AdminCredentialsSecretRef.Name,
+					DefaultMode: int32Ptr(0400),
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "admin-credentials",
+			MountPath: "/etc/mongodb-admin",
+			ReadOnly:  true,
+		})
+	}
+
 	// Init container to copy keyfile with correct permissions
 	// Runs as mongodb user (999) and uses FSGroup for proper file ownership
 	initContainers := []corev1.Container{
@@ -283,6 +347,17 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 				InitialDelaySeconds: 5,
 				PeriodSeconds:       10,
 				TimeoutSeconds:      5,
+			},
+			// pod 자체가 자기 mongod에 localhost 연결로 첫 admin user를 생성한다.
+			// operator는 pods/exec을 호출하지 않는다. 스크립트가 실패해도 mongod
+			// 시작 자체는 멈추지 않으며, 운영자는 readiness 미달 → reconcile
+			// requeue로 인지한다.
+			Lifecycle: &corev1.Lifecycle{
+				PostStart: &corev1.LifecycleHandler{
+					Exec: &corev1.ExecAction{
+						Command: []string{"/scripts/bootstrap-admin.sh"},
+					},
+				},
 			},
 			Env: []corev1.EnvVar{
 				{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{
