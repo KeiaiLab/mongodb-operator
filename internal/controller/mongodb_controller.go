@@ -56,6 +56,12 @@ type MongoDBReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
+// pods/exec — 보안 알림: 이 권한은 namespace를 가리지 않는 ClusterRole로 부여된다.
+// 이유: 운영자는 cluster-wide watch이며, operator가 어느 namespace에 어느 이름의 mongodb
+// pod이 생기든 mongosh를 exec해야 한다. resourceNames는 pod 이름이 동적이라 효력이 없고,
+// verbs는 이미 최소(create)로 제한되어 있다.
+// 근본 해결: mongo-go-driver를 도입해 exec 자체를 제거하면 이 권한을 삭제할 수 있다.
+// 자세한 내용은 docs/security/rbac-known-limitations.md 참조.
 // +kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 
