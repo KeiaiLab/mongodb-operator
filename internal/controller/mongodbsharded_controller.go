@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"time"
 
@@ -346,6 +347,10 @@ func (r *MongoDBShardedReconciler) reconcileShardsInit(ctx context.Context, mdbs
 		return fmt.Errorf("failed to create replica set manager: %w", err)
 	}
 
+	// shardErrs는 각 shard별 실패를 누적한다. 이전 구현은 continue로 에러를 삼키고
+	// 루프 종료 후 Status().Update로 항상 nil error를 반환해 호출자에게 "성공"
+	// 신호를 보냈음. 그 결과 운영자는 클러스터가 깨진 것을 알지 못했다.
+	var shardErrs []error
 	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
 		if mdbsh.Status.ShardsInitialized[i] {
 			continue
@@ -360,7 +365,9 @@ func (r *MongoDBShardedReconciler) reconcileShardsInit(ctx context.Context, mdbs
 		// Check if already initialized
 		initialized, err := rsManager.IsInitialized(ctx, firstPod, mdbsh.Namespace)
 		if err != nil {
-			continue // Will retry
+			logger.Error(err, "Failed to check shard initialization", "shard", shardName)
+			shardErrs = append(shardErrs, fmt.Errorf("shard %s: check init: %w", shardName, err))
+			continue
 		}
 
 		if initialized {
@@ -382,14 +389,21 @@ func (r *MongoDBShardedReconciler) reconcileShardsInit(ctx context.Context, mdbs
 		// Initialize
 		if err := rsManager.Initiate(ctx, firstPod, mdbsh.Namespace, config); err != nil {
 			logger.Error(err, "Failed to initiate shard replica set", "shard", shardName)
-			continue // Will retry
+			shardErrs = append(shardErrs, fmt.Errorf("shard %s: initiate: %w", shardName, err))
+			continue
 		}
 
 		logger.Info("Shard replica set initialized successfully", "shard", shardName)
 		mdbsh.Status.ShardsInitialized[i] = true
 	}
 
-	return r.Status().Update(ctx, mdbsh)
+	// 부분 진행 상태(Initialized 슬라이스)는 항상 status에 반영. status update 자체가
+	// 실패해도 shard 실패가 우선이므로 errors.Join으로 묶어 호출자에게 전달.
+	statusErr := r.Status().Update(ctx, mdbsh)
+	if len(shardErrs) > 0 {
+		return stderrors.Join(append(shardErrs, statusErr)...)
+	}
+	return statusErr
 }
 
 func (r *MongoDBShardedReconciler) reconcileShardedAdminUser(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
@@ -467,6 +481,8 @@ func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh
 		return fmt.Errorf("failed to get mongos pod: %w", err)
 	}
 
+	// reconcileShardsInit과 동일한 사일런트 실패 패턴을 가지고 있어 동일 방식으로 수정.
+	var addErrs []error
 	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
 		if mdbsh.Status.ShardsAdded[i] {
 			continue
@@ -490,14 +506,19 @@ func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh
 		// Add shard via mongos with authentication (container "mongos", port 27017)
 		if err := shardManager.AddShardWithAuthInContainer(ctx, mongosPod, mdbsh.Namespace, "mongos", "admin", adminPassword, shardConnString, 27017); err != nil {
 			logger.Error(err, "Failed to add shard", "shard", shardName)
-			continue // Will retry
+			addErrs = append(addErrs, fmt.Errorf("shard %s: add: %w", shardName, err))
+			continue
 		}
 
 		logger.Info("Shard added successfully", "shard", shardName)
 		mdbsh.Status.ShardsAdded[i] = true
 	}
 
-	return r.Status().Update(ctx, mdbsh)
+	statusErr := r.Status().Update(ctx, mdbsh)
+	if len(addErrs) > 0 {
+		return stderrors.Join(append(addErrs, statusErr)...)
+	}
+	return statusErr
 }
 
 func (r *MongoDBShardedReconciler) getMongosPodName(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) (string, error) {
