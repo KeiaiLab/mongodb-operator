@@ -109,10 +109,10 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.0.1
-    created: "2026-01-22T13:13:07.517367422Z"
+    created: "2026-04-26T02:01:19.242784307Z"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
-    digest: a0123c631cf84fdde5395233ee87d0241f7b4dd4c56316af3110565a1db18080
+    digest: fb707048256ab34c9af4cdf33fa70d60e4a8bf81b1698df734ddc595b5821a3c
     home: https://github.com/keiailab/mongodb-operator
     icon: https://raw.githubusercontent.com/mongodb/mongo/master/docs/leaf.svg
     keywords:
@@ -256,7 +256,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.0.0
-    created: "2026-01-22T13:13:07.516500586Z"
+    created: "2026-04-26T02:01:19.241466878Z"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: f65e9e57b254c2aaed0b42569cc61616c6048a714a0686180ace19712648f6d2
@@ -387,7 +387,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 0.0.7
-    created: "2026-01-22T13:13:07.515175993Z"
+    created: "2026-04-26T02:01:19.240387137Z"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters
     digest: f4d0fb7cc01ecc4aeb659555596856faabf94de5c8d3be8bc42da6c6f9011aa0
@@ -516,7 +516,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 0.0.6
-    created: "2026-01-22T13:13:07.514115122Z"
+    created: "2026-04-26T02:01:19.23945877Z"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters
     digest: 0cce9cf49f837b76e909bf9d7156e9ef049370b388d040142a719ea3623bb790
@@ -645,7 +645,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 0.0.5
-    created: "2026-01-22T13:13:07.513215003Z"
+    created: "2026-04-26T02:01:19.238547369Z"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters
     digest: fc383b1472a1840ffa50a5ee03b281cc0a0caea3511a0fc265472e9168b99f0a
@@ -801,4 +801,4 @@ entries:
     urls:
     - https://eightynine01.github.io/mongodb-operator/dist/mongodb-operator-0.0.2.tgz
     version: 0.0.2
-generated: "2026-01-22T13:13:07.507381877Z"
+generated: "2026-04-26T02:01:19.23743536Z"
