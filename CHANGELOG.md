@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **BREAKING (security)**: mongosh `kubectl exec` 의존을 mongo-go-driver v2 네트워크
+  client로 완전 대체. `pods/exec` ClusterRole 권한이 RBAC에서 삭제됨.
+  - operator Pod이 침해되어도 cluster의 임의 Pod에서 임의 명령 실행 불가능
+  - 첫 admin user 생성은 mongodb pod / mongos pod의 `lifecycle.postStart`
+    bootstrap 스크립트가 담당 (localhost exception을 operator가 아닌 pod
+    자체에서 사용)
+  - 기존 cluster 마이그레이션: admin user가 이미 있으면 자동 호환. 없거나
+    password가 다르면 reconcile 영구 실패 → 운영 매뉴얼 별도 필요.
+- 부수 효과: connection pooling, context 기반 timeout, BSON 타입 안전성으로
+  JS 인젝션 가능성 0건.
+
+### Removed
+- `pods/exec` ClusterRole 규칙 (config/rbac/role.yaml,
+  charts/mongodb-operator/templates/clusterrole.yaml)
+- `internal/mongodb/{executor,escape}.go` 및 관련 테스트
+- `docs/security/rbac-known-limitations.md` (한계 해소)
+
+### Verification (사용자 권장)
+fresh install 시:
+```bash
+kind create cluster --name mongo-op-e2e
+make docker-build IMG=ghcr.io/eightynine01/mongodb-operator:test-v2
+kind load docker-image ghcr.io/eightynine01/mongodb-operator:test-v2
+make deploy IMG=ghcr.io/eightynine01/mongodb-operator:test-v2
+kubectl apply -f examples/minimal/
+# 검증:
+# - replica set 3 멤버 init 성공
+# - operator pod의 audit log에 pods/exec 호출 0건
+# - sharded 예제에서 addShard 성공
+```
+
+후속 phase 권장:
+- envtest binaries 자동 다운로드 + in-process mongod(memongo)로 driver
+  호출 단위 검증
+- kind 골든 패스를 GitHub Actions에 자동화
+
 ### Planned
 - Point-in-Time Recovery (PITR)
 - Automated version upgrades
