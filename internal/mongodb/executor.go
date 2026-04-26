@@ -61,8 +61,22 @@ type ExecResult struct {
 	ExitCode int
 }
 
-// ExecuteCommand executes a command in a pod container
+// ExecuteCommand executes a command in a pod container without stdin.
 func (e *Executor) ExecuteCommand(ctx context.Context, podName, namespace, container string, command []string) (*ExecResult, error) {
+	return e.executeCommand(ctx, podName, namespace, container, command, nil)
+}
+
+// ExecuteCommandWithStdin executes a command in a pod container, piping the
+// given string to its stdin. 사용 목적: 자격증명·비밀값을 명령행 인자가 아닌
+// stdin으로 전달해 Kubernetes audit log 및 컨테이너 내 `ps` 출력에 평문으로
+// 노출되지 않도록 한다.
+func (e *Executor) ExecuteCommandWithStdin(ctx context.Context, podName, namespace, container string, command []string, stdin string) (*ExecResult, error) {
+	return e.executeCommand(ctx, podName, namespace, container, command, strings.NewReader(stdin))
+}
+
+// executeCommand는 ExecuteCommand/ExecuteCommandWithStdin의 공통 구현이다.
+// stdin이 nil이면 PodExecOptions.Stdin도 false로 설정한다.
+func (e *Executor) executeCommand(ctx context.Context, podName, namespace, container string, command []string, stdin *strings.Reader) (*ExecResult, error) {
 	req := e.clientset.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(podName).
@@ -71,7 +85,7 @@ func (e *Executor) ExecuteCommand(ctx context.Context, podName, namespace, conta
 		VersionedParams(&corev1.PodExecOptions{
 			Container: container,
 			Command:   command,
-			Stdin:     false,
+			Stdin:     stdin != nil,
 			Stdout:    true,
 			Stderr:    true,
 			TTY:       false,
@@ -83,10 +97,14 @@ func (e *Executor) ExecuteCommand(ctx context.Context, podName, namespace, conta
 	}
 
 	var stdout, stderr bytes.Buffer
-	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+	streamOpts := remotecommand.StreamOptions{
 		Stdout: &stdout,
 		Stderr: &stderr,
-	})
+	}
+	if stdin != nil {
+		streamOpts.Stdin = stdin
+	}
+	err = exec.StreamWithContext(ctx, streamOpts)
 
 	result := &ExecResult{
 		Stdout:   stdout.String(),
@@ -136,18 +154,33 @@ func (e *Executor) ExecuteMongoshWithAuthAndPort(ctx context.Context, podName, n
 	return e.ExecuteMongoshWithAuthInContainer(ctx, podName, namespace, "mongodb", username, password, authDB, command, port)
 }
 
-// ExecuteMongoshWithAuthInContainer executes a mongosh command with authentication in a specified container
+// ExecuteMongoshWithAuthInContainer executes a mongosh command with authentication in a specified container.
+//
+// 자격증명을 명령행 인자(-u/-p)가 아닌 stdin script로 전달한다. 이렇게 하면
+// (1) Kubernetes audit log에 평문 password가 기록되지 않고,
+// (2) 컨테이너 내 `ps` 출력에서도 password가 보이지 않는다.
 func (e *Executor) ExecuteMongoshWithAuthInContainer(ctx context.Context, podName, namespace, container, username, password, authDB, command string, port int) (*ExecResult, error) {
-	return e.ExecuteCommand(ctx, podName, namespace, container, []string{
+	args := mongoshArgsNoAuth(port)
+	script := buildAuthScript(authDB, username, password, command)
+	return e.ExecuteCommandWithStdin(ctx, podName, namespace, container, args, script)
+}
+
+// mongoshArgsNoAuth는 자격증명을 포함하지 않는 mongosh 명령행 인자를 만든다.
+// 자격증명은 stdin script로 전달되며 절대 args에 포함되어서는 안 된다 (audit/ps 노출 차단).
+func mongoshArgsNoAuth(port int) []string {
+	return []string{
 		"mongosh",
 		"--quiet",
 		"--port", fmt.Sprintf("%d", port),
-		"-u", username,
-		"-p", password,
-		"--authenticationDatabase", authDB,
-		"--eval",
-		command,
-	})
+	}
+}
+
+// buildAuthScript는 stdin으로 mongosh에 파이프할 인증 + 명령 스크립트를 만든다.
+// 모든 사용자 제어 값(authDB, username, password)은 jsString으로 JS literal로
+// 인코딩되므로 인젝션 위험이 없다.
+func buildAuthScript(authDB, username, password, command string) string {
+	return fmt.Sprintf("db.getSiblingDB(%s).auth(%s, %s);\n%s\n",
+		jsString(authDB), jsString(username), jsString(password), command)
 }
 
 // ExecuteMongoshJSON executes a mongosh command and expects JSON output
