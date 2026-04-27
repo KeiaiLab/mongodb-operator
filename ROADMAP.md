@@ -303,6 +303,99 @@ spec:
 
 **Phase 3 총 기간**: 22-26주
 
+## Phase 4: Bitnami `mongodb-sharded` Helm chart 동등성 (2027 Q1 - 3개월)
+
+[Bitnami `mongodb-sharded` 9.4.12 동등성 분석](docs/comparison/bitnami-mongodb-sharded.md)에서 도출된 9건의 갭. Helm chart 사용자가 본 Operator로 전환할 때 누락 없는 1:1 마이그레이션이 가능하도록 한다.
+
+### 4.1 NetworkPolicy 자동 생성 (P0)
+
+**구현 사항**:
+- `MongoDB`/`MongoDBSharded` CRD에 `network.policy.enabled`, `allowExternal`, `extraIngress`, `extraEgress`, `ingressNSMatchLabels` 필드 추가
+- ResourceBuilder에 `BuildNetworkPolicy()` 추가 (mongos/configsvr/shardsvr 컴포넌트별 라벨 셀렉터)
+- 기본값: `enabled: false` (기존 클러스터 호환성), 신규 가이드는 `true` 권장
+
+**근거**: 매트릭스 #18 (Bitnami 기본 enabled, 본 프로젝트 미지원).
+**예상 기간**: 2-3주.
+
+### 4.2 Sharded Arbiter / Hidden member 지원 (P0)
+
+**구현 사항**:
+- `MongoDBSharded.spec.shards.arbiter.{enabled,replicas,resources}` 필드 추가
+- `MongoDBSharded.spec.shards.hiddenMembers.{count,priority,votes,tags}` 필드 추가
+- `ShardManager`에서 `rs.add({arbiterOnly: true})` / `rs.add({hidden: true, priority: 0})` 호출 분기
+
+**근거**: 매트릭스 #1 (비용 최적화 토폴로지, 분석/백업 격리 시나리오 누락).
+**예상 기간**: 3-4주.
+
+### 4.3 워크로드 사이드카·extraVolumes·extraEnvVars 주입 (P1)
+
+**구현 사항**:
+- `PodSpec`에 `Sidecars []corev1.Container`, `InitContainers []corev1.Container`, `ExtraVolumes []corev1.Volume`, `ExtraVolumeMounts []corev1.VolumeMount`, `ExtraEnvVars []corev1.EnvVar`, `LifecycleHooks *corev1.Lifecycle` 필드 추가
+- ResourceBuilder가 StatefulSet/Deployment 생성 시 합성
+- 보안 가드: operator가 주입하는 admin bootstrap postStart는 항상 우선
+
+**근거**: 매트릭스 #26-28 (audit 로그, fluentbit, oplog tailer 등 운영 표준 갭).
+**예상 기간**: 2-3주.
+
+### 4.4 PVC retention policy 노출 (P1)
+
+**구현 사항**:
+- `StorageSpec`에 `retentionPolicy.{whenScaled,whenDeleted}` 필드 추가 (`Retain` | `Delete`)
+- StatefulSet `persistentVolumeClaimRetentionPolicy` 매핑
+
+**근거**: 매트릭스 #11 (scale-down 시 데이터 손실 방지).
+**예상 기간**: 1주.
+
+### 4.5 volumePermissions init container (P1)
+
+**구현 사항**:
+- CRD `pod.volumePermissions.{enabled,image,resources}` 필드 추가
+- ResourceBuilder가 활성화 시 `os-shell` 또는 `busybox` init container 주입 (`chown -R mongodb:mongodb /data/db`)
+- 비활성화 기본값 (fsGroup만으로 충분한 환경 우선)
+
+**근거**: 매트릭스 #12 (non-root/restricted PSA 클러스터 대응).
+**예상 기간**: 1주.
+
+### 4.6 Init scripts ConfigMap (P2)
+
+**구현 사항**:
+- `MongoDB`/`MongoDBSharded`에 `initScripts.{configMapRef, secretRef}` 필드 추가
+- pod에 `/docker-entrypoint-initdb.d`로 마운트, 컨테이너 entrypoint가 `.sh`/`.js` 순차 실행
+- admin user 부트스트랩 후 1회만 실행
+
+**근거**: 매트릭스 #25 (인덱스/시드 자동화).
+**예상 기간**: 1-2주.
+
+### 4.7 Service 옵션 확장 (P2)
+
+**구현 사항**:
+- `MongosServiceSpec`에 `sessionAffinity`, `sessionAffinityConfig`, `externalIPs`, `nodePort`, `headless` 필드 추가
+- ResourceBuilder Service 생성 로직 확장
+
+**근거**: 매트릭스 #17 (외부 노출 시나리오).
+**예상 기간**: 1주.
+
+### 4.8 Diagnostic mode + Resource presets (P2)
+
+**구현 사항**:
+- CRD `pod.diagnosticMode.enabled` 필드 (활성화 시 command `["sleep","infinity"]`, probe 비활성화)
+- `pod.resources.preset` 필드 (`none`/`nano`/`micro`/`small`/`medium`/`large`/`xlarge`/`2xlarge`) — 직접 `resources` 지정 시 preset 무시
+
+**근거**: 매트릭스 #30, #31 (트러블슈팅 편의 + Bitnami preset 호환).
+**예상 기간**: 1-2주.
+
+### 4.9 Scale-in / Member removal (P2)
+
+**구현 사항**:
+- `MongoDBSharded.spec.shards.count` 감소 시 `removeShard` 호출 → drain 완료 대기 → StatefulSet 삭제 + PVC 정책에 따라 처리
+- `MongoDB.spec.members` 감소 시 `rs.remove()` 호출 후 멤버 pod 종료
+- 안전 가드: drain 미완 시 reconcile 재시도, finalizer로 stuck 방지
+
+**근거**: 매트릭스 #37, #38 (현재 README가 명시한 한계 직접 해소).
+**예상 기간**: 4-5주 (가장 위험한 작업, e2e 테스트 필수).
+
+**Phase 4 총 기간**: 16-22주 (P0 5-7주, P1 4-5주, P2 7-10주)
+
 ## 타임라인 요약
 
 ```
@@ -325,6 +418,11 @@ spec:
 2026 Q4 (10-12월) - Phase 3B: 멀티 클러스터
 ├─ Week 1-8:  멀티 클러스터 관리
 └─ Week 9-12: 고급 감사 로깅
+
+2027 Q1 (1-3월) - Phase 4: Bitnami Helm chart 동등성
+├─ Week 1-3:   NetworkPolicy + Arbiter/Hidden member (P0)
+├─ Week 4-7:   사이드카·extraVolumes·PVC retention·volumePermissions (P1)
+└─ Week 8-12:  Init scripts·Service 옵션·Diagnostic mode·Scale-in (P2)
 ```
 
 ## 우선순위 매트릭스
@@ -396,6 +494,7 @@ spec:
 | v1.2.0 | 2026-07 | LDAP/OIDC, 다중 리전, 저장 암호화 |
 | v1.3.0 | 2026-10 | 고급 백업, 성능 분석 도구 |
 | v2.0.0 | 2027-01 | 멀티 클러스터, 감사 로깅, 주요 API 변경 |
+| v2.1.0 | 2027-04 | Bitnami Helm chart 동등성 (NetworkPolicy, Arbiter/Hidden, 사이드카, Scale-in) |
 
 ## 참고 자료
 
