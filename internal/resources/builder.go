@@ -180,8 +180,8 @@ echo "admin user bootstrap complete"
 			Labels:    buildLabels(mdb.Name, "scripts"),
 		},
 		Data: map[string]string{
-			"readiness-probe.sh":  readinessScript,
-			"bootstrap-admin.sh":  bootstrapScript,
+			"readiness-probe.sh": readinessScript,
+			"bootstrap-admin.sh": bootstrapScript,
 		},
 	}
 }
@@ -910,10 +910,10 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 
 	containers := []corev1.Container{
 		{
-			Name:            "mongos",
-			Image:           getMongoDBImage(mdbsh.Spec.Version),
-			Command:         []string{"mongos"},
-			Args:            args,
+			Name:    "mongos",
+			Image:   getMongoDBImage(mdbsh.Spec.Version),
+			Command: []string{"mongos"},
+			Args:    args,
 			Ports: []corev1.ContainerPort{
 				{Name: "mongodb", ContainerPort: mongoDBPort},
 			},
@@ -1009,8 +1009,8 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 						},
 					},
 					Containers: containers,
-					Volumes: buildMongosVolumes(mdbsh),
-					Affinity: buildDefaultAffinity(mdbsh.Name),
+					Volumes:    buildMongosVolumes(mdbsh),
+					Affinity:   buildDefaultAffinity(mdbsh.Name),
 				},
 			},
 		},

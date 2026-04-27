@@ -30,7 +30,7 @@ import (
 // 이 헬퍼는 retry.RetryOnConflict로 conflict를 흡수한다. spec/metadata는 호출자의
 // in-memory 사본을 신뢰(reconcile 컨텍스트의 source of truth가 보통 그것)하되,
 // conflict 시 controller-runtime의 client.Status().Update가 ResourceVersion 충돌을
-//자동 감지하고 retry 콜백 안에서 다시 시도하도록 한다.
+// 자동 감지하고 retry 콜백 안에서 다시 시도하도록 한다.
 //
 // 본 헬퍼는 status subresource만 다루므로 spec field 손실을 일으키지 않는다.
 func updateStatusWithRetry(ctx context.Context, c client.Client, obj client.Object) error {
