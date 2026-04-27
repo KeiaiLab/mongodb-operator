@@ -17,7 +17,9 @@ limitations under the License.
 package mongodb
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -240,4 +242,130 @@ func TestNewReplicaSetManagerWithFactory(t *testing.T) {
 	// nil factory도 일단 생성은 가능 (호출 시점에 panic). 단순 not-nil 검증.
 	manager := NewReplicaSetManagerWithFactory(nil)
 	assert.NotNil(t, manager)
+}
+
+// TestNewReplicaSetManager_Deprecated는 옛 생성자가 거부됨을 보장. Executor 시대
+// 의 우회 경로가 다시 살아나면 이 테스트가 실패한다.
+func TestNewReplicaSetManager_Deprecated(t *testing.T) {
+	mgr, err := NewReplicaSetManager()
+	assert.Error(t, err)
+	assert.Nil(t, mgr)
+	assert.Contains(t, err.Error(), "deprecated")
+}
+
+// TestNewReplicaSetManagerWithPort_Deprecated는 호환성용 옛 생성자 거부 검증.
+func TestNewReplicaSetManagerWithPort_Deprecated(t *testing.T) {
+	mgr, err := NewReplicaSetManagerWithPort(27017)
+	assert.Error(t, err)
+	assert.Nil(t, mgr)
+}
+
+// TestOkFloat는 mongo-go-driver가 응답 ok 필드를 다양한 수치 타입(float64/int32/
+// int64/int)으로 디코드할 수 있다는 사실을 흡수하는 헬퍼를 검증. 한 케이스라도
+// 빠지면 정상 응답이 실패로 잘못 인식된다.
+func TestOkFloat(t *testing.T) {
+	cases := []struct {
+		name string
+		in   interface{}
+		want int
+	}{
+		{"float64 ok", float64(1), 1},
+		{"int32 ok", int32(1), 1},
+		{"int64 ok", int64(1), 1},
+		{"int ok", int(1), 1},
+		{"float64 zero", float64(0), 0},
+		{"unsupported type returns 0", "1", 0},
+		{"nil returns 0", nil, 0},
+		{"bool returns 0", true, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, okFloat(tc.in))
+		})
+	}
+}
+
+// TestNewPodConnectFactory_Constructs는 controller가 흔히 쓰는 헬퍼가 ConnectFactory
+// 시그니처를 만족하는 함수를 반환하는지 확인. 실제 connect 호출은 driver를
+// 거치므로 unit 레벨에서는 검증 불가.
+func TestNewPodConnectFactory_Constructs(t *testing.T) {
+	f := NewPodConnectFactory("svc", 27017, "admin", "pw", "admin")
+	assert.NotNil(t, f, "factory function should not be nil")
+}
+
+// TestReplicaSetManager_ConnectErrorPaths는 connect 실패가 각 메서드에서 명시적
+// op label과 함께 wrap되어 반환되는지 일괄 검증. 운영 로그에서 어떤 단계에서
+// 실패했는지 추적 가능해야 한다.
+func TestReplicaSetManager_ConnectErrorPaths(t *testing.T) {
+	mgr := NewReplicaSetManagerWithFactory(failingFactory("dial fail"))
+	ctx := context.Background()
+
+	t.Run("IsInitialized", func(t *testing.T) {
+		ok, err := mgr.IsInitialized(ctx, "mongo-0", "ns")
+		assert.Error(t, err)
+		assert.False(t, ok)
+		assert.Contains(t, err.Error(), "connect for IsInitialized")
+	})
+
+	t.Run("Initiate wraps via IsInitialized", func(t *testing.T) {
+		err := mgr.Initiate(ctx, "mongo-0", "ns", BuildReplicaSetConfig("rs0", "mongo", "svc", "ns", 3, 27017))
+		assert.Error(t, err)
+		// IsInitialized가 먼저 실패하므로 "check init" wrapper가 보여야 함.
+		assert.Contains(t, err.Error(), "check init")
+	})
+
+	t.Run("GetStatus", func(t *testing.T) {
+		status, err := mgr.GetStatus(ctx, "mongo-0", "ns")
+		assert.Error(t, err)
+		assert.Nil(t, status)
+		assert.Contains(t, err.Error(), "connect for GetStatus")
+	})
+
+	t.Run("GetPrimaryPod propagates GetStatus error", func(t *testing.T) {
+		pod, err := mgr.GetPrimaryPod(ctx, "mongo-0", "ns")
+		assert.Error(t, err)
+		assert.Empty(t, pod)
+	})
+
+	t.Run("HasPrimary propagates GetStatus error", func(t *testing.T) {
+		has, err := mgr.HasPrimary(ctx, "mongo-0", "ns")
+		assert.Error(t, err)
+		assert.False(t, has)
+	})
+
+	t.Run("AddMember wraps via GetConfig", func(t *testing.T) {
+		err := mgr.AddMember(ctx, "mongo-0", "ns", "new-host:27017", false)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "get config")
+	})
+
+	t.Run("RemoveMember wraps via GetConfig", func(t *testing.T) {
+		err := mgr.RemoveMember(ctx, "mongo-0", "ns", "old-host:27017")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "get config")
+	})
+
+	t.Run("GetConfig", func(t *testing.T) {
+		cfg, err := mgr.GetConfig(ctx, "mongo-0", "ns")
+		assert.Error(t, err)
+		assert.Nil(t, cfg)
+		assert.Contains(t, err.Error(), "connect for GetConfig")
+	})
+
+	t.Run("Reconfigure", func(t *testing.T) {
+		err := mgr.Reconfigure(ctx, "mongo-0", "ns", BuildReplicaSetConfig("rs0", "mongo", "svc", "ns", 1, 27017), false)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "connect for Reconfigure")
+	})
+}
+
+// TestWaitForPrimary_ContextCanceled는 primary가 영원히 안 뜨는 상황에서 context
+// 만료 시 ctx.Err()가 반환됨을 검증. 무한 ticker 폴링으로 reconcile이 stuck되면
+// 안 된다.
+func TestWaitForPrimary_ContextCanceled(t *testing.T) {
+	mgr := NewReplicaSetManagerWithFactory(failingFactory("nx"))
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := mgr.WaitForPrimary(ctx, "mongo-0", "ns")
+	assert.Error(t, err)
 }

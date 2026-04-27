@@ -88,3 +88,41 @@ func TestNewClient_RejectsDirectAndReplicaSet(t *testing.T) {
 		t.Fatalf("에러 메시지가 기대와 다름: %v", err)
 	}
 }
+
+// TestGetPodFQDN은 StatefulSet headless service 명명 규약(<pod>.<svc>.<ns>.svc.cluster.local:<port>)이
+// 정확히 적용되는지 확인한다. driver 연결의 host 기반이라 형식이 깨지면 모든 reconcile이 실패.
+func TestGetPodFQDN(t *testing.T) {
+	got := GetPodFQDN("mongo-1", "mongo-svc", "mongodb-system", 27017)
+	want := "mongo-1.mongo-svc.mongodb-system.svc.cluster.local:27017"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// TestGetPodsFQDN은 StatefulSet ordinal 패턴(0..N-1)으로 FQDN 슬라이스가 정확히
+// 생성되는지 검증.
+func TestGetPodsFQDN(t *testing.T) {
+	got := GetPodsFQDN("rs", "rs-svc", "default", 3, 27017)
+	if len(got) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(got))
+	}
+	expectations := []string{
+		"rs-0.rs-svc.default.svc.cluster.local:27017",
+		"rs-1.rs-svc.default.svc.cluster.local:27017",
+		"rs-2.rs-svc.default.svc.cluster.local:27017",
+	}
+	for i, want := range expectations {
+		if got[i] != want {
+			t.Errorf("index %d: got %q, want %q", i, got[i], want)
+		}
+	}
+}
+
+// TestGetPodsFQDN_Zero는 replicas=0 입력에서 빈 슬라이스가 반환되는 경계 케이스를
+// 보장. 갓 생성된 CR이 reconcile 중간 상태에서 호출될 수 있다.
+func TestGetPodsFQDN_Zero(t *testing.T) {
+	got := GetPodsFQDN("rs", "rs-svc", "default", 0, 27017)
+	if len(got) != 0 {
+		t.Fatalf("expected empty slice, got %v", got)
+	}
+}
