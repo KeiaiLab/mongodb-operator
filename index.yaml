@@ -109,7 +109,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.0.1
-    created: "2026-04-27T00:13:02.698079733Z"
+    created: "2026-04-27T00:13:13.468537583Z"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 1da66dbe3b40b3a1e772217c85094fb8da2170647b8c14a3ba8bde4958bb5feb
@@ -256,7 +256,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.0.0
-    created: "2026-04-27T00:13:02.697155606Z"
+    created: "2026-04-27T00:13:13.466620689Z"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: f65e9e57b254c2aaed0b42569cc61616c6048a714a0686180ace19712648f6d2
@@ -387,7 +387,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 0.0.7
-    created: "2026-04-27T00:13:02.695340314Z"
+    created: "2026-04-27T00:13:13.465530694Z"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters
     digest: f4d0fb7cc01ecc4aeb659555596856faabf94de5c8d3be8bc42da6c6f9011aa0
@@ -516,7 +516,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 0.0.6
-    created: "2026-04-27T00:13:02.694397311Z"
+    created: "2026-04-27T00:13:13.464632988Z"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters
     digest: 0cce9cf49f837b76e909bf9d7156e9ef049370b388d040142a719ea3623bb790
@@ -645,7 +645,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 0.0.5
-    created: "2026-04-27T00:13:02.693483354Z"
+    created: "2026-04-27T00:13:13.463598317Z"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters
     digest: fc383b1472a1840ffa50a5ee03b281cc0a0caea3511a0fc265472e9168b99f0a
@@ -801,4 +801,4 @@ entries:
     urls:
     - https://eightynine01.github.io/mongodb-operator/dist/mongodb-operator-0.0.2.tgz
     version: 0.0.2
-generated: "2026-04-27T00:13:02.692384109Z"
+generated: "2026-04-27T00:13:13.462498608Z"
