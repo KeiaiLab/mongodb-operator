@@ -6,7 +6,9 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: mongodb-operator-manager-role
+  # controller-gen이 생성하는 ClusterRole 이름은 Makefile의 roleName=manager-role
+  # 인자에 따라 그대로 'manager-role'이다. binding의 roleRef도 같은 이름이어야 한다.
+  name: manager-role
 subjects:
   - kind: ServiceAccount
     name: mongodb-operator-controller-manager

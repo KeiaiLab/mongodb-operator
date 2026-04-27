@@ -1,3 +1,4 @@
+---
 # MongoDB Operator Helm Chart Values
 # This is a YAML-formatted file.
 
@@ -7,7 +8,7 @@ replicaCount: 1
 # Operator image configuration
 image:
   # -- Image repository
-  repository: ghcr.io/eightynine01/mongodb-operator
+  repository: ghcr.io/keiailab/mongodb-operator
   # -- Image pull policy
   pullPolicy: IfNotPresent
   # -- Overrides the image tag (default: chart appVersion)

@@ -2,11 +2,14 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
-  - manager.yaml
+- manager.yaml
 
-images:
   # manager.yaml의 image와 정확히 일치해야 kustomize가 newTag/newName으로 교체 가능.
   # GHCR 마이그레이션 이후 이미지는 ghcr.io/eightynine01/mongodb-operator.
-  - name: ghcr.io/eightynine01/mongodb-operator
-    newName: ghcr.io/eightynine01/mongodb-operator
-    newTag: latest
+images:
+- name: controller
+  newName: ghcr.io/eightynine01/mongodb-operator
+  newTag: test-v2
+- name: ghcr.io/eightynine01/mongodb-operator
+  newName: ghcr.io/eightynine01/mongodb-operator
+  newTag: latest
