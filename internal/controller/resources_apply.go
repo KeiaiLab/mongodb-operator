@@ -79,6 +79,19 @@ func applyService(ctx context.Context, c client.Client, scheme *runtime.Scheme, 
 		target.Spec.Type = desired.Spec.Type
 		target.Spec.PublishNotReadyAddresses = desired.Spec.PublishNotReadyAddresses
 		target.Spec.SessionAffinity = desired.Spec.SessionAffinity
+		target.Spec.SessionAffinityConfig = desired.Spec.SessionAffinityConfig
+		// LoadBalancer/NodePort 관련 필드 — Mongos LB IP 변경, externalIPs 추가,
+		// PROXY protocol 헬스 체크 NodePort 등 운영 변경이 첫 Create 후에도
+		// 반영되어야 함. 기존 누락 시 LoadBalancerIP 영구 고착 P0 결함.
+		target.Spec.LoadBalancerIP = desired.Spec.LoadBalancerIP
+		target.Spec.LoadBalancerSourceRanges = desired.Spec.LoadBalancerSourceRanges
+		target.Spec.LoadBalancerClass = desired.Spec.LoadBalancerClass
+		target.Spec.AllocateLoadBalancerNodePorts = desired.Spec.AllocateLoadBalancerNodePorts
+		target.Spec.ExternalIPs = desired.Spec.ExternalIPs
+		target.Spec.ExternalName = desired.Spec.ExternalName
+		target.Spec.ExternalTrafficPolicy = desired.Spec.ExternalTrafficPolicy
+		target.Spec.HealthCheckNodePort = desired.Spec.HealthCheckNodePort
+		target.Spec.InternalTrafficPolicy = desired.Spec.InternalTrafficPolicy
 		return controllerutil.SetControllerReference(owner, target, scheme)
 	})
 	return err
