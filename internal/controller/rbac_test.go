@@ -41,6 +41,18 @@ func TestRBAC_RoleYAML_HasRequiredCorePermissions(t *testing.T) {
 			"services":   {"get", "list", "watch"},
 			"configmaps": {"get", "list", "watch"},
 		},
+		// 본 사이클에서 추가된 권한 — Track A (Lease 분산락) + Track C1/C4 (PDB·NetworkPolicy).
+		// kubebuilder 마커가 실수로 제거되어 controller-gen이 role.yaml에서 빼는
+		// 회귀를 catch한다.
+		"coordination.k8s.io": {
+			"leases": {"get", "list", "watch", "create", "update", "patch", "delete"},
+		},
+		"policy": {
+			"poddisruptionbudgets": {"get", "list", "watch", "create", "update", "patch", "delete"},
+		},
+		"networking.k8s.io": {
+			"networkpolicies": {"get", "list", "watch", "create", "update", "patch", "delete"},
+		},
 	}
 
 	for group, resources := range required {
