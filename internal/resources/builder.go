@@ -1350,3 +1350,147 @@ func BuildMongoDBNetworkPolicy(mdb *mongodbv1alpha1.MongoDB) *networkingv1.Netwo
 	}
 	return np
 }
+
+// pdbBaseSpec은 PodDisruptionBudgetSpec를 받아 기본 minAvailable=replicas-1을
+// 적용한 K8s PDB spec을 만든다(MinAvailable/MaxUnavailable 미지정 시).
+func pdbBaseSpec(spec *mongodbv1alpha1.PodDisruptionBudgetSpec, replicas int32, selector map[string]string) policyv1.PodDisruptionBudgetSpec {
+	out := policyv1.PodDisruptionBudgetSpec{
+		Selector: &metav1.LabelSelector{MatchLabels: selector},
+	}
+	switch {
+	case spec.MinAvailable != nil:
+		out.MinAvailable = spec.MinAvailable
+	case spec.MaxUnavailable != nil:
+		out.MaxUnavailable = spec.MaxUnavailable
+	default:
+		minAvail := replicas - 1
+		if minAvail < 0 {
+			minAvail = 0
+		}
+		v := intstr.FromInt(int(minAvail))
+		out.MinAvailable = &v
+	}
+	return out
+}
+
+// BuildShardedPDBs는 sharded cluster의 cfg/shards/mongos 각 컴포넌트에 대한
+// PodDisruptionBudget 슬라이스를 반환한다. Spec.PodDisruptionBudget이 nil이거나
+// disabled면 nil 슬라이스 반환.
+func BuildShardedPDBs(mdbsh *mongodbv1alpha1.MongoDBSharded) []*policyv1.PodDisruptionBudget {
+	pdbSpec := mdbsh.Spec.PodDisruptionBudget
+	if pdbSpec == nil || !pdbSpec.Enabled {
+		return nil
+	}
+	var out []*policyv1.PodDisruptionBudget
+
+	// Config server
+	cfgSelector := buildLabels(mdbsh.Name, "configsvr")
+	out = append(out, &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      mdbsh.Name + "-cfg-pdb",
+			Namespace: mdbsh.Namespace,
+			Labels:    cfgSelector,
+		},
+		Spec: pdbBaseSpec(pdbSpec, mdbsh.Spec.ConfigServer.Members, cfgSelector),
+	})
+
+	// Shards (각 shard별)
+	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
+		shSelector := buildLabels(mdbsh.Name, fmt.Sprintf("shard-%d", i))
+		out = append(out, &policyv1.PodDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("%s-shard-%d-pdb", mdbsh.Name, i),
+				Namespace: mdbsh.Namespace,
+				Labels:    shSelector,
+			},
+			Spec: pdbBaseSpec(pdbSpec, mdbsh.Spec.Shards.MembersPerShard, shSelector),
+		})
+	}
+
+	// Mongos
+	mongosSelector := buildLabels(mdbsh.Name, "mongos")
+	out = append(out, &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      mdbsh.Name + "-mongos-pdb",
+			Namespace: mdbsh.Namespace,
+			Labels:    mongosSelector,
+		},
+		Spec: pdbBaseSpec(pdbSpec, mdbsh.Spec.Mongos.Replicas, mongosSelector),
+	})
+
+	return out
+}
+
+// buildShardedComponentNetworkPolicy은 cfg/shard/mongos 컴포넌트별 NetworkPolicy
+// 빌더의 공용 helper. selector(컴포넌트 라벨)와 port(cfg=27019/shard=27018/
+// mongos=27017)를 매개변수화한다.
+func buildShardedComponentNetworkPolicy(mdbsh *mongodbv1alpha1.MongoDBSharded, name string, port int, selector map[string]string) *networkingv1.NetworkPolicy {
+	npSpec := mdbsh.Spec.NetworkPolicy
+	if npSpec == nil || !npSpec.Enabled {
+		return nil
+	}
+	p := intstr.FromInt(port)
+	tcp := corev1.ProtocolTCP
+
+	np := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: mdbsh.Namespace,
+			Labels:    selector,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{MatchLabels: selector},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						// 같은 sharded cluster의 다른 컴포넌트도 허용 (cfg ↔ shard ↔ mongos).
+						{PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{
+							"app.kubernetes.io/instance":   mdbsh.Name,
+							"app.kubernetes.io/managed-by": "mongodb-operator",
+						}}},
+					},
+					Ports: []networkingv1.NetworkPolicyPort{{Port: &p, Protocol: &tcp}},
+				},
+			},
+		},
+	}
+
+	for _, peer := range npSpec.AdditionalIngressFrom {
+		npp := networkingv1.NetworkPolicyPeer{}
+		if peer.PodSelector != nil {
+			npp.PodSelector = &metav1.LabelSelector{MatchLabels: *peer.PodSelector}
+		}
+		if peer.NamespaceSelector != nil {
+			npp.NamespaceSelector = &metav1.LabelSelector{MatchLabels: *peer.NamespaceSelector}
+		}
+		if npp.PodSelector == nil && npp.NamespaceSelector == nil {
+			continue
+		}
+		np.Spec.Ingress = append(np.Spec.Ingress, networkingv1.NetworkPolicyIngressRule{
+			From:  []networkingv1.NetworkPolicyPeer{npp},
+			Ports: []networkingv1.NetworkPolicyPort{{Port: &p, Protocol: &tcp}},
+		})
+	}
+	return np
+}
+
+// BuildShardedNetworkPolicies는 cfg/shards/mongos 각 컴포넌트에 대한 NetworkPolicy
+// 슬라이스를 반환한다. spec.networkPolicy.enabled=false면 nil 반환.
+func BuildShardedNetworkPolicies(mdbsh *mongodbv1alpha1.MongoDBSharded) []*networkingv1.NetworkPolicy {
+	npSpec := mdbsh.Spec.NetworkPolicy
+	if npSpec == nil || !npSpec.Enabled {
+		return nil
+	}
+	var out []*networkingv1.NetworkPolicy
+	out = append(out, buildShardedComponentNetworkPolicy(mdbsh, mdbsh.Name+"-cfg-netpol", 27019,
+		buildLabels(mdbsh.Name, "configsvr")))
+	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
+		out = append(out, buildShardedComponentNetworkPolicy(mdbsh,
+			fmt.Sprintf("%s-shard-%d-netpol", mdbsh.Name, i), 27018,
+			buildLabels(mdbsh.Name, fmt.Sprintf("shard-%d", i))))
+	}
+	out = append(out, buildShardedComponentNetworkPolicy(mdbsh, mdbsh.Name+"-mongos-netpol", 27017,
+		buildLabels(mdbsh.Name, "mongos")))
+	return out
+}

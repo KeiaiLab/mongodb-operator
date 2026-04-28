@@ -3651,6 +3651,67 @@ spec:
                 required:
                 - enabled
                 type: object
+              networkPolicy:
+                description: |-
+                  NetworkPolicy defines NetworkPolicy configuration. 기본 비활성(opt-in).
+                  활성화 시 cfg(27019)/shard(27018)/mongos(27017) 컴포넌트별 deny-by-default.
+                properties:
+                  additionalIngressFrom:
+                    description: |-
+                      AdditionalIngressFrom appends extra peers (namespaces or pods) to the
+                      generated ingress rule. 본 필드의 peers는 27017 포트로 ingress가 허용된다.
+                    items:
+                      description: |-
+                        NetworkPolicyPeer는 NetworkPolicySpec의 추가 peer를 단순화한 타입이다.
+                        PodSelector + NamespaceSelector 조합 하나만 허용 (CIDR은 본 단계 비지원).
+                      properties:
+                        namespaceSelector:
+                          additionalProperties:
+                            type: string
+                          description: NamespaceSelector selects namespaces by labels
+                          type: object
+                        podSelector:
+                          additionalProperties:
+                            type: string
+                          description: PodSelector selects pods within the chosen
+                            namespaces
+                          type: object
+                      type: object
+                    type: array
+                  enabled:
+                    default: false
+                    description: Enabled enables NetworkPolicy creation
+                    type: boolean
+                required:
+                - enabled
+                type: object
+              podDisruptionBudget:
+                description: |-
+                  PodDisruptionBudget defines PDB configuration for cfg/shard/mongos
+                  workloads. Enabled=true 시 모든 컴포넌트에 동일 정책 적용 (기본
+                  minAvailable = replicas-1).
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled enables PDB creation
+                    type: boolean
+                  maxUnavailable:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: MaxUnavailable is the maximum number/percentage of
+                      pods unavailable during disruption
+                    x-kubernetes-int-or-string: true
+                  minAvailable:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: MinAvailable is the minimum number/percentage of
+                      pods available during disruption
+                    x-kubernetes-int-or-string: true
+                required:
+                - enabled
+                type: object
               shards:
                 description: Shards defines shard configuration
                 properties:

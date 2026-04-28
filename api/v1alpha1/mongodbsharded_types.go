@@ -69,6 +69,17 @@ type MongoDBShardedSpec struct {
 	// AdditionalConfig allows passing additional MongoDB configuration
 	// +optional
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
+
+	// PodDisruptionBudget defines PDB configuration for cfg/shard/mongos
+	// workloads. Enabled=true 시 모든 컴포넌트에 동일 정책 적용 (기본
+	// minAvailable = replicas-1).
+	// +optional
+	PodDisruptionBudget *PodDisruptionBudgetSpec `json:"podDisruptionBudget,omitempty"`
+
+	// NetworkPolicy defines NetworkPolicy configuration. 기본 비활성(opt-in).
+	// 활성화 시 cfg(27019)/shard(27018)/mongos(27017) 컴포넌트별 deny-by-default.
+	// +optional
+	NetworkPolicy *NetworkPolicySpec `json:"networkPolicy,omitempty"`
 }
 
 // ConfigServerSpec defines config server configuration

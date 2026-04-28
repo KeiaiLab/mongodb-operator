@@ -24,6 +24,8 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -57,6 +59,8 @@ type MongoDBShardedReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 
 func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -129,6 +133,16 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// 6. Mongos
 	if err := r.reconcileMongos(ctx, mdbsh); err != nil {
 		return r.updateStatusError(ctx, mdbsh, "Mongos", err)
+	}
+
+	// 6.5. PodDisruptionBudgets (opt-in, 모든 컴포넌트 cfg/shards/mongos)
+	if err := r.reconcileShardedPDBs(ctx, mdbsh); err != nil {
+		return r.updateStatusError(ctx, mdbsh, "PodDisruptionBudgets", err)
+	}
+
+	// 6.6. NetworkPolicies (opt-in, 컴포넌트별 deny-by-default)
+	if err := r.reconcileShardedNetworkPolicies(ctx, mdbsh); err != nil {
+		return r.updateStatusError(ctx, mdbsh, "NetworkPolicies", err)
 	}
 
 	// 7. Initialize Config Server replica set.
@@ -702,6 +716,79 @@ func (r *MongoDBShardedReconciler) updateStatusError(ctx context.Context, mdbsh 
 	return ctrl.Result{RequeueAfter: requeueAfter}, err
 }
 
+// reconcileShardedPDBs는 cfg/shards/mongos 각 컴포넌트의 PodDisruptionBudget을
+// reconcile한다. spec.podDisruptionBudget가 nil/disabled면 기존 PDB를 삭제한다
+// (spec/cluster 동기화).
+func (r *MongoDBShardedReconciler) reconcileShardedPDBs(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+	desired := resources.BuildShardedPDBs(mdbsh)
+	if desired == nil {
+		return r.cleanupShardedPDBs(ctx, mdbsh)
+	}
+	for _, pdb := range desired {
+		if err := applyPDB(ctx, r.Client, r.Scheme, mdbsh, pdb); err != nil {
+			return fmt.Errorf("apply PDB %s: %w", pdb.Name, err)
+		}
+	}
+	return nil
+}
+
+func (r *MongoDBShardedReconciler) cleanupShardedPDBs(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+	names := []string{mdbsh.Name + "-cfg-pdb", mdbsh.Name + "-mongos-pdb"}
+	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
+		names = append(names, fmt.Sprintf("%s-shard-%d-pdb", mdbsh.Name, i))
+	}
+	for _, n := range names {
+		existing := &policyv1.PodDisruptionBudget{}
+		err := r.Get(ctx, types.NamespacedName{Name: n, Namespace: mdbsh.Namespace}, existing)
+		if errors.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if err := r.Delete(ctx, existing); err != nil && !errors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+// reconcileShardedNetworkPolicies는 cfg/shards/mongos 각 컴포넌트의 NetworkPolicy
+// 를 reconcile한다. disabled면 cleanup.
+func (r *MongoDBShardedReconciler) reconcileShardedNetworkPolicies(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+	desired := resources.BuildShardedNetworkPolicies(mdbsh)
+	if desired == nil {
+		return r.cleanupShardedNetworkPolicies(ctx, mdbsh)
+	}
+	for _, np := range desired {
+		if err := applyNetworkPolicy(ctx, r.Client, r.Scheme, mdbsh, np); err != nil {
+			return fmt.Errorf("apply NetworkPolicy %s: %w", np.Name, err)
+		}
+	}
+	return nil
+}
+
+func (r *MongoDBShardedReconciler) cleanupShardedNetworkPolicies(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+	names := []string{mdbsh.Name + "-cfg-netpol", mdbsh.Name + "-mongos-netpol"}
+	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
+		names = append(names, fmt.Sprintf("%s-shard-%d-netpol", mdbsh.Name, i))
+	}
+	for _, n := range names {
+		existing := &networkingv1.NetworkPolicy{}
+		err := r.Get(ctx, types.NamespacedName{Name: n, Namespace: mdbsh.Namespace}, existing)
+		if errors.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if err := r.Delete(ctx, existing); err != nil && !errors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *MongoDBShardedReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -711,5 +798,7 @@ func (r *MongoDBShardedReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&corev1.Secret{}).
 		Owns(&corev1.ConfigMap{}).
+		Owns(&policyv1.PodDisruptionBudget{}).
+		Owns(&networkingv1.NetworkPolicy{}).
 		Complete(r)
 }
