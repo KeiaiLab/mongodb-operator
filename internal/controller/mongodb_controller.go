@@ -218,23 +218,19 @@ func (r *MongoDBReconciler) reconcileKeyfileSecret(ctx context.Context, mdb *mon
 }
 
 func (r *MongoDBReconciler) reconcileConfigMap(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
-	cm := resources.BuildMongoDBConfigMap(mdb)
-	return r.createOrUpdate(ctx, mdb, cm)
+	return applyConfigMap(ctx, r.Client, r.Scheme, mdb, resources.BuildMongoDBConfigMap(mdb))
 }
 
 func (r *MongoDBReconciler) reconcileHeadlessService(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
-	svc := resources.BuildHeadlessService(mdb)
-	return r.createOrUpdate(ctx, mdb, svc)
+	return applyService(ctx, r.Client, r.Scheme, mdb, resources.BuildHeadlessService(mdb))
 }
 
 func (r *MongoDBReconciler) reconcileClientService(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
-	svc := resources.BuildClientService(mdb)
-	return r.createOrUpdate(ctx, mdb, svc)
+	return applyService(ctx, r.Client, r.Scheme, mdb, resources.BuildClientService(mdb))
 }
 
 func (r *MongoDBReconciler) reconcileStatefulSet(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
-	sts := resources.BuildReplicaSetStatefulSet(mdb)
-	return r.createOrUpdate(ctx, mdb, sts)
+	return applyStatefulSet(ctx, r.Client, r.Scheme, mdb, resources.BuildReplicaSetStatefulSet(mdb))
 }
 
 func (r *MongoDBReconciler) areAllPodsReady(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (bool, error) {
@@ -402,29 +398,6 @@ func (r *MongoDBReconciler) getAdminPassword(ctx context.Context, mdb *mongodbv1
 	}
 
 	return string(password), nil
-}
-
-func (r *MongoDBReconciler) createOrUpdate(ctx context.Context, mdb *mongodbv1alpha1.MongoDB, obj client.Object) error {
-	// Set owner reference
-	if err := controllerutil.SetControllerReference(mdb, obj, r.Scheme); err != nil {
-		return err
-	}
-
-	// Check if object exists
-	existing := obj.DeepCopyObject().(client.Object)
-	err := r.Get(ctx, types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, existing)
-
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			// Create the object
-			return r.Create(ctx, obj)
-		}
-		return err
-	}
-
-	// Update the object
-	obj.SetResourceVersion(existing.GetResourceVersion())
-	return r.Update(ctx, obj)
 }
 
 func (r *MongoDBReconciler) updateStatus(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {

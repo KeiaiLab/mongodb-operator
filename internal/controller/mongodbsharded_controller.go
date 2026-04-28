@@ -221,14 +221,12 @@ func (r *MongoDBShardedReconciler) reconcileConfigServer(ctx context.Context, md
 	}
 
 	// Headless service
-	svc := resources.BuildConfigServerService(mdbsh)
-	if err := r.createOrUpdate(ctx, mdbsh, svc); err != nil {
+	if err := applyService(ctx, r.Client, r.Scheme, mdbsh, resources.BuildConfigServerService(mdbsh)); err != nil {
 		return err
 	}
 
 	// StatefulSet
-	sts := resources.BuildConfigServerStatefulSet(mdbsh)
-	return r.createOrUpdate(ctx, mdbsh, sts)
+	return applyStatefulSet(ctx, r.Client, r.Scheme, mdbsh, resources.BuildConfigServerStatefulSet(mdbsh))
 }
 
 // reconcileConfigServerScriptsConfigMap는 cfg StatefulSet이 lifecycle.postStart에서
@@ -239,8 +237,7 @@ func (r *MongoDBShardedReconciler) reconcileConfigServerScriptsConfigMap(ctx con
 	if mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name == "" {
 		return nil
 	}
-	cm := resources.BuildConfigServerScriptsConfigMap(mdbsh)
-	return r.createOrUpdate(ctx, mdbsh, cm)
+	return applyConfigMap(ctx, r.Client, r.Scheme, mdbsh, resources.BuildConfigServerScriptsConfigMap(mdbsh))
 }
 
 func (r *MongoDBShardedReconciler) isConfigServerReady(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
@@ -258,14 +255,12 @@ func (r *MongoDBShardedReconciler) reconcileShard(ctx context.Context, mdbsh *mo
 	}
 
 	// Headless service
-	svc := resources.BuildShardService(mdbsh, shardIndex)
-	if err := r.createOrUpdate(ctx, mdbsh, svc); err != nil {
+	if err := applyService(ctx, r.Client, r.Scheme, mdbsh, resources.BuildShardService(mdbsh, shardIndex)); err != nil {
 		return err
 	}
 
 	// StatefulSet
-	sts := resources.BuildShardStatefulSet(mdbsh, shardIndex)
-	return r.createOrUpdate(ctx, mdbsh, sts)
+	return applyStatefulSet(ctx, r.Client, r.Scheme, mdbsh, resources.BuildShardStatefulSet(mdbsh, shardIndex))
 }
 
 // reconcileShardScriptsConfigMap는 shard StatefulSet이 lifecycle.postStart에서 호출
@@ -274,8 +269,7 @@ func (r *MongoDBShardedReconciler) reconcileShardScriptsConfigMap(ctx context.Co
 	if mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name == "" {
 		return nil
 	}
-	cm := resources.BuildShardScriptsConfigMap(mdbsh, shardIndex)
-	return r.createOrUpdate(ctx, mdbsh, cm)
+	return applyConfigMap(ctx, r.Client, r.Scheme, mdbsh, resources.BuildShardScriptsConfigMap(mdbsh, shardIndex))
 }
 
 func (r *MongoDBShardedReconciler) areShardsReady(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
@@ -294,20 +288,17 @@ func (r *MongoDBShardedReconciler) areShardsReady(ctx context.Context, mdbsh *mo
 
 func (r *MongoDBShardedReconciler) reconcileMongos(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
 	// ConfigMap
-	cm := resources.BuildMongosConfigMap(mdbsh)
-	if err := r.createOrUpdate(ctx, mdbsh, cm); err != nil {
+	if err := applyConfigMap(ctx, r.Client, r.Scheme, mdbsh, resources.BuildMongosConfigMap(mdbsh)); err != nil {
 		return err
 	}
 
 	// Service
-	svc := resources.BuildMongosService(mdbsh)
-	if err := r.createOrUpdate(ctx, mdbsh, svc); err != nil {
+	if err := applyService(ctx, r.Client, r.Scheme, mdbsh, resources.BuildMongosService(mdbsh)); err != nil {
 		return err
 	}
 
 	// Deployment
-	deploy := resources.BuildMongosDeployment(mdbsh)
-	return r.createOrUpdate(ctx, mdbsh, deploy)
+	return applyDeployment(ctx, r.Client, r.Scheme, mdbsh, resources.BuildMongosDeployment(mdbsh))
 }
 
 func (r *MongoDBShardedReconciler) isMongosReady(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
@@ -599,29 +590,6 @@ func (r *MongoDBShardedReconciler) getAdminPassword(ctx context.Context, mdbsh *
 	}
 
 	return string(password), nil
-}
-
-func (r *MongoDBShardedReconciler) createOrUpdate(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, obj client.Object) error {
-	// Set owner reference
-	if err := controllerutil.SetControllerReference(mdbsh, obj, r.Scheme); err != nil {
-		return err
-	}
-
-	// Check if object exists
-	existing := obj.DeepCopyObject().(client.Object)
-	err := r.Get(ctx, types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, existing)
-
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Create the object
-			return r.Create(ctx, obj)
-		}
-		return err
-	}
-
-	// Update the object
-	obj.SetResourceVersion(existing.GetResourceVersion())
-	return r.Update(ctx, obj)
 }
 
 func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
