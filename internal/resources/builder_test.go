@@ -490,3 +490,171 @@ func TestBuildMongosDeployment(t *testing.T) {
 	assert.Equal(t, int32(2), *deploy.Spec.Replicas)
 	assert.Equal(t, "mongos", deploy.Spec.Template.Spec.Containers[0].Command[0])
 }
+
+// 본 사이클 Track C1/C2/C4 신규 helper 회귀 가드 (심층 검수에서 0% 커버리지로 식별).
+
+func TestBuildMongoDBPDB_NilWhenDisabledOrMissing(t *testing.T) {
+	cases := []struct {
+		name string
+		spec *mongodbv1alpha1.PodDisruptionBudgetSpec
+	}{
+		{"nil_spec", nil},
+		{"explicit_disabled", &mongodbv1alpha1.PodDisruptionBudgetSpec{Enabled: false}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			mdb := &mongodbv1alpha1.MongoDB{
+				ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "ns"},
+				Spec:       mongodbv1alpha1.MongoDBSpec{Members: 3, PodDisruptionBudget: c.spec},
+			}
+			if pdb := BuildMongoDBPDB(mdb); pdb != nil {
+				t.Fatalf("기대 nil(미생성), got %+v", pdb)
+			}
+		})
+	}
+}
+
+func TestBuildMongoDBPDB_DefaultMinAvailableIsReplicasMinusOne(t *testing.T) {
+	mdb := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "ns"},
+		Spec: mongodbv1alpha1.MongoDBSpec{
+			Members:             3,
+			PodDisruptionBudget: &mongodbv1alpha1.PodDisruptionBudgetSpec{Enabled: true},
+		},
+	}
+	pdb := BuildMongoDBPDB(mdb)
+	if pdb == nil {
+		t.Fatal("기대 PDB non-nil")
+	}
+	if pdb.Spec.MinAvailable == nil || pdb.Spec.MinAvailable.IntValue() != 2 {
+		t.Fatalf("기대 minAvailable=2 (replicas-1), got %+v", pdb.Spec.MinAvailable)
+	}
+	if pdb.Spec.MaxUnavailable != nil {
+		t.Fatalf("기대 maxUnavailable nil, got %+v", pdb.Spec.MaxUnavailable)
+	}
+	if pdb.Spec.Selector == nil || pdb.Spec.Selector.MatchLabels["app.kubernetes.io/component"] != "replicaset" {
+		t.Fatalf("selector component label 잘못: %+v", pdb.Spec.Selector)
+	}
+}
+
+func TestBuildShardedPDBs_NilWhenDisabled(t *testing.T) {
+	mdbsh := &mongodbv1alpha1.MongoDBSharded{
+		Spec: mongodbv1alpha1.MongoDBShardedSpec{},
+	}
+	if out := BuildShardedPDBs(mdbsh); out != nil {
+		t.Fatalf("기대 nil, got %d items", len(out))
+	}
+}
+
+func TestBuildShardedPDBs_GeneratesAllComponents(t *testing.T) {
+	mdbsh := &mongodbv1alpha1.MongoDBSharded{
+		ObjectMeta: metav1.ObjectMeta{Name: "sh", Namespace: "ns"},
+		Spec: mongodbv1alpha1.MongoDBShardedSpec{
+			ConfigServer:        mongodbv1alpha1.ConfigServerSpec{Members: 3},
+			Shards:              mongodbv1alpha1.ShardSpec{Count: 2, MembersPerShard: 3},
+			Mongos:              mongodbv1alpha1.MongosSpec{Replicas: 2},
+			PodDisruptionBudget: &mongodbv1alpha1.PodDisruptionBudgetSpec{Enabled: true},
+		},
+	}
+	out := BuildShardedPDBs(mdbsh)
+	// 1 cfg + 2 shards + 1 mongos = 4
+	if len(out) != 4 {
+		t.Fatalf("기대 4 PDBs (cfg + 2 shards + mongos), got %d", len(out))
+	}
+	names := map[string]bool{}
+	for _, pdb := range out {
+		names[pdb.Name] = true
+	}
+	expected := []string{"sh-cfg-pdb", "sh-shard-0-pdb", "sh-shard-1-pdb", "sh-mongos-pdb"}
+	for _, n := range expected {
+		if !names[n] {
+			t.Errorf("PDB name %q 누락: actual=%v", n, names)
+		}
+	}
+}
+
+func TestBuildMongoDBNetworkPolicy_NilWhenDisabled(t *testing.T) {
+	mdb := &mongodbv1alpha1.MongoDB{
+		Spec: mongodbv1alpha1.MongoDBSpec{},
+	}
+	if np := BuildMongoDBNetworkPolicy(mdb); np != nil {
+		t.Fatalf("기대 nil, got %+v", np)
+	}
+}
+
+func TestBuildMongoDBNetworkPolicy_DenyByDefaultPlusIntraCluster(t *testing.T) {
+	mdb := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "ns"},
+		Spec: mongodbv1alpha1.MongoDBSpec{
+			NetworkPolicy: &mongodbv1alpha1.NetworkPolicySpec{Enabled: true},
+		},
+	}
+	np := BuildMongoDBNetworkPolicy(mdb)
+	if np == nil {
+		t.Fatal("기대 non-nil")
+	}
+	if np.Spec.PodSelector.MatchLabels["app.kubernetes.io/component"] != "replicaset" {
+		t.Fatalf("podSelector component 잘못: %+v", np.Spec.PodSelector)
+	}
+	if len(np.Spec.Ingress) != 1 {
+		t.Fatalf("기대 1 ingress(intra-cluster), got %d", len(np.Spec.Ingress))
+	}
+	port := np.Spec.Ingress[0].Ports[0].Port.IntValue()
+	if port != 27017 {
+		t.Fatalf("기대 port=27017, got %d", port)
+	}
+}
+
+func TestBuildMongoDBNetworkPolicy_AdditionalIngressFromAppendsRules(t *testing.T) {
+	monitoringPodLabel := map[string]string{"app": "prometheus"}
+	mdb := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "ns"},
+		Spec: mongodbv1alpha1.MongoDBSpec{
+			NetworkPolicy: &mongodbv1alpha1.NetworkPolicySpec{
+				Enabled: true,
+				AdditionalIngressFrom: []mongodbv1alpha1.NetworkPolicyPeer{
+					{PodSelector: &monitoringPodLabel},
+					{PodSelector: nil, NamespaceSelector: nil}, // 무효 — skip 되어야 함
+				},
+			},
+		},
+	}
+	np := BuildMongoDBNetworkPolicy(mdb)
+	// intra-cluster 1 + additional 1 (무효 1건은 skip) = 2
+	if len(np.Spec.Ingress) != 2 {
+		t.Fatalf("기대 2 ingress(intra + 1 valid additional), got %d (전체: %+v)",
+			len(np.Spec.Ingress), np.Spec.Ingress)
+	}
+}
+
+func TestBuildShardedNetworkPolicies_PerComponentPort(t *testing.T) {
+	mdbsh := &mongodbv1alpha1.MongoDBSharded{
+		ObjectMeta: metav1.ObjectMeta{Name: "sh", Namespace: "ns"},
+		Spec: mongodbv1alpha1.MongoDBShardedSpec{
+			Shards:        mongodbv1alpha1.ShardSpec{Count: 2},
+			NetworkPolicy: &mongodbv1alpha1.NetworkPolicySpec{Enabled: true},
+		},
+	}
+	out := BuildShardedNetworkPolicies(mdbsh)
+	if len(out) != 4 {
+		t.Fatalf("기대 4 NetworkPolicies, got %d", len(out))
+	}
+	// cfg=27019, shard=27018(×2), mongos=27017
+	expected := map[string]int{
+		"sh-cfg-netpol":     27019,
+		"sh-shard-0-netpol": 27018,
+		"sh-shard-1-netpol": 27018,
+		"sh-mongos-netpol":  27017,
+	}
+	for _, np := range out {
+		want, ok := expected[np.Name]
+		if !ok {
+			t.Errorf("예상 외 NetworkPolicy 이름: %s", np.Name)
+			continue
+		}
+		got := np.Spec.Ingress[0].Ports[0].Port.IntValue()
+		if got != want {
+			t.Errorf("%s: 기대 port=%d, got %d", np.Name, want, got)
+		}
+	}
+}
