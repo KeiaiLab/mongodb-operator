@@ -139,16 +139,22 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
-	// 8. Wait for primary election
+	// 8. Wait for primary election.
+	// hasPrimary err가 nil이면서 false인 경우(정상 미선출): 단순 대기 후 requeue.
+	// err non-nil(connect/auth/network 실패): silent로 두면 운영자가 진단 불가하므로
+	// PrimaryUnreachable condition을 status에 기록하고 requeue.
 	hasPrimary, err := r.hasPrimary(ctx, mdb)
 	if err != nil {
-		logger.Info("Waiting for primary election", "error", err)
+		logger.Info("Primary unreachable, will retry", "error", err)
+		r.setPrimaryUnreachableCondition(ctx, mdb, err)
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 	if !hasPrimary {
 		logger.Info("Waiting for primary election")
+		r.clearPrimaryUnreachableCondition(ctx, mdb)
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
+	r.clearPrimaryUnreachableCondition(ctx, mdb)
 
 	// 9. Create admin user if not created
 	if !mdb.Status.AdminUserCreated {
@@ -259,12 +265,15 @@ func (r *MongoDBReconciler) reconcileReplicaSetInitialization(ctx context.Contex
 		return fmt.Errorf("failed to create replica set manager: %w", err)
 	}
 
-	// Check if already initialized by querying first pod
+	// Check if already initialized by querying first pod.
+	// 주의: IsInitialized는 "init이 안된" 정상 케이스를 (false, nil)로 반환한다
+	// (notYetInitializedCode=94 분기). 따라서 여기서 에러는 connect/auth/network
+	// 같은 진짜 결함이며, silently nil로 삼키면 안 됨. 호출자(Reconcile)가
+	// updateStatusError로 status에 노출하도록 propagate.
 	firstPod := fmt.Sprintf("%s-0", mdb.Name)
 	initialized, err := rsManager.IsInitialized(ctx, firstPod, mdb.Namespace)
 	if err != nil {
-		logger.Info("Failed to check initialization status, will retry", "error", err)
-		return nil // Will retry on next reconcile
+		return fmt.Errorf("check replica set init: %w", err)
 	}
 
 	if initialized {
@@ -489,6 +498,77 @@ func (r *MongoDBReconciler) buildConditions(mdb *mongodbv1alpha1.MongoDB) []meta
 	})
 
 	return conditions
+}
+
+// setPrimaryUnreachableCondition은 hasPrimary가 connect/network 에러로 실패했을 때
+// status에 PrimaryUnreachable=True condition을 기록한다. message에는 err의 첫
+// 줄만 노출(secret/긴 stack 누출 방지).
+func (r *MongoDBReconciler) setPrimaryUnreachableCondition(ctx context.Context, mdb *mongodbv1alpha1.MongoDB, err error) {
+	logger := log.FromContext(ctx)
+	msg := firstLine(err.Error())
+	// 동일 type의 기존 condition은 제거하고 최신만 유지.
+	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, "PrimaryUnreachable")
+	mdb.Status.Conditions = append(mdb.Status.Conditions, metav1.Condition{
+		Type:               "PrimaryUnreachable",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: mdb.Generation,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "ConnectError",
+		Message:            fmt.Sprintf("hasPrimary check failed: %s", msg),
+	})
+	if statusErr := updateStatusWithRetry(ctx, r.Client, mdb); statusErr != nil {
+		logger.Error(statusErr, "Failed to update PrimaryUnreachable condition")
+	}
+}
+
+// clearPrimaryUnreachableCondition은 connect 에러가 해소되었을 때(hasPrimary가
+// 에러 없이 응답) status condition을 False로 갱신한다. 한 번도 set되지 않은
+// 경우(슬라이스에 type이 아예 없으면) 굳이 추가하지 않아 noise를 줄인다.
+func (r *MongoDBReconciler) clearPrimaryUnreachableCondition(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) {
+	logger := log.FromContext(ctx)
+	hasIt := false
+	for _, c := range mdb.Status.Conditions {
+		if c.Type == "PrimaryUnreachable" && c.Status == metav1.ConditionTrue {
+			hasIt = true
+			break
+		}
+	}
+	if !hasIt {
+		return
+	}
+	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, "PrimaryUnreachable")
+	mdb.Status.Conditions = append(mdb.Status.Conditions, metav1.Condition{
+		Type:               "PrimaryUnreachable",
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: mdb.Generation,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "Reachable",
+		Message:            "Primary check succeeded",
+	})
+	if statusErr := updateStatusWithRetry(ctx, r.Client, mdb); statusErr != nil {
+		logger.Error(statusErr, "Failed to clear PrimaryUnreachable condition")
+	}
+}
+
+// firstLine은 multiline 에러 message에서 첫 줄만 잘라 반환한다.
+func firstLine(s string) string {
+	for i, c := range s {
+		if c == '\n' {
+			return s[:i]
+		}
+	}
+	return s
+}
+
+// filterConditionsByType은 주어진 type의 condition을 슬라이스에서 제거한다.
+func filterConditionsByType(conds []metav1.Condition, t string) []metav1.Condition {
+	out := conds[:0]
+	for _, c := range conds {
+		if c.Type != t {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 func (r *MongoDBReconciler) updateStatusError(ctx context.Context, mdb *mongodbv1alpha1.MongoDB, component string, err error) (ctrl.Result, error) {

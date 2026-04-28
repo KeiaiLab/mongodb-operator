@@ -131,18 +131,20 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.updateStatusError(ctx, mdbsh, "Mongos", err)
 	}
 
-	// 7. Initialize Config Server replica set
+	// 7. Initialize Config Server replica set.
+	// 이전: 모든 단계가 silent. 운영자는 cfg server가 "no replset config"로
+	// 영구 멈춰도 conditions에서 인지 불가. updateStatusError로 ReconcileError
+	// condition을 남기고 controller-runtime의 자동 backoff에 맡긴다.
 	if !mdbsh.Status.ConfigServerInitialized {
 		if err := r.reconcileConfigServerInit(ctx, mdbsh); err != nil {
-			logger.Info("Failed to initialize config server, will retry", "error", err)
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+			return r.updateStatusError(ctx, mdbsh, "ConfigServerInit", err)
 		}
 	}
 
-	// 8. Initialize Shard replica sets
+	// 8. Initialize Shard replica sets — reconcileShardsInit이 부분 실패를
+	// errors.Join으로 묶어 반환. 호출자가 status에 노출.
 	if err := r.reconcileShardsInit(ctx, mdbsh); err != nil {
-		logger.Info("Failed to initialize shards, will retry", "error", err)
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		return r.updateStatusError(ctx, mdbsh, "ShardsInit", err)
 	}
 
 	// 9. Wait for mongos to be ready
@@ -154,15 +156,13 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// 10. Create admin user
 	if !mdbsh.Status.AdminUserCreated {
 		if err := r.reconcileShardedAdminUser(ctx, mdbsh); err != nil {
-			logger.Info("Failed to create admin user, will retry", "error", err)
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+			return r.updateStatusError(ctx, mdbsh, "AdminUser", err)
 		}
 	}
 
-	// 11. Add shards to cluster
+	// 11. Add shards to cluster — reconcileAddShards도 errors.Join 누적 패턴.
 	if err := r.reconcileAddShards(ctx, mdbsh); err != nil {
-		logger.Info("Failed to add shards, will retry", "error", err)
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		return r.updateStatusError(ctx, mdbsh, "AddShards", err)
 	}
 
 	// 12. Update status
@@ -305,11 +305,14 @@ func (r *MongoDBShardedReconciler) reconcileConfigServerInit(ctx context.Context
 	// Config servers use port 27019
 	rsManager := r.newRSManager(mdbsh.Name+"-cfg-headless", 27019, adminPassword)
 
-	// Check if already initialized
+	// Check if already initialized.
+	// IsInitialized는 "아직 init 안됨" 정상 케이스를 (false, nil)로 반환하므로
+	// 여기 도달한 err는 connect/auth/network 같은 진짜 결함이다. 이전엔 silent
+	// nil로 삼켜 cfg server가 영구 미초기화되어도 status에 나오지 않았다.
 	firstPod := fmt.Sprintf("%s-cfg-0", mdbsh.Name)
 	initialized, err := rsManager.IsInitialized(ctx, firstPod, mdbsh.Namespace)
 	if err != nil {
-		return nil // Will retry
+		return fmt.Errorf("check config server init: %w", err)
 	}
 
 	if initialized {
