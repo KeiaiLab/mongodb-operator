@@ -1,0 +1,19 @@
+# Architecture Decision Records — INDEX
+
+본 디렉터리는 mongodb-operator의 비역행 결정(architecture decisions)을 Nygard
+5섹션 형식으로 보존한다. 결정의 *이유*가 코드보다 오래 살아남도록 한다.
+
+## 활성 ADR
+
+| 번호 | 제목 | 상태 | 날짜 |
+|------|------|------|------|
+| [ADR-0001](0001-controllerutil-createorupdate-pattern.md) | 자체 createOrUpdate 헬퍼 폐기 + controllerutil.CreateOrUpdate(mutateFn) 채택 | Accepted | 2026-04-28 |
+| [ADR-0002](0002-bootstrap-admin-user-lease.md) | Admin user 부트스트랩 race-free를 위한 K8s Lease 분산락 도입 | Accepted | 2026-04-28 |
+| [ADR-0003](0003-sharded-arbiter-hidden-deferred.md) | MongoDBSharded Arbiter/Hidden 토폴로지 후속 사이클 이연 | Accepted | 2026-04-28 |
+
+## 작성 가이드
+
+- 형식: Nygard 5섹션 (Context / Decision / Consequences / Alternatives Considered).
+- 위치: `docs/kb/adr/NNNN-<영어 kebab-case slug>.md`.
+- 번호 부여: 4자리 0-padded, 한 번 부여한 번호는 *재사용 금지*.
+- 본 INDEX.md는 신규 ADR 추가 시 수동 갱신.
