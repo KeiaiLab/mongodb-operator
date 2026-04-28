@@ -7,7 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-28
+
+Production-readiness 사이클 — 검수에서 식별된 P0 6건 + P1 6건을 단일 PR로 봉쇄,
+Bitnami Helm chart 동등성 갭 4건 클로즈, envtest 회귀 봉쇄망 가동.
+
+### Added
+- **MongoDB ReplicaSet PodDisruptionBudget 자동화** — opt-in via
+  `spec.podDisruptionBudget.{enabled,minAvailable,maxUnavailable}`. 기본
+  `minAvailable=replicas-1` (3 멤버 RS면 한 번에 한 멤버만 maintenance).
+- **MongoDBSharded PodDisruptionBudget 자동화** — cfg/shards/mongos 모든
+  컴포넌트에 단일 spec 동일 적용.
+- **MongoDB ReplicaSet NetworkPolicy 자동화** — opt-in via `spec.networkPolicy`,
+  deny-by-default + intra-cluster ingress + `additionalIngressFrom` 사용자 peer.
+- **MongoDBSharded NetworkPolicy 자동화** — 컴포넌트별 deny-by-default
+  (cfg=27019/shard=27018/mongos=27017) + cluster 내부 cross-talk 자동 허용.
+- **MongoDBSharded Scale-in** — `spec.shardCount` 감소 시 `removeShard` 자동
+  호출, ShardDraining condition으로 진행 상황 노출, drain 완료된 자원
+  (STS/Service/scripts CM/PDB/NetworkPolicy) cleanup. PVC는 의도적 보존(데이터
+  손실 방지).
+- **envtest 회귀 봉쇄망** — `internal/controller/suite_test.go`에 3개
+  reconciler 등록, 신규 케이스로 downstream resource 생성·OwnerReference·
+  finalizer 흐름 검증. controller coverage 23.8% → 29.0% (+5.2pp).
+- **단위 회귀 가드** (silent_error_unit_test.go +3건) — condition 누적 차단,
+  isClusterReady nil/zero 안전성, buildConditions 외부 condition 보존.
+
 ### Changed
+- **부트스트랩 race-free**: K8s `coordination/v1.Lease` 분산 락으로 동일 CR에
+  대한 동시 reconcile에서 첫 admin user 생성 race 차단. controller-runtime
+  leader-election과 별개의 resource-level lock.
+- **부트스트랩 검증 강화**: `BootstrapAdminUser` 직후 인증된 매니저로
+  `usersInfo` ping → 통과해야만 `Status.AdminUserCreated=true`.
+- **typed `mongo.ServerError` 도입** (auth.go): `isAuthRequiredErr` /
+  `isUserAlreadyExistsErr`를 string match에서 `HasErrorCode(13/18 / 11000/51003)`
+  으로 변경. TLS handshake 등 typed wrapping이 없는 경로용 fallback 메시지
+  매칭은 유지(hybrid 패턴).
+- **`controllerutil.CreateOrUpdate` 마이그레이션**: 자체 createOrUpdate(DeepCopy
+  → Update) 헬퍼를 폐기하고 mutateFn 패턴으로 전환. Service/STS/Deployment의
+  immutable 필드(ClusterIP, Selector, ServiceName, VolumeClaimTemplates 등)는
+  Create 시점에만 설정 → spec 손실 위험 차단.
+- **`updateStatusError` condition 누적 차단**: 동일 type ReconcileError가 매
+  호출마다 append되던 P2 버그 수정 → `filterConditionsByType` 적용 후 1건만 유지.
+- **`buildConditions` 외부 condition 보존**: 본 함수가 관리하지 않는 type
+  (PrimaryUnreachable, ReconcileError 등)을 보존해 silent로 사라지지 않게 함.
+- **`updateStatus`의 silent primary skip 제거**: rsManager 생성/조회 실패를
+  `PrimaryUnreachable=True` condition으로 영속화 → 운영자가 phase=Running인
+  채로 primary 추적이 멈춘 상태를 인지 가능.
+- **`isClusterReady` nil/zero 안전성**: `len(Status.Shards) != Spec.Shards.Count`
+  가드 + `Spec.Members/Replicas/MembersPerShard <= 0`인 잘못된 설정 차단.
+
+### Fixed
+- `Makefile` docker-build/docker-push: `--builder masblue-builder` 제거. 글로벌
+  표준에 따라 docker buildx 기본 빌더(default)만 사용.
+- `config/manager/kustomization.yaml`: dev 태그 `dev-5cdeb71-final` → `latest`
+  (운영 배포가 dev 태그를 가리키던 상태 해소).
+
+### Security
+- `coordination.k8s.io/leases` RBAC 권한 추가 (부트스트랩 분산 락 용도).
+- `networking.k8s.io/networkpolicies`, `policy/poddisruptionbudgets` RBAC 권한
+  추가 (자동 reconcile 용도). controller-gen이 role.yaml에 자동 반영.
+
+### 후속 사이클로 미룬 항목
+- MongoDBSharded Arbiter/Hidden topology (Bitnami #1) — MongoDB CR에는 이미
+  지원, Sharded는 builder STS 분기가 필요해 별도 사이클.
+- ReplicaSet member graceful removal (`rs.remove()` 호출) — 현재 STS replicas
+  축소만 처리.
+- ROADMAP Phase 1.3 자동 롤링 업그레이드, Phase 1-2의 LDAP/OIDC/PITR/Grafana.
+
+### Changed (Pre-existing in Unreleased before 1.1.0)
 - **BREAKING (security)**: mongosh `kubectl exec` 의존을 mongo-go-driver v2 네트워크
   client로 완전 대체. `pods/exec` ClusterRole 권한이 RBAC에서 삭제됨.
   - operator Pod이 침해되어도 cluster의 임의 Pod에서 임의 명령 실행 불가능

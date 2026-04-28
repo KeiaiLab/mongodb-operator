@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.0.1
-appVersion: "1.0.1"
+version: 1.1.0
+appVersion: "1.1.0"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -114,23 +114,33 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/eightynine01/mongodb-operator:1.0.1
+      image: ghcr.io/eightynine01/mongodb-operator:1.1.0
     - name: mongodb
       image: mongo:8.2
     - name: mongodb-exporter
       image: percona/mongodb_exporter:0.40
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
+    - kind: added
+      description: PodDisruptionBudget automation for MongoDB ReplicaSet and MongoDBSharded (opt-in)
+    - kind: added
+      description: NetworkPolicy automation with deny-by-default + additional ingress peers (opt-in)
+    - kind: added
+      description: MongoDBSharded Scale-in via removeShard with ShardDraining condition + resource cleanup
+    - kind: added
+      description: envtest-based controller integration regression suite
     - kind: changed
-      description: "BREAKING: Migrated from Docker Hub to GitHub Container Registry (ghcr.io)"
-    - kind: added
-      description: E2E testing framework with comprehensive test scripts
-    - kind: added
-      description: Extended roadmap with MongoDB Enterprise feature comparison
-    - kind: added
-      description: GHCR setup and migration documentation
+      description: Bootstrap admin user is race-free via Kubernetes Lease distributed lock + post-bootstrap usersInfo verify
+    - kind: changed
+      description: Auth error detection migrated to typed mongo.ServerError (HasErrorCode 13/18/11000/51003) with message fallback
+    - kind: changed
+      description: Self-managed createOrUpdate replaced with controllerutil.CreateOrUpdate(mutateFn) — eliminates Spec drift on partial mutations
     - kind: fixed
-      description: GitHub Actions Docker build automation (no external secrets needed)
+      description: ReconcileError condition no longer accumulates on repeated failures
+    - kind: fixed
+      description: updateStatus no longer silently skips primary probe errors — surfaces PrimaryUnreachable condition
+    - kind: fixed
+      description: isClusterReady rejects partial-status and zero-spec configurations
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
