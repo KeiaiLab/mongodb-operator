@@ -174,6 +174,13 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	}
 
+	// 10.5. Scale-in: spec.shardCount < status.shardCount면 잉여 shard drain.
+	// 데이터 마이그레이션이 진행 중이면 ShardDraining condition을 노출하고
+	// 다음 reconcile에서 polling. 완료된 shard는 STS/Service/CM/PDB/NP cleanup.
+	if err := r.reconcileScaleIn(ctx, mdbsh); err != nil {
+		return r.updateStatusError(ctx, mdbsh, "ScaleIn", err)
+	}
+
 	// 11. Add shards to cluster — reconcileAddShards도 errors.Join 누적 패턴.
 	if err := r.reconcileAddShards(ctx, mdbsh); err != nil {
 		return r.updateStatusError(ctx, mdbsh, "AddShards", err)
@@ -714,6 +721,89 @@ func (r *MongoDBShardedReconciler) updateStatusError(ctx context.Context, mdbsh 
 	}
 
 	return ctrl.Result{RequeueAfter: requeueAfter}, err
+}
+
+// reconcileScaleIn은 spec.Shards.Count < status.shardCount일 때 잉여 shard들을
+// MongoDB의 removeShard 명령으로 drain하고 완료된 자원을 cleanup한다.
+//
+// 흐름:
+//
+//	spec.Count <= statusCount-1인 shard들에 대해
+//	  1. mongos에 removeShard 명령 → state(started/ongoing/completed)
+//	  2. state != completed → ShardDraining condition + return (다음 reconcile에서 polling)
+//	  3. state == completed → STS/Service/scripts CM/PDB/NetworkPolicy cleanup
+//
+// 안전 가드: removeShard 명령은 chunks/dbs 마이그레이션이 *완전*히 끝난 후에만
+// completed 상태가 된다. 즉 사용자 데이터 손실 위험은 MongoDB 자체가 차단.
+// 단, PVC는 의도적으로 보존(StatefulSet의 PVCRetentionPolicy=Retain) — 운영자가
+// 수동으로 삭제 결정.
+func (r *MongoDBShardedReconciler) reconcileScaleIn(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+	statusShardCount := int32(len(mdbsh.Status.Shards))
+	if mdbsh.Spec.Shards.Count >= statusShardCount {
+		// scale-out 또는 stable. ShardDraining condition은 cleanup.
+		mdbsh.Status.Conditions = filterConditionsByType(mdbsh.Status.Conditions, "ShardDraining")
+		return nil
+	}
+
+	adminPassword, err := r.getAdminPassword(ctx, mdbsh)
+	if err != nil {
+		return fmt.Errorf("get admin password: %w", err)
+	}
+	shardMgr := mongodb.NewShardManagerWithFactory(
+		mongodb.NewPodConnectFactory(mdbsh.Name+"-mongos", 27017, "admin", adminPassword, "admin"),
+	)
+	mongosPod := mdbsh.Name + "-mongos-0"
+
+	for i := mdbsh.Spec.Shards.Count; i < statusShardCount; i++ {
+		shardName := fmt.Sprintf("%s-shard-%d", mdbsh.Name, i)
+		result, err := shardMgr.RemoveShardWithStatus(ctx, mongosPod, mdbsh.Namespace, shardName)
+		if err != nil {
+			return fmt.Errorf("remove shard %s: %w", shardName, err)
+		}
+		if result.State != "completed" {
+			r.recordShardDrainingCondition(mdbsh, shardName, result)
+			return nil
+		}
+		if err := r.cleanupShardResources(ctx, mdbsh, i); err != nil {
+			return fmt.Errorf("cleanup shard %s: %w", shardName, err)
+		}
+	}
+	mdbsh.Status.Conditions = filterConditionsByType(mdbsh.Status.Conditions, "ShardDraining")
+	return nil
+}
+
+// recordShardDrainingCondition은 removeShard 진행 상황을 ShardDraining condition
+// 으로 status에 기록한다. 운영자가 kubectl describe로 진행 정도(remaining chunks,
+// dbs)를 추적 가능.
+func (r *MongoDBShardedReconciler) recordShardDrainingCondition(mdbsh *mongodbv1alpha1.MongoDBSharded, shardName string, result *mongodb.RemoveShardResult) {
+	mdbsh.Status.Conditions = filterConditionsByType(mdbsh.Status.Conditions, "ShardDraining")
+	mdbsh.Status.Conditions = append(mdbsh.Status.Conditions, metav1.Condition{
+		Type:               "ShardDraining",
+		Status:             metav1.ConditionTrue,
+		Reason:             result.State,
+		Message:            fmt.Sprintf("shard %s state=%s, remaining chunks=%d, dbs=%d", shardName, result.State, result.Remaining.Chunks, result.Remaining.Databases),
+		ObservedGeneration: mdbsh.Generation,
+		LastTransitionTime: metav1.Now(),
+	})
+}
+
+// cleanupShardResources는 drain 완료된 shard의 STS/Service/scripts CM/PDB/
+// NetworkPolicy를 삭제한다. PVC는 보존(데이터 손실 방지).
+func (r *MongoDBShardedReconciler) cleanupShardResources(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int32) error {
+	prefix := fmt.Sprintf("%s-shard-%d", mdbsh.Name, shardIndex)
+	candidates := []client.Object{
+		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: prefix, Namespace: mdbsh.Namespace}},
+		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: prefix + "-headless", Namespace: mdbsh.Namespace}},
+		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: prefix + "-scripts", Namespace: mdbsh.Namespace}},
+		&policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Name: prefix + "-pdb", Namespace: mdbsh.Namespace}},
+		&networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: prefix + "-netpol", Namespace: mdbsh.Namespace}},
+	}
+	for _, obj := range candidates {
+		if err := r.Delete(ctx, obj); err != nil && !errors.IsNotFound(err) {
+			return fmt.Errorf("delete %T %s: %w", obj, obj.GetName(), err)
+		}
+	}
+	return nil
 }
 
 // reconcileShardedPDBs는 cfg/shards/mongos 각 컴포넌트의 PodDisruptionBudget을

@@ -77,6 +77,39 @@ func (s *ShardManager) RemoveShard(ctx context.Context, mongosPod, namespace, ad
 		bson.D{{Key: "removeShard", Value: shardName}}, "removeShard")
 }
 
+// RemoveShardResult는 MongoDB의 removeShard 명령 응답을 담는다.
+// State는 "started" | "ongoing" | "completed" 중 하나로, controller는 이 값으로
+// drain 진행 상황을 추적해 status.condition을 갱신한다.
+type RemoveShardResult struct {
+	State     string `bson:"state"`
+	Msg       string `bson:"msg"`
+	Shard     string `bson:"shard"`
+	Remaining struct {
+		Chunks    int `bson:"chunks"`
+		Databases int `bson:"dbs"`
+	} `bson:"remaining"`
+}
+
+// RemoveShardWithStatus는 removeShard 명령을 호출하고 응답의 state/remaining을
+// 그대로 반환한다. RemoveShard와 달리 진행 상황을 controller가 관측 가능.
+//
+// 멱등성: 동일 shard에 반복 호출하면 매번 state가 진행되어(started → ongoing
+// → completed) 안전하게 polling 가능. 이미 제거된 shard에 호출하면 server가
+// "shard not found" error 반환 — 호출자가 isShardNotFound 등으로 처리.
+func (s *ShardManager) RemoveShardWithStatus(ctx context.Context, mongosPod, namespace, shardName string) (*RemoveShardResult, error) {
+	c, err := s.connect(ctx, mongosPod, namespace, true)
+	if err != nil {
+		return nil, fmt.Errorf("connect for removeShard: %w", err)
+	}
+	defer disconnectQuiet(c)
+
+	var res RemoveShardResult
+	if err := c.Database("admin").RunCommand(ctx, bson.D{{Key: "removeShard", Value: shardName}}).Decode(&res); err != nil {
+		return nil, fmt.Errorf("removeShard: %w", err)
+	}
+	return &res, nil
+}
+
 // ListShards returns the list of shards in the cluster.
 func (s *ShardManager) ListShards(ctx context.Context, mongosPod, namespace string) ([]ShardStatus, error) {
 	c, err := s.connect(ctx, mongosPod, namespace, true)
