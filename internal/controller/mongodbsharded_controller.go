@@ -214,6 +214,12 @@ func (r *MongoDBShardedReconciler) reconcileKeyfileSecret(ctx context.Context, m
 }
 
 func (r *MongoDBShardedReconciler) reconcileConfigServer(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+	// Scripts ConfigMap (admin bootstrap + readiness, port 27019)
+	// StatefulSet 생성 전에 reconcile해야 pod가 mount 실패하지 않는다.
+	if err := r.reconcileConfigServerScriptsConfigMap(ctx, mdbsh); err != nil {
+		return err
+	}
+
 	// Headless service
 	svc := resources.BuildConfigServerService(mdbsh)
 	if err := r.createOrUpdate(ctx, mdbsh, svc); err != nil {
@@ -225,6 +231,18 @@ func (r *MongoDBShardedReconciler) reconcileConfigServer(ctx context.Context, md
 	return r.createOrUpdate(ctx, mdbsh, sts)
 }
 
+// reconcileConfigServerScriptsConfigMap는 cfg StatefulSet이 lifecycle.postStart에서
+// 호출하는 bootstrap-admin.sh + readiness 스크립트를 담은 ConfigMap을 reconcile한다.
+// AdminCredentialsSecretRef가 비어있으면 cfg StatefulSet도 ConfigMap을 마운트하지
+// 않으므로 이 단계 자체를 skip한다.
+func (r *MongoDBShardedReconciler) reconcileConfigServerScriptsConfigMap(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+	if mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name == "" {
+		return nil
+	}
+	cm := resources.BuildConfigServerScriptsConfigMap(mdbsh)
+	return r.createOrUpdate(ctx, mdbsh, cm)
+}
+
 func (r *MongoDBShardedReconciler) isConfigServerReady(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
 	sts := &appsv1.StatefulSet{}
 	if err := r.Get(ctx, types.NamespacedName{Name: mdbsh.Name + "-cfg", Namespace: mdbsh.Namespace}, sts); err != nil {
@@ -234,6 +252,11 @@ func (r *MongoDBShardedReconciler) isConfigServerReady(ctx context.Context, mdbs
 }
 
 func (r *MongoDBShardedReconciler) reconcileShard(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int32) error {
+	// Scripts ConfigMap (admin bootstrap + readiness, port 27018)
+	if err := r.reconcileShardScriptsConfigMap(ctx, mdbsh, shardIndex); err != nil {
+		return err
+	}
+
 	// Headless service
 	svc := resources.BuildShardService(mdbsh, shardIndex)
 	if err := r.createOrUpdate(ctx, mdbsh, svc); err != nil {
@@ -243,6 +266,16 @@ func (r *MongoDBShardedReconciler) reconcileShard(ctx context.Context, mdbsh *mo
 	// StatefulSet
 	sts := resources.BuildShardStatefulSet(mdbsh, shardIndex)
 	return r.createOrUpdate(ctx, mdbsh, sts)
+}
+
+// reconcileShardScriptsConfigMap는 shard StatefulSet이 lifecycle.postStart에서 호출
+// 하는 bootstrap-admin.sh + readiness 스크립트를 담은 ConfigMap을 reconcile한다.
+func (r *MongoDBShardedReconciler) reconcileShardScriptsConfigMap(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int32) error {
+	if mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name == "" {
+		return nil
+	}
+	cm := resources.BuildShardScriptsConfigMap(mdbsh, shardIndex)
+	return r.createOrUpdate(ctx, mdbsh, cm)
 }
 
 func (r *MongoDBShardedReconciler) areShardsReady(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) bool {

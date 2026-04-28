@@ -123,37 +123,39 @@ func BuildShardedKeyfileSecret(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.Se
 	}
 }
 
-// BuildMongoDBConfigMap creates a ConfigMap for MongoDB configuration.
-//
-// 포함 스크립트:
-//   - readiness-probe.sh: mongod이 ping에 응답하는지 확인.
-//   - bootstrap-admin.sh: pod 자체가 자기 mongod에 localhost connection으로
-//     첫 admin user를 생성. operator는 더 이상 pods/exec을 수행하지 않는다.
-func BuildMongoDBConfigMap(mdb *mongodbv1alpha1.MongoDB) *corev1.ConfigMap {
-	readinessScript := `#!/bin/bash
+// buildReadinessScript는 mongod ping을 수행하는 readiness probe 스크립트를 만든다.
+// port가 다르면(cfg=27019, shard=27018, replicaset/mongos=27017) --port 인자가 필요.
+func buildReadinessScript(port int) string {
+	return fmt.Sprintf(`#!/bin/bash
 set -e
-mongosh --quiet --eval "db.adminCommand('ping')" > /dev/null 2>&1
-`
+mongosh --quiet --port %d --eval "db.adminCommand('ping')" > /dev/null 2>&1
+`, port)
+}
 
-	// localhost exception을 활용한 첫 admin user 부트스트랩.
-	// 실행 컨텍스트: lifecycle.postStart hook (mongodb container 내부).
-	// 같은 pod의 mongod에 대해 source=localhost이므로 user 0명일 때 인증 우회 가능.
-	//
-	// password는 process.env로 노출하지 않고 Secret Volume mount(/etc/mongodb-admin/password)
-	// 에서 fs.readFileSync로 읽는다 → ps/env 노출 차단.
-	bootstrapScript := `#!/bin/bash
+// buildAdminBootstrapScript는 lifecycle.postStart에서 localhost exception을 사용해
+// 첫 admin user를 만드는 스크립트를 반환한다.
+//
+// 보안 메모:
+//   - password는 process.env가 아닌 Secret Volume(/etc/mongodb-admin/password)에서
+//     fs.readFileSync로 읽음 → ps/audit 로그에 password 노출 0건.
+//   - JS literal에 password 문자열이 들어가지 않아 인젝션 차단.
+//   - 이미 user가 존재하면 idempotent no-op.
+//
+// port 매개변수: ReplicaSet=27017, Config Server=27019, Shard=27018.
+func buildAdminBootstrapScript(port int) string {
+	return fmt.Sprintf(`#!/bin/bash
 set -eu
 
 # mongod이 응답할 때까지 최대 120초 대기 (60회 × 2초).
 for i in $(seq 1 60); do
-  if mongosh --quiet --port 27017 --eval "db.adminCommand('ping').ok" > /dev/null 2>&1; then
+  if mongosh --quiet --port %d --eval "db.adminCommand('ping').ok" > /dev/null 2>&1; then
     break
   fi
   sleep 2
 done
 
 # 이미 user가 있으면 idempotent no-op.
-EXISTING=$(mongosh --quiet --port 27017 admin --eval "db.system.users.countDocuments({user:'admin'})" 2>/dev/null || echo 0)
+EXISTING=$(mongosh --quiet --port %d admin --eval "db.system.users.countDocuments({user:'admin'})" 2>/dev/null || echo 0)
 if [ "$EXISTING" != "0" ]; then
   echo "admin user already exists, skipping bootstrap"
   exit 0
@@ -161,7 +163,7 @@ fi
 
 # password는 mongosh stdin으로 fs.readFileSync로 읽어 직접 createUser에 전달.
 # JS literal에 password 문자열이 들어가지 않으므로 인젝션 위험도 없다.
-mongosh --quiet --port 27017 admin <<'EOF'
+mongosh --quiet --port %d admin <<'EOF'
 const fs = require('fs');
 const pw = fs.readFileSync('/etc/mongodb-admin/password', 'utf8').trim();
 db.createUser({
@@ -171,8 +173,73 @@ db.createUser({
 });
 EOF
 echo "admin user bootstrap complete"
-`
+`, port, port, port)
+}
 
+// buildAdminCredentialsVolume은 admin password Secret을 0400으로 mount하는 Volume을
+// 만든다. 호출자는 secretName이 비어있지 않은지 미리 검증해야 한다.
+func buildAdminCredentialsVolume(secretName string) corev1.Volume {
+	return corev1.Volume{
+		Name: "admin-credentials",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName:  secretName,
+				DefaultMode: int32Ptr(0400),
+			},
+		},
+	}
+}
+
+// buildAdminCredentialsMount는 /etc/mongodb-admin 경로에 admin Secret을
+// read-only로 마운트하는 VolumeMount를 반환한다. bootstrap 스크립트는
+// /etc/mongodb-admin/password를 읽는다.
+func buildAdminCredentialsMount() corev1.VolumeMount {
+	return corev1.VolumeMount{
+		Name:      "admin-credentials",
+		MountPath: "/etc/mongodb-admin",
+		ReadOnly:  true,
+	}
+}
+
+// buildScriptsVolume은 ConfigMap을 0755 실행 권한으로 mount하는 Volume을 만든다.
+func buildScriptsVolume(configMapName string) corev1.Volume {
+	return corev1.Volume{
+		Name: "scripts",
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: configMapName,
+				},
+				DefaultMode: int32Ptr(0755),
+			},
+		},
+	}
+}
+
+// buildScriptsMount는 /scripts 경로에 ConfigMap을 read-only로 마운트한다.
+func buildScriptsMount() corev1.VolumeMount {
+	return corev1.VolumeMount{Name: "scripts", MountPath: "/scripts", ReadOnly: true}
+}
+
+// buildAdminBootstrapLifecycle은 /scripts/bootstrap-admin.sh를 postStart로 실행하는
+// Lifecycle hook을 반환한다. ReplicaSet/ConfigServer/Shard StatefulSet 공용.
+func buildAdminBootstrapLifecycle() *corev1.Lifecycle {
+	return &corev1.Lifecycle{
+		PostStart: &corev1.LifecycleHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"/scripts/bootstrap-admin.sh"},
+			},
+		},
+	}
+}
+
+// BuildMongoDBConfigMap creates a ConfigMap for MongoDB configuration.
+//
+// 포함 스크립트:
+//   - readiness-probe.sh: mongod이 ping에 응답하는지 확인.
+//   - bootstrap-admin.sh: pod 자체가 자기 mongod에 localhost connection으로
+//     첫 admin user를 생성. operator는 더 이상 pods/exec을 수행하지 않는다.
+func BuildMongoDBConfigMap(mdb *mongodbv1alpha1.MongoDB) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      mdb.Name + "-scripts",
@@ -180,8 +247,40 @@ echo "admin user bootstrap complete"
 			Labels:    buildLabels(mdb.Name, "scripts"),
 		},
 		Data: map[string]string{
-			"readiness-probe.sh": readinessScript,
-			"bootstrap-admin.sh": bootstrapScript,
+			"readiness-probe.sh": buildReadinessScript(mongoDBPort),
+			"bootstrap-admin.sh": buildAdminBootstrapScript(mongoDBPort),
+		},
+	}
+}
+
+// BuildConfigServerScriptsConfigMap는 Config Server StatefulSet에 마운트되는
+// scripts ConfigMap을 만든다. port=27019.
+func BuildConfigServerScriptsConfigMap(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      mdbsh.Name + "-cfg-scripts",
+			Namespace: mdbsh.Namespace,
+			Labels:    buildLabels(mdbsh.Name, "configsvr"),
+		},
+		Data: map[string]string{
+			"readiness-probe.sh": buildReadinessScript(27019),
+			"bootstrap-admin.sh": buildAdminBootstrapScript(27019),
+		},
+	}
+}
+
+// BuildShardScriptsConfigMap는 Shard StatefulSet에 마운트되는 scripts ConfigMap을
+// 만든다. port=27018, name={instance}-shard-{i}-scripts.
+func BuildShardScriptsConfigMap(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int32) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-shard-%d-scripts", mdbsh.Name, shardIndex),
+			Namespace: mdbsh.Namespace,
+			Labels:    buildLabels(mdbsh.Name, fmt.Sprintf("shard-%d", shardIndex)),
+		},
+		Data: map[string]string{
+			"readiness-probe.sh": buildReadinessScript(27018),
+			"bootstrap-admin.sh": buildAdminBootstrapScript(27018),
 		},
 	}
 }
@@ -253,43 +352,21 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
-		{
-			Name: "scripts",
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: mdb.Name + "-scripts",
-					},
-					DefaultMode: int32Ptr(0755),
-				},
-			},
-		},
+		buildScriptsVolume(mdb.Name + "-scripts"),
 	}
 
 	volumeMounts := []corev1.VolumeMount{
 		{Name: "data", MountPath: mdb.Spec.Storage.DataDirPath},
 		{Name: "keyfile", MountPath: "/etc/mongodb-keyfile", ReadOnly: true},
-		{Name: "scripts", MountPath: "/scripts", ReadOnly: true},
+		buildScriptsMount(),
 	}
 
 	// admin credentials Secret을 file로 마운트한다. lifecycle.postStart의 bootstrap
 	// 스크립트가 /etc/mongodb-admin/password를 읽어 첫 admin user를 생성한다.
 	// envvar로 노출하지 않으므로 ps/audit에 password가 보이지 않는다.
 	if mdb.Spec.Auth.AdminCredentialsSecretRef.Name != "" {
-		volumes = append(volumes, corev1.Volume{
-			Name: "admin-credentials",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  mdb.Spec.Auth.AdminCredentialsSecretRef.Name,
-					DefaultMode: int32Ptr(0400),
-				},
-			},
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      "admin-credentials",
-			MountPath: "/etc/mongodb-admin",
-			ReadOnly:  true,
-		})
+		volumes = append(volumes, buildAdminCredentialsVolume(mdb.Spec.Auth.AdminCredentialsSecretRef.Name))
+		volumeMounts = append(volumeMounts, buildAdminCredentialsMount())
 	}
 
 	// Init container to copy keyfile with correct permissions
@@ -352,13 +429,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			// operator는 pods/exec을 호출하지 않는다. 스크립트가 실패해도 mongod
 			// 시작 자체는 멈추지 않으며, 운영자는 readiness 미달 → reconcile
 			// requeue로 인지한다.
-			Lifecycle: &corev1.Lifecycle{
-				PostStart: &corev1.LifecycleHandler{
-					Exec: &corev1.ExecAction{
-						Command: []string{"/scripts/bootstrap-admin.sh"},
-					},
-				},
-			},
+			Lifecycle: buildAdminBootstrapLifecycle(),
 			Env: []corev1.EnvVar{
 				{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{
 					FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"},
@@ -539,6 +610,40 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 		storageSize = resource.MustParse("10Gi")
 	}
 
+	// Volumes/Mounts 구성. admin-credentials와 scripts는 AdminCredentialsSecretRef
+	// 가 설정된 경우에만 추가하여 옵션 사용을 깨지 않는다.
+	volumes := []corev1.Volume{
+		{
+			Name: "keyfile-secret",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  mdbsh.Name + "-keyfile",
+					DefaultMode: int32Ptr(0400),
+				},
+			},
+		},
+		{
+			Name:         "keyfile",
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		},
+	}
+	mongodVolumeMounts := []corev1.VolumeMount{
+		{Name: "data", MountPath: "/data/configdb"},
+		{Name: "keyfile", MountPath: "/etc/mongodb-keyfile", ReadOnly: true},
+	}
+	var mongodLifecycle *corev1.Lifecycle
+	if mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name != "" {
+		volumes = append(volumes,
+			buildScriptsVolume(mdbsh.Name+"-cfg-scripts"),
+			buildAdminCredentialsVolume(mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name),
+		)
+		mongodVolumeMounts = append(mongodVolumeMounts,
+			buildScriptsMount(),
+			buildAdminCredentialsMount(),
+		)
+		mongodLifecycle = buildAdminBootstrapLifecycle()
+	}
+
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      mdbsh.Name + "-cfg",
@@ -588,29 +693,11 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 							Args:            args,
 							Resources:       buildResourceRequirements(mdbsh.Spec.ConfigServer.Resources),
 							SecurityContext: buildDefaultContainerSecurityContext(),
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "data", MountPath: "/data/configdb"},
-								{Name: "keyfile", MountPath: "/etc/mongodb-keyfile", ReadOnly: true},
-							},
+							VolumeMounts:    mongodVolumeMounts,
+							Lifecycle:       mongodLifecycle,
 						},
 					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "keyfile-secret",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName:  mdbsh.Name + "-keyfile",
-									DefaultMode: int32Ptr(0400),
-								},
-							},
-						},
-						{
-							Name: "keyfile",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-					},
+					Volumes:  volumes,
 					Affinity: buildDefaultAffinity(mdbsh.Name),
 				},
 			},
@@ -676,6 +763,39 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 		storageSize = resource.MustParse("50Gi")
 	}
 
+	// ConfigServer와 동일 패턴: admin bootstrap 옵션 사용시 추가 마운트.
+	volumes := []corev1.Volume{
+		{
+			Name: "keyfile-secret",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  mdbsh.Name + "-keyfile",
+					DefaultMode: int32Ptr(0400),
+				},
+			},
+		},
+		{
+			Name:         "keyfile",
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		},
+	}
+	mongodVolumeMounts := []corev1.VolumeMount{
+		{Name: "data", MountPath: "/data/db"},
+		{Name: "keyfile", MountPath: "/etc/mongodb-keyfile", ReadOnly: true},
+	}
+	var mongodLifecycle *corev1.Lifecycle
+	if mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name != "" {
+		volumes = append(volumes,
+			buildScriptsVolume(fmt.Sprintf("%s-shard-%d-scripts", mdbsh.Name, shardIndex)),
+			buildAdminCredentialsVolume(mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name),
+		)
+		mongodVolumeMounts = append(mongodVolumeMounts,
+			buildScriptsMount(),
+			buildAdminCredentialsMount(),
+		)
+		mongodLifecycle = buildAdminBootstrapLifecycle()
+	}
+
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -725,29 +845,11 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 							Args:            args,
 							Resources:       buildResourceRequirements(mdbsh.Spec.Shards.Resources),
 							SecurityContext: buildDefaultContainerSecurityContext(),
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "data", MountPath: "/data/db"},
-								{Name: "keyfile", MountPath: "/etc/mongodb-keyfile", ReadOnly: true},
-							},
+							VolumeMounts:    mongodVolumeMounts,
+							Lifecycle:       mongodLifecycle,
 						},
 					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "keyfile-secret",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName:  mdbsh.Name + "-keyfile",
-									DefaultMode: int32Ptr(0400),
-								},
-							},
-						},
-						{
-							Name: "keyfile",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-					},
+					Volumes:  volumes,
 					Affinity: buildDefaultAffinity(mdbsh.Name),
 				},
 			},
@@ -786,35 +888,6 @@ func BuildMongosConfigMap(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.ConfigM
 			mdbsh.Name, i, mdbsh.Name, mdbsh.Namespace)
 	}
 
-	bootstrapScript := `#!/bin/bash
-set -eu
-
-# mongos가 응답할 때까지 최대 120초 대기.
-for i in $(seq 1 60); do
-  if mongosh --quiet --port 27017 --eval "db.adminCommand('ping').ok" > /dev/null 2>&1; then
-    break
-  fi
-  sleep 2
-done
-
-EXISTING=$(mongosh --quiet --port 27017 admin --eval "db.system.users.countDocuments({user:'admin'})" 2>/dev/null || echo 0)
-if [ "$EXISTING" != "0" ]; then
-  echo "admin user already exists, skipping bootstrap"
-  exit 0
-fi
-
-mongosh --quiet --port 27017 admin <<'EOF'
-const fs = require('fs');
-const pw = fs.readFileSync('/etc/mongodb-admin/password', 'utf8').trim();
-db.createUser({
-  user: 'admin',
-  pwd: pw,
-  roles: [{ role: 'root', db: 'admin' }],
-});
-EOF
-echo "admin user bootstrap complete"
-`
-
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      mdbsh.Name + "-mongos-config",
@@ -823,7 +896,7 @@ echo "admin user bootstrap complete"
 		},
 		Data: map[string]string{
 			"configdb":           fmt.Sprintf("%s-cfg/%s", mdbsh.Name, configHosts),
-			"bootstrap-admin.sh": bootstrapScript,
+			"bootstrap-admin.sh": buildAdminBootstrapScript(mongoDBPort),
 		},
 	}
 }
