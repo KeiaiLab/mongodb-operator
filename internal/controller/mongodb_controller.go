@@ -24,6 +24,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,6 +60,7 @@ type MongoDBReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 
 func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -128,6 +130,11 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// 5.5. PodDisruptionBudget (opt-in, spec.podDisruptionBudget이 enabled일 때만 생성)
 	if err := r.reconcilePDB(ctx, mdb); err != nil {
 		return r.updateStatusError(ctx, mdb, "PodDisruptionBudget", err)
+	}
+
+	// 5.6. NetworkPolicy (opt-in, spec.networkPolicy가 enabled일 때만 생성)
+	if err := r.reconcileNetworkPolicy(ctx, mdb); err != nil {
+		return r.updateStatusError(ctx, mdb, "NetworkPolicy", err)
 	}
 
 	// 6. Wait for all pods to be ready
@@ -237,6 +244,24 @@ func (r *MongoDBReconciler) reconcileClientService(ctx context.Context, mdb *mon
 
 func (r *MongoDBReconciler) reconcileStatefulSet(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
 	return applyStatefulSet(ctx, r.Client, r.Scheme, mdb, resources.BuildReplicaSetStatefulSet(mdb))
+}
+
+// reconcileNetworkPolicy는 spec.networkPolicy가 enabled일 때만 NetworkPolicy를 생성한다.
+// disabled로 변경되면 기존 NetworkPolicy를 삭제(spec과 cluster 동기화).
+func (r *MongoDBReconciler) reconcileNetworkPolicy(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
+	desired := resources.BuildMongoDBNetworkPolicy(mdb)
+	if desired == nil {
+		existing := &networkingv1.NetworkPolicy{}
+		err := r.Get(ctx, types.NamespacedName{Name: mdb.Name + "-netpol", Namespace: mdb.Namespace}, existing)
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return r.Delete(ctx, existing)
+	}
+	return applyNetworkPolicy(ctx, r.Client, r.Scheme, mdb, desired)
 }
 
 // reconcilePDB는 spec.podDisruptionBudget가 enabled일 때만 PDB를 만든다.
@@ -671,5 +696,6 @@ func (r *MongoDBReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Secret{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&policyv1.PodDisruptionBudget{}).
+		Owns(&networkingv1.NetworkPolicy{}).
 		Complete(r)
 }

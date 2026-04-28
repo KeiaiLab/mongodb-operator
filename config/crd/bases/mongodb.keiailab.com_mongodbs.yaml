@@ -410,6 +410,41 @@ spec:
                 required:
                 - enabled
                 type: object
+              networkPolicy:
+                description: |-
+                  NetworkPolicy defines NetworkPolicy configuration. 기본 비활성(opt-in).
+                  Enabled=true면 같은 RS의 pods간 27017 ingress만 허용하는 deny-by-default
+                  정책이 적용되며 AdditionalIngressFrom으로 운영 namespace/exporter 등을 추가.
+                properties:
+                  additionalIngressFrom:
+                    description: |-
+                      AdditionalIngressFrom appends extra peers (namespaces or pods) to the
+                      generated ingress rule. 본 필드의 peers는 27017 포트로 ingress가 허용된다.
+                    items:
+                      description: |-
+                        NetworkPolicyPeer는 NetworkPolicySpec의 추가 peer를 단순화한 타입이다.
+                        PodSelector + NamespaceSelector 조합 하나만 허용 (CIDR은 본 단계 비지원).
+                      properties:
+                        namespaceSelector:
+                          additionalProperties:
+                            type: string
+                          description: NamespaceSelector selects namespaces by labels
+                          type: object
+                        podSelector:
+                          additionalProperties:
+                            type: string
+                          description: PodSelector selects pods within the chosen
+                            namespaces
+                          type: object
+                      type: object
+                    type: array
+                  enabled:
+                    default: false
+                    description: Enabled enables NetworkPolicy creation
+                    type: boolean
+                required:
+                - enabled
+                type: object
               pod:
                 description: Pod defines pod-level configuration
                 properties:

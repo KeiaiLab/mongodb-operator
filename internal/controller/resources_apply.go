@@ -21,6 +21,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -105,6 +106,25 @@ func applyStatefulSet(ctx context.Context, c client.Client, scheme *runtime.Sche
 			target.Spec.MinReadySeconds = desired.Spec.MinReadySeconds
 			target.Spec.PersistentVolumeClaimRetentionPolicy = desired.Spec.PersistentVolumeClaimRetentionPolicy
 		}
+		return controllerutil.SetControllerReference(owner, target, scheme)
+	})
+	return err
+}
+
+// applyNetworkPolicy는 desired NetworkPolicy를 idempotent하게 적용한다.
+// PodSelector/PolicyTypes/Ingress/Egress를 매번 desired 그대로 동기화 — RS
+// 멤버 라벨/포트가 spec 변경에 따라 갱신되어도 추적 가능.
+func applyNetworkPolicy(ctx context.Context, c client.Client, scheme *runtime.Scheme, owner client.Object, desired *networkingv1.NetworkPolicy) error {
+	target := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
+	}
+	_, err := controllerutil.CreateOrUpdate(ctx, c, target, func() error {
+		target.Labels = desired.Labels
+		target.Annotations = desired.Annotations
+		target.Spec.PodSelector = desired.Spec.PodSelector
+		target.Spec.PolicyTypes = desired.Spec.PolicyTypes
+		target.Spec.Ingress = desired.Spec.Ingress
+		target.Spec.Egress = desired.Spec.Egress
 		return controllerutil.SetControllerReference(owner, target, scheme)
 	})
 	return err

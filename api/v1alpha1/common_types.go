@@ -362,6 +362,36 @@ type PodSpec struct {
 	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
 }
 
+// NetworkPolicySpec defines NetworkPolicy configuration for the workload pods.
+// Enabled가 true면 controller가 NetworkPolicy를 생성한다 — 기본 정책은 같은
+// RS/cluster의 pods간 ingress만 허용. AdditionalIngressRules는 사용자가 정의한
+// 추가 ingress(예: 모니터링 namespace, 클라이언트 namespace)를 append.
+//
+// 기본값은 Enabled=false (opt-in) — 기존 운영 클러스터 트래픽을 의도치 않게
+// 차단하지 않기 위함.
+type NetworkPolicySpec struct {
+	// Enabled enables NetworkPolicy creation
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// AdditionalIngressFrom appends extra peers (namespaces or pods) to the
+	// generated ingress rule. 본 필드의 peers는 27017 포트로 ingress가 허용된다.
+	// +optional
+	AdditionalIngressFrom []NetworkPolicyPeer `json:"additionalIngressFrom,omitempty"`
+}
+
+// NetworkPolicyPeer는 NetworkPolicySpec의 추가 peer를 단순화한 타입이다.
+// PodSelector + NamespaceSelector 조합 하나만 허용 (CIDR은 본 단계 비지원).
+type NetworkPolicyPeer struct {
+	// PodSelector selects pods within the chosen namespaces
+	// +optional
+	PodSelector *map[string]string `json:"podSelector,omitempty"`
+
+	// NamespaceSelector selects namespaces by labels
+	// +optional
+	NamespaceSelector *map[string]string `json:"namespaceSelector,omitempty"`
+}
+
 // PodDisruptionBudgetSpec defines PodDisruptionBudget configuration for the workload pods.
 // Enabled가 true면 controller가 PodDisruptionBudget을 생성한다.
 // MinAvailable과 MaxUnavailable은 동시 지정 불가(K8s 제약). 둘 다 nil이면

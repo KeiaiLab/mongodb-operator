@@ -88,6 +88,12 @@ type MongoDBSpec struct {
 	// +optional
 	PodDisruptionBudget *PodDisruptionBudgetSpec `json:"podDisruptionBudget,omitempty"`
 
+	// NetworkPolicy defines NetworkPolicy configuration. 기본 비활성(opt-in).
+	// Enabled=true면 같은 RS의 pods간 27017 ingress만 허용하는 deny-by-default
+	// 정책이 적용되며 AdditionalIngressFrom으로 운영 namespace/exporter 등을 추가.
+	// +optional
+	NetworkPolicy *NetworkPolicySpec `json:"networkPolicy,omitempty"`
+
 	// ReplicaSetName is the name of the replica set
 	// +kubebuilder:default="rs0"
 	ReplicaSetName string `json:"replicaSetName,omitempty"`

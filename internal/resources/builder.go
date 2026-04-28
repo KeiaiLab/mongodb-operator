@@ -24,6 +24,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1293,4 +1294,59 @@ func BuildMongoDBPDB(mdb *mongodbv1alpha1.MongoDB) *policyv1.PodDisruptionBudget
 		pdb.Spec.MinAvailable = &v
 	}
 	return pdb
+}
+
+// BuildMongoDBNetworkPolicy는 MongoDB ReplicaSet pods에 대한 deny-by-default
+// NetworkPolicy를 생성한다. spec.networkPolicy.enabled=false면 nil 반환.
+//
+// 기본 정책: 같은 RS의 pods간 27017 ingress만 허용. AdditionalIngressFrom으로
+// 운영 namespace, 모니터링 stack(exporter scrape) 등을 추가 ingress로 명시 가능.
+func BuildMongoDBNetworkPolicy(mdb *mongodbv1alpha1.MongoDB) *networkingv1.NetworkPolicy {
+	npSpec := mdb.Spec.NetworkPolicy
+	if npSpec == nil || !npSpec.Enabled {
+		return nil
+	}
+	selector := buildLabels(mdb.Name, "replicaset")
+	port := intstr.FromInt(mongoDBPort)
+	tcp := corev1.ProtocolTCP
+
+	np := &networkingv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      mdb.Name + "-netpol",
+			Namespace: mdb.Namespace,
+			Labels:    selector,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{MatchLabels: selector},
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{PodSelector: &metav1.LabelSelector{MatchLabels: selector}},
+					},
+					Ports: []networkingv1.NetworkPolicyPort{
+						{Port: &port, Protocol: &tcp},
+					},
+				},
+			},
+		},
+	}
+
+	for _, peer := range npSpec.AdditionalIngressFrom {
+		npp := networkingv1.NetworkPolicyPeer{}
+		if peer.PodSelector != nil {
+			npp.PodSelector = &metav1.LabelSelector{MatchLabels: *peer.PodSelector}
+		}
+		if peer.NamespaceSelector != nil {
+			npp.NamespaceSelector = &metav1.LabelSelector{MatchLabels: *peer.NamespaceSelector}
+		}
+		if npp.PodSelector == nil && npp.NamespaceSelector == nil {
+			continue
+		}
+		np.Spec.Ingress = append(np.Spec.Ingress, networkingv1.NetworkPolicyIngressRule{
+			From:  []networkingv1.NetworkPolicyPeer{npp},
+			Ports: []networkingv1.NetworkPolicyPort{{Port: &port, Protocol: &tcp}},
+		})
+	}
+	return np
 }
