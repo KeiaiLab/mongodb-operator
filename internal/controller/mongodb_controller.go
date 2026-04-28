@@ -24,6 +24,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -122,6 +123,11 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// 5. StatefulSet
 	if err := r.reconcileStatefulSet(ctx, mdb); err != nil {
 		return r.updateStatusError(ctx, mdb, "StatefulSet", err)
+	}
+
+	// 5.5. PodDisruptionBudget (opt-in, spec.podDisruptionBudget이 enabled일 때만 생성)
+	if err := r.reconcilePDB(ctx, mdb); err != nil {
+		return r.updateStatusError(ctx, mdb, "PodDisruptionBudget", err)
 	}
 
 	// 6. Wait for all pods to be ready
@@ -231,6 +237,25 @@ func (r *MongoDBReconciler) reconcileClientService(ctx context.Context, mdb *mon
 
 func (r *MongoDBReconciler) reconcileStatefulSet(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
 	return applyStatefulSet(ctx, r.Client, r.Scheme, mdb, resources.BuildReplicaSetStatefulSet(mdb))
+}
+
+// reconcilePDB는 spec.podDisruptionBudget가 enabled일 때만 PDB를 만든다.
+// 사용자가 enabled=false로 변경하거나 podDisruptionBudget 필드를 제거하면
+// 기존 PDB를 삭제해 spec과 cluster 상태를 동기화한다.
+func (r *MongoDBReconciler) reconcilePDB(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
+	desired := resources.BuildMongoDBPDB(mdb)
+	if desired == nil {
+		existing := &policyv1.PodDisruptionBudget{}
+		err := r.Get(ctx, types.NamespacedName{Name: mdb.Name + "-pdb", Namespace: mdb.Namespace}, existing)
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		return r.Delete(ctx, existing)
+	}
+	return applyPDB(ctx, r.Client, r.Scheme, mdb, desired)
 }
 
 func (r *MongoDBReconciler) areAllPodsReady(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (bool, error) {
@@ -645,5 +670,6 @@ func (r *MongoDBReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&corev1.Secret{}).
 		Owns(&corev1.ConfigMap{}).
+		Owns(&policyv1.PodDisruptionBudget{}).
 		Complete(r)
 }

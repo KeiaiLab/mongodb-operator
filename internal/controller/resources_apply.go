@@ -21,6 +21,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -104,6 +105,24 @@ func applyStatefulSet(ctx context.Context, c client.Client, scheme *runtime.Sche
 			target.Spec.MinReadySeconds = desired.Spec.MinReadySeconds
 			target.Spec.PersistentVolumeClaimRetentionPolicy = desired.Spec.PersistentVolumeClaimRetentionPolicy
 		}
+		return controllerutil.SetControllerReference(owner, target, scheme)
+	})
+	return err
+}
+
+// applyPDB는 desired PodDisruptionBudget을 idempotent하게 적용한다.
+// MinAvailable/MaxUnavailable은 K8s 제약상 둘 중 하나만 설정 가능하므로 desired
+// 그대로 mutate(둘 중 하나만 non-nil이라는 호출자 책임).
+func applyPDB(ctx context.Context, c client.Client, scheme *runtime.Scheme, owner client.Object, desired *policyv1.PodDisruptionBudget) error {
+	target := &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
+	}
+	_, err := controllerutil.CreateOrUpdate(ctx, c, target, func() error {
+		target.Labels = desired.Labels
+		target.Annotations = desired.Annotations
+		target.Spec.Selector = desired.Spec.Selector
+		target.Spec.MinAvailable = desired.Spec.MinAvailable
+		target.Spec.MaxUnavailable = desired.Spec.MaxUnavailable
 		return controllerutil.SetControllerReference(owner, target, scheme)
 	})
 	return err

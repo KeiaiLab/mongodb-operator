@@ -24,6 +24,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -1253,4 +1254,43 @@ echo "Starting backup: ${BACKUP_NAME}"
 mongodump --uri="${MONGODB_URI}" --out="/backup/${BACKUP_NAME}" %s
 echo "Backup completed: ${BACKUP_NAME}"
 `, backup.Spec.ClusterRef.Name, compressionFlag)
+}
+
+// BuildMongoDBPDB는 MongoDB ReplicaSet workload를 위한 PodDisruptionBudget을 생성한다.
+// spec.podDisruptionBudget가 nil이거나 enabled=false면 nil을 반환해 controller가
+// 생성/업데이트를 skip하게 한다.
+//
+// 기본값: minAvailable = max(replicas-1, 0). 3 멤버 RS면 minAvailable=2가
+// 적용되어 한 번에 한 멤버만 maintenance 가능하도록 보장.
+func BuildMongoDBPDB(mdb *mongodbv1alpha1.MongoDB) *policyv1.PodDisruptionBudget {
+	pdbSpec := mdb.Spec.PodDisruptionBudget
+	if pdbSpec == nil || !pdbSpec.Enabled {
+		return nil
+	}
+	pdb := &policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      mdb.Name + "-pdb",
+			Namespace: mdb.Namespace,
+			Labels:    buildLabels(mdb.Name, "replicaset"),
+		},
+		Spec: policyv1.PodDisruptionBudgetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: buildLabels(mdb.Name, "replicaset"),
+			},
+		},
+	}
+	switch {
+	case pdbSpec.MinAvailable != nil:
+		pdb.Spec.MinAvailable = pdbSpec.MinAvailable
+	case pdbSpec.MaxUnavailable != nil:
+		pdb.Spec.MaxUnavailable = pdbSpec.MaxUnavailable
+	default:
+		minAvail := mdb.Spec.Members - 1
+		if minAvail < 0 {
+			minAvail = 0
+		}
+		v := intstr.FromInt(int(minAvail))
+		pdb.Spec.MinAvailable = &v
+	}
+	return pdb
 }

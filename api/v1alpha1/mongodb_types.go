@@ -83,6 +83,11 @@ type MongoDBSpec struct {
 	// +optional
 	Arbiter *ArbiterSpec `json:"arbiter,omitempty"`
 
+	// PodDisruptionBudget defines PDB configuration for the replica set workload.
+	// 미지정 시 controller는 PDB를 생성하지 않는다(opt-in).
+	// +optional
+	PodDisruptionBudget *PodDisruptionBudgetSpec `json:"podDisruptionBudget,omitempty"`
+
 	// ReplicaSetName is the name of the replica set
 	// +kubebuilder:default="rs0"
 	ReplicaSetName string `json:"replicaSetName,omitempty"`

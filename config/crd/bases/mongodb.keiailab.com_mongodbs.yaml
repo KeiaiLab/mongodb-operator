@@ -1984,6 +1984,32 @@ spec:
                       type: object
                     type: array
                 type: object
+              podDisruptionBudget:
+                description: |-
+                  PodDisruptionBudget defines PDB configuration for the replica set workload.
+                  미지정 시 controller는 PDB를 생성하지 않는다(opt-in).
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled enables PDB creation
+                    type: boolean
+                  maxUnavailable:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: MaxUnavailable is the maximum number/percentage of
+                      pods unavailable during disruption
+                    x-kubernetes-int-or-string: true
+                  minAvailable:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    description: MinAvailable is the minimum number/percentage of
+                      pods available during disruption
+                    x-kubernetes-int-or-string: true
+                required:
+                - enabled
+                type: object
               replicaSetName:
                 default: rs0
                 description: ReplicaSetName is the name of the replica set

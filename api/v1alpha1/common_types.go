@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // MongoDBVersion defines MongoDB version configuration
@@ -359,6 +360,24 @@ type PodSpec struct {
 	// TopologySpreadConstraints describes how pods are spread across topology
 	// +optional
 	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
+}
+
+// PodDisruptionBudgetSpec defines PodDisruptionBudget configuration for the workload pods.
+// Enabled가 true면 controller가 PodDisruptionBudget을 생성한다.
+// MinAvailable과 MaxUnavailable은 동시 지정 불가(K8s 제약). 둘 다 nil이면
+// minAvailable = replicas-1을 기본값으로 적용한다(3 멤버 RS → minAvailable=2).
+type PodDisruptionBudgetSpec struct {
+	// Enabled enables PDB creation
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled"`
+
+	// MinAvailable is the minimum number/percentage of pods available during disruption
+	// +optional
+	MinAvailable *intstr.IntOrString `json:"minAvailable,omitempty"`
+
+	// MaxUnavailable is the maximum number/percentage of pods unavailable during disruption
+	// +optional
+	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 }
 
 // ClusterReference references a MongoDB cluster
