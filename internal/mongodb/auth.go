@@ -14,9 +14,122 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
+
+// BootstrapAdminUser는 RS init 직후 primary에 익명 connect로 접속해
+// 첫 admin user를 생성한다. 이 시점은 mongod이 --auth + --replSet으로 실행
+// 중이지만 user가 0명이라 익명 접근이 허용되는 유일한 창. createUser 후엔
+// 모든 connect가 SCRAM 인증 필요.
+//
+// 멱등성: user가 이미 있으면(`already exists`) skip. 익명 호출이 인증
+// 요구를 받으면(`requires authentication` / `Authentication failed`)
+// 이미 user가 존재한다는 강한 신호이므로 동일하게 nil 반환.
+//
+// 호출자는 firstHost를 RS의 임의 멤버 FQDN으로 전달. primary 추적은 내부
+// 책임. roles는 admin DB의 root.
+func BootstrapAdminUser(ctx context.Context, firstHost, username, password string) error {
+	anonClient, err := NewClient(ctx, ConnectOpts{Hosts: []string{firstHost}, Direct: true})
+	if err != nil {
+		if isAuthRequiredErr(err) {
+			return nil
+		}
+		return fmt.Errorf("anonymous connect: %w", err)
+	}
+	defer disconnectQuiet(anonClient)
+
+	var status ReplicaSetStatus
+	if err := anonClient.Database("admin").RunCommand(ctx, bson.D{{Key: "replSetGetStatus", Value: 1}}).Decode(&status); err != nil {
+		if isAuthRequiredErr(err) {
+			return nil
+		}
+		return fmt.Errorf("rs.status: %w", err)
+	}
+
+	var primaryHost string
+	for _, m := range status.Members {
+		if m.StateStr == "PRIMARY" && m.Health == 1 {
+			primaryHost = m.Name
+			break
+		}
+	}
+	if primaryHost == "" {
+		return fmt.Errorf("no primary member in rs status")
+	}
+
+	primaryClient, err := NewClient(ctx, ConnectOpts{Hosts: []string{primaryHost}, Direct: true})
+	if err != nil {
+		if isAuthRequiredErr(err) {
+			return nil
+		}
+		return fmt.Errorf("primary connect: %w", err)
+	}
+	defer disconnectQuiet(primaryClient)
+
+	var res bson.M
+	err = primaryClient.Database("admin").RunCommand(ctx, bson.D{
+		{Key: "createUser", Value: username},
+		{Key: "pwd", Value: password},
+		{Key: "roles", Value: bson.A{bson.M{"role": "root", "db": "admin"}}},
+	}).Decode(&res)
+	if err != nil {
+		if isUserAlreadyExistsErr(err) {
+			return nil
+		}
+		return fmt.Errorf("createUser: %w", err)
+	}
+	return nil
+}
+
+// MongoDB 표준 server error codes (참고: replicaset.go의 notYetInitializedCode와
+// 같은 분류). string match는 mongo-driver 메시지 포맷이 minor release에서
+// 바뀌면 silent break가 발생하므로 typed mongo.ServerError 우선으로 검사한다.
+const (
+	mongoErrUnauthorized         = 13
+	mongoErrAuthenticationFailed = 18
+	mongoErrDuplicateKey         = 11000
+	mongoErrUserAlreadyExists    = 51003
+)
+
+// isAuthRequiredErr는 connect/command가 인증 요구·실패로 거부됐는지 검사한다.
+// typed mongo.ServerError로 wrapping된 경우 code(13/18)를 우선 보고, TLS
+// handshake처럼 typed wrapping이 없는 경로에서는 server response message를
+// fallback으로 본다.
+func isAuthRequiredErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	var srvErr mongo.ServerError
+	if errors.As(err, &srvErr) {
+		if srvErr.HasErrorCode(mongoErrUnauthorized) || srvErr.HasErrorCode(mongoErrAuthenticationFailed) {
+			return true
+		}
+	}
+	s := err.Error()
+	return strings.Contains(s, "requires authentication") ||
+		strings.Contains(s, "Authentication failed") ||
+		strings.Contains(s, "AuthenticationFailed")
+}
+
+// isUserAlreadyExistsErr는 createUser가 중복 user로 거부됐는지 검사한다.
+// MongoDB는 server version에 따라 11000(DuplicateKey) 또는 51003
+// (UserAlreadyExists) 중 하나를 반환한다. typed 우선, message fallback.
+func isUserAlreadyExistsErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	var srvErr mongo.ServerError
+	if errors.As(err, &srvErr) {
+		if srvErr.HasErrorCode(mongoErrDuplicateKey) || srvErr.HasErrorCode(mongoErrUserAlreadyExists) {
+			return true
+		}
+	}
+	s := err.Error()
+	return strings.Contains(s, "already exists")
+}
 
 // UserRole represents a MongoDB role assignment
 type UserRole struct {

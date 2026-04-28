@@ -18,12 +18,13 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -57,6 +58,7 @@ type MongoDBReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 
 func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -65,7 +67,7 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Fetch MongoDB instance
 	mdb := &mongodbv1alpha1.MongoDB{}
 	if err := r.Get(ctx, req.NamespacedName, mdb); err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			logger.Info("MongoDB resource not found, ignoring")
 			return ctrl.Result{}, nil
 		}
@@ -159,6 +161,10 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// 9. Create admin user if not created
 	if !mdb.Status.AdminUserCreated {
 		if err := r.reconcileAdminUser(ctx, mdb); err != nil {
+			// busy lease는 transient — phase=Failed로 전이시키지 않고 양보.
+			if errors.Is(err, errBootstrapBusy) {
+				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+			}
 			return r.updateStatusError(ctx, mdb, "AdminUser", err)
 		}
 	}
@@ -199,7 +205,7 @@ func (r *MongoDBReconciler) reconcileKeyfileSecret(ctx context.Context, mdb *mon
 		// Secret exists, do not update
 		return nil
 	}
-	if !errors.IsNotFound(err) {
+	if !apierrors.IsNotFound(err) {
 		return err
 	}
 
@@ -243,9 +249,8 @@ func (r *MongoDBReconciler) areAllPodsReady(ctx context.Context, mdb *mongodbv1a
 // newRSManager는 mongo-go-driver 기반 ReplicaSetManager를 만든다.
 // admin password는 매 호출마다 Secret에서 fetch한다 (보안: in-memory 캐싱하지 않음).
 //
-// 주의: 이 함수는 admin user가 mongodb pod의 lifecycle.postStart에서 이미
-// 만들어졌다고 가정한다. pod ready ≠ bootstrap done 이므로 호출 직후 인증
-// 실패할 수 있고, 호출자는 reconcile requeue로 대응한다.
+// 인증 모드는 BootstrapAdminUser 호출 후, 즉 mdb.Status.AdminUserCreated=true
+// 일 때만 사용 가능. 그 이전엔 newAnonRSManager()를 사용해야 함.
 func (r *MongoDBReconciler) newRSManager(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (*mongodb.ReplicaSetManager, error) {
 	pw, err := r.getAdminPassword(ctx, mdb)
 	if err != nil {
@@ -256,14 +261,21 @@ func (r *MongoDBReconciler) newRSManager(ctx context.Context, mdb *mongodbv1alph
 	), nil
 }
 
+// newAnonRSManager는 자격증명 없이 ReplicaSetManager를 만든다. RS init과
+// admin user 생성 사이의 좁은 창에서 사용. 그 이전(mongod boot 직후)과
+// 그 이후(admin user 생성 후) 모두 익명 호출은 거부됨.
+func (r *MongoDBReconciler) newAnonRSManager(mdb *mongodbv1alpha1.MongoDB) *mongodb.ReplicaSetManager {
+	return mongodb.NewReplicaSetManagerWithFactory(
+		mongodb.NewPodConnectFactory(mdb.Name+"-headless", 27017, "", "", ""),
+	)
+}
+
 func (r *MongoDBReconciler) reconcileReplicaSetInitialization(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Initializing replica set")
 
-	rsManager, err := r.newRSManager(ctx, mdb)
-	if err != nil {
-		return fmt.Errorf("failed to create replica set manager: %w", err)
-	}
+	// pre-bootstrap 단계는 익명 connect. admin user는 RS init 후에 생성됨.
+	rsManager := r.newAnonRSManager(mdb)
 
 	// Check if already initialized by querying first pod.
 	// 주의: IsInitialized는 "init이 안된" 정상 케이스를 (false, nil)로 반환한다
@@ -304,9 +316,16 @@ func (r *MongoDBReconciler) reconcileReplicaSetInitialization(ctx context.Contex
 }
 
 func (r *MongoDBReconciler) hasPrimary(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (bool, error) {
-	rsManager, err := r.newRSManager(ctx, mdb)
-	if err != nil {
-		return false, err
+	// admin user 생성 전이면 익명, 후면 인증된 매니저 사용.
+	var rsManager *mongodb.ReplicaSetManager
+	if mdb.Status.AdminUserCreated {
+		var err error
+		rsManager, err = r.newRSManager(ctx, mdb)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		rsManager = r.newAnonRSManager(mdb)
 	}
 	firstPod := fmt.Sprintf("%s-0", mdb.Name)
 	return rsManager.HasPrimary(ctx, firstPod, mdb.Namespace)
@@ -314,45 +333,60 @@ func (r *MongoDBReconciler) hasPrimary(ctx context.Context, mdb *mongodbv1alpha1
 
 func (r *MongoDBReconciler) reconcileAdminUser(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
 	logger := log.FromContext(ctx)
-	logger.Info("Creating admin user")
 
-	// Get admin credentials from secret
+	// 분산 락(K8s Lease): 동일 CR에 대한 동시 reconcile race 차단. 다른 holder
+	// 가 lease를 점유 중이면 errBootstrapBusy로 양보 — 호출자가 짧은 requeue.
+	lease, ok, err := r.acquireBootstrapLease(ctx, mdb)
+	if err != nil {
+		return fmt.Errorf("acquire bootstrap lease: %w", err)
+	}
+	if !ok {
+		logger.Info("Bootstrap lease busy, will retry next reconcile")
+		return errBootstrapBusy
+	}
+	defer r.releaseBootstrapLease(ctx, lease)
+
+	logger.Info("Bootstrapping admin user", "lease", lease.Name)
+
 	adminPassword, err := r.getAdminPassword(ctx, mdb)
 	if err != nil {
 		return fmt.Errorf("failed to get admin password: %w", err)
 	}
 
-	// Find the primary pod
-	rsManager, err := r.newRSManager(ctx, mdb)
-	if err != nil {
-		return fmt.Errorf("failed to create replica set manager: %w", err)
+	// RS init 직후엔 mongod이 --auth+--replSet으로 떠 있고 user는 0명. 익명
+	// 접근은 첫 user 생성에 한해 허용된다(localhost exception). createUser
+	// 후엔 모든 connect가 SCRAM 인증 필요.
+	firstHost := mongodb.GetPodFQDN(fmt.Sprintf("%s-0", mdb.Name), mdb.Name+"-headless", mdb.Namespace, 27017)
+	if err := mongodb.BootstrapAdminUser(ctx, firstHost, "admin", adminPassword); err != nil {
+		return fmt.Errorf("bootstrap admin user: %w", err)
 	}
 
-	firstPod := fmt.Sprintf("%s-0", mdb.Name)
-	primaryPod, err := rsManager.GetPrimaryPod(ctx, firstPod, mdb.Namespace)
-	if err != nil {
-		return fmt.Errorf("failed to get primary pod: %w", err)
+	// bootstrap 직후 인증된 매니저로 user 존재를 즉시 ping. 통과 시에만
+	// AdminUserCreated=true로 영속화 — race 또는 partial-failure가 있으면
+	// 다음 reconcile에서 재시도하도록 false 유지.
+	if err := r.verifyAdminUser(ctx, mdb, adminPassword); err != nil {
+		return fmt.Errorf("verify admin user post-bootstrap: %w", err)
 	}
 
-	// admin user는 mongodb pod의 lifecycle.postStart bootstrap이 만든다.
-	// operator는 driver로 인증 시도해 user 존재와 password 정합성을 검증만 한다.
-	authManager := mongodb.NewAuthManagerWithFactory(
-		mongodb.NewPodConnectFactory(mdb.Name+"-headless", 27017, "admin", adminPassword, "admin"),
-	)
-
-	exists, err := authManager.UserExists(ctx, primaryPod, mdb.Namespace, "admin", "admin")
-	if err != nil {
-		// 인증 실패 또는 connect 실패는 transient로 보고 requeue. pod의 postStart가
-		// 아직 끝나지 않았을 가능성이 높음.
-		return fmt.Errorf("verify admin user: %w", err)
-	}
-	if !exists {
-		return fmt.Errorf("admin user not found — pod의 postStart bootstrap이 실행되지 않았거나 실패함")
-	}
-
-	logger.Info("Admin user verified (created by pod bootstrap)")
+	logger.Info("Admin user bootstrap complete and verified")
 	mdb.Status.AdminUserCreated = true
 	return updateStatusWithRetry(ctx, r.Client, mdb)
+}
+
+// verifyAdminUser는 bootstrap 직후 인증된 매니저로 admin user 존재를 ping한다.
+// 인증 실패 또는 user 부재는 partial-failure로 보고 error 전파.
+func (r *MongoDBReconciler) verifyAdminUser(ctx context.Context, mdb *mongodbv1alpha1.MongoDB, password string) error {
+	factory := mongodb.NewPodConnectFactory(mdb.Name+"-headless", 27017, "admin", password, "admin")
+	auth := mongodb.NewAuthManagerWithFactory(factory)
+	firstPod := fmt.Sprintf("%s-0", mdb.Name)
+	exists, err := auth.UserExists(ctx, firstPod, mdb.Namespace, "admin", "admin")
+	if err != nil {
+		return fmt.Errorf("usersInfo: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("admin user not found in usersInfo response — race or partial bootstrap")
+	}
+	return nil
 }
 
 func (r *MongoDBReconciler) getAdminPassword(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (string, error) {
@@ -381,7 +415,7 @@ func (r *MongoDBReconciler) createOrUpdate(ctx context.Context, mdb *mongodbv1al
 	err := r.Get(ctx, types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, existing)
 
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			// Create the object
 			return r.Create(ctx, obj)
 		}
@@ -397,7 +431,7 @@ func (r *MongoDBReconciler) updateStatus(ctx context.Context, mdb *mongodbv1alph
 	// Get StatefulSet status
 	sts := &appsv1.StatefulSet{}
 	if err := r.Get(ctx, types.NamespacedName{Name: mdb.Name, Namespace: mdb.Namespace}, sts); err != nil {
-		if !errors.IsNotFound(err) {
+		if !apierrors.IsNotFound(err) {
 			return err
 		}
 		mdb.Status.ReadyMembers = 0
