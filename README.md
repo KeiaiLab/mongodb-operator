@@ -307,22 +307,25 @@ kubectl patch mongodbsharded my-cluster --type='merge' \
 
 ## Tested Features
 
-The following features have been verified through stability testing:
+상태 표기 기준:
+- **✅ Stable**: envtest 회귀 + 단위 테스트 + 실제 mongod workload(testcontainers/kind/실 클러스터)에서 부하/내구 검증 완료. 증거(stress test 결과/incident 후처리) 보존.
+- **✅ Implemented**: 코드 + envtest 회귀 + 단위 테스트로 *기능적* 정확성 확인. *부하 검증은 운영자 책임*.
+- **⚠️ Beta**: 코드는 동작하나 단위 테스트만 일부, 실 환경 검증 없음 — 운영 환경에 적용 전 추가 검증 필요.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| ReplicaSet auto-initialization | ✅ Stable | `rs.initiate()` automatic |
-| Sharded cluster initialization | ✅ Stable | Config server, shards, mongos |
-| Admin user creation | ✅ Stable | Driver-based bootstrap with K8s Lease lock |
-| Shard scale out (2→5) | ✅ Stable | Automatic `sh.addShard()` |
-| Shard scale in (5→2) | ✅ Implemented | Automatic `removeShard()` + ShardDraining condition + resource cleanup (PVC retained) |
-| Mongos replica scaling | ✅ Stable | Up and down |
-| Resource updates | ✅ Stable | Rolling restart |
-| Data integrity during scaling | ✅ Verified | No data loss |
-| Concurrent writes during scale | ✅ Stable | Tested with stress load |
-| PodDisruptionBudget automation | ✅ Implemented | opt-in via `spec.podDisruptionBudget` (MongoDB + Sharded) |
-| NetworkPolicy automation | ✅ Implemented | opt-in via `spec.networkPolicy` (deny-by-default + additional peers) |
-| Admin bootstrap race-free | ✅ Stable | K8s Lease distributed lock + post-bootstrap `usersInfo` verify |
+| ReplicaSet auto-initialization | ✅ Implemented | `rs.initiate()` automatic. envtest + driver 단위 테스트. |
+| Sharded cluster initialization | ✅ Implemented | Config server, shards, mongos. envtest 검증. |
+| Admin user creation | ✅ Implemented | Driver-based bootstrap with K8s Lease lock + post-bootstrap usersInfo verify. |
+| Shard scale out (2→5) | ⚠️ Beta | Automatic `sh.addShard()` — driver 호출 검증, *실 cluster 부하* 미검증. |
+| Shard scale in (5→2) | ⚠️ Beta | Automatic `removeShard()` + ShardDraining condition + resource cleanup (PVC retained). chunks 마이그레이션 long-running polling은 30s 고정(backoff 미적용). |
+| Mongos replica scaling | ✅ Implemented | Deployment replicas 변경 → rolling. |
+| Resource updates | ✅ Implemented | Rolling restart via STS UpdateStrategy. |
+| Data integrity during scaling | ⚠️ Beta | 코드 흐름상 데이터 손실 차단(PVC retain, removeShard drain wait) — *실 데이터 부하 검증* 미수행. |
+| Concurrent writes during scale | ⚠️ Beta | stress test 증거 없음. 향후 testcontainers-go 기반 부하 시험 예정. |
+| PodDisruptionBudget automation | ✅ Implemented | opt-in via `spec.podDisruptionBudget` (MongoDB + Sharded). builder 단위 테스트로 4 컴포넌트 생성 검증. |
+| NetworkPolicy automation | ✅ Implemented | opt-in via `spec.networkPolicy` (deny-by-default + additional peers). 단위 테스트로 cfg=27019/shard=27018/mongos=27017 포트 검증. *실 통신 차단 검증 미수행*. |
+| Admin bootstrap race-free | ✅ Implemented | K8s Lease distributed lock(30s TTL) + post-bootstrap `usersInfo` verify. fake-client 단위 테스트(busy/takeover/release). holder pod crash 시 30s까지 다른 reconcile은 backoff. |
 
 ## Limitations
 
