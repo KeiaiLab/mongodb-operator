@@ -419,12 +419,20 @@ func (r *MongoDBReconciler) updateStatus(ctx context.Context, mdb *mongodbv1alph
 		mdb.Status.Phase = mongodbv1alpha1.PhaseInitializing
 	}
 
-	// Get current primary if replica set is initialized
-	if mdb.Status.ReplicaSetInitialized {
+	// Get current primary if replica set is initialized.
+	// 인증된 매니저 생성/조회 실패는 PrimaryUnreachable=True condition으로 영속화.
+	// 이전 silent skip은 phase=Running인 채로 primary 추적이 멈춘 상태를 운영자가
+	// 인지할 수 없게 만들어 silent failure였다.
+	if mdb.Status.ReplicaSetInitialized && mdb.Status.AdminUserCreated {
 		rsManager, err := r.newRSManager(ctx, mdb)
-		if err == nil {
+		if err != nil {
+			r.recordPrimaryUnreachable(mdb, "ManagerCreateFailed", err)
+		} else {
 			firstPod := fmt.Sprintf("%s-0", mdb.Name)
-			if primaryPod, err := rsManager.GetPrimaryPod(ctx, firstPod, mdb.Namespace); err == nil {
+			primaryPod, lookupErr := rsManager.GetPrimaryPod(ctx, firstPod, mdb.Namespace)
+			if lookupErr != nil {
+				r.recordPrimaryUnreachable(mdb, "PrimaryLookupFailed", lookupErr)
+			} else {
 				mdb.Status.CurrentPrimary = primaryPod
 			}
 		}
@@ -444,7 +452,20 @@ func (r *MongoDBReconciler) updateStatus(ctx context.Context, mdb *mongodbv1alph
 }
 
 func (r *MongoDBReconciler) buildConditions(mdb *mongodbv1alpha1.MongoDB) []metav1.Condition {
+	// 본 함수는 Ready / ReplicaSetInitialized / AuthenticationReady 3개 type만
+	// 관리한다. 다른 type(PrimaryUnreachable, ReconcileError 등)은 외부에서
+	// set한 상태를 그대로 보존해 silent로 사라지지 않게 한다.
+	managedTypes := map[string]bool{
+		"Ready":                 true,
+		"ReplicaSetInitialized": true,
+		"AuthenticationReady":   true,
+	}
 	conditions := []metav1.Condition{}
+	for _, c := range mdb.Status.Conditions {
+		if !managedTypes[c.Type] {
+			conditions = append(conditions, c)
+		}
+	}
 
 	// Ready condition
 	readyStatus := metav1.ConditionFalse
@@ -557,6 +578,22 @@ func (r *MongoDBReconciler) clearPrimaryUnreachableCondition(ctx context.Context
 	}
 }
 
+// recordPrimaryUnreachable은 updateStatus 단계에서 primary probe 실패를
+// PrimaryUnreachable=True condition으로 status에 기록한다(메모리 mutate만 — 호출
+// 자가 buildConditions 후 updateStatusWithRetry로 영속화). reason은 호출자가
+// 단계(ManagerCreateFailed / PrimaryLookupFailed)를 명시.
+func (r *MongoDBReconciler) recordPrimaryUnreachable(mdb *mongodbv1alpha1.MongoDB, reason string, err error) {
+	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, "PrimaryUnreachable")
+	mdb.Status.Conditions = append(mdb.Status.Conditions, metav1.Condition{
+		Type:               "PrimaryUnreachable",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: mdb.Generation,
+		LastTransitionTime: metav1.Now(),
+		Reason:             reason,
+		Message:            firstLine(err.Error()),
+	})
+}
+
 // firstLine은 multiline 에러 message에서 첫 줄만 잘라 반환한다.
 func firstLine(s string) string {
 	for i, c := range s {
@@ -583,6 +620,8 @@ func (r *MongoDBReconciler) updateStatusError(ctx context.Context, mdb *mongodbv
 	logger.Error(err, "Failed to reconcile component", "component", component)
 
 	mdb.Status.Phase = mongodbv1alpha1.PhaseFailed
+	// 동일 type append 시 condition이 무한 누적되는 P2 버그 차단 — 항상 1건만.
+	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, "ReconcileError")
 	mdb.Status.Conditions = append(mdb.Status.Conditions, metav1.Condition{
 		Type:               "ReconcileError",
 		Status:             metav1.ConditionTrue,

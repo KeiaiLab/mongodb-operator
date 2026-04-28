@@ -655,10 +655,21 @@ func (r *MongoDBShardedReconciler) getComponentPhase(ready, total int32) string 
 }
 
 func (r *MongoDBShardedReconciler) isClusterReady(mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
-	if mdbsh.Status.ConfigServer.Ready != mdbsh.Spec.ConfigServer.Members {
+	// 모든 shard가 status에 보고됐는지 정합성 검사 — 부분 누락된 상태에서
+	// 잘못 ready로 판정되는 silent bug를 차단.
+	if int32(len(mdbsh.Status.Shards)) != mdbsh.Spec.Shards.Count {
 		return false
 	}
-	if mdbsh.Status.Mongos.Ready != mdbsh.Spec.Mongos.Replicas {
+	// Spec=0이면 잘못된 설정 — never ready.
+	if mdbsh.Spec.ConfigServer.Members <= 0 ||
+		mdbsh.Status.ConfigServer.Ready != mdbsh.Spec.ConfigServer.Members {
+		return false
+	}
+	if mdbsh.Spec.Mongos.Replicas <= 0 ||
+		mdbsh.Status.Mongos.Ready != mdbsh.Spec.Mongos.Replicas {
+		return false
+	}
+	if mdbsh.Spec.Shards.MembersPerShard <= 0 {
 		return false
 	}
 	for _, shard := range mdbsh.Status.Shards {
@@ -674,6 +685,8 @@ func (r *MongoDBShardedReconciler) updateStatusError(ctx context.Context, mdbsh 
 	logger.Error(err, "Failed to reconcile component", "component", component)
 
 	mdbsh.Status.Phase = mongodbv1alpha1.ShardedPhaseFailed
+	// 동일 type append 시 condition이 무한 누적되는 P2 버그 차단 — 항상 1건만.
+	mdbsh.Status.Conditions = filterConditionsByType(mdbsh.Status.Conditions, "ReconcileError")
 	mdbsh.Status.Conditions = append(mdbsh.Status.Conditions, metav1.Condition{
 		Type:               "ReconcileError",
 		Status:             metav1.ConditionTrue,

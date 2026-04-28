@@ -145,6 +145,145 @@ func TestSetPrimaryUnreachableCondition(t *testing.T) {
 	}
 }
 
+// TestUpdateStatusError_DoesNotAccumulateConditions은 updateStatusError가
+// 반복 호출돼도 ReconcileError condition이 항상 1건만 유지되는지 검증한다.
+// 이전 패턴(append만)은 매 호출마다 누적 → status.Conditions 폭주의 P2 버그.
+func TestUpdateStatusError_DoesNotAccumulateConditions(t *testing.T) {
+	s := newTestScheme(t)
+	mdb := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "ns"},
+		Spec:       mongodbv1alpha1.MongoDBSpec{Members: 3, ReplicaSetName: "rs0"},
+	}
+	cl := fake.NewClientBuilder().
+		WithScheme(s).
+		WithObjects(mdb).
+		WithStatusSubresource(mdb).
+		Build()
+	r := &MongoDBReconciler{Client: cl, Scheme: s}
+
+	for i := 0; i < 3; i++ {
+		_, _ = r.updateStatusError(context.Background(), mdb, "Component", errors.New("transient"))
+	}
+
+	got := &mongodbv1alpha1.MongoDB{}
+	if err := cl.Get(context.Background(), client.ObjectKeyFromObject(mdb), got); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	count := 0
+	for _, c := range got.Status.Conditions {
+		if c.Type == "ReconcileError" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("기대 ReconcileError 1건, got %d (conditions: %+v)", count, got.Status.Conditions)
+	}
+}
+
+// TestIsClusterReady_RejectsNilShardsAndZeroSpec은 sharded controller의
+// isClusterReady가 status.Shards가 nil(부분 누락)이거나 spec value=0(잘못된
+// 설정)일 때 절대 ready로 판정하지 않는지 검증한다.
+func TestIsClusterReady_RejectsNilShardsAndZeroSpec(t *testing.T) {
+	r := &MongoDBShardedReconciler{}
+
+	cases := []struct {
+		name string
+		mdb  mongodbv1alpha1.MongoDBSharded
+		want bool
+	}{
+		{
+			name: "shards_status_nil_but_spec_count_2",
+			mdb: mongodbv1alpha1.MongoDBSharded{
+				Spec: mongodbv1alpha1.MongoDBShardedSpec{
+					ConfigServer: mongodbv1alpha1.ConfigServerSpec{Members: 3},
+					Shards:       mongodbv1alpha1.ShardSpec{Count: 2, MembersPerShard: 3},
+					Mongos:       mongodbv1alpha1.MongosSpec{Replicas: 2},
+				},
+				Status: mongodbv1alpha1.MongoDBShardedStatus{
+					ConfigServer: mongodbv1alpha1.ComponentStatus{Ready: 3},
+					Mongos:       mongodbv1alpha1.ComponentStatus{Ready: 2},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "spec_zero_members",
+			mdb: mongodbv1alpha1.MongoDBSharded{
+				Spec: mongodbv1alpha1.MongoDBShardedSpec{
+					Shards: mongodbv1alpha1.ShardSpec{Count: 0, MembersPerShard: 0},
+					Mongos: mongodbv1alpha1.MongosSpec{Replicas: 0},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "all_ready",
+			mdb: mongodbv1alpha1.MongoDBSharded{
+				Spec: mongodbv1alpha1.MongoDBShardedSpec{
+					ConfigServer: mongodbv1alpha1.ConfigServerSpec{Members: 3},
+					Shards:       mongodbv1alpha1.ShardSpec{Count: 2, MembersPerShard: 3},
+					Mongos:       mongodbv1alpha1.MongosSpec{Replicas: 2},
+				},
+				Status: mongodbv1alpha1.MongoDBShardedStatus{
+					ConfigServer: mongodbv1alpha1.ComponentStatus{Ready: 3},
+					Mongos:       mongodbv1alpha1.ComponentStatus{Ready: 2},
+					Shards: []mongodbv1alpha1.ShardStatus{
+						{Name: "shard-0", Ready: 3},
+						{Name: "shard-1", Ready: 3},
+					},
+				},
+			},
+			want: true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := r.isClusterReady(&c.mdb)
+			if got != c.want {
+				t.Fatalf("기대 %v, got %v (mdb: %+v)", c.want, got, c.mdb)
+			}
+		})
+	}
+}
+
+// TestBuildConditions_PreservesExternalConditions은 buildConditions가
+// 외부에서 set한 PrimaryUnreachable/ReconcileError condition을 보존하는지 검증.
+// 이전: 매 호출마다 conditions=[]로 초기화 → 외부 condition silent 손실.
+func TestBuildConditions_PreservesExternalConditions(t *testing.T) {
+	s := newTestScheme(t)
+	r := &MongoDBReconciler{Scheme: s}
+	mdb := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "ns"},
+		Spec:       mongodbv1alpha1.MongoDBSpec{Members: 3},
+		Status: mongodbv1alpha1.MongoDBStatus{
+			Conditions: []metav1.Condition{
+				{Type: "PrimaryUnreachable", Status: metav1.ConditionTrue, Reason: "ConnectError", LastTransitionTime: metav1.Now()},
+				{Type: "Ready", Status: metav1.ConditionFalse, Reason: "Stale", LastTransitionTime: metav1.Now()},
+			},
+		},
+	}
+
+	out := r.buildConditions(mdb)
+
+	hasPrimary, hasReady := false, false
+	readyCount := 0
+	for _, c := range out {
+		if c.Type == "PrimaryUnreachable" {
+			hasPrimary = true
+		}
+		if c.Type == "Ready" {
+			hasReady = true
+			readyCount++
+		}
+	}
+	if !hasPrimary {
+		t.Fatalf("PrimaryUnreachable 보존 실패: %+v", out)
+	}
+	if !hasReady || readyCount != 1 {
+		t.Fatalf("Ready condition 1건 재생성 실패 (hasReady=%v count=%d): %+v", hasReady, readyCount, out)
+	}
+}
+
 // TestShardedUpdateStatusError은 sharded controller의 동일 헬퍼가 cfg/shard
 // init 실패에 대해 ReconcileError condition을 남기는지 검증.
 func TestShardedUpdateStatusError(t *testing.T) {
