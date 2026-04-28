@@ -313,12 +313,16 @@ The following features have been verified through stability testing:
 |---------|--------|-------|
 | ReplicaSet auto-initialization | ✅ Stable | `rs.initiate()` automatic |
 | Sharded cluster initialization | ✅ Stable | Config server, shards, mongos |
-| Admin user creation | ✅ Stable | Localhost exception |
+| Admin user creation | ✅ Stable | Driver-based bootstrap with K8s Lease lock |
 | Shard scale out (2→5) | ✅ Stable | Automatic `sh.addShard()` |
+| Shard scale in (5→2) | ✅ Implemented | Automatic `removeShard()` + ShardDraining condition + resource cleanup (PVC retained) |
 | Mongos replica scaling | ✅ Stable | Up and down |
 | Resource updates | ✅ Stable | Rolling restart |
 | Data integrity during scaling | ✅ Verified | No data loss |
 | Concurrent writes during scale | ✅ Stable | Tested with stress load |
+| PodDisruptionBudget automation | ✅ Implemented | opt-in via `spec.podDisruptionBudget` (MongoDB + Sharded) |
+| NetworkPolicy automation | ✅ Implemented | opt-in via `spec.networkPolicy` (deny-by-default + additional peers) |
+| Admin bootstrap race-free | ✅ Stable | K8s Lease distributed lock + post-bootstrap `usersInfo` verify |
 
 ## Limitations
 
@@ -326,16 +330,16 @@ The following features have been verified through stability testing:
 
 | Feature | Status | Workaround |
 |---------|--------|------------|
-| Shard scale-in | ❌ Not implemented | Manual `removeShard` required |
 | ReplicaSet member removal | ❌ Not implemented | Manual `rs.remove()` required |
 | Automatic backup scheduling | ❌ Planned | Use external CronJob |
 | Cross-cluster replication | ❌ Planned | - |
+| Sharded Arbiter/Hidden topology | ⚠️ ReplicaSet only | Arbiter is supported in MongoDB CR; Sharded extension is on the roadmap |
 
 ### Known Issues
 
 1. **Mongos Memory**: Minimum 512Mi recommended. 256Mi causes OOM under load.
-2. **Scale-in orphans resources**: Decreasing shard count leaves StatefulSets orphaned.
-3. **No graceful member removal**: Scaling down ReplicaSet members doesn't call `rs.remove()`.
+2. **No graceful ReplicaSet member removal**: Scaling down ReplicaSet members doesn't call `rs.remove()` — only StatefulSet replicas are reduced.
+3. **Scale-in PVC retention**: After `removeShard` completes, PVCs of the drained shard are intentionally retained to prevent accidental data loss. Operators are expected to delete them manually after verification.
 
 ### MongoDBBackup
 

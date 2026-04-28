@@ -307,7 +307,9 @@ spec:
 
 [Bitnami `mongodb-sharded` 9.4.12 동등성 분석](docs/comparison/bitnami-mongodb-sharded.md)에서 도출된 9건의 갭. Helm chart 사용자가 본 Operator로 전환할 때 누락 없는 1:1 마이그레이션이 가능하도록 한다.
 
-### 4.1 NetworkPolicy 자동 생성 (P0)
+**진행 상황 (2026-04-28 부분 완료)**: Production-readiness 사이클에서 4건 클로즈 — 4.1 NetworkPolicy ✅, 4.9 Scale-in ✅(MongoDBSharded), 추가로 워크로드 PodDisruptionBudget 자동화(매트릭스 #22) ✅, 부트스트랩 race-free(K8s Lease 분산락) ✅. 4.2 Sharded Arbiter/Hidden은 *ReplicaSet 모델에는 이미 지원*되어 있고 Sharded 확장만 후속.
+
+### 4.1 NetworkPolicy 자동 생성 (P0) ✅ DONE (2026-04-28)
 
 **구현 사항**:
 - `MongoDB`/`MongoDBSharded` CRD에 `network.policy.enabled`, `allowExternal`, `extraIngress`, `extraEgress`, `ingressNSMatchLabels` 필드 추가
@@ -317,7 +319,7 @@ spec:
 **근거**: 매트릭스 #18 (Bitnami 기본 enabled, 본 프로젝트 미지원).
 **예상 기간**: 2-3주.
 
-### 4.2 Sharded Arbiter / Hidden member 지원 (P0)
+### 4.2 Sharded Arbiter / Hidden member 지원 (P0) — ⚠️ 부분 (ReplicaSet만, Sharded 확장은 후속)
 
 **구현 사항**:
 - `MongoDBSharded.spec.shards.arbiter.{enabled,replicas,resources}` 필드 추가
@@ -384,7 +386,7 @@ spec:
 **근거**: 매트릭스 #30, #31 (트러블슈팅 편의 + Bitnami preset 호환).
 **예상 기간**: 1-2주.
 
-### 4.9 Scale-in / Member removal (P2)
+### 4.9 Scale-in / Member removal (P2) — ⚠️ 부분 ✅ Sharded scale-in 완료 (2026-04-28), ReplicaSet member removal은 후속
 
 **구현 사항**:
 - `MongoDBSharded.spec.shards.count` 감소 시 `removeShard` 호출 → drain 완료 대기 → StatefulSet 삭제 + PVC 정책에 따라 처리
