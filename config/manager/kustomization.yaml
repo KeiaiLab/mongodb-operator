@@ -9,7 +9,7 @@ resources:
 images:
 - name: controller
   newName: ghcr.io/eightynine01/mongodb-operator
-  newTag: dev-5cdeb71-final
+  newTag: latest
 - name: ghcr.io/eightynine01/mongodb-operator
   newName: ghcr.io/eightynine01/mongodb-operator
   newTag: latest
