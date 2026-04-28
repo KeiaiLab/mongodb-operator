@@ -32,195 +32,179 @@ import (
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
+const (
+	mongoDBTestNS = "default"
+	// envtest엔 workload controller가 없어 STS가 실제로 ready되지 않으므로
+	// reconcile loop가 여러 번 도는 것을 감안해 timeout을 넉넉히 잡는다.
+	mongoDBTestTimeout  = time.Second * 30
+	mongoDBTestInterval = time.Millisecond * 250
+)
+
+func newTestMongoDB(name string, members int32, size string) *mongodbv1alpha1.MongoDB {
+	return &mongodbv1alpha1.MongoDB{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "mongodb.keiailab.com/v1alpha1",
+			Kind:       "MongoDB",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: mongoDBTestNS,
+		},
+		Spec: mongodbv1alpha1.MongoDBSpec{
+			Members:        members,
+			ReplicaSetName: "rs0",
+			Version:        mongodbv1alpha1.MongoDBVersion{Version: "7.0"},
+			Storage:        mongodbv1alpha1.StorageSpec{Size: resource.MustParse(size)},
+			Auth: mongodbv1alpha1.AuthSpec{
+				AdminCredentialsSecretRef: corev1.LocalObjectReference{Name: name + "-admin"},
+			},
+		},
+	}
+}
+
+// deleteMongoDBAndWait는 finalizer 흐름이 끝나길 기다린다.
+// reconciler 등록 이후엔 단순 Delete가 즉시 사라지지 않고 handleDeletion이
+// finalizer를 제거할 때까지 객체가 남는다.
+func deleteMongoDBAndWait(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) {
+	Expect(k8sClient.Delete(ctx, mdb)).Should(Succeed())
+	key := types.NamespacedName{Name: mdb.Name, Namespace: mdb.Namespace}
+	Eventually(func() bool {
+		err := k8sClient.Get(ctx, key, &mongodbv1alpha1.MongoDB{})
+		return errors.IsNotFound(err)
+	}, mongoDBTestTimeout, mongoDBTestInterval).Should(BeTrue())
+}
+
 var _ = Describe("MongoDB Controller", func() {
-	const (
-		MongoDBName      = "test-mongodb"
-		MongoDBNamespace = "default"
-
-		timeout  = time.Second * 10
-		interval = time.Millisecond * 250
-	)
-
 	Context("When creating a MongoDB resource", func() {
-		It("Should create the required Kubernetes resources", func() {
-			By("Creating a new MongoDB")
+		It("Should accept the spec and persist it", func() {
 			ctx := context.Background()
-			mongodb := &mongodbv1alpha1.MongoDB{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "mongodb.keiailab.github.io/v1alpha1",
-					Kind:       "MongoDB",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      MongoDBName,
-					Namespace: MongoDBNamespace,
-				},
-				Spec: mongodbv1alpha1.MongoDBSpec{
-					Members:        3,
-					ReplicaSetName: "rs0",
-					Version: mongodbv1alpha1.MongoDBVersion{
-						Version: "7.0",
-					},
-					Storage: mongodbv1alpha1.StorageSpec{
-						Size:        resource.MustParse("10Gi"),
-						DataDirPath: "/data/db",
-					},
-				},
-			}
+			mongodb := newTestMongoDB("test-mongodb", 3, "10Gi")
 			Expect(k8sClient.Create(ctx, mongodb)).Should(Succeed())
 
-			mongoDBLookupKey := types.NamespacedName{Name: MongoDBName, Namespace: MongoDBNamespace}
-			createdMongoDB := &mongodbv1alpha1.MongoDB{}
+			key := types.NamespacedName{Name: mongodb.Name, Namespace: mongodb.Namespace}
+			created := &mongodbv1alpha1.MongoDB{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, key, created)
+			}, mongoDBTestTimeout, mongoDBTestInterval).Should(Succeed())
 
-			// Verify MongoDB resource is created
-			Eventually(func() bool {
-				err := k8sClient.Get(ctx, mongoDBLookupKey, createdMongoDB)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
+			Expect(created.Spec.Members).Should(Equal(int32(3)))
+			Expect(created.Spec.ReplicaSetName).Should(Equal("rs0"))
+			Expect(created.Spec.Auth.AdminCredentialsSecretRef.Name).Should(Equal("test-mongodb-admin"))
 
-			Expect(createdMongoDB.Spec.Members).Should(Equal(int32(3)))
-			Expect(createdMongoDB.Spec.ReplicaSetName).Should(Equal("rs0"))
-
-			// Clean up
-			By("Cleaning up the MongoDB resource")
-			Expect(k8sClient.Delete(ctx, mongodb)).Should(Succeed())
+			deleteMongoDBAndWait(ctx, mongodb)
 		})
 	})
 
 	Context("When validating MongoDB spec", func() {
 		It("Should accept valid member counts", func() {
 			ctx := context.Background()
-			mongodb := &mongodbv1alpha1.MongoDB{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "mongodb.keiailab.github.io/v1alpha1",
-					Kind:       "MongoDB",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-valid-members",
-					Namespace: MongoDBNamespace,
-				},
-				Spec: mongodbv1alpha1.MongoDBSpec{
-					Members:        5,
-					ReplicaSetName: "rs0",
-					Version: mongodbv1alpha1.MongoDBVersion{
-						Version: "7.0",
-					},
-					Storage: mongodbv1alpha1.StorageSpec{
-						Size: resource.MustParse("20Gi"),
-					},
-				},
-			}
+			mongodb := newTestMongoDB("test-valid-members", 5, "20Gi")
 			Expect(k8sClient.Create(ctx, mongodb)).Should(Succeed())
-
-			// Clean up
-			Expect(k8sClient.Delete(ctx, mongodb)).Should(Succeed())
+			deleteMongoDBAndWait(ctx, mongodb)
 		})
 	})
 
 	Context("When updating MongoDB resources", func() {
 		It("Should update the spec correctly", func() {
 			ctx := context.Background()
-			mongodb := &mongodbv1alpha1.MongoDB{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "mongodb.keiailab.github.io/v1alpha1",
-					Kind:       "MongoDB",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-update-mongodb",
-					Namespace: MongoDBNamespace,
-				},
-				Spec: mongodbv1alpha1.MongoDBSpec{
-					Members:        3,
-					ReplicaSetName: "rs0",
-					Version: mongodbv1alpha1.MongoDBVersion{
-						Version: "7.0",
-					},
-					Storage: mongodbv1alpha1.StorageSpec{
-						Size: resource.MustParse("10Gi"),
-					},
-				},
-			}
+			mongodb := newTestMongoDB("test-update-mongodb", 3, "10Gi")
 			Expect(k8sClient.Create(ctx, mongodb)).Should(Succeed())
 
-			// Update the MongoDB
-			mongoDBLookupKey := types.NamespacedName{Name: "test-update-mongodb", Namespace: MongoDBNamespace}
-			createdMongoDB := &mongodbv1alpha1.MongoDB{}
-			Eventually(func() bool {
-				err := k8sClient.Get(ctx, mongoDBLookupKey, createdMongoDB)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
+			key := types.NamespacedName{Name: mongodb.Name, Namespace: mongodb.Namespace}
+			created := &mongodbv1alpha1.MongoDB{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, key, created)
+			}, mongoDBTestTimeout, mongoDBTestInterval).Should(Succeed())
 
-			// Update members count
-			createdMongoDB.Spec.Members = 5
-			Expect(k8sClient.Update(ctx, createdMongoDB)).Should(Succeed())
+			// reconciler가 finalizer를 추가하면서 generation이 변하므로 retry
+			// 패턴으로 update 충돌 회피.
+			Eventually(func() error {
+				if err := k8sClient.Get(ctx, key, created); err != nil {
+					return err
+				}
+				created.Spec.Members = 5
+				return k8sClient.Update(ctx, created)
+			}, mongoDBTestTimeout, mongoDBTestInterval).Should(Succeed())
 
-			// Verify the update
-			updatedMongoDB := &mongodbv1alpha1.MongoDB{}
 			Eventually(func() int32 {
-				err := k8sClient.Get(ctx, mongoDBLookupKey, updatedMongoDB)
-				if err != nil {
+				updated := &mongodbv1alpha1.MongoDB{}
+				if err := k8sClient.Get(ctx, key, updated); err != nil {
 					return 0
 				}
-				return updatedMongoDB.Spec.Members
-			}, timeout, interval).Should(Equal(int32(5)))
+				return updated.Spec.Members
+			}, mongoDBTestTimeout, mongoDBTestInterval).Should(Equal(int32(5)))
 
-			// Clean up
-			Expect(k8sClient.Delete(ctx, mongodb)).Should(Succeed())
+			deleteMongoDBAndWait(ctx, mongodb)
 		})
 	})
 
 	Context("When deleting MongoDB resources", func() {
-		It("Should delete the MongoDB resource", func() {
+		It("Should drain finalizer and remove the resource", func() {
 			ctx := context.Background()
-			mongodb := &mongodbv1alpha1.MongoDB{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: "mongodb.keiailab.github.io/v1alpha1",
-					Kind:       "MongoDB",
-				},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-delete-mongodb",
-					Namespace: MongoDBNamespace,
-				},
-				Spec: mongodbv1alpha1.MongoDBSpec{
-					Members:        3,
-					ReplicaSetName: "rs0",
-					Version: mongodbv1alpha1.MongoDBVersion{
-						Version: "7.0",
-					},
-					Storage: mongodbv1alpha1.StorageSpec{
-						Size: resource.MustParse("10Gi"),
-					},
-				},
-			}
+			mongodb := newTestMongoDB("test-delete-mongodb", 3, "10Gi")
 			Expect(k8sClient.Create(ctx, mongodb)).Should(Succeed())
 
-			// Delete the MongoDB
-			Expect(k8sClient.Delete(ctx, mongodb)).Should(Succeed())
+			deleteMongoDBAndWait(ctx, mongodb)
+		})
+	})
 
-			// Verify deletion
-			mongoDBLookupKey := types.NamespacedName{Name: "test-delete-mongodb", Namespace: MongoDBNamespace}
+	Context("When the reconciler runs", func() {
+		It("Should create downstream resources (StatefulSet, Services, Secret, ConfigMap)", func() {
+			ctx := context.Background()
+			const name = "test-reconcile-resources"
+			mongodb := newTestMongoDB(name, 3, "10Gi")
+			Expect(k8sClient.Create(ctx, mongodb)).Should(Succeed())
+
+			// reconcile 단계 1-5는 envtest에서도 결정적으로 실행된다.
+			// 이후 areAllPodsReady에서 멈춤(workload controller 없음).
+			By("Eventually creating the StatefulSet")
 			Eventually(func() bool {
-				err := k8sClient.Get(ctx, mongoDBLookupKey, &mongodbv1alpha1.MongoDB{})
-				return errors.IsNotFound(err)
-			}, timeout, interval).Should(BeTrue())
+				return statefulSetExists(ctx, name, mongoDBTestNS)
+			}, mongoDBTestTimeout, mongoDBTestInterval).Should(BeTrue())
+
+			By("Eventually creating the headless Service")
+			Eventually(func() bool {
+				return serviceExists(ctx, name+"-headless", mongoDBTestNS)
+			}, mongoDBTestTimeout, mongoDBTestInterval).Should(BeTrue())
+
+			By("Eventually creating the keyfile Secret")
+			Eventually(func() bool {
+				return secretExists(ctx, name+"-keyfile", mongoDBTestNS)
+			}, mongoDBTestTimeout, mongoDBTestInterval).Should(BeTrue())
+
+			By("Setting an OwnerReference back to MongoDB on the StatefulSet")
+			Eventually(func() bool {
+				sts := &appsv1.StatefulSet{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: mongoDBTestNS}, sts); err != nil {
+					return false
+				}
+				for _, owner := range sts.OwnerReferences {
+					if owner.Kind == "MongoDB" && owner.Name == name {
+						return true
+					}
+				}
+				return false
+			}, mongoDBTestTimeout, mongoDBTestInterval).Should(BeTrue())
+
+			deleteMongoDBAndWait(ctx, mongodb)
 		})
 	})
 })
 
-// Helper function to check if a StatefulSet exists
+// statefulSetExists는 envtest에서 STS 객체 존재 여부만 검증한다.
+// (envtest엔 workload controller가 없어 ready replicas는 항상 0.)
 func statefulSetExists(ctx context.Context, name, namespace string) bool {
 	sts := &appsv1.StatefulSet{}
 	err := k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, sts)
 	return err == nil
 }
 
-// Helper function to check if a Service exists
 func serviceExists(ctx context.Context, name, namespace string) bool {
 	svc := &corev1.Service{}
 	err := k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, svc)
 	return err == nil
 }
 
-// Helper function to check if a Secret exists
 func secretExists(ctx context.Context, name, namespace string) bool {
 	secret := &corev1.Secret{}
 	err := k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, secret)

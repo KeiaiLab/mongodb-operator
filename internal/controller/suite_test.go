@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -32,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
@@ -60,10 +62,12 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 
-	// Use KUBEBUILDER_ASSETS env var if set, otherwise use default path
+	// KUBEBUILDER_ASSETS는 `make test`가 setup-envtest로 채운다. 직접
+	// `go test`로 실행할 땐 host platform 기준 디렉터리를 fallback으로 추정.
 	binaryAssetsDir := os.Getenv("KUBEBUILDER_ASSETS")
 	if binaryAssetsDir == "" {
-		binaryAssetsDir = filepath.Join("..", "..", "bin", "k8s", "1.31.0-darwin-arm64")
+		binaryAssetsDir = filepath.Join("..", "..", "bin", "k8s",
+			"1.31.0-"+runtime.GOOS+"-"+runtime.GOARCH)
 	}
 
 	testEnv = &envtest.Environment{
@@ -73,7 +77,6 @@ var _ = BeforeSuite(func() {
 	}
 
 	var err error
-	// cfg is defined in this file globally.
 	cfg, err = testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
@@ -87,20 +90,35 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
-	// Start controller manager
+	// Manager 시작. metrics는 envtest에서 비활성화(임의 port 점유 회피).
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme: scheme.Scheme,
+		Scheme:  scheme.Scheme,
+		Metrics: metricsserver.Options{BindAddress: "0"},
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	// Note: We don't set up the actual controllers here because they require
-	// a real Kubernetes cluster with pod exec capabilities. For integration
-	// testing, we only test the resource creation logic.
+	// pod exec 의존이 4bc0bec에서 제거됨 — 3개 reconciler를 envtest에 등록.
+	// envtest엔 workload controller가 없어 STS.Status.ReadyReplicas=0이므로
+	// reconcile은 areAllPodsReady에서 정지. 그 전 단계(Secret·ConfigMap·
+	// Service·STS 생성)까지는 결정적으로 실행되어 회귀 검증이 가능.
+	Expect((&MongoDBReconciler{
+		Client: k8sManager.GetClient(),
+		Scheme: k8sManager.GetScheme(),
+	}).SetupWithManager(k8sManager)).To(Succeed())
+
+	Expect((&MongoDBShardedReconciler{
+		Client: k8sManager.GetClient(),
+		Scheme: k8sManager.GetScheme(),
+	}).SetupWithManager(k8sManager)).To(Succeed())
+
+	Expect((&MongoDBBackupReconciler{
+		Client: k8sManager.GetClient(),
+		Scheme: k8sManager.GetScheme(),
+	}).SetupWithManager(k8sManager)).To(Succeed())
 
 	go func() {
 		defer GinkgoRecover()
-		err = k8sManager.Start(ctx)
-		Expect(err).ToNot(HaveOccurred(), "failed to run manager")
+		Expect(k8sManager.Start(ctx)).To(Succeed(), "failed to run manager")
 	}()
 })
 
