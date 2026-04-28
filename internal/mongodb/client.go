@@ -82,9 +82,18 @@ func NewClient(ctx context.Context, opts ConnectOpts) (*mongo.Client, error) {
 		SetRetryReads(true)
 
 	if opts.Username != "" {
-		clientOpts.SetAuth(options.Credential{
+		// AuthSource 누락 시 SCRAM이 default DB("test")를 인증 DB로 시도해 실패한다.
+		// 호출자가 비워서 넘기는 실수를 차단하기 위해 명시적으로 "admin" 기본값을 보강.
+		authDB := opts.AuthDB
+		if authDB == "" {
+			authDB = "admin"
+		}
+		// v2 driver에서 SetAuth는 receiver in-place mutate(*ClientOptions)이지만,
+		// 반환값을 재할당해 두면 향후 driver가 immutable builder로 바뀌더라도 안전.
+		// 또한 godoc/공식 예제가 권장하는 chaining 패턴과 일치.
+		clientOpts = clientOpts.SetAuth(options.Credential{
 			AuthMechanism: "SCRAM-SHA-256",
-			AuthSource:    opts.AuthDB,
+			AuthSource:    authDB,
 			Username:      opts.Username,
 			Password:      opts.Password,
 		})
