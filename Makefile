@@ -69,12 +69,14 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go
 
 .PHONY: docker-build
-docker-build: ## Build docker image with the manager (linux/amd64 via masblue-builder).
-	docker buildx build --builder masblue-builder --platform linux/amd64 --load -t ${IMG} .
+docker-build: ## Build docker image with the manager (linux/amd64, default builder).
+	# 글로벌 §2: docker buildx의 기본 빌더(default)만 사용. 커스텀 빌더 인스턴스 금지.
+	docker buildx build --platform linux/amd64 --load -t ${IMG} .
 
 .PHONY: docker-push
-docker-push: ## Build and push docker image (linux/amd64 only — multi-arch is forbidden by CLAUDE.md).
-	docker buildx build --builder masblue-builder --platform linux/amd64 --push -t ${IMG} .
+docker-push: ## Build and push docker image (linux/amd64, default builder).
+	# --platform 명시로 host 아키텍처와 무관하게 amd64 단일 빌드. 멀티아키 금지.
+	docker buildx build --platform linux/amd64 --push -t ${IMG} .
 
 ##@ Deployment
 
