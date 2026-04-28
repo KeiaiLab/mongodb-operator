@@ -20,6 +20,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// MongoDBShardedPhase represents the lifecycle phase of a MongoDBSharded resource.
+// +kubebuilder:validation:Enum=Pending;Initializing;Running;Failed;Upgrading
+type MongoDBShardedPhase string
+
+const (
+	// ShardedPhasePending indicates the resource is awaiting reconciliation.
+	ShardedPhasePending MongoDBShardedPhase = "Pending"
+	// ShardedPhaseInitializing indicates the cluster is being initialized.
+	ShardedPhaseInitializing MongoDBShardedPhase = "Initializing"
+	// ShardedPhaseRunning indicates the sharded cluster is fully operational.
+	ShardedPhaseRunning MongoDBShardedPhase = "Running"
+	// ShardedPhaseFailed indicates the resource entered a failed state.
+	ShardedPhaseFailed MongoDBShardedPhase = "Failed"
+	// ShardedPhaseUpgrading indicates the cluster is undergoing a version upgrade.
+	ShardedPhaseUpgrading MongoDBShardedPhase = "Upgrading"
+)
+
 // MongoDBShardedSpec defines the desired state of MongoDBSharded
 type MongoDBShardedSpec struct {
 	// Version defines MongoDB version configuration
@@ -166,8 +183,7 @@ type MongosServiceSpec struct {
 // MongoDBShardedStatus defines the observed state of MongoDBSharded
 type MongoDBShardedStatus struct {
 	// Phase represents the current phase
-	// +kubebuilder:validation:Enum=Pending;Initializing;Running;Failed;Upgrading
-	Phase string `json:"phase,omitempty"`
+	Phase MongoDBShardedPhase `json:"phase,omitempty"`
 
 	// ConfigServerStatus contains config server status
 	ConfigServer ComponentStatus `json:"configServer,omitempty"`

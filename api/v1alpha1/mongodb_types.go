@@ -20,6 +20,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// MongoDBPhase represents the lifecycle phase of a MongoDB resource.
+// +kubebuilder:validation:Enum=Pending;Initializing;Running;Failed;Upgrading
+type MongoDBPhase string
+
+const (
+	// PhasePending indicates the resource is awaiting reconciliation.
+	PhasePending MongoDBPhase = "Pending"
+	// PhaseInitializing indicates the replica set is being initialized.
+	PhaseInitializing MongoDBPhase = "Initializing"
+	// PhaseRunning indicates the replica set is fully operational.
+	PhaseRunning MongoDBPhase = "Running"
+	// PhaseFailed indicates the resource entered a failed state.
+	PhaseFailed MongoDBPhase = "Failed"
+	// PhaseUpgrading indicates the replica set is undergoing a version upgrade.
+	PhaseUpgrading MongoDBPhase = "Upgrading"
+)
+
 // MongoDBSpec defines the desired state of MongoDB ReplicaSet
 type MongoDBSpec struct {
 	// Members is the number of replica set members
@@ -88,8 +105,7 @@ type ArbiterSpec struct {
 // MongoDBStatus defines the observed state of MongoDB
 type MongoDBStatus struct {
 	// Phase represents the current phase
-	// +kubebuilder:validation:Enum=Pending;Initializing;Running;Failed;Upgrading
-	Phase string `json:"phase,omitempty"`
+	Phase MongoDBPhase `json:"phase,omitempty"`
 
 	// ReadyMembers is the number of ready replica set members
 	ReadyMembers int32 `json:"readyMembers,omitempty"`

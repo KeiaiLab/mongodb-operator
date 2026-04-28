@@ -82,13 +82,6 @@ spec:
           - name: readWrite
             db: myapp
 
-  # Pod configuration
-  pod:
-    securityContext:
-      fsGroup: 999
-      runAsUser: 999
-      runAsNonRoot: true
-
 ---
 # Admin credentials Secret
 # Create this secret before deploying the MongoDBSharded resource

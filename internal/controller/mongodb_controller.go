@@ -88,8 +88,8 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Update status phase to Initializing if pending
-	if mdb.Status.Phase == "" || mdb.Status.Phase == "Pending" {
-		mdb.Status.Phase = "Initializing"
+	if mdb.Status.Phase == "" || mdb.Status.Phase == mongodbv1alpha1.PhasePending {
+		mdb.Status.Phase = mongodbv1alpha1.PhaseInitializing
 		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -398,9 +398,9 @@ func (r *MongoDBReconciler) updateStatus(ctx context.Context, mdb *mongodbv1alph
 
 	// Update phase based on ready members and initialization status
 	if mdb.Status.ReadyMembers == mdb.Spec.Members && mdb.Status.ReplicaSetInitialized && mdb.Status.AdminUserCreated {
-		mdb.Status.Phase = "Running"
+		mdb.Status.Phase = mongodbv1alpha1.PhaseRunning
 	} else if mdb.Status.ReadyMembers > 0 {
-		mdb.Status.Phase = "Initializing"
+		mdb.Status.Phase = mongodbv1alpha1.PhaseInitializing
 	}
 
 	// Get current primary if replica set is initialized
@@ -495,7 +495,7 @@ func (r *MongoDBReconciler) updateStatusError(ctx context.Context, mdb *mongodbv
 	logger := log.FromContext(ctx)
 	logger.Error(err, "Failed to reconcile component", "component", component)
 
-	mdb.Status.Phase = "Failed"
+	mdb.Status.Phase = mongodbv1alpha1.PhaseFailed
 	mdb.Status.Conditions = append(mdb.Status.Conditions, metav1.Condition{
 		Type:               "ReconcileError",
 		Status:             metav1.ConditionTrue,

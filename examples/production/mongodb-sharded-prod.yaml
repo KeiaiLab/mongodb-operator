@@ -140,52 +140,6 @@ spec:
           cpu: "500m"
           memory: "512Mi"
 
-  # Pod configuration
-  pod:
-    # High priority for critical database pods
-    priorityClassName: system-cluster-critical
-    # Security context
-    securityContext:
-      fsGroup: 999
-      runAsUser: 999
-      runAsNonRoot: true
-    # Pod anti-affinity for high availability
-    affinity:
-      podAntiAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                  - key: app.kubernetes.io/name
-                    operator: In
-                    values:
-                      - my-sharded-prod
-              topologyKey: kubernetes.io/hostname
-      # Node affinity for database nodes
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
-                - key: node-type
-                  operator: In
-                  values:
-                    - database
-    # Toleration for dedicated database nodes
-    tolerations:
-      - key: "dedicated"
-        operator: "Equal"
-        value: "database"
-        effect: "NoSchedule"
-    # Topology spread constraints
-    topologySpreadConstraints:
-      - maxSkew: 1
-        topologyKey: topology.kubernetes.io/zone
-        whenUnsatisfiable: ScheduleAnyway
-        labelSelector:
-          matchLabels:
-            app.kubernetes.io/name: my-sharded-prod
-
 ---
 # Pod Disruption Budget for config server
 apiVersion: policy/v1

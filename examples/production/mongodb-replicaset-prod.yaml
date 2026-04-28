@@ -89,14 +89,6 @@ spec:
           cpu: "500m"
           memory: "512Mi"
 
-  # Service configuration
-  service:
-    type: ClusterIP
-    # Add annotations for service mesh or ingress
-    annotations:
-      # Example for Istio
-      # traffic.sidecar.istio.io/includeInboundPorts: "27017"
-
   # Pod configuration
   pod:
     # High priority for critical database pods

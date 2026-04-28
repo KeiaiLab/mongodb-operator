@@ -52,10 +52,6 @@ spec:
           - name: readWrite
             db: myapp
 
-  # Service configuration (ClusterIP for internal access)
-  service:
-    type: ClusterIP
-
   # Pod configuration
   pod:
     securityContext:

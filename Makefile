@@ -69,12 +69,12 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go
 
 .PHONY: docker-build
-docker-build: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -t ${IMG} .
+docker-build: ## Build docker image with the manager (linux/amd64 via masblue-builder).
+	docker buildx build --builder masblue-builder --platform linux/amd64 --load -t ${IMG} .
 
 .PHONY: docker-push
-docker-push: ## Push docker image with the manager.
-	$(CONTAINER_TOOL) push ${IMG}
+docker-push: ## Build and push docker image (linux/amd64 only — multi-arch is forbidden by CLAUDE.md).
+	docker buildx build --builder masblue-builder --platform linux/amd64 --push -t ${IMG} .
 
 ##@ Deployment
 

@@ -153,3 +153,42 @@ jobs:
             exit 1
           fi
           ./bin/manager --version || true
+
+  examples-validation:
+    name: Examples Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: examples-validation
+          wait: 120s
+
+      - name: Generate and install CRDs
+        run: |
+          make manifests
+          make install
+
+      - name: Validate examples (server-side dry-run, strict)
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          fail=0
+          for f in examples/minimal/*.yaml examples/production/*.yaml; do
+            echo "::group::Validating $f"
+            if ! kubectl apply -f "$f" --dry-run=server --validate=strict; then
+              echo "::error file=$f::strict server-side dry-run failed"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$fail"

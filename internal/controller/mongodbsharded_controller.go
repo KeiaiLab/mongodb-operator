@@ -88,8 +88,8 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Update status phase to Initializing if pending
-	if mdbsh.Status.Phase == "" || mdbsh.Status.Phase == "Pending" {
-		mdbsh.Status.Phase = "Initializing"
+	if mdbsh.Status.Phase == "" || mdbsh.Status.Phase == mongodbv1alpha1.ShardedPhasePending {
+		mdbsh.Status.Phase = mongodbv1alpha1.ShardedPhaseInitializing
 		if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -626,9 +626,9 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 
 	// Update overall phase
 	if r.isClusterReady(mdbsh) {
-		mdbsh.Status.Phase = "Running"
+		mdbsh.Status.Phase = mongodbv1alpha1.ShardedPhaseRunning
 	} else {
-		mdbsh.Status.Phase = "Initializing"
+		mdbsh.Status.Phase = mongodbv1alpha1.ShardedPhaseInitializing
 	}
 
 	// Set connection string
@@ -642,12 +642,12 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 
 func (r *MongoDBShardedReconciler) getComponentPhase(ready, total int32) string {
 	if ready == total {
-		return "Running"
+		return string(mongodbv1alpha1.ShardedPhaseRunning)
 	}
 	if ready > 0 {
-		return "Initializing"
+		return string(mongodbv1alpha1.ShardedPhaseInitializing)
 	}
-	return "Pending"
+	return string(mongodbv1alpha1.ShardedPhasePending)
 }
 
 func (r *MongoDBShardedReconciler) isClusterReady(mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
@@ -669,7 +669,7 @@ func (r *MongoDBShardedReconciler) updateStatusError(ctx context.Context, mdbsh 
 	logger := log.FromContext(ctx)
 	logger.Error(err, "Failed to reconcile component", "component", component)
 
-	mdbsh.Status.Phase = "Failed"
+	mdbsh.Status.Phase = mongodbv1alpha1.ShardedPhaseFailed
 	mdbsh.Status.Conditions = append(mdbsh.Status.Conditions, metav1.Condition{
 		Type:               "ReconcileError",
 		Status:             metav1.ConditionTrue,
