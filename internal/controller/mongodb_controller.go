@@ -420,19 +420,36 @@ func (r *MongoDBReconciler) reconcileAdminUser(ctx context.Context, mdb *mongodb
 }
 
 // verifyAdminUser는 bootstrap 직후 인증된 매니저로 admin user 존재를 ping한다.
-// 인증 실패 또는 user 부재는 partial-failure로 보고 error 전파.
+//
+// secondary oplog 지연으로 인한 false negative 차단 — pod-0이 PRIMARY가 아니
+// 면 createUser oplog 이벤트가 secondary에 도달할 때까지 짧은 retry. 5초
+// 안에 oplog가 catch up하지 못하면(매우 비정상) error 전파해 다음 reconcile
+// 에서 재시도. 정상 RS에서는 ms 단위로 동기화되므로 첫 시도에 통과.
 func (r *MongoDBReconciler) verifyAdminUser(ctx context.Context, mdb *mongodbv1alpha1.MongoDB, password string) error {
 	factory := mongodb.NewPodConnectFactory(mdb.Name+"-headless", 27017, "admin", password, "admin")
 	auth := mongodb.NewAuthManagerWithFactory(factory)
 	firstPod := fmt.Sprintf("%s-0", mdb.Name)
-	exists, err := auth.UserExists(ctx, firstPod, mdb.Namespace, "admin", "admin")
-	if err != nil {
-		return fmt.Errorf("usersInfo: %w", err)
+
+	deadline := time.Now().Add(5 * time.Second)
+	var lastErr error
+	for {
+		exists, err := auth.UserExists(ctx, firstPod, mdb.Namespace, "admin", "admin")
+		if err != nil {
+			lastErr = fmt.Errorf("usersInfo: %w", err)
+		} else if exists {
+			return nil
+		} else {
+			lastErr = fmt.Errorf("admin user not visible (oplog sync pending?)")
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("verify admin user timeout(5s): %w", lastErr)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(1 * time.Second):
+		}
 	}
-	if !exists {
-		return fmt.Errorf("admin user not found in usersInfo response — race or partial bootstrap")
-	}
-	return nil
 }
 
 func (r *MongoDBReconciler) getAdminPassword(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (string, error) {

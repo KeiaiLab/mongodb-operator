@@ -111,7 +111,7 @@ annotations:
             endpoint: https://s3.amazonaws.com
             credentialsRef:
               name: s3-credentials
-  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/images: |
     - name: mongodb-operator
       image: ghcr.io/eightynine01/mongodb-operator:1.1.0

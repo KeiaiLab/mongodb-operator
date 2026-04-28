@@ -20,6 +20,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -175,10 +176,11 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// 10.5. Scale-in: spec.shardCount < status.shardCount면 잉여 shard drain.
-	// 데이터 마이그레이션이 진행 중이면 ShardDraining condition을 노출하고
-	// 다음 reconcile에서 polling. 완료된 shard는 STS/Service/CM/PDB/NP cleanup.
-	if err := r.reconcileScaleIn(ctx, mdbsh); err != nil {
+	// 진행 중이면 ShardDraining condition + elapsed-based backoff requeue.
+	if scaleInRes, err := r.reconcileScaleIn(ctx, mdbsh); err != nil {
 		return r.updateStatusError(ctx, mdbsh, "ScaleIn", err)
+	} else if scaleInRes.RequeueAfter > 0 {
+		return scaleInRes, nil
 	}
 
 	// 11. Add shards to cluster — reconcileAddShards도 errors.Join 누적 패턴.
@@ -737,17 +739,20 @@ func (r *MongoDBShardedReconciler) updateStatusError(ctx context.Context, mdbsh 
 // completed 상태가 된다. 즉 사용자 데이터 손실 위험은 MongoDB 자체가 차단.
 // 단, PVC는 의도적으로 보존(StatefulSet의 PVCRetentionPolicy=Retain) — 운영자가
 // 수동으로 삭제 결정.
-func (r *MongoDBShardedReconciler) reconcileScaleIn(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+// reconcileScaleIn returns ctrl.Result with RequeueAfter when a shard drain is
+// in progress — caller(Reconcile)는 그 RequeueAfter를 사용해 polling 빈도를
+// adaptive하게 조정한다(elapsed < 5m: 30s, 5-30m: 1m, >30m: 5m).
+func (r *MongoDBShardedReconciler) reconcileScaleIn(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) (ctrl.Result, error) {
 	statusShardCount := int32(len(mdbsh.Status.Shards))
 	if mdbsh.Spec.Shards.Count >= statusShardCount {
 		// scale-out 또는 stable. ShardDraining condition은 cleanup.
 		mdbsh.Status.Conditions = filterConditionsByType(mdbsh.Status.Conditions, "ShardDraining")
-		return nil
+		return ctrl.Result{}, nil
 	}
 
 	adminPassword, err := r.getAdminPassword(ctx, mdbsh)
 	if err != nil {
-		return fmt.Errorf("get admin password: %w", err)
+		return ctrl.Result{}, fmt.Errorf("get admin password: %w", err)
 	}
 	shardMgr := mongodb.NewShardManagerWithFactory(
 		mongodb.NewPodConnectFactory(mdbsh.Name+"-mongos", 27017, "admin", adminPassword, "admin"),
@@ -758,18 +763,39 @@ func (r *MongoDBShardedReconciler) reconcileScaleIn(ctx context.Context, mdbsh *
 		shardName := fmt.Sprintf("%s-shard-%d", mdbsh.Name, i)
 		result, err := shardMgr.RemoveShardWithStatus(ctx, mongosPod, mdbsh.Namespace, shardName)
 		if err != nil {
-			return fmt.Errorf("remove shard %s: %w", shardName, err)
+			return ctrl.Result{}, fmt.Errorf("remove shard %s: %w", shardName, err)
 		}
 		if result.State != "completed" {
 			r.recordShardDrainingCondition(mdbsh, shardName, result)
-			return nil
+			return ctrl.Result{RequeueAfter: scaleInPollInterval(mdbsh, shardName)}, nil
 		}
 		if err := r.cleanupShardResources(ctx, mdbsh, i); err != nil {
-			return fmt.Errorf("cleanup shard %s: %w", shardName, err)
+			return ctrl.Result{}, fmt.Errorf("cleanup shard %s: %w", shardName, err)
 		}
 	}
 	mdbsh.Status.Conditions = filterConditionsByType(mdbsh.Status.Conditions, "ShardDraining")
-	return nil
+	return ctrl.Result{}, nil
+}
+
+// scaleInPollInterval은 ShardDraining condition의 LastTransitionTime을 보고
+// elapsed 시간 기반으로 polling 간격을 결정. 짧은 drain은 빠른 응답, long-
+// running drain(chunks 마이그레이션)은 mongos 부하를 낮추는 backoff.
+func scaleInPollInterval(mdbsh *mongodbv1alpha1.MongoDBSharded, shardName string) time.Duration {
+	for _, c := range mdbsh.Status.Conditions {
+		if c.Type == "ShardDraining" && strings.Contains(c.Message, shardName) {
+			elapsed := time.Since(c.LastTransitionTime.Time)
+			switch {
+			case elapsed < 5*time.Minute:
+				return 30 * time.Second
+			case elapsed < 30*time.Minute:
+				return 1 * time.Minute
+			default:
+				return 5 * time.Minute
+			}
+		}
+	}
+	// 첫 호출(condition 미설정) — 다음 polling은 30s.
+	return 30 * time.Second
 }
 
 // recordShardDrainingCondition은 removeShard 진행 상황을 ShardDraining condition
