@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-04-29
+
+배포 경로 복구 — owner가 `eightynine01` → `keiailab`로 이전됐는데 release/helm-publish 워크플로와 chart 메타데이터가 옛 owner를 참조해 v1.1.1~v1.3.0 release 워크플로가 모두 ghcr push 단계에서 fail했고, `index.yaml`의 .tgz URL이 죽은 도메인을 가리켜 ArtifactHub이 chart 본체를 가져가지 못한 문제를 일괄 정정한다.
+
+### Fixed
+- **`.github/workflows/release.yml`**: `IMAGE_NAME: keiailab/mongodb-operator`로 정정. `--url`과 chart annotation sed 패턴의 owner도 keiailab로 통일.
+- **`.github/workflows/helm-publish.yml`**: `helm repo index --url`을 `https://keiailab.github.io/mongodb-operator`로 정정.
+- **`charts/mongodb-operator/Chart.yaml`**: `artifacthub.io/images` annotation을 `ghcr.io/keiailab/mongodb-operator:1.3.1`로 갱신.
+- **`charts/mongodb-operator/README.md`**: `helm repo add` URL을 keiailab로 갱신 (ArtifactHub 페이지 본문에 노출).
+- **`config/manager/kustomization.yaml`, `config/manager/manager.yaml`, `Makefile`**: 기본 image 참조를 keiailab로 정정.
+
 ## [1.3.0] - 2026-04-29
 
 Auto-scaling 통합 사이클 — ADR-0007 후속 4건 통합 구현. mongos drift 방지 + RS

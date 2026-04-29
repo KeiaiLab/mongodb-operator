@@ -17,7 +17,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: eightynine01/mongodb-operator
+  IMAGE_NAME: keiailab/mongodb-operator
   HELM_CHART_PATH: charts/mongodb-operator
 
 jobs:
@@ -229,7 +229,7 @@ jobs:
           # Update image reference in annotations
           # GHCR 마이그레이션 이후 chart 이미지에 ghcr.io/ prefix가 붙음. prefix 없는 옛 패턴은 매치되지 않아
           # chart 자동 버전 업데이트가 무력화되므로 prefix를 명시한다.
-          sed -i "s|image: ghcr.io/eightynine01/mongodb-operator:[^\"]*|image: ghcr.io/eightynine01/mongodb-operator:${TAG}|g" charts/mongodb-operator/Chart.yaml
+          sed -i "s|image: ghcr.io/keiailab/mongodb-operator:[^\"]*|image: ghcr.io/keiailab/mongodb-operator:${TAG}|g" charts/mongodb-operator/Chart.yaml
 
           # Update changes annotation
           if [ -f CHANGELOG.md ]; then
@@ -270,13 +270,13 @@ jobs:
         # gh-pages 브랜치가 Helm repo의 단일 진실 소스. 루트의 index.yaml은 삭제됐으므로
         # merge base를 항상 gh-pages에서 fetch한다. 브랜치가 비어있으면 빈 파일로 시작.
         run: |
-          curl -fsSL https://eightynine01.github.io/mongodb-operator/index.yaml -o index.yaml \
+          curl -fsSL https://keiailab.github.io/mongodb-operator/index.yaml -o index.yaml \
             || echo "" > index.yaml
 
       - name: Generate Helm index (for gh-pages)
         run: |
-          helm repo index . --url https://eightynine01.github.io/mongodb-operator/ --merge index.yaml \
-            || helm repo index . --url https://eightynine01.github.io/mongodb-operator/
+          helm repo index . --url https://keiailab.github.io/mongodb-operator/ --merge index.yaml \
+            || helm repo index . --url https://keiailab.github.io/mongodb-operator/
 
       - name: Upload Helm chart as artifact
         uses: actions/upload-artifact@v4
@@ -425,7 +425,7 @@ jobs:
           sed -i "s/^version:.*/version: ${VERSION}/" charts/mongodb-operator/Chart.yaml
           sed -i "s/^appVersion:.*/appVersion: \"${TAG}\"/" charts/mongodb-operator/Chart.yaml
           # GHCR prefix 포함 패턴으로 매치 (Docker Hub 옛 경로는 GHCR 마이그레이션 이후 폐지됨)
-          sed -i "s|image: ghcr.io/eightynine01/mongodb-operator:[^\"]*|image: ghcr.io/eightynine01/mongodb-operator:${TAG}|g" charts/mongodb-operator/Chart.yaml
+          sed -i "s|image: ghcr.io/keiailab/mongodb-operator:[^\"]*|image: ghcr.io/keiailab/mongodb-operator:${TAG}|g" charts/mongodb-operator/Chart.yaml
 
       - name: Commit and push changes
         run: |

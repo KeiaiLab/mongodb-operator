@@ -29,7 +29,7 @@ A Kubernetes Operator for deploying and managing MongoDB ReplicaSets and Sharded
 ### Add the Helm Repository
 
 ```bash
-helm repo add mongodb-operator https://eightynine01.github.io/mongodb-operator
+helm repo add mongodb-operator https://keiailab.github.io/mongodb-operator
 helm repo update
 ```
 

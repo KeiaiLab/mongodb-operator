@@ -1,6 +1,6 @@
 # Image URL to use all building/pushing image targets
 # GHCR(GitHub Container Registry)을 단일 진실 소스로 사용. Docker Hub는 더 이상 사용하지 않음.
-IMG ?= ghcr.io/eightynine01/mongodb-operator:latest
+IMG ?= ghcr.io/keiailab/mongodb-operator:latest
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))

@@ -50,7 +50,7 @@ jobs:
         run: |
           cd gh-pages-branch
           helm repo index . \
-            --url https://eightynine01.github.io/mongodb-operator \
+            --url https://keiailab.github.io/mongodb-operator \
             --merge index.yaml
 
       - name: Configure Git
@@ -107,7 +107,7 @@ jobs:
         run: |
           cd gh-pages-branch
           helm repo index . \
-            --url https://eightynine01.github.io/mongodb-operator \
+            --url https://keiailab.github.io/mongodb-operator \
             --merge index.yaml
 
       - name: Commit and Push Cleanup
