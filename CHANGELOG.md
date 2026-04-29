@@ -7,6 +7,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-04-29
+
+Bootstrap self-heal 사이클 — 외부 connect로 풀 수 없는 부트스트랩 deadlock(mongod
+`--auth+--keyFile` 시작 + localhost-exception 외부 미적용)을 *pod 내부 postStart hook*
+으로 자동 해소. RS / cfg / shard 모두 CR 적용 후 사용자 개입 없이 PRIMARY 선출 +
+admin user 생성까지 자동 진행. mongos는 Deployment+ClusterIP 구조에 맞는 별도
+connect 패턴(`NewServiceConnectFactory`)으로 분리.
+
+### Fixed
+- **postStart hook에 RS init 통합** (`internal/resources/builder.go`):
+  `buildAdminBootstrapScript`가 createUser뿐 아니라 *RS init도 함께 처리*.
+  ordinal-0 분기로 RS init은 단 한 번만 시도(idempotent), 다른 멤버는 oplog로 자동
+  합류. mongo의 localhost-exception은 createUser에만 적용되고 replSetInitiate에는
+  적용되지 않으나 *pod 내부 localhost connect*에서는 두 명령 모두 0-user 윈도에서
+  허용되는 점을 활용. 이는 외부 connect로는 풀 수 없는 deadlock을 근본 해소한다.
+- **STS env 자동 주입** (`buildBootstrapEnv` helper): RS / cfg / shard StatefulSet의
+  mongod 컨테이너에 `MONGO_PORT` / `MONGO_REPLSET` / `MONGO_MEMBERS` /
+  `MONGO_CONFIGSVR` 4종을 주입. postStart 스크립트가 RS init config를 동적 구성.
+- **`NewServiceConnectFactory`** (`internal/mongodb/replicaset.go`): mongos처럼
+  Deployment+ClusterIP 구조의 컴포넌트 connect용 ConnectFactory. headless service
+  + StatefulSet 전용인 `NewPodConnectFactory`와 분리. sharded controller가 mongos
+  connect에서 사용 → 이전의 `<pod-name>.<svc>...` DNS 미해석 결함 해소.
+- **mongos postStart deadlock 자동 해소**: mongos pod hostname은
+  `<deploy>-<rs>-<pod-hash>`로 ordinal != 0 → postStart 스크립트의 ordinal-0 분기에
+  걸리지 않아 자동 skip. mongos의 부트스트랩은 cfg/shard 부트스트랩 후 operator의
+  ServiceConnectFactory connect로 처리.
+
+### Added
+- **회귀 가드 (port 검증 패턴 갱신)** (`internal/resources/builder_test.go`):
+  스크립트가 `--port <port>` 리터럴 대신 `MONGO_PORT:-<port>` 디폴트 fallback을
+  사용하도록 단위 테스트 갱신. 환경변수 기반 동적 port 설정 회귀 가드.
+
+### Decisions
+- ADR-0006: postStart hook 안에서 RS init + createUser 통합 처리
+  (`docs/kb/adr/0006-poststart-bootstrap-rs-init.md`).
+
+### Verification (2026-04-29 k3s 클러스터 실 부트스트랩)
+- RS `rs-auto`: CR 적용 → Phase=Running 67초, 3 멤버 모두 RESTARTS=0, 인증 mongosh
+  `rs.status().ok=1`/`usersInfo.ok=1`/members=3.
+- Sharded `sh-auto`(cfg×3 + shard-0×3 + mongos×1): CR 적용 → Phase=Running 152초,
+  7 pod 모두 RESTARTS=0, `hello.msg=isdbgrid`, balancer=full, 분산 write 1503건
+  영속(bulk insert + range read + min/max aggregate 일관).
+- 60s reconcile loop: rs-auto Successfully 4건/ERROR 0건, sh-auto Successfully
+  1199건/ERROR 0건.
+
+## [1.1.1] - 2026-04-29
+
+Bootstrap-resilience 사이클 — 부트스트랩이 RS init까지만 완료된 채 admin user
+생성 단계에서 중단된 상태에서 reconcile flow가 영구 stuck되는 P0 결함 1건 봉쇄
+(2026-04-29 INC-0001), kubectl-apply 사용자를 위한 RBAC 마이그레이션 가이드 추가.
+
+### Fixed
+- **`IsInitialized` Unauthorized 분기 추가** (`internal/mongodb/replicaset.go`):
+  익명 매니저가 auth-on RS에 `replSetGetStatus`를 호출해 Unauthorized(13) /
+  AuthenticationFailed(18)을 받으면 RS는 *이미 init되어 auth가 켜진 상태*로
+  판정하고 `(true, nil)` 반환. 이전에는 generic error로 propagate되어
+  reconcile flow가 admin user 부트스트랩 단계로 진입하지 못하고 Phase=Failed로
+  영구 stuck됐다.
+- **`BootstrapAdminUser` 단순화** (`internal/mongodb/auth.go`): 직접 primary
+  추적(`replSetGetStatus` preflight + 두 번째 connect)을 제거하고 driver의
+  자동 server selection으로 위임(Direct=false). 이는 두 효과를 동시에 낸다.
+  - 0-user 상태에서 익명 `replSetGetStatus`가 mongod 빌드/구성에 따라
+    Unauthorized로 거부되는 경우에도 createUser는 정상 시도된다.
+  - primary가 first pod이 아닐 때 직접 추적의 1회 실패 위험이 사라진다.
+  멱등성은 그대로 — UserAlreadyExists / DuplicateKey / 모든 인증 요구 에러
+  → idempotent skip.
+- **`classifyReplSetGetStatusErr` helper 추출**: replSetGetStatus 응답 분류
+  로직을 단위 테스트 가능한 순수 함수로 분리. `mongo.CommandError`를 wrap한
+  에러도 `errors.As`로 정상 분류.
+
+### Added
+- **`docs/UPGRADING.md`**: chart 1.0 → 1.1 업그레이드 시 추가된 RBAC 권한
+  3종(`coordination/leases`, `networking.k8s.io/networkpolicies`,
+  `policy/poddisruptionbudgets`) 마이그레이션 가이드. Helm consumer는 자동
+  처리, kubectl-apply consumer는 ClusterRole patch가 필요함을 명시.
+- **회귀 가드** (`internal/mongodb/replicaset_test.go`): `TestClassifyReplSet
+  GetStatusErr` 6개 케이스 — code 94/13/18/wrap된-13/unknown/non-server-error
+  분기 모두 검증.
+
+- **`reconcile` flow 보강** (`internal/controller/mongodb_controller.go`):
+  `Status.AdminUserCreated=false` 단계에서는 step 8 `hasPrimary` 체크를
+  생략하고 step 9 admin user 부트스트랩으로 직행한다. 익명 매니저가 auth-on
+  RS의 `replSetGetStatus`를 호출하면 Unauthorized로 거부되어 부트스트랩
+  진입이 영구 차단되던 회귀 봉쇄. 부트스트랩 후 `AdminUserCreated=true`
+  영속화 → 다음 reconcile에서 인증 매니저로 정상 체크.
+
+### Decisions
+- ADR-0004: IsInitialized Unauthorized 분기를 init-completed 시그널로 사용
+  (`docs/kb/adr/0004-isinitialized-unauthorized-as-init-completed.md`).
+- ADR-0005: admin user 부트스트랩 전 primary 체크 생략
+  (`docs/kb/adr/0005-skip-primary-check-before-admin-bootstrap.md`).
+
 ## [1.1.0] - 2026-04-28
 
 Production-readiness 사이클 — 검수에서 식별된 P0 6건 + P1 6건을 단일 PR로 봉쇄,

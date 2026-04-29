@@ -423,8 +423,8 @@ func TestBuildConfigServerScriptsConfigMap_PortMatches(t *testing.T) {
 	assert.Equal(t, "default", cm.Namespace)
 	require.Contains(t, cm.Data, "bootstrap-admin.sh")
 	require.Contains(t, cm.Data, "readiness-probe.sh")
-	assert.Contains(t, cm.Data["bootstrap-admin.sh"], "--port 27019",
-		"cfg server bootstrap script는 27019 포트를 써야 한다")
+	assert.Contains(t, cm.Data["bootstrap-admin.sh"], `MONGO_PORT:-27019`,
+		"cfg server bootstrap script는 27019 포트를 디폴트로 써야 한다")
 	assert.Contains(t, cm.Data["readiness-probe.sh"], "--port 27019")
 }
 
@@ -437,8 +437,8 @@ func TestBuildShardScriptsConfigMap_PortMatches(t *testing.T) {
 	assert.Equal(t, "default", cm.Namespace)
 	require.Contains(t, cm.Data, "bootstrap-admin.sh")
 	require.Contains(t, cm.Data, "readiness-probe.sh")
-	assert.Contains(t, cm.Data["bootstrap-admin.sh"], "--port 27018",
-		"shard bootstrap script는 27018 포트를 써야 한다")
+	assert.Contains(t, cm.Data["bootstrap-admin.sh"], `MONGO_PORT:-27018`,
+		"shard bootstrap script는 27018 포트를 디폴트로 써야 한다")
 	assert.Contains(t, cm.Data["readiness-probe.sh"], "--port 27018")
 }
 

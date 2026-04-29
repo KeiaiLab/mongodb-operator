@@ -489,7 +489,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedAdminUser(ctx context.Context
 	// admin user는 mongos pod의 lifecycle.postStart bootstrap이 만든다.
 	// operator는 driver 인증으로 verify만 한다.
 	authManager := mongodb.NewAuthManagerWithFactory(
-		mongodb.NewPodConnectFactory(mdbsh.Name+"-mongos", 27017, "admin", adminPassword, "admin"),
+		mongodb.NewServiceConnectFactory(mdbsh.Name+"-mongos", mdbsh.Namespace, 27017, "admin", adminPassword, "admin"),
 	)
 
 	exists, err := authManager.UserExists(ctx, mongosPod, mdbsh.Namespace, "admin", "admin")
@@ -536,7 +536,7 @@ func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh
 
 	// ShardManager는 mongos를 향한 driver factory로 만든다.
 	shardManager := mongodb.NewShardManagerWithFactory(
-		mongodb.NewPodConnectFactory(mdbsh.Name+"-mongos", 27017, "admin", adminPassword, "admin"),
+		mongodb.NewServiceConnectFactory(mdbsh.Name+"-mongos", mdbsh.Namespace, 27017, "admin", adminPassword, "admin"),
 	)
 
 	// reconcileShardsInit과 동일한 사일런트 실패 패턴을 가지고 있어 동일 방식으로 수정.
@@ -755,7 +755,7 @@ func (r *MongoDBShardedReconciler) reconcileScaleIn(ctx context.Context, mdbsh *
 		return ctrl.Result{}, fmt.Errorf("get admin password: %w", err)
 	}
 	shardMgr := mongodb.NewShardManagerWithFactory(
-		mongodb.NewPodConnectFactory(mdbsh.Name+"-mongos", 27017, "admin", adminPassword, "admin"),
+		mongodb.NewServiceConnectFactory(mdbsh.Name+"-mongos", mdbsh.Namespace, 27017, "admin", adminPassword, "admin"),
 	)
 	mongosPod := mdbsh.Name + "-mongos-0"
 

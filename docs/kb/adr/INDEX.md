@@ -10,6 +10,9 @@
 | [ADR-0001](0001-controllerutil-createorupdate-pattern.md) | 자체 createOrUpdate 헬퍼 폐기 + controllerutil.CreateOrUpdate(mutateFn) 채택 | Accepted | 2026-04-28 |
 | [ADR-0002](0002-bootstrap-admin-user-lease.md) | Admin user 부트스트랩 race-free를 위한 K8s Lease 분산락 도입 | Accepted | 2026-04-28 |
 | [ADR-0003](0003-sharded-arbiter-hidden-deferred.md) | MongoDBSharded Arbiter/Hidden 토폴로지 후속 사이클 이연 | Accepted | 2026-04-28 |
+| [ADR-0004](0004-isinitialized-unauthorized-as-init-completed.md) | `IsInitialized` Unauthorized 응답을 init-completed 시그널로 해석 | Accepted | 2026-04-29 |
+| [ADR-0005](0005-skip-primary-check-before-admin-bootstrap.md) | admin user 부트스트랩 전 primary 체크 (anon + auth-fallback) | Accepted | 2026-04-29 |
+| [ADR-0006](0006-poststart-bootstrap-rs-init.md) | postStart hook 안에서 RS init + createUser 통합 | Accepted | 2026-04-29 |
 
 ## 작성 가이드
 

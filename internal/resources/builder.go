@@ -20,6 +20,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -134,48 +135,101 @@ mongosh --quiet --port %d --eval "db.adminCommand('ping')" > /dev/null 2>&1
 `, port)
 }
 
-// buildAdminBootstrapScript는 lifecycle.postStart에서 localhost exception을 사용해
-// 첫 admin user를 만드는 스크립트를 반환한다.
+// buildAdminBootstrapScript는 lifecycle.postStart에서 localhost-exception을 사용해
+// RS init과 첫 admin user를 한 번에 부트스트랩하는 스크립트를 반환한다.
 //
-// 보안 메모:
-//   - password는 process.env가 아닌 Secret Volume(/etc/mongodb-admin/password)에서
-//     fs.readFileSync로 읽음 → ps/audit 로그에 password 노출 0건.
-//   - JS literal에 password 문자열이 들어가지 않아 인젝션 차단.
-//   - 이미 user가 존재하면 idempotent no-op.
+// 본 스크립트가 두 단계를 모두 책임지는 이유 — mongod이 `--auth+--keyFile`로 시작
+// 하면 *모든 admin 명령*이 인증을 요구한다. localhost-exception은 *createUser*에만
+// 적용되고 *replSetInitiate*는 적용되지 않는다. 그러나 두 명령 모두 *pod 내부의
+// localhost connect*에서는 mongod이 첫 user 생성 직전까지 익명 호출을 허용한다.
+// 따라서 외부 connect로는 풀 수 없는 부트스트랩 deadlock이 pod 내부 스크립트로는
+// 한 번에 풀린다(2026-04-29 검증).
 //
-// port 매개변수: ReplicaSet=27017, Config Server=27019, Shard=27018.
+// 동작 분기:
+//   - 모든 멤버: mongod ping 대기.
+//   - ordinal-0(HOSTNAME suffix `-0`): rs.initiate(idempotent) → PRIMARY 대기 →
+//     createUser(idempotent). RS init은 단 한 번만, 다른 멤버는 oplog로 자동 합류.
+//   - 기타 ordinal: skip(secondary는 cfg propagate로 자동 RS 합류).
+//
+// 환경변수(STS template에서 주입):
+//
+//	MONGO_PORT      — 27017(RS) / 27019(cfg) / 27018(shard)
+//	MONGO_REPLSET   — RS 이름
+//	MONGO_MEMBERS   — 콤마 list of <pod-FQDN>:<port>
+//	MONGO_CONFIGSVR — "true"이면 rs.initiate에 configsvr:true 추가
+//
+// 보안:
+//   - password는 Secret Volume(/etc/mongodb-admin/password)에서 fs.readFileSync로
+//     읽음. ps/audit 로그 노출 없음, JS literal 인젝션 차단.
+//   - 이미 RS init/user가 있으면 idempotent no-op.
 func buildAdminBootstrapScript(port int) string {
 	return fmt.Sprintf(`#!/bin/bash
 set -eu
+PORT="${MONGO_PORT:-%d}"
+RS_NAME="${MONGO_REPLSET:-}"
+MEMBERS="${MONGO_MEMBERS:-}"
+CONFIGSVR_FLAG="${MONGO_CONFIGSVR:-}"
 
 # mongod이 응답할 때까지 최대 120초 대기 (60회 × 2초).
 for i in $(seq 1 60); do
-  if mongosh --quiet --port %d --eval "db.adminCommand('ping').ok" > /dev/null 2>&1; then
+  if mongosh --quiet --host 127.0.0.1 --port "$PORT" --eval "db.adminCommand('ping').ok" > /dev/null 2>&1; then
     break
   fi
   sleep 2
 done
 
-# 이미 user가 있으면 idempotent no-op.
-EXISTING=$(mongosh --quiet --port %d admin --eval "db.system.users.countDocuments({user:'admin'})" 2>/dev/null || echo 0)
-if [ "$EXISTING" != "0" ]; then
-  echo "admin user already exists, skipping bootstrap"
+ORDINAL="${HOSTNAME##*-}"
+if [ "$ORDINAL" != "0" ]; then
+  echo "ordinal=$ORDINAL — bootstrap is ordinal-0 only, skipping"
   exit 0
 fi
 
-# password는 mongosh stdin으로 fs.readFileSync로 읽어 직접 createUser에 전달.
-# JS literal에 password 문자열이 들어가지 않으므로 인젝션 위험도 없다.
-mongosh --quiet --port %d admin <<'EOF'
+# RS init (idempotent). NotYetInitialized(94)이면 initiate, 아니면 skip.
+RS_OK=$(mongosh --quiet --host 127.0.0.1 --port "$PORT" --eval 'try{rs.status().ok}catch(e){if(e.code===94){print("init")}else{print("err:"+e.code)}}' 2>/dev/null || echo "err:dial")
+if [ "$RS_OK" = "init" ]; then
+  if [ -z "$RS_NAME" ] || [ -z "$MEMBERS" ]; then
+    echo "FATAL: MONGO_REPLSET or MONGO_MEMBERS unset" >&2
+    exit 1
+  fi
+  echo "rs.initiate: replSet=$RS_NAME members=$MEMBERS configsvr=$CONFIGSVR_FLAG"
+  # JS literal 안에 환경변수를 안전하게 주입 (process.env 사용).
+  RS_NAME="$RS_NAME" MEMBERS="$MEMBERS" CONFIGSVR_FLAG="$CONFIGSVR_FLAG" \
+    mongosh --quiet --host 127.0.0.1 --port "$PORT" <<'EOF'
+const rsName = process.env.RS_NAME;
+const members = process.env.MEMBERS.split(',').map((host, i) => ({ _id: i, host: host.trim() }));
+const cfg = { _id: rsName, members: members };
+if (process.env.CONFIGSVR_FLAG === 'true') { cfg.configsvr = true; }
+const r = rs.initiate(cfg);
+if (r.ok !== 1) { print('rs.initiate FAILED: ' + JSON.stringify(r)); quit(2); }
+print('rs.initiate OK');
+EOF
+fi
+
+# PRIMARY 대기 (writable).
+for i in $(seq 1 60); do
+  WP=$(mongosh --quiet --host 127.0.0.1 --port "$PORT" --eval 'db.adminCommand({hello:1}).isWritablePrimary' 2>/dev/null || echo "")
+  [ "$WP" = "true" ] && break
+  sleep 2
+done
+
+# createUser (idempotent — UserAlreadyExists/DuplicateKey 에러는 무시).
+mongosh --quiet --host 127.0.0.1 --port "$PORT" admin <<'EOF'
 const fs = require('fs');
 const pw = fs.readFileSync('/etc/mongodb-admin/password', 'utf8').trim();
-db.createUser({
-  user: 'admin',
-  pwd: pw,
-  roles: [{ role: 'root', db: 'admin' }],
-});
+try {
+  db.createUser({ user: 'admin', pwd: pw, roles: [{ role: 'root', db: 'admin' }] });
+  print('createUser OK');
+} catch (e) {
+  if (e.code === 11000 || e.code === 51003 || /already exists/.test(e.message || '')) {
+    print('createUser: already exists, idempotent skip');
+  } else {
+    print('createUser FAILED: ' + e.message);
+    quit(3);
+  }
+}
 EOF
-echo "admin user bootstrap complete"
-`, port, port, port)
+echo "bootstrap complete"
+`, port)
 }
 
 // buildAdminCredentialsVolume은 admin password Secret을 0400으로 mount하는 Volume을
@@ -221,6 +275,32 @@ func buildScriptsVolume(configMapName string) corev1.Volume {
 // buildScriptsMount는 /scripts 경로에 ConfigMap을 read-only로 마운트한다.
 func buildScriptsMount() corev1.VolumeMount {
 	return corev1.VolumeMount{Name: "scripts", MountPath: "/scripts", ReadOnly: true}
+}
+
+// buildBootstrapEnv는 RS init과 admin user 생성을 자동화하는 postStart 스크립트가
+// 사용할 환경변수를 만든다(buildAdminBootstrapScript 참조).
+//
+// stsName: StatefulSet 이름 = pod 호스트네임 prefix.
+// headlessSvc: pod의 headless Service 이름.
+// replSetName: RS 식별자.
+// replicas: 멤버 수 (RS init members[].host 갯수).
+// port: 27017(RS) / 27019(cfg) / 27018(shard).
+// configsvr: rs.initiate(cfg.configsvr=true) 추가 여부.
+func buildBootstrapEnv(stsName, headlessSvc, namespace, replSetName string, replicas int32, port int, configsvr bool) []corev1.EnvVar {
+	fqdns := make([]string, replicas)
+	for i := int32(0); i < replicas; i++ {
+		fqdns[i] = fmt.Sprintf("%s-%d.%s.%s.svc.cluster.local:%d", stsName, i, headlessSvc, namespace, port)
+	}
+	cfgFlag := ""
+	if configsvr {
+		cfgFlag = "true"
+	}
+	return []corev1.EnvVar{
+		{Name: "MONGO_PORT", Value: fmt.Sprintf("%d", port)},
+		{Name: "MONGO_REPLSET", Value: replSetName},
+		{Name: "MONGO_MEMBERS", Value: strings.Join(fqdns, ",")},
+		{Name: "MONGO_CONFIGSVR", Value: cfgFlag},
+	}
 }
 
 // buildAdminBootstrapLifecycle은 /scripts/bootstrap-admin.sh를 postStart로 실행하는
@@ -432,14 +512,14 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			// 시작 자체는 멈추지 않으며, 운영자는 readiness 미달 → reconcile
 			// requeue로 인지한다.
 			Lifecycle: buildAdminBootstrapLifecycle(),
-			Env: []corev1.EnvVar{
+			Env: append([]corev1.EnvVar{
 				{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{
 					FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"},
 				}},
 				{Name: "POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{
 					FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"},
 				}},
-			},
+			}, buildBootstrapEnv(mdb.Name, mdb.Name+"-headless", mdb.Namespace, mdb.Spec.ReplicaSetName, mdb.Spec.Members, mongoDBPort, false)...),
 		},
 	}
 
@@ -697,6 +777,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 							SecurityContext: buildDefaultContainerSecurityContext(),
 							VolumeMounts:    mongodVolumeMounts,
 							Lifecycle:       mongodLifecycle,
+							Env:             buildBootstrapEnv(mdbsh.Name+"-cfg", mdbsh.Name+"-cfg-headless", mdbsh.Namespace, mdbsh.Name+"-cfg", mdbsh.Spec.ConfigServer.Members, 27019, true),
 						},
 					},
 					Volumes:  volumes,
@@ -849,6 +930,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 							SecurityContext: buildDefaultContainerSecurityContext(),
 							VolumeMounts:    mongodVolumeMounts,
 							Lifecycle:       mongodLifecycle,
+							Env:             buildBootstrapEnv(name, name+"-headless", mdbsh.Namespace, name, mdbsh.Spec.Shards.MembersPerShard, 27018, false),
 						},
 					},
 					Volumes:  volumes,
