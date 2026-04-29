@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -1574,5 +1575,111 @@ func BuildShardedNetworkPolicies(mdbsh *mongodbv1alpha1.MongoDBSharded) []*netwo
 	}
 	out = append(out, buildShardedComponentNetworkPolicy(mdbsh, mdbsh.Name+"-mongos-netpol", 27017,
 		buildLabels(mdbsh.Name, "mongos")))
+	return out
+}
+
+// BuildMongosHPA는 mongos Deployment에 대한 HorizontalPodAutoscaler를 만든다.
+// `Spec.Mongos.AutoScaling.Enabled=false`이면 nil을 반환(호출자가 기존 HPA 삭제 처리).
+//
+// 본 사이클에서 HPA는 *mongos에만* 적용된다 — mongos는 stateless router로
+// replica 변경이 RS reconfig 같은 부작용을 일으키지 않아 표준 HPA로 안전하게
+// 수평 확장 가능. RS / cfg / shard 멤버는 RS reconfig 영향 때문에 vertical
+// scaling 또는 운영자 명시 reconfig 경로를 권장(ADR-0007).
+//
+// metrics:
+//   - type: cpu/memory → Resource metric, target=Utilization(%)
+//   - type: custom → Pods metric, target=AverageValue(절대값), name=CustomMetric.Name
+//
+// minReplicas 미지정 시 1로 클램프(HPA validation 요구).
+func BuildMongosHPA(mdbsh *mongodbv1alpha1.MongoDBSharded) *autoscalingv2.HorizontalPodAutoscaler {
+	as := mdbsh.Spec.Mongos.AutoScaling
+	if as == nil || !as.Enabled {
+		return nil
+	}
+	min := as.MinReplicas
+	if min < 1 {
+		min = 1
+	}
+	metrics := buildHPAMetrics(as.Metrics)
+	return &autoscalingv2.HorizontalPodAutoscaler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      mdbsh.Name + "-mongos-hpa",
+			Namespace: mdbsh.Namespace,
+			Labels:    buildLabels(mdbsh.Name, "mongos"),
+		},
+		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
+			ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       mdbsh.Name + "-mongos",
+			},
+			MinReplicas: &min,
+			MaxReplicas: as.MaxReplicas,
+			Metrics:     metrics,
+		},
+	}
+}
+
+// buildHPAMetrics는 spec의 metric 목록을 autoscaling/v2 metric으로 변환한다.
+// 알 수 없는 type은 silently skip하지 않고(운영자 진단성을 위해) caller가 spec
+// validation에서 차단해야 한다 — 본 함수는 변환 책임만.
+func buildHPAMetrics(metrics []mongodbv1alpha1.AutoScalingMetric) []autoscalingv2.MetricSpec {
+	if len(metrics) == 0 {
+		// 아무 metric도 없으면 cpu 80% 기본값 — Bitnami chart 등 표준 기본.
+		v := int32(80)
+		return []autoscalingv2.MetricSpec{{
+			Type: autoscalingv2.ResourceMetricSourceType,
+			Resource: &autoscalingv2.ResourceMetricSource{
+				Name: corev1.ResourceCPU,
+				Target: autoscalingv2.MetricTarget{
+					Type:               autoscalingv2.UtilizationMetricType,
+					AverageUtilization: &v,
+				},
+			},
+		}}
+	}
+	out := make([]autoscalingv2.MetricSpec, 0, len(metrics))
+	for _, m := range metrics {
+		target := m.Target
+		switch m.Type {
+		case "cpu":
+			out = append(out, autoscalingv2.MetricSpec{
+				Type: autoscalingv2.ResourceMetricSourceType,
+				Resource: &autoscalingv2.ResourceMetricSource{
+					Name: corev1.ResourceCPU,
+					Target: autoscalingv2.MetricTarget{
+						Type:               autoscalingv2.UtilizationMetricType,
+						AverageUtilization: &target,
+					},
+				},
+			})
+		case "memory":
+			out = append(out, autoscalingv2.MetricSpec{
+				Type: autoscalingv2.ResourceMetricSourceType,
+				Resource: &autoscalingv2.ResourceMetricSource{
+					Name: corev1.ResourceMemory,
+					Target: autoscalingv2.MetricTarget{
+						Type:               autoscalingv2.UtilizationMetricType,
+						AverageUtilization: &target,
+					},
+				},
+			})
+		case "custom":
+			if m.CustomMetric == nil || m.CustomMetric.Name == "" {
+				continue
+			}
+			q := resource.NewQuantity(int64(target), resource.DecimalSI)
+			out = append(out, autoscalingv2.MetricSpec{
+				Type: autoscalingv2.PodsMetricSourceType,
+				Pods: &autoscalingv2.PodsMetricSource{
+					Metric: autoscalingv2.MetricIdentifier{Name: m.CustomMetric.Name},
+					Target: autoscalingv2.MetricTarget{
+						Type:         autoscalingv2.AverageValueMetricType,
+						AverageValue: q,
+					},
+				},
+			})
+		}
+	}
 	return out
 }

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-04-29
+
+Mongos auto-scaling 사이클 — `Spec.Mongos.AutoScaling`이 v1alpha1 API에 이미
+선언돼 있었으나 reconcile 로직이 비어 있던 결함 봉쇄. mongos는 stateless router
+이므로 표준 HPA로 안전하게 수평 확장. RS / cfg / shard 멤버는 RS reconfig 부작용
+으로 본 ADR 범위 외(ADR-0007).
+
+### Added
+- **`BuildMongosHPA`** (`internal/resources/builder.go`): 옵트인 HPA 빌더.
+  CPU / Memory utilization 또는 custom Prometheus metric 지원. metric 미지정 시
+  default `cpu 80%`. `MinReplicas` 미지정 시 1로 클램프.
+- **`reconcileMongosHPA`** (`internal/controller/mongodbsharded_controller.go`):
+  reconcile loop step 6.7. `Enabled=false` (또는 nil)이면 기존 HPA 삭제,
+  enabled이면 `controllerutil.CreateOrUpdate`로 idempotent apply + OwnerReference.
+- **RBAC 마커** — `+kubebuilder:rbac:groups=autoscaling,resources=horizontalpod
+  autoscalers,verbs=get;list;watch;create;update;patch;delete` (chart는 v1.1.0
+  부터 이미 권한 보유).
+- **단위 테스트 7케이스** (`builder_test.go`): disabled/nil/default-cpu/min-clamp/
+  cpu+memory/custom/empty-custom-name 모두 회귀 가드.
+
+### Decisions
+- ADR-0007: mongos HorizontalPodAutoscaler 지원 (RS 멤버는 제외)
+  (`docs/kb/adr/0007-mongos-hpa-autoscaling.md`).
+
 ## [1.1.2] - 2026-04-29
 
 Bootstrap self-heal 사이클 — 외부 connect로 풀 수 없는 부트스트랩 deadlock(mongod

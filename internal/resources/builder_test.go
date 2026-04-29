@@ -22,12 +22,97 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
+
+// TestBuildMongosHPA는 mongos HPA 빌더 분기를 매트릭스로 검증한다.
+// 회귀 가드: opt-out(nil/disabled) → nil, default metric 적용, cpu/memory/custom
+// 분기, minReplicas 클램프(1).
+func TestBuildMongosHPA(t *testing.T) {
+	t.Run("disabled → nil (opt-out)", func(t *testing.T) {
+		mdbsh := shardedWithAuth()
+		mdbsh.Spec.Mongos.AutoScaling = &mongodbv1alpha1.AutoScalingSpec{Enabled: false, MaxReplicas: 5}
+		assert.Nil(t, BuildMongosHPA(mdbsh))
+	})
+	t.Run("nil AutoScaling → nil", func(t *testing.T) {
+		mdbsh := shardedWithAuth()
+		mdbsh.Spec.Mongos.AutoScaling = nil
+		assert.Nil(t, BuildMongosHPA(mdbsh))
+	})
+	t.Run("enabled, no metrics → cpu 80% default", func(t *testing.T) {
+		mdbsh := shardedWithAuth()
+		mdbsh.Spec.Mongos.AutoScaling = &mongodbv1alpha1.AutoScalingSpec{
+			Enabled: true, MinReplicas: 2, MaxReplicas: 10,
+		}
+		hpa := BuildMongosHPA(mdbsh)
+		require.NotNil(t, hpa)
+		assert.Equal(t, "test-sharded-mongos-hpa", hpa.Name)
+		assert.Equal(t, "test-sharded-mongos", hpa.Spec.ScaleTargetRef.Name)
+		assert.Equal(t, "Deployment", hpa.Spec.ScaleTargetRef.Kind)
+		assert.Equal(t, int32(2), *hpa.Spec.MinReplicas)
+		assert.Equal(t, int32(10), hpa.Spec.MaxReplicas)
+		require.Len(t, hpa.Spec.Metrics, 1)
+		assert.Equal(t, autoscalingv2.ResourceMetricSourceType, hpa.Spec.Metrics[0].Type)
+		assert.Equal(t, corev1.ResourceCPU, hpa.Spec.Metrics[0].Resource.Name)
+		assert.Equal(t, int32(80), *hpa.Spec.Metrics[0].Resource.Target.AverageUtilization)
+	})
+	t.Run("MinReplicas=0 → clamp to 1 (HPA validation 요구)", func(t *testing.T) {
+		mdbsh := shardedWithAuth()
+		mdbsh.Spec.Mongos.AutoScaling = &mongodbv1alpha1.AutoScalingSpec{Enabled: true, MaxReplicas: 5}
+		hpa := BuildMongosHPA(mdbsh)
+		require.NotNil(t, hpa)
+		assert.Equal(t, int32(1), *hpa.Spec.MinReplicas)
+	})
+	t.Run("cpu+memory metrics", func(t *testing.T) {
+		mdbsh := shardedWithAuth()
+		mdbsh.Spec.Mongos.AutoScaling = &mongodbv1alpha1.AutoScalingSpec{
+			Enabled: true, MinReplicas: 1, MaxReplicas: 8,
+			Metrics: []mongodbv1alpha1.AutoScalingMetric{
+				{Type: "cpu", Target: 60},
+				{Type: "memory", Target: 70},
+			},
+		}
+		hpa := BuildMongosHPA(mdbsh)
+		require.NotNil(t, hpa)
+		require.Len(t, hpa.Spec.Metrics, 2)
+		assert.Equal(t, corev1.ResourceCPU, hpa.Spec.Metrics[0].Resource.Name)
+		assert.Equal(t, int32(60), *hpa.Spec.Metrics[0].Resource.Target.AverageUtilization)
+		assert.Equal(t, corev1.ResourceMemory, hpa.Spec.Metrics[1].Resource.Name)
+		assert.Equal(t, int32(70), *hpa.Spec.Metrics[1].Resource.Target.AverageUtilization)
+	})
+	t.Run("custom metric", func(t *testing.T) {
+		mdbsh := shardedWithAuth()
+		mdbsh.Spec.Mongos.AutoScaling = &mongodbv1alpha1.AutoScalingSpec{
+			Enabled: true, MinReplicas: 1, MaxReplicas: 5,
+			Metrics: []mongodbv1alpha1.AutoScalingMetric{
+				{Type: "custom", Target: 1000, CustomMetric: &mongodbv1alpha1.CustomMetricSpec{Name: "mongos_qps"}},
+			},
+		}
+		hpa := BuildMongosHPA(mdbsh)
+		require.NotNil(t, hpa)
+		require.Len(t, hpa.Spec.Metrics, 1)
+		assert.Equal(t, autoscalingv2.PodsMetricSourceType, hpa.Spec.Metrics[0].Type)
+		assert.Equal(t, "mongos_qps", hpa.Spec.Metrics[0].Pods.Metric.Name)
+		assert.Equal(t, "1k", hpa.Spec.Metrics[0].Pods.Target.AverageValue.String())
+	})
+	t.Run("custom metric with empty name → skip", func(t *testing.T) {
+		mdbsh := shardedWithAuth()
+		mdbsh.Spec.Mongos.AutoScaling = &mongodbv1alpha1.AutoScalingSpec{
+			Enabled: true, MinReplicas: 1, MaxReplicas: 5,
+			Metrics: []mongodbv1alpha1.AutoScalingMetric{
+				{Type: "custom", Target: 100, CustomMetric: nil},
+			},
+		}
+		hpa := BuildMongosHPA(mdbsh)
+		require.NotNil(t, hpa)
+		assert.Empty(t, hpa.Spec.Metrics, "이름 없는 custom metric은 silently skip")
+	})
+}
 
 // shardedWithAuth는 admin bootstrap 활성화에 필요한 AdminCredentialsSecretRef와
 // 기본 ConfigServer/Shards 스펙을 갖춘 MongoDBSharded fixture를 만든다.

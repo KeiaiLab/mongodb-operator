@@ -24,6 +24,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -61,6 +62,7 @@ type MongoDBShardedReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 
 func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -144,6 +146,11 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// 6.6. NetworkPolicies (opt-in, 컴포넌트별 deny-by-default)
 	if err := r.reconcileShardedNetworkPolicies(ctx, mdbsh); err != nil {
 		return r.updateStatusError(ctx, mdbsh, "NetworkPolicies", err)
+	}
+
+	// 6.7. Mongos HPA (opt-in via Spec.Mongos.AutoScaling.Enabled — ADR-0007)
+	if err := r.reconcileMongosHPA(ctx, mdbsh); err != nil {
+		return r.updateStatusError(ctx, mdbsh, "MongosHPA", err)
 	}
 
 	// 7. Initialize Config Server replica set.
@@ -828,6 +835,51 @@ func (r *MongoDBShardedReconciler) cleanupShardResources(ctx context.Context, md
 		if err := r.Delete(ctx, obj); err != nil && !errors.IsNotFound(err) {
 			return fmt.Errorf("delete %T %s: %w", obj, obj.GetName(), err)
 		}
+	}
+	return nil
+}
+
+// reconcileMongosHPA는 mongos HorizontalPodAutoscaler를 reconcile한다.
+// `Spec.Mongos.AutoScaling.Enabled=false` (또는 nil)이면 기존 HPA를 삭제한다
+// (spec/cluster 동기화). enabled=true이면 BuildMongosHPA로 desired state 생성 후
+// controllerutil.CreateOrUpdate로 idempotent apply.
+//
+// 주의: HPA가 Replicas를 직접 관리하므로 mongos Deployment의 spec.replicas 필드는
+// 운영자가 *직접 조정하지 않는다*(HPA controller가 patch). reconcileMongos에서
+// HPA enabled 시 desired replicas를 무시하도록 별도 가드는 도입하지 않는다 —
+// HPA controller가 매 reconcile cycle에서 자체 patch로 정렬하기 때문(<60s 안에
+// 수렴).
+func (r *MongoDBShardedReconciler) reconcileMongosHPA(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+	desired := resources.BuildMongosHPA(mdbsh)
+	if desired == nil {
+		// disabled — 기존 HPA 정리
+		existing := &autoscalingv2.HorizontalPodAutoscaler{}
+		err := r.Get(ctx, types.NamespacedName{Name: mdbsh.Name + "-mongos-hpa", Namespace: mdbsh.Namespace}, existing)
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := r.Delete(ctx, existing); err != nil && !errors.IsNotFound(err) {
+			return err
+		}
+		return nil
+	}
+	if err := controllerutil.SetControllerReference(mdbsh, desired, r.Scheme); err != nil {
+		return fmt.Errorf("set HPA owner ref: %w", err)
+	}
+	existing := &autoscalingv2.HorizontalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace}}
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, existing, func() error {
+		existing.Labels = desired.Labels
+		existing.Spec = desired.Spec
+		return controllerutil.SetControllerReference(mdbsh, existing, r.Scheme)
+	})
+	if err != nil {
+		return fmt.Errorf("apply mongos HPA: %w", err)
+	}
+	if op != controllerutil.OperationResultNone {
+		log.FromContext(ctx).Info("Mongos HPA reconciled", "operation", op, "minReplicas", *desired.Spec.MinReplicas, "maxReplicas", desired.Spec.MaxReplicas)
 	}
 	return nil
 }
