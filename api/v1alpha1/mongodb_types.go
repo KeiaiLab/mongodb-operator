@@ -71,9 +71,16 @@ type MongoDBSpec struct {
 	// +optional
 	Backup *BackupSpec `json:"backup,omitempty"`
 
-	// AutoScaling defines auto-scaling configuration
+	// AutoScaling defines auto-scaling configuration. 멤버 수 자동 조정 — RS
+	// reconfig + initial sync 부작용 때문에 ScalePolicy.Deliberate=true 가드와
+	// 함께 opt-in 해야 HPA가 reconcile된다(ADR-0008).
 	// +optional
 	AutoScaling *AutoScalingSpec `json:"autoScaling,omitempty"`
+
+	// ScalePolicy는 멤버 수 변경 가드. deliberate=true 없이는 spec.Members 변경
+	// 또는 HPA의 scale 결정이 *적용되지 않고* Status.PendingScale에 보류된다.
+	// +optional
+	ScalePolicy *ScalePolicy `json:"scalePolicy,omitempty"`
 
 	// Pod defines pod-level configuration
 	// +optional
@@ -154,6 +161,15 @@ type MongoDBStatus struct {
 
 	// AdminUserCreated indicates if the admin user has been created
 	AdminUserCreated bool `json:"adminUserCreated,omitempty"`
+
+	// HPA는 RS HorizontalPodAutoscaler 상태(opt-in 시 노출).
+	// +optional
+	HPA *HPAStatus `json:"hpa,omitempty"`
+
+	// PendingScale은 ScalePolicy.Deliberate=false 가드 때문에 보류된 멤버 수
+	// 변경 요청. 보류 중이 아니면 nil.
+	// +optional
+	PendingScale *PendingScale `json:"pendingScale,omitempty"`
 }
 
 // MemberStatus represents the status of a replica set member

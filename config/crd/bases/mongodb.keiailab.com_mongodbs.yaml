@@ -181,7 +181,10 @@ spec:
                 - adminCredentialsSecretRef
                 type: object
               autoScaling:
-                description: AutoScaling defines auto-scaling configuration
+                description: |-
+                  AutoScaling defines auto-scaling configuration. 멤버 수 자동 조정 — RS
+                  reconfig + initial sync 부작용 때문에 ScalePolicy.Deliberate=true 가드와
+                  함께 opt-in 해야 HPA가 reconcile된다(ADR-0008).
                 properties:
                   enabled:
                     description: Enabled enables auto-scaling
@@ -2071,6 +2074,15 @@ spec:
                     description: Requests describes minimum resources required
                     type: object
                 type: object
+              scalePolicy:
+                description: |-
+                  ScalePolicy는 멤버 수 변경 가드. deliberate=true 없이는 spec.Members 변경
+                  또는 HPA의 scale 결정이 *적용되지 않고* Status.PendingScale에 보류된다.
+                properties:
+                  deliberate:
+                    description: Deliberate가 true이면 멤버 수 변경을 즉시 적용. false/미지정이면 pending.
+                    type: boolean
+                type: object
               storage:
                 description: Storage defines storage configuration
                 properties:
@@ -2231,6 +2243,35 @@ spec:
               currentPrimary:
                 description: CurrentPrimary is the current primary member
                 type: string
+              hpa:
+                description: HPA는 RS HorizontalPodAutoscaler 상태(opt-in 시 노출).
+                properties:
+                  currentReplicas:
+                    description: CurrentReplicas는 HPA controller가 현재 측정한 replica 수.
+                    format: int32
+                    type: integer
+                  desiredReplicas:
+                    description: DesiredReplicas는 HPA controller가 metric에 따라 계산한 목표
+                      replica 수.
+                    format: int32
+                    type: integer
+                  enabled:
+                    description: Enabled는 HPA가 spec에서 활성화됐는지 여부.
+                    type: boolean
+                  lastScaleTime:
+                    description: LastScaleTime은 HPA controller가 마지막으로 scale을 변경한 시각.
+                    type: string
+                  maxReplicas:
+                    description: MaxReplicas는 spec의 상한.
+                    format: int32
+                    type: integer
+                  minReplicas:
+                    description: MinReplicas는 spec의 하한.
+                    format: int32
+                    type: integer
+                required:
+                - enabled
+                type: object
               lastBackup:
                 description: LastBackup contains information about the last backup
                 properties:
@@ -2280,6 +2321,29 @@ spec:
                 description: ObservedGeneration is the most recent generation observed
                 format: int64
                 type: integer
+              pendingScale:
+                description: |-
+                  PendingScale은 ScalePolicy.Deliberate=false 가드 때문에 보류된 멤버 수
+                  변경 요청. 보류 중이 아니면 nil.
+                properties:
+                  currentMembers:
+                    description: CurrentMembers는 현재 STS의 replicas.
+                    format: int32
+                    type: integer
+                  desiredMembers:
+                    description: DesiredMembers는 spec에서 요청된 새 값.
+                    format: int32
+                    type: integer
+                  reason:
+                    description: Reason은 보류 이유(보통 "ScalePolicy.Deliberate=false").
+                    type: string
+                  requestedAt:
+                    description: RequestedAt은 spec 변경이 처음 감지된 시각(RFC3339).
+                    type: string
+                required:
+                - currentMembers
+                - desiredMembers
+                type: object
               phase:
                 description: Phase represents the current phase
                 enum:

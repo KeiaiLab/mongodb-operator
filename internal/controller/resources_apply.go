@@ -100,7 +100,14 @@ func applyService(ctx context.Context, c client.Client, scheme *runtime.Scheme, 
 // applyStatefulSet은 desired StatefulSet을 idempotent하게 적용한다.
 // Selector/ServiceName/VolumeClaimTemplates 등 immutable 필드는 Create 시점에만 설정.
 // Replicas/Template/UpdateStrategy/MinReadySeconds/PersistentVolumeClaimRetentionPolicy는 mutable.
-func applyStatefulSet(ctx context.Context, c client.Client, scheme *runtime.Scheme, owner client.Object, desired *appsv1.StatefulSet) error {
+//
+// preserveReplicas=true 시 운영 중인 STS의 spec.Replicas를 desired 값으로 덮어쓰지
+// 않는다. 두 가지 경우에 사용:
+//   - HPA가 활성화돼 HPA controller가 Replicas를 자체 patch하는 경우.
+//   - ScalePolicy.Deliberate=false 가드로 spec.Members 변경이 보류된 경우.
+//
+// 첫 Create 시점에는 desired.Spec.Replicas를 그대로 사용해 첫 deploy를 막지 않는다.
+func applyStatefulSet(ctx context.Context, c client.Client, scheme *runtime.Scheme, owner client.Object, desired *appsv1.StatefulSet, preserveReplicas bool) error {
 	target := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
 	}
@@ -113,7 +120,9 @@ func applyStatefulSet(ctx context.Context, c client.Client, scheme *runtime.Sche
 			// 운영 중인 STS는 immutable 필드(Selector/ServiceName/
 			// VolumeClaimTemplates/PodManagementPolicy)를 그대로 두고
 			// 변경 가능한 필드만 동기화.
-			target.Spec.Replicas = desired.Spec.Replicas
+			if !preserveReplicas {
+				target.Spec.Replicas = desired.Spec.Replicas
+			}
 			target.Spec.Template = desired.Spec.Template
 			target.Spec.UpdateStrategy = desired.Spec.UpdateStrategy
 			target.Spec.MinReadySeconds = desired.Spec.MinReadySeconds
@@ -163,7 +172,10 @@ func applyPDB(ctx context.Context, c client.Client, scheme *runtime.Scheme, owne
 
 // applyDeployment는 desired Deployment를 idempotent하게 적용한다.
 // Selector는 immutable이므로 Create 시점에만 설정한다.
-func applyDeployment(ctx context.Context, c client.Client, scheme *runtime.Scheme, owner client.Object, desired *appsv1.Deployment) error {
+//
+// preserveReplicas=true 시 운영 중인 Deployment의 spec.Replicas를 보존한다 — HPA
+// controller의 patch와 operator의 reconcile이 충돌하지 않게 함(ADR-0007).
+func applyDeployment(ctx context.Context, c client.Client, scheme *runtime.Scheme, owner client.Object, desired *appsv1.Deployment, preserveReplicas bool) error {
 	target := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
 	}
@@ -173,7 +185,9 @@ func applyDeployment(ctx context.Context, c client.Client, scheme *runtime.Schem
 		if target.CreationTimestamp.IsZero() {
 			target.Spec = desired.Spec
 		} else {
-			target.Spec.Replicas = desired.Spec.Replicas
+			if !preserveReplicas {
+				target.Spec.Replicas = desired.Spec.Replicas
+			}
 			target.Spec.Template = desired.Spec.Template
 			target.Spec.Strategy = desired.Spec.Strategy
 			target.Spec.MinReadySeconds = desired.Spec.MinReadySeconds

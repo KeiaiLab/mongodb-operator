@@ -23,6 +23,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -210,6 +211,16 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 
+	// 9.5. RS HPA (opt-in via Spec.AutoScaling.Enabled + ScalePolicy.Deliberate
+	// 이중 가드 — ADR-0008). 가드 통과 시에만 HPA 생성.
+	if err := r.reconcileRSHPA(ctx, mdb); err != nil {
+		return r.updateStatusError(ctx, mdb, "RSHPA", err)
+	}
+
+	// 9.6. PendingScale 가드 — Spec.Members 변경이 deliberate=false 때문에 보류
+	// 됐다면 status에 노출 + Event 발행.
+	r.recordPendingScale(ctx, mdb)
+
 	// 10. Update status
 	if err := r.updateStatus(ctx, mdb); err != nil {
 		return ctrl.Result{}, err
@@ -271,7 +282,9 @@ func (r *MongoDBReconciler) reconcileClientService(ctx context.Context, mdb *mon
 }
 
 func (r *MongoDBReconciler) reconcileStatefulSet(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
-	return applyStatefulSet(ctx, r.Client, r.Scheme, mdb, resources.BuildReplicaSetStatefulSet(mdb))
+	// HPA 활성 또는 ScalePolicy.Deliberate=false 시 STS replicas를 보존(ADR-0007/0008).
+	preserve := resources.IsRSHPAActive(mdb) || !resources.IsRSScaleDeliberate(mdb)
+	return applyStatefulSet(ctx, r.Client, r.Scheme, mdb, resources.BuildReplicaSetStatefulSet(mdb), preserve)
 }
 
 // reconcileNetworkPolicy는 spec.networkPolicy가 enabled일 때만 NetworkPolicy를 생성한다.
@@ -742,5 +755,75 @@ func (r *MongoDBReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.ConfigMap{}).
 		Owns(&policyv1.PodDisruptionBudget{}).
 		Owns(&networkingv1.NetworkPolicy{}).
+		Owns(&autoscalingv2.HorizontalPodAutoscaler{}).
 		Complete(r)
+}
+
+// reconcileRSHPA는 RS HPA를 reconcile한다(ADR-0008 이중 가드 통과 시에만 활성).
+// builder의 BuildReplicaSetHPA가 가드 체크를 내장하므로 호출자는 nil/non-nil로
+// 분기. nil이면 기존 HPA cleanup.
+func (r *MongoDBReconciler) reconcileRSHPA(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
+	desired := resources.BuildReplicaSetHPA(mdb)
+	if desired == nil {
+		existing := &autoscalingv2.HorizontalPodAutoscaler{}
+		err := r.Get(ctx, types.NamespacedName{Name: mdb.Name + "-hpa", Namespace: mdb.Namespace}, existing)
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := r.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+		return nil
+	}
+	if err := controllerutil.SetControllerReference(mdb, desired, r.Scheme); err != nil {
+		return fmt.Errorf("set RS HPA owner ref: %w", err)
+	}
+	existing := &autoscalingv2.HorizontalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace}}
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, existing, func() error {
+		existing.Labels = desired.Labels
+		existing.Spec = desired.Spec
+		return controllerutil.SetControllerReference(mdb, existing, r.Scheme)
+	})
+	if err != nil {
+		return fmt.Errorf("apply RS HPA: %w", err)
+	}
+	if op != controllerutil.OperationResultNone {
+		log.FromContext(ctx).Info("RS HPA reconciled", "operation", op, "minReplicas", *desired.Spec.MinReplicas, "maxReplicas", desired.Spec.MaxReplicas)
+	}
+	return nil
+}
+
+// recordPendingScale는 spec.Members가 STS의 현재 replicas와 다르고 ScalePolicy.
+// Deliberate=false인 경우 Status.PendingScale에 기록한다(ADR-0008). deliberate=true
+// 이거나 변경 없으면 PendingScale을 nil로 정리.
+func (r *MongoDBReconciler) recordPendingScale(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) {
+	if resources.IsRSScaleDeliberate(mdb) {
+		mdb.Status.PendingScale = nil
+		return
+	}
+	sts := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, types.NamespacedName{Name: mdb.Name, Namespace: mdb.Namespace}, sts); err != nil || sts.Spec.Replicas == nil {
+		return
+	}
+	current := *sts.Spec.Replicas
+	desired := mdb.Spec.Members
+	if current == desired {
+		mdb.Status.PendingScale = nil
+		return
+	}
+	if mdb.Status.PendingScale != nil &&
+		mdb.Status.PendingScale.CurrentMembers == current &&
+		mdb.Status.PendingScale.DesiredMembers == desired {
+		return // 이미 기록됨, 시각 갱신 불필요
+	}
+	mdb.Status.PendingScale = &mongodbv1alpha1.PendingScale{
+		CurrentMembers: current,
+		DesiredMembers: desired,
+		RequestedAt:    metav1.Now().UTC().Format(time.RFC3339),
+		Reason:         "ScalePolicy.Deliberate=false — set spec.scalePolicy.deliberate=true to apply",
+	}
+	log.FromContext(ctx).Info("Pending scale recorded (deliberate=false guard)", "current", current, "desired", desired)
 }

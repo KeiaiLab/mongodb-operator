@@ -1579,45 +1579,112 @@ func BuildShardedNetworkPolicies(mdbsh *mongodbv1alpha1.MongoDBSharded) []*netwo
 }
 
 // BuildMongosHPA는 mongos Deployment에 대한 HorizontalPodAutoscaler를 만든다.
-// `Spec.Mongos.AutoScaling.Enabled=false`이면 nil을 반환(호출자가 기존 HPA 삭제 처리).
-//
-// 본 사이클에서 HPA는 *mongos에만* 적용된다 — mongos는 stateless router로
-// replica 변경이 RS reconfig 같은 부작용을 일으키지 않아 표준 HPA로 안전하게
-// 수평 확장 가능. RS / cfg / shard 멤버는 RS reconfig 영향 때문에 vertical
-// scaling 또는 운영자 명시 reconfig 경로를 권장(ADR-0007).
-//
-// metrics:
-//   - type: cpu/memory → Resource metric, target=Utilization(%)
-//   - type: custom → Pods metric, target=AverageValue(절대값), name=CustomMetric.Name
-//
-// minReplicas 미지정 시 1로 클램프(HPA validation 요구).
+// `Spec.Mongos.AutoScaling.Enabled=false`이면 nil(호출자가 기존 HPA 삭제 처리).
+// mongos는 stateless router라 deliberate 가드가 불필요(ADR-0007).
 func BuildMongosHPA(mdbsh *mongodbv1alpha1.MongoDBSharded) *autoscalingv2.HorizontalPodAutoscaler {
-	as := mdbsh.Spec.Mongos.AutoScaling
-	if as == nil || !as.Enabled {
+	if !IsMongosHPAActive(mdbsh) {
 		return nil
 	}
+	return buildHPAForTarget(
+		mdbsh.Name+"-mongos-hpa", mdbsh.Namespace, buildLabels(mdbsh.Name, "mongos"),
+		"Deployment", mdbsh.Name+"-mongos",
+		mdbsh.Spec.Mongos.AutoScaling,
+	)
+}
+
+// BuildReplicaSetHPA는 ReplicaSet StatefulSet에 대한 HPA를 만든다.
+// `Spec.AutoScaling.Enabled=true` + `Spec.ScalePolicy.Deliberate=true` *둘 다*
+// 일 때만 nil 아닌 HPA 반환(이중 가드, ADR-0008).
+//
+// 이중 가드 근거 — RS 멤버 수 변경은 RS reconfig + initial sync 부작용 동반.
+// HPA controller가 metric 변동에 따라 Replicas를 자동 patch하면 운영자 모르는
+// 사이 RS reconfig가 발동될 수 있어, "운영자 의도된 자동화"임을 명시(deliberate)
+// 해야만 활성화한다.
+func BuildReplicaSetHPA(mdb *mongodbv1alpha1.MongoDB) *autoscalingv2.HorizontalPodAutoscaler {
+	if !IsRSHPAActive(mdb) {
+		return nil
+	}
+	return buildHPAForTarget(
+		mdb.Name+"-hpa", mdb.Namespace, buildLabels(mdb.Name, "replicaset"),
+		"StatefulSet", mdb.Name,
+		mdb.Spec.AutoScaling,
+	)
+}
+
+// BuildConfigServerHPA는 cfg StatefulSet에 대한 HPA를 만든다. cfg는 보통 작은
+// 멤버 수(3-7)이고 변동이 거의 없어 *deliberate 이중 가드*를 동일하게 적용한다
+// (ADR-0009).
+func BuildConfigServerHPA(mdbsh *mongodbv1alpha1.MongoDBSharded) *autoscalingv2.HorizontalPodAutoscaler {
+	if !IsConfigServerHPAActive(mdbsh) {
+		return nil
+	}
+	return buildHPAForTarget(
+		mdbsh.Name+"-cfg-hpa", mdbsh.Namespace, buildLabels(mdbsh.Name, "configsvr"),
+		"StatefulSet", mdbsh.Name+"-cfg",
+		mdbsh.Spec.ConfigServer.AutoScaling,
+	)
+}
+
+// buildHPAForTarget는 HPA 객체 생성 공통 로직(가드 검사는 호출자 책임).
+func buildHPAForTarget(name, namespace string, labels map[string]string, kind, refName string,
+	as *mongodbv1alpha1.AutoScalingSpec,
+) *autoscalingv2.HorizontalPodAutoscaler {
 	min := as.MinReplicas
 	if min < 1 {
 		min = 1
 	}
-	metrics := buildHPAMetrics(as.Metrics)
 	return &autoscalingv2.HorizontalPodAutoscaler{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      mdbsh.Name + "-mongos-hpa",
-			Namespace: mdbsh.Namespace,
-			Labels:    buildLabels(mdbsh.Name, "mongos"),
+			Name:      name,
+			Namespace: namespace,
+			Labels:    labels,
 		},
 		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
 			ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
 				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-				Name:       mdbsh.Name + "-mongos",
+				Kind:       kind,
+				Name:       refName,
 			},
 			MinReplicas: &min,
 			MaxReplicas: as.MaxReplicas,
-			Metrics:     metrics,
+			Metrics:     buildHPAMetrics(as.Metrics),
 		},
 	}
+}
+
+// IsRSHPAActive는 RS HPA가 reconcile에서 활성 상태인지 검사한다(이중 가드).
+// applyStatefulSet의 HPA-aware preserve 분기에서 사용.
+func IsRSHPAActive(mdb *mongodbv1alpha1.MongoDB) bool {
+	return mdb.Spec.AutoScaling != nil && mdb.Spec.AutoScaling.Enabled &&
+		mdb.Spec.ScalePolicy != nil && mdb.Spec.ScalePolicy.Deliberate
+}
+
+// IsConfigServerHPAActive는 cfg HPA의 이중 가드 통과 여부를 검사한다.
+func IsConfigServerHPAActive(mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
+	return mdbsh.Spec.ConfigServer.AutoScaling != nil && mdbsh.Spec.ConfigServer.AutoScaling.Enabled &&
+		mdbsh.Spec.ConfigServer.ScalePolicy != nil && mdbsh.Spec.ConfigServer.ScalePolicy.Deliberate
+}
+
+// IsMongosHPAActive는 mongos HPA의 활성 상태(단일 가드: enabled).
+func IsMongosHPAActive(mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
+	return mdbsh.Spec.Mongos.AutoScaling != nil && mdbsh.Spec.Mongos.AutoScaling.Enabled
+}
+
+// IsRSScaleDeliberate는 ReplicaSet 멤버 수 변경이 의도된 자동화임을 검사한다.
+// Spec.ScalePolicy=nil이면 default false(즉시 변경 금지). true이면 spec.Members
+// 변경이 즉시 STS replicas로 반영된다(ADR-0008).
+func IsRSScaleDeliberate(mdb *mongodbv1alpha1.MongoDB) bool {
+	return mdb.Spec.ScalePolicy != nil && mdb.Spec.ScalePolicy.Deliberate
+}
+
+// IsConfigServerScaleDeliberate는 cfg 멤버 수 변경 가드(ADR-0008/0009).
+func IsConfigServerScaleDeliberate(mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
+	return mdbsh.Spec.ConfigServer.ScalePolicy != nil && mdbsh.Spec.ConfigServer.ScalePolicy.Deliberate
+}
+
+// IsShardScaleDeliberate는 shard MembersPerShard 변경 가드(ADR-0008/0009).
+func IsShardScaleDeliberate(mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
+	return mdbsh.Spec.Shards.ScalePolicy != nil && mdbsh.Spec.Shards.ScalePolicy.Deliberate
 }
 
 // buildHPAMetrics는 spec의 metric 목록을 autoscaling/v2 metric으로 변환한다.

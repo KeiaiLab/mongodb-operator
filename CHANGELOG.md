@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-04-29
+
+Auto-scaling 통합 사이클 — ADR-0007 후속 4건 통합 구현. mongos drift 방지 + RS
+HPA 이중 가드 + cfg HPA 이중 가드 + RS deliberate scale + Status.PendingScale
+가시화. shard 갯수 자동화는 chunk migration 부작용으로 명시 거절(ADR-0009).
+
+### Added
+- **`ScalePolicy{Deliberate bool}`** (`api/v1alpha1/common_types.go`) — RS / cfg
+  / shard 멤버 수 변경의 명시 승인 가드. `MongoDB.Spec.ScalePolicy`,
+  `ConfigServer.ScalePolicy`, `Shards.ScalePolicy` 세 곳에 추가.
+- **`HPAStatus`** + **`PendingScale`** 신규 타입 — CR `Status.HPA`,
+  `Status.PendingScale`로 운영자에게 자동 스케일 현황과 보류된 변경 가시화.
+- **`BuildReplicaSetHPA`** / **`BuildConfigServerHPA`** — `AutoScaling.Enabled
+  =true` + `ScalePolicy.Deliberate=true` *이중 가드* 통과 시에만 HPA 객체 생성.
+- **`reconcileRSHPA`** / **`reconcileConfigServerHPA`** — controller에 HPA
+  reconcile 분기 추가, idempotent CreateOrUpdate + cleanup.
+- **`recordPendingScale`** — `spec.Members` 변경 + `Deliberate=false`인 경우
+  STS replicas 변경 보류 + Status.PendingScale 노출 + 로그 출력.
+- **`applyStatefulSet`/`applyDeployment` `preserveReplicas` 인자** — HPA 활성
+  또는 Deliberate=false 시 운영 중인 spec.Replicas를 desired로 덮어쓰지 않음.
+  첫 Create 시점에는 desired 그대로(첫 deploy 영향 없음).
+- **단위 테스트 8케이스 추가** (`builder_test.go`): RS HPA 이중 가드 4분기 +
+  cfg HPA 3분기 + ScaleDeliberate helpers 4분기. coverage 72.3% → 73.5%.
+
+### Decisions
+- ADR-0008 — ReplicaSet 멤버 수 변경의 deliberate 가드.
+- ADR-0009 — shard / cfg HPA의 RS 부작용과 이중 가드 (shard 갯수 자동화 명시
+  거절).
+
 ## [1.2.0] - 2026-04-29
 
 Mongos auto-scaling 사이클 — `Spec.Mongos.AutoScaling`이 v1alpha1 API에 이미

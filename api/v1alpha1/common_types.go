@@ -327,6 +327,69 @@ type CustomMetricSpec struct {
 	Query string `json:"query,omitempty"`
 }
 
+// ScalePolicy는 멤버 수 변경의 안전성 가드를 정의한다.
+//
+// MongoDB ReplicaSet 멤버 수 변경(MongoDB.Spec.Members, ConfigServer.Members)은
+// RS reconfig + initial sync 부작용을 동반한다 — 잘못된 spec 변경 한 번에
+// PRIMARY 부재 / 수십 분 IO 폭주 / shard rebalancing 동반 진행 가능.
+// Deliberate=true가 명시되어야만 즉시 적용되며, 그 외에는 operator가 의도된
+// 값을 Status에 기록하고 STS replicas를 변경하지 않는다.
+//
+// 이 패턴은 MongoDB Inc. operator의 HumanReviewRequired 가드, Percona PSMDB의
+// manualUpdate 플래그와 동일한 보호 의도를 가진다.
+type ScalePolicy struct {
+	// Deliberate가 true이면 멤버 수 변경을 즉시 적용. false/미지정이면 pending.
+	// +optional
+	Deliberate bool `json:"deliberate,omitempty"`
+}
+
+// HPAStatus는 컴포넌트의 HorizontalPodAutoscaler 현재 상태 스냅샷이다.
+// reconcile loop이 매 cycle에서 cluster의 HPA 객체를 읽어 CR status에 복사한다.
+type HPAStatus struct {
+	// Enabled는 HPA가 spec에서 활성화됐는지 여부.
+	Enabled bool `json:"enabled"`
+
+	// CurrentReplicas는 HPA controller가 현재 측정한 replica 수.
+	// +optional
+	CurrentReplicas int32 `json:"currentReplicas,omitempty"`
+
+	// DesiredReplicas는 HPA controller가 metric에 따라 계산한 목표 replica 수.
+	// +optional
+	DesiredReplicas int32 `json:"desiredReplicas,omitempty"`
+
+	// MinReplicas는 spec의 하한.
+	// +optional
+	MinReplicas int32 `json:"minReplicas,omitempty"`
+
+	// MaxReplicas는 spec의 상한.
+	// +optional
+	MaxReplicas int32 `json:"maxReplicas,omitempty"`
+
+	// LastScaleTime은 HPA controller가 마지막으로 scale을 변경한 시각.
+	// +optional
+	LastScaleTime string `json:"lastScaleTime,omitempty"`
+}
+
+// PendingScale은 ScalePolicy.Deliberate=false 가드 때문에 즉시 적용되지 않은
+// 멤버 수 변경 요청을 노출한다. 운영자가 `kubectl get -o jsonpath='{.status
+// .pendingScale}'`만으로 보류된 변경을 인지하고, deliberate=true로 승인할 수
+// 있게 한다.
+type PendingScale struct {
+	// CurrentMembers는 현재 STS의 replicas.
+	CurrentMembers int32 `json:"currentMembers"`
+
+	// DesiredMembers는 spec에서 요청된 새 값.
+	DesiredMembers int32 `json:"desiredMembers"`
+
+	// RequestedAt은 spec 변경이 처음 감지된 시각(RFC3339).
+	// +optional
+	RequestedAt string `json:"requestedAt,omitempty"`
+
+	// Reason은 보류 이유(보통 "ScalePolicy.Deliberate=false").
+	// +optional
+	Reason string `json:"reason,omitempty"`
+}
+
 // PodSpec defines pod-level configuration
 type PodSpec struct {
 	// SecurityContext defines pod security context

@@ -100,6 +100,17 @@ type ConfigServerSpec struct {
 	// Pod defines pod-level configuration
 	// +optional
 	Pod *PodSpec `json:"pod,omitempty"`
+
+	// AutoScaling defines config server auto-scaling configuration. cfg는 보통
+	// 작은 멤버 수(3-7)이고 변동이 거의 없으므로 기본 비활성. opt-in 시 멤버
+	// 수 조정에 ScalePolicy.Deliberate 가드 의무.
+	// +optional
+	AutoScaling *AutoScalingSpec `json:"autoScaling,omitempty"`
+
+	// ScalePolicy는 멤버 수 변경 가드. deliberate=true 없이는 spec.Members 변경
+	// 또는 HPA의 scale 결정이 *적용되지 않고* Status.PendingScale에 보류된다.
+	// +optional
+	ScalePolicy *ScalePolicy `json:"scalePolicy,omitempty"`
 }
 
 // ShardSpec defines shard configuration
@@ -126,9 +137,20 @@ type ShardSpec struct {
 	// +optional
 	Pod *PodSpec `json:"pod,omitempty"`
 
-	// AutoScaling defines shard auto-scaling configuration
+	// AutoScaling defines shard *count* auto-scaling configuration.
+	//
+	// 주의(ADR-0009): shard 갯수 변경(addShard/removeShard)은 chunk migration +
+	// rebalancing을 동반하므로 표준 HPA로는 안전하게 다룰 수 없다. 본 필드는
+	// 호환성을 위해 spec에 보존되지만 *operator가 reconcile하지 않는다*. 별도
+	// deliberate sharding API 사이클이 도입될 때까지 운영자가 수동으로 shardCount
+	// 를 조정해야 한다.
 	// +optional
 	AutoScaling *ShardAutoScalingSpec `json:"autoScaling,omitempty"`
+
+	// ScalePolicy는 멤버 수 변경 가드(membersPerShard 또는 향후 멤버 단위 HPA).
+	// deliberate=true 없이는 spec.MembersPerShard 변경이 즉시 적용되지 않는다.
+	// +optional
+	ScalePolicy *ScalePolicy `json:"scalePolicy,omitempty"`
 }
 
 // ShardAutoScalingSpec defines shard auto-scaling
@@ -249,6 +271,15 @@ type ComponentStatus struct {
 
 	// Phase is the component phase
 	Phase string `json:"phase,omitempty"`
+
+	// HPA는 컴포넌트의 HorizontalPodAutoscaler 상태(opt-in 시 노출).
+	// +optional
+	HPA *HPAStatus `json:"hpa,omitempty"`
+
+	// PendingScale은 ScalePolicy.Deliberate=false 가드 때문에 보류된 멤버 수
+	// 변경 요청. 보류 중이 아니면 nil.
+	// +optional
+	PendingScale *PendingScale `json:"pendingScale,omitempty"`
 }
 
 // ShardStatus represents the status of a shard

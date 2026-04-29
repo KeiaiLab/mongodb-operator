@@ -743,3 +743,92 @@ func TestBuildShardedNetworkPolicies_PerComponentPort(t *testing.T) {
 		}
 	}
 }
+
+// TestBuildReplicaSetHPA는 RS HPA의 이중 가드(AutoScaling.Enabled +
+// ScalePolicy.Deliberate)를 검증한다(ADR-0008).
+func TestBuildReplicaSetHPA(t *testing.T) {
+	base := func() *mongodbv1alpha1.MongoDB {
+		return &mongodbv1alpha1.MongoDB{
+			ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "default"},
+			Spec: mongodbv1alpha1.MongoDBSpec{
+				Members: 3,
+				Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("5Gi")},
+			},
+		}
+	}
+	t.Run("AutoScaling=nil → nil", func(t *testing.T) {
+		assert.Nil(t, BuildReplicaSetHPA(base()))
+	})
+	t.Run("AutoScaling.Enabled=true + ScalePolicy=nil → nil(이중 가드 미통과)", func(t *testing.T) {
+		m := base()
+		m.Spec.AutoScaling = &mongodbv1alpha1.AutoScalingSpec{Enabled: true, MaxReplicas: 5}
+		assert.Nil(t, BuildReplicaSetHPA(m), "deliberate 가드 없이는 HPA 생성 금지")
+	})
+	t.Run("ScalePolicy.Deliberate=false → nil", func(t *testing.T) {
+		m := base()
+		m.Spec.AutoScaling = &mongodbv1alpha1.AutoScalingSpec{Enabled: true, MaxReplicas: 5}
+		m.Spec.ScalePolicy = &mongodbv1alpha1.ScalePolicy{Deliberate: false}
+		assert.Nil(t, BuildReplicaSetHPA(m))
+	})
+	t.Run("이중 가드 통과 → HPA 생성", func(t *testing.T) {
+		m := base()
+		m.Spec.AutoScaling = &mongodbv1alpha1.AutoScalingSpec{Enabled: true, MinReplicas: 3, MaxReplicas: 7}
+		m.Spec.ScalePolicy = &mongodbv1alpha1.ScalePolicy{Deliberate: true}
+		hpa := BuildReplicaSetHPA(m)
+		require.NotNil(t, hpa)
+		assert.Equal(t, "rs-hpa", hpa.Name)
+		assert.Equal(t, "StatefulSet", hpa.Spec.ScaleTargetRef.Kind)
+		assert.Equal(t, "rs", hpa.Spec.ScaleTargetRef.Name)
+		assert.Equal(t, int32(3), *hpa.Spec.MinReplicas)
+		assert.Equal(t, int32(7), hpa.Spec.MaxReplicas)
+	})
+}
+
+// TestBuildConfigServerHPA는 cfg HPA의 이중 가드(ADR-0009)를 검증한다.
+func TestBuildConfigServerHPA(t *testing.T) {
+	base := func() *mongodbv1alpha1.MongoDBSharded {
+		m := shardedWithAuth()
+		return m
+	}
+	t.Run("AutoScaling=nil → nil", func(t *testing.T) {
+		assert.Nil(t, BuildConfigServerHPA(base()))
+	})
+	t.Run("Deliberate=false → nil", func(t *testing.T) {
+		m := base()
+		m.Spec.ConfigServer.AutoScaling = &mongodbv1alpha1.AutoScalingSpec{Enabled: true, MaxReplicas: 5}
+		assert.Nil(t, BuildConfigServerHPA(m))
+	})
+	t.Run("이중 가드 통과 → HPA 생성", func(t *testing.T) {
+		m := base()
+		m.Spec.ConfigServer.AutoScaling = &mongodbv1alpha1.AutoScalingSpec{Enabled: true, MinReplicas: 3, MaxReplicas: 5}
+		m.Spec.ConfigServer.ScalePolicy = &mongodbv1alpha1.ScalePolicy{Deliberate: true}
+		hpa := BuildConfigServerHPA(m)
+		require.NotNil(t, hpa)
+		assert.Equal(t, "test-sharded-cfg-hpa", hpa.Name)
+		assert.Equal(t, "StatefulSet", hpa.Spec.ScaleTargetRef.Kind)
+		assert.Equal(t, "test-sharded-cfg", hpa.Spec.ScaleTargetRef.Name)
+	})
+}
+
+// TestScaleDeliberateHelpers는 IsRS/IsConfigServer/IsShardScaleDeliberate
+// helper의 기본값(=false) 분기를 검증한다.
+func TestScaleDeliberateHelpers(t *testing.T) {
+	t.Run("RS — ScalePolicy=nil → false (default)", func(t *testing.T) {
+		mdb := &mongodbv1alpha1.MongoDB{}
+		assert.False(t, IsRSScaleDeliberate(mdb))
+	})
+	t.Run("RS — Deliberate=true", func(t *testing.T) {
+		mdb := &mongodbv1alpha1.MongoDB{Spec: mongodbv1alpha1.MongoDBSpec{
+			ScalePolicy: &mongodbv1alpha1.ScalePolicy{Deliberate: true},
+		}}
+		assert.True(t, IsRSScaleDeliberate(mdb))
+	})
+	t.Run("cfg — Deliberate=true", func(t *testing.T) {
+		m := shardedWithAuth()
+		m.Spec.ConfigServer.ScalePolicy = &mongodbv1alpha1.ScalePolicy{Deliberate: true}
+		assert.True(t, IsConfigServerScaleDeliberate(m))
+	})
+	t.Run("shard — default false", func(t *testing.T) {
+		assert.False(t, IsShardScaleDeliberate(shardedWithAuth()))
+	})
+}

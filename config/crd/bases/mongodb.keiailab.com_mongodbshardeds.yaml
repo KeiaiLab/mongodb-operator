@@ -252,6 +252,63 @@ spec:
               configServer:
                 description: ConfigServer defines config server configuration
                 properties:
+                  autoScaling:
+                    description: |-
+                      AutoScaling defines config server auto-scaling configuration. cfg는 보통
+                      작은 멤버 수(3-7)이고 변동이 거의 없으므로 기본 비활성. opt-in 시 멤버
+                      수 조정에 ScalePolicy.Deliberate 가드 의무.
+                    properties:
+                      enabled:
+                        description: Enabled enables auto-scaling
+                        type: boolean
+                      maxReplicas:
+                        description: MaxReplicas is the maximum number of replicas
+                        format: int32
+                        type: integer
+                      metrics:
+                        description: Metrics defines scaling metrics
+                        items:
+                          description: AutoScalingMetric defines a scaling metric
+                          properties:
+                            customMetric:
+                              description: CustomMetric defines a custom Prometheus
+                                metric
+                              properties:
+                                name:
+                                  description: Name is the metric name
+                                  type: string
+                                query:
+                                  description: Query is the Prometheus query (optional)
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            target:
+                              description: Target is the target value (percentage
+                                for cpu/memory, absolute for custom)
+                              format: int32
+                              type: integer
+                            type:
+                              description: Type is the metric type
+                              enum:
+                              - cpu
+                              - memory
+                              - custom
+                              type: string
+                          required:
+                          - target
+                          - type
+                          type: object
+                        type: array
+                      minReplicas:
+                        description: MinReplicas is the minimum number of replicas
+                        format: int32
+                        minimum: 1
+                        type: integer
+                    required:
+                    - enabled
+                    - maxReplicas
+                    type: object
                   members:
                     default: 3
                     description: Members is the number of config server replica set
@@ -1862,6 +1919,16 @@ spec:
                           x-kubernetes-int-or-string: true
                         description: Requests describes minimum resources required
                         type: object
+                    type: object
+                  scalePolicy:
+                    description: |-
+                      ScalePolicy는 멤버 수 변경 가드. deliberate=true 없이는 spec.Members 변경
+                      또는 HPA의 scale 결정이 *적용되지 않고* Status.PendingScale에 보류된다.
+                    properties:
+                      deliberate:
+                        description: Deliberate가 true이면 멤버 수 변경을 즉시 적용. false/미지정이면
+                          pending.
+                        type: boolean
                     type: object
                   storage:
                     description: Storage defines storage configuration
@@ -3716,7 +3783,14 @@ spec:
                 description: Shards defines shard configuration
                 properties:
                   autoScaling:
-                    description: AutoScaling defines shard auto-scaling configuration
+                    description: |-
+                      AutoScaling defines shard *count* auto-scaling configuration.
+
+                      주의(ADR-0009): shard 갯수 변경(addShard/removeShard)은 chunk migration +
+                      rebalancing을 동반하므로 표준 HPA로는 안전하게 다룰 수 없다. 본 필드는
+                      호환성을 위해 spec에 보존되지만 *operator가 reconcile하지 않는다*. 별도
+                      deliberate sharding API 사이클이 도입될 때까지 운영자가 수동으로 shardCount
+                      를 조정해야 한다.
                     properties:
                       enabled:
                         description: Enabled enables shard auto-scaling
@@ -5384,6 +5458,16 @@ spec:
                         description: Requests describes minimum resources required
                         type: object
                     type: object
+                  scalePolicy:
+                    description: |-
+                      ScalePolicy는 멤버 수 변경 가드(membersPerShard 또는 향후 멤버 단위 HPA).
+                      deliberate=true 없이는 spec.MembersPerShard 변경이 즉시 적용되지 않는다.
+                    properties:
+                      deliberate:
+                        description: Deliberate가 true이면 멤버 수 변경을 즉시 적용. false/미지정이면
+                          pending.
+                        type: boolean
+                    type: object
                   storage:
                     description: Storage defines storage configuration for each shard
                     properties:
@@ -5547,6 +5631,60 @@ spec:
               configServer:
                 description: ConfigServerStatus contains config server status
                 properties:
+                  hpa:
+                    description: HPA는 컴포넌트의 HorizontalPodAutoscaler 상태(opt-in 시 노출).
+                    properties:
+                      currentReplicas:
+                        description: CurrentReplicas는 HPA controller가 현재 측정한 replica
+                          수.
+                        format: int32
+                        type: integer
+                      desiredReplicas:
+                        description: DesiredReplicas는 HPA controller가 metric에 따라 계산한
+                          목표 replica 수.
+                        format: int32
+                        type: integer
+                      enabled:
+                        description: Enabled는 HPA가 spec에서 활성화됐는지 여부.
+                        type: boolean
+                      lastScaleTime:
+                        description: LastScaleTime은 HPA controller가 마지막으로 scale을 변경한
+                          시각.
+                        type: string
+                      maxReplicas:
+                        description: MaxReplicas는 spec의 상한.
+                        format: int32
+                        type: integer
+                      minReplicas:
+                        description: MinReplicas는 spec의 하한.
+                        format: int32
+                        type: integer
+                    required:
+                    - enabled
+                    type: object
+                  pendingScale:
+                    description: |-
+                      PendingScale은 ScalePolicy.Deliberate=false 가드 때문에 보류된 멤버 수
+                      변경 요청. 보류 중이 아니면 nil.
+                    properties:
+                      currentMembers:
+                        description: CurrentMembers는 현재 STS의 replicas.
+                        format: int32
+                        type: integer
+                      desiredMembers:
+                        description: DesiredMembers는 spec에서 요청된 새 값.
+                        format: int32
+                        type: integer
+                      reason:
+                        description: Reason은 보류 이유(보통 "ScalePolicy.Deliberate=false").
+                        type: string
+                      requestedAt:
+                        description: RequestedAt은 spec 변경이 처음 감지된 시각(RFC3339).
+                        type: string
+                    required:
+                    - currentMembers
+                    - desiredMembers
+                    type: object
                   phase:
                     description: Phase is the component phase
                     type: string
@@ -5588,6 +5726,60 @@ spec:
               mongos:
                 description: MongosStatus contains mongos status
                 properties:
+                  hpa:
+                    description: HPA는 컴포넌트의 HorizontalPodAutoscaler 상태(opt-in 시 노출).
+                    properties:
+                      currentReplicas:
+                        description: CurrentReplicas는 HPA controller가 현재 측정한 replica
+                          수.
+                        format: int32
+                        type: integer
+                      desiredReplicas:
+                        description: DesiredReplicas는 HPA controller가 metric에 따라 계산한
+                          목표 replica 수.
+                        format: int32
+                        type: integer
+                      enabled:
+                        description: Enabled는 HPA가 spec에서 활성화됐는지 여부.
+                        type: boolean
+                      lastScaleTime:
+                        description: LastScaleTime은 HPA controller가 마지막으로 scale을 변경한
+                          시각.
+                        type: string
+                      maxReplicas:
+                        description: MaxReplicas는 spec의 상한.
+                        format: int32
+                        type: integer
+                      minReplicas:
+                        description: MinReplicas는 spec의 하한.
+                        format: int32
+                        type: integer
+                    required:
+                    - enabled
+                    type: object
+                  pendingScale:
+                    description: |-
+                      PendingScale은 ScalePolicy.Deliberate=false 가드 때문에 보류된 멤버 수
+                      변경 요청. 보류 중이 아니면 nil.
+                    properties:
+                      currentMembers:
+                        description: CurrentMembers는 현재 STS의 replicas.
+                        format: int32
+                        type: integer
+                      desiredMembers:
+                        description: DesiredMembers는 spec에서 요청된 새 값.
+                        format: int32
+                        type: integer
+                      reason:
+                        description: Reason은 보류 이유(보통 "ScalePolicy.Deliberate=false").
+                        type: string
+                      requestedAt:
+                        description: RequestedAt은 spec 변경이 처음 감지된 시각(RFC3339).
+                        type: string
+                    required:
+                    - currentMembers
+                    - desiredMembers
+                    type: object
                   phase:
                     description: Phase is the component phase
                     type: string

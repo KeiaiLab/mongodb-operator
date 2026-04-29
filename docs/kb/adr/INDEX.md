@@ -14,6 +14,8 @@
 | [ADR-0005](0005-skip-primary-check-before-admin-bootstrap.md) | admin user 부트스트랩 전 primary 체크 (anon + auth-fallback) | Accepted | 2026-04-29 |
 | [ADR-0006](0006-poststart-bootstrap-rs-init.md) | postStart hook 안에서 RS init + createUser 통합 | Accepted | 2026-04-29 |
 | [ADR-0007](0007-mongos-hpa-autoscaling.md) | mongos HorizontalPodAutoscaler 지원 (RS 멤버는 제외) | Accepted | 2026-04-29 |
+| [ADR-0008](0008-rs-deliberate-scale-policy.md) | ReplicaSet 멤버 수 변경의 deliberate 가드 | Accepted | 2026-04-29 |
+| [ADR-0009](0009-shard-cfg-hpa-with-deliberate-guard.md) | shard / cfg HPA의 RS 부작용과 이중 가드 | Accepted | 2026-04-29 |
 
 ## 작성 가이드
 

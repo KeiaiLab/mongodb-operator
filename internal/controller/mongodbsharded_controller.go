@@ -153,6 +153,12 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.updateStatusError(ctx, mdbsh, "MongosHPA", err)
 	}
 
+	// 6.8. ConfigServer HPA (opt-in via Spec.ConfigServer.AutoScaling.Enabled +
+	// ScalePolicy.Deliberate — ADR-0008/0009 이중 가드)
+	if err := r.reconcileConfigServerHPA(ctx, mdbsh); err != nil {
+		return r.updateStatusError(ctx, mdbsh, "ConfigServerHPA", err)
+	}
+
 	// 7. Initialize Config Server replica set.
 	// 이전: 모든 단계가 silent. 운영자는 cfg server가 "no replset config"로
 	// 영구 멈춰도 conditions에서 인지 불가. updateStatusError로 ReconcileError
@@ -256,7 +262,8 @@ func (r *MongoDBShardedReconciler) reconcileConfigServer(ctx context.Context, md
 	}
 
 	// StatefulSet
-	return applyStatefulSet(ctx, r.Client, r.Scheme, mdbsh, resources.BuildConfigServerStatefulSet(mdbsh))
+	preserve := resources.IsConfigServerHPAActive(mdbsh) || !resources.IsConfigServerScaleDeliberate(mdbsh)
+	return applyStatefulSet(ctx, r.Client, r.Scheme, mdbsh, resources.BuildConfigServerStatefulSet(mdbsh), preserve)
 }
 
 // reconcileConfigServerScriptsConfigMap는 cfg StatefulSet이 lifecycle.postStart에서
@@ -290,7 +297,8 @@ func (r *MongoDBShardedReconciler) reconcileShard(ctx context.Context, mdbsh *mo
 	}
 
 	// StatefulSet
-	return applyStatefulSet(ctx, r.Client, r.Scheme, mdbsh, resources.BuildShardStatefulSet(mdbsh, shardIndex))
+	preserve := !resources.IsShardScaleDeliberate(mdbsh)
+	return applyStatefulSet(ctx, r.Client, r.Scheme, mdbsh, resources.BuildShardStatefulSet(mdbsh, shardIndex), preserve)
 }
 
 // reconcileShardScriptsConfigMap는 shard StatefulSet이 lifecycle.postStart에서 호출
@@ -328,7 +336,7 @@ func (r *MongoDBShardedReconciler) reconcileMongos(ctx context.Context, mdbsh *m
 	}
 
 	// Deployment
-	return applyDeployment(ctx, r.Client, r.Scheme, mdbsh, resources.BuildMongosDeployment(mdbsh))
+	return applyDeployment(ctx, r.Client, r.Scheme, mdbsh, resources.BuildMongosDeployment(mdbsh), resources.IsMongosHPAActive(mdbsh))
 }
 
 func (r *MongoDBShardedReconciler) isMongosReady(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
@@ -880,6 +888,43 @@ func (r *MongoDBShardedReconciler) reconcileMongosHPA(ctx context.Context, mdbsh
 	}
 	if op != controllerutil.OperationResultNone {
 		log.FromContext(ctx).Info("Mongos HPA reconciled", "operation", op, "minReplicas", *desired.Spec.MinReplicas, "maxReplicas", desired.Spec.MaxReplicas)
+	}
+	return nil
+}
+
+// reconcileConfigServerHPA는 cfg StatefulSet의 HPA를 reconcile한다. mongos
+// HPA와 동일 패턴이지만 BuildConfigServerHPA가 이중 가드(enabled+deliberate)를
+// 강제하므로 별도 검사 없이 builder 결과 nil/non-nil로 분기.
+func (r *MongoDBShardedReconciler) reconcileConfigServerHPA(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+	desired := resources.BuildConfigServerHPA(mdbsh)
+	if desired == nil {
+		existing := &autoscalingv2.HorizontalPodAutoscaler{}
+		err := r.Get(ctx, types.NamespacedName{Name: mdbsh.Name + "-cfg-hpa", Namespace: mdbsh.Namespace}, existing)
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := r.Delete(ctx, existing); err != nil && !errors.IsNotFound(err) {
+			return err
+		}
+		return nil
+	}
+	if err := controllerutil.SetControllerReference(mdbsh, desired, r.Scheme); err != nil {
+		return fmt.Errorf("set cfg HPA owner ref: %w", err)
+	}
+	existing := &autoscalingv2.HorizontalPodAutoscaler{ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace}}
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, existing, func() error {
+		existing.Labels = desired.Labels
+		existing.Spec = desired.Spec
+		return controllerutil.SetControllerReference(mdbsh, existing, r.Scheme)
+	})
+	if err != nil {
+		return fmt.Errorf("apply cfg HPA: %w", err)
+	}
+	if op != controllerutil.OperationResultNone {
+		log.FromContext(ctx).Info("ConfigServer HPA reconciled", "operation", op, "minReplicas", *desired.Spec.MinReplicas, "maxReplicas", desired.Spec.MaxReplicas)
 	}
 	return nil
 }
