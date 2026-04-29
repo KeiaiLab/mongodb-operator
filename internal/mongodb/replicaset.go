@@ -97,28 +97,52 @@ func NewReplicaSetManagerWithPort(port int) (*ReplicaSetManager, error) {
 // replSetGetStatus에서 반환하는 server error code이다.
 const notYetInitializedCode int32 = 94
 
-// IsInitialized checks if the replica set is already initialized.
+// helloNoConfigInfoSubstr는 mongod이 RS init 전(`--replSet`로 떠 있으나
+// replSetInitiate 미수신) 상태에서 hello 응답에 포함시키는 info 문구다.
+// mongo 4.x ~ 8.x 일관 — server 메시지 변경 시 회귀 가드 단위 테스트가 잡는다.
+const helloNoConfigInfoSubstr = "valid replica set config"
+
+// IsInitialized는 RS 멤버 등록 여부를 hello 명령으로 판정한다.
+//
+// 왜 hello인가 — replSetGetStatus는 인증 활성 mongod에서 user 0명일 때조차
+// Unauthorized(13)/AuthenticationFailed(18)/NotYetInitialized(94) 중 어떤 것이든
+// 반환할 수 있어 *서버 빌드/구성에 따라 분류 모호*. hello는 인증 비활성이고
+// pre-init 상태와 RSGhost(config propagate 진행) 상태를 명확히 구분한다.
+//
+// 판정 규칙(mongo 4.x ~ 8.x 공통):
+//   - hello.info == "Does not have a valid replica set config"  → not initialized
+//   - hello.setName 존재                                          → initialized
+//   - 그 외(RSGhost transient, error)                              → not initialized
+//
+// RSGhost 상태(setName 부재 + info 무관) 또한 *멤버 정의 미수신*이므로 init
+// 미완료로 본다. 이는 controller에 "한 번 더 시도하라"는 안전한 시그널이며,
+// `Initiate`가 idempotent이므로 false positive 비용이 없다.
+//
+// 본 구현은 이전(replSetGetStatus 기반 + Unauthorized→true 분류)이 fresh
+// mongod의 pre-init unauthenticated 응답을 init-completed로 잘못 분류해
+// `Status.ReplicaSetInitialized=true`를 영속화시킨 회귀(2026-04-29)를 봉쇄한다.
 func (r *ReplicaSetManager) IsInitialized(ctx context.Context, podName, namespace string) (bool, error) {
 	c, err := r.connect(ctx, podName, namespace, true)
 	if err != nil {
-		// 인증 실패 등 connect 자체의 에러는 not-initialized로 단정할 수 없으므로 error 전파.
 		return false, fmt.Errorf("connect for IsInitialized: %w", err)
 	}
 	defer disconnectQuiet(c)
 
-	var result bson.M
-	err = c.Database("admin").RunCommand(ctx, bson.D{{Key: "replSetGetStatus", Value: 1}}).Decode(&result)
-	if err != nil {
-		var cmdErr mongo.ServerError
-		if errors.As(err, &cmdErr) && cmdErr.HasErrorCode(int(notYetInitializedCode)) {
-			return false, nil
-		}
-		return false, fmt.Errorf("replSetGetStatus: %w", err)
+	var hello bson.M
+	if err := c.Database("admin").RunCommand(ctx, bson.D{{Key: "hello", Value: 1}}).Decode(&hello); err != nil {
+		return false, fmt.Errorf("hello: %w", err)
 	}
-	if okFloat(result["ok"]) == 1 {
-		return true, nil
+	return classifyHelloForRSInit(hello), nil
+}
+
+// classifyHelloForRSInit는 hello 응답에서 RS init 완료 여부를 판정한다.
+// 단위 테스트로 분기 표를 회귀 가드한다.
+func classifyHelloForRSInit(hello bson.M) bool {
+	if info, ok := hello["info"].(string); ok && strings.Contains(info, helloNoConfigInfoSubstr) {
+		return false
 	}
-	return false, nil
+	_, hasSetName := hello["setName"]
+	return hasSetName
 }
 
 // Initiate initializes a new replica set with the given config (idempotent).
@@ -343,9 +367,31 @@ func BuildShardReplicaSetConfig(shardName, baseName, serviceName, namespace stri
 
 // NewPodConnectFactory는 controller가 흔히 만드는 ConnectFactory를 한 줄로 만든다.
 // serviceName/port/자격증명을 closure에 캡슐화해 podName, namespace만 받는 형태로 노출한다.
+//
+// 이 패턴은 *headless service + StatefulSet* (RS / cfg / shard) 전용이다 — pod의
+// 안정 hostname `<pod>.<svc>.<ns>...`을 DNS로 해석한다.
 func NewPodConnectFactory(serviceName string, port int, username, password, authDB string) ConnectFactory {
 	return func(ctx context.Context, podName, namespace string, direct bool) (*mongo.Client, error) {
 		host := GetPodFQDN(podName, serviceName, namespace, port)
+		return NewClient(ctx, ConnectOpts{
+			Hosts:    []string{host},
+			Username: username,
+			Password: password,
+			AuthDB:   authDB,
+			Direct:   direct,
+		})
+	}
+}
+
+// NewServiceConnectFactory는 ClusterIP/headless Service DNS로 connect하는
+// ConnectFactory다. mongos(Deployment + ClusterIP)처럼 안정된 pod hostname이
+// 없는 컴포넌트에 사용한다.
+//
+// host 형식: `<serviceName>.<namespace>.svc.cluster.local:<port>`. podName/namespace
+// 인자는 무시한다(ConnectFactory 시그니처 호환을 위해 받는다).
+func NewServiceConnectFactory(serviceName, namespace string, port int, username, password, authDB string) ConnectFactory {
+	host := fmt.Sprintf("%s.%s.svc.cluster.local:%d", serviceName, namespace, port)
+	return func(ctx context.Context, _, _ string, direct bool) (*mongo.Client, error) {
 		return NewClient(ctx, ConnectOpts{
 			Hosts:    []string{host},
 			Username: username,

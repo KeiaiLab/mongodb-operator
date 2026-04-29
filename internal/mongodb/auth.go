@@ -15,24 +15,43 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-// BootstrapAdminUser는 RS init 직후 primary에 익명 connect로 접속해
-// 첫 admin user를 생성한다. 이 시점은 mongod이 --auth + --replSet으로 실행
-// 중이지만 user가 0명이라 익명 접근이 허용되는 유일한 창. createUser 후엔
-// 모든 connect가 SCRAM 인증 필요.
+// BootstrapAdminUser는 RS init 직후 첫 admin user를 생성한다. mongod이
+// --auth + --replSet으로 실행 중이지만 user가 0명이라 localhost-exception이
+// 살아있는 좁은 창에서만 성공. createUser 후엔 모든 connect가 SCRAM 인증 필요.
 //
-// 멱등성: user가 이미 있으면(`already exists`) skip. 익명 호출이 인증
-// 요구를 받으면(`requires authentication` / `Authentication failed`)
-// 이미 user가 존재한다는 강한 신호이므로 동일하게 nil 반환.
+// 라우팅: Direct=false로 anon connect — driver가 firstHost를 seed로 RS
+// topology를 discovery한 뒤 createUser write를 자동 primary 라우팅한다.
+// 이는 두 가지 이유로 직접 primary 추적 방식보다 우월하다.
 //
-// 호출자는 firstHost를 RS의 임의 멤버 FQDN으로 전달. primary 추적은 내부
-// 책임. roles는 admin DB의 root.
+//  1. 0-user 상태에서 익명 replSetGetStatus는 mongod 빌드/구성에 따라
+//     Unauthorized로 거부될 수 있다. preflight를 거치지 않고 곧장 createUser를
+//     던지면 localhost-exception 창을 정확히 활용한다.
+//  2. primary가 first pod이 아닐 때 직접 primary 추적은 1회 실패 위험을
+//     도입한다. driver의 server selection은 정상 RS topology에서 ms 단위로
+//     primary를 찾는다.
+//
+// 멱등성:
+//   - user가 이미 존재 → idempotent skip (UserAlreadyExists / DuplicateKey).
+//   - 익명 connect/discovery가 인증 요구로 거부 → user가 이미 있고
+//     localhost-exception이 닫힌 상태로 추정, idempotent skip.
+//   - createUser 자체가 인증 요구로 거부 → 동일하게 idempotent skip.
+//
+// 호출자는 firstHost를 RS의 임의 멤버 FQDN(host:port)으로 전달. roles는
+// admin DB의 root.
 func BootstrapAdminUser(ctx context.Context, firstHost, username, password string) error {
-	anonClient, err := NewClient(ctx, ConnectOpts{Hosts: []string{firstHost}, Direct: true})
+	// Timeout=25s — fresh RS의 primary 선출(보통 5–10s)을 기다리며 driver의
+	// server selection이 PRIMARY를 찾을 수 있도록 default(10s)보다 충분히 길게.
+	anonClient, err := NewClient(ctx, ConnectOpts{
+		Hosts:   []string{firstHost},
+		Direct:  false,
+		Timeout: 25 * time.Second,
+	})
 	if err != nil {
 		if isAuthRequiredErr(err) {
 			return nil
@@ -41,42 +60,14 @@ func BootstrapAdminUser(ctx context.Context, firstHost, username, password strin
 	}
 	defer disconnectQuiet(anonClient)
 
-	var status ReplicaSetStatus
-	if err := anonClient.Database("admin").RunCommand(ctx, bson.D{{Key: "replSetGetStatus", Value: 1}}).Decode(&status); err != nil {
-		if isAuthRequiredErr(err) {
-			return nil
-		}
-		return fmt.Errorf("rs.status: %w", err)
-	}
-
-	var primaryHost string
-	for _, m := range status.Members {
-		if m.StateStr == "PRIMARY" && m.Health == 1 {
-			primaryHost = m.Name
-			break
-		}
-	}
-	if primaryHost == "" {
-		return fmt.Errorf("no primary member in rs status")
-	}
-
-	primaryClient, err := NewClient(ctx, ConnectOpts{Hosts: []string{primaryHost}, Direct: true})
-	if err != nil {
-		if isAuthRequiredErr(err) {
-			return nil
-		}
-		return fmt.Errorf("primary connect: %w", err)
-	}
-	defer disconnectQuiet(primaryClient)
-
 	var res bson.M
-	err = primaryClient.Database("admin").RunCommand(ctx, bson.D{
+	err = anonClient.Database("admin").RunCommand(ctx, bson.D{
 		{Key: "createUser", Value: username},
 		{Key: "pwd", Value: password},
 		{Key: "roles", Value: bson.A{bson.M{"role": "root", "db": "admin"}}},
 	}).Decode(&res)
 	if err != nil {
-		if isUserAlreadyExistsErr(err) {
+		if isUserAlreadyExistsErr(err) || isAuthRequiredErr(err) {
 			return nil
 		}
 		return fmt.Errorf("createUser: %w", err)
@@ -93,6 +84,12 @@ const (
 	mongoErrDuplicateKey         = 11000
 	mongoErrUserAlreadyExists    = 51003
 )
+
+// IsAuthRequiredErr는 isAuthRequiredErr의 export wrapper. controller 패키지에서
+// pre-bootstrap primary 체크 분기 결정에 사용 (ADR-0005 보강).
+func IsAuthRequiredErr(err error) bool {
+	return isAuthRequiredErr(err)
+}
 
 // isAuthRequiredErr는 connect/command가 인증 요구·실패로 거부됐는지 검사한다.
 // typed mongo.ServerError로 wrapping된 경우 code(13/18)를 우선 보고, TLS

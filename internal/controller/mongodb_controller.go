@@ -155,21 +155,49 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// 8. Wait for primary election.
-	// hasPrimary err가 nil이면서 false인 경우(정상 미선출): 단순 대기 후 requeue.
-	// err non-nil(connect/auth/network 실패): silent로 두면 운영자가 진단 불가하므로
-	// PrimaryUnreachable condition을 status에 기록하고 requeue.
-	hasPrimary, err := r.hasPrimary(ctx, mdb)
-	if err != nil {
-		logger.Info("Primary unreachable, will retry", "error", err)
-		r.setPrimaryUnreachableCondition(ctx, mdb, err)
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	}
-	if !hasPrimary {
-		logger.Info("Waiting for primary election")
+	//
+	// post-bootstrap(`AdminUserCreated=true`)은 인증 매니저로 정상 체크.
+	//
+	// pre-bootstrap(`AdminUserCreated=false`)에서는 익명 매니저로 검사하되
+	// auth 거부(Unauthorized/AuthenticationFailed)는 *step 9 부트스트랩 진행*
+	// 시그널로 해석한다 — RS가 이미 auth-on이라 익명으로 status를 못 읽는
+	// 정상 케이스(부트스트랩 중단/외부 init/postStart hook 선행)이며,
+	// `BootstrapAdminUser`가 driver의 server selection으로 primary 자동 라우팅을
+	// 처리한다. 그 외 정상 미선출(election 진행 중)은 단순 requeue, connect/network
+	// 실패는 PrimaryUnreachable condition으로 진단성 표면화 후 requeue.
+	if mdb.Status.AdminUserCreated {
+		hasPrimary, err := r.hasPrimary(ctx, mdb)
+		if err != nil {
+			logger.Info("Primary unreachable, will retry", "error", err)
+			r.setPrimaryUnreachableCondition(ctx, mdb, err)
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
+		if !hasPrimary {
+			logger.Info("Waiting for primary election")
+			r.clearPrimaryUnreachableCondition(ctx, mdb)
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
 		r.clearPrimaryUnreachableCondition(ctx, mdb)
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	} else {
+		anonMgr := r.newAnonRSManager(mdb)
+		firstPod := fmt.Sprintf("%s-0", mdb.Name)
+		hasPrimary, err := anonMgr.HasPrimary(ctx, firstPod, mdb.Namespace)
+		switch {
+		case err != nil && mongodb.IsAuthRequiredErr(err):
+			// auth-on RS — primary 알 수 없지만 부트스트랩 진행 가능.
+			r.clearPrimaryUnreachableCondition(ctx, mdb)
+		case err != nil:
+			logger.Info("Primary unreachable (pre-bootstrap), will retry", "error", err)
+			r.setPrimaryUnreachableCondition(ctx, mdb, err)
+			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		case !hasPrimary:
+			logger.Info("Waiting for primary election (pre-bootstrap)")
+			r.clearPrimaryUnreachableCondition(ctx, mdb)
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		default:
+			r.clearPrimaryUnreachableCondition(ctx, mdb)
+		}
 	}
-	r.clearPrimaryUnreachableCondition(ctx, mdb)
 
 	// 9. Create admin user if not created
 	if !mdb.Status.AdminUserCreated {

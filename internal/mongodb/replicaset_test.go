@@ -22,7 +22,77 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
+
+// TestClassifyHelloForRSInit는 IsInitialized의 hello 응답 분류 분기를 검증한다.
+// 회귀 가드 대상: replSetGetStatus 기반 분류가 fresh mongod의 pre-init
+// unauthenticated 응답을 init-completed로 잘못 분류해 `Status.ReplicaSetInitialized
+// =true`를 영속화시킨 회귀(2026-04-29). hello.info / setName 두 필드만으로
+// 정확히 분류되는지 매트릭스 검증.
+func TestClassifyHelloForRSInit(t *testing.T) {
+	cases := []struct {
+		name string
+		resp bson.M
+		want bool
+	}{
+		{
+			name: "pre-init: --replSet but no config received yet",
+			resp: bson.M{
+				"isWritablePrimary": false,
+				"secondary":         false,
+				"info":              "Does not have a valid replica set config",
+				"isreplicaset":      true,
+				"ok":                1.0,
+			},
+			want: false,
+		},
+		{
+			name: "primary: setName present, isWritablePrimary true",
+			resp: bson.M{
+				"setName":           "rs0",
+				"isWritablePrimary": true,
+				"secondary":         false,
+				"ok":                1.0,
+			},
+			want: true,
+		},
+		{
+			name: "secondary: setName present, secondary true",
+			resp: bson.M{
+				"setName":           "rs0",
+				"isWritablePrimary": false,
+				"secondary":         true,
+				"ok":                1.0,
+			},
+			want: true,
+		},
+		{
+			name: "RSGhost transient (config propagate 진행) — init 미완료로 간주",
+			resp: bson.M{
+				"isWritablePrimary": false,
+				"secondary":         false,
+				"isreplicaset":      true,
+				"ok":                1.0,
+			},
+			want: false,
+		},
+		{
+			name: "standalone mongod (--replSet 없음) — init 무관 false",
+			resp: bson.M{
+				"isWritablePrimary": true,
+				"ok":                1.0,
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, classifyHelloForRSInit(tc.resp))
+		})
+	}
+}
 
 func TestBuildReplicaSetConfig(t *testing.T) {
 	tests := []struct {
