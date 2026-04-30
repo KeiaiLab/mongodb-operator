@@ -79,7 +79,7 @@ None. This is a major release representing stabilization of the project with all
 
 ### Helm Repository
 ```bash
-helm repo add mongodb-operator https://eightynine01.github.io/mongodb-operator
+helm repo add mongodb-operator https://keiailab.github.io/mongodb-operator
 helm repo update
 
 helm install mongodb-operator mongodb-operator/mongodb-operator \
@@ -175,7 +175,7 @@ gh release upload v1.0.0 \
 
 ```bash
 # Helm 차트 패키징 (이미 gh-pages에 있음)
-curl -LO https://eightynine01.github.io/mongodb-operator/mongodb-operator-1.0.0.tgz
+curl -LO https://keiailab.github.io/mongodb-operator/mongodb-operator-1.0.0.tgz
 
 # 릴리스에 업로드
 gh release upload v1.0.0 mongodb-operator-1.0.0.tgz

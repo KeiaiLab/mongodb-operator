@@ -24,14 +24,14 @@ MongoDB Operator는 다음 단계를 통해 자동으로 Artifact Hub에 게시�
 
 ```bash
 # Helm 레포지토리 인덱스 확인
-curl -s https://eightynine01.github.io/mongodb-operator/index.yaml | grep -A 10 "version: 1.0.0"
+curl -s https://keiailab.github.io/mongodb-operator/index.yaml | grep -A 10 "version: 1.0.0"
 
 # 예상 출력:
 #   version: 1.0.0
 #   created: "2026-01-22T12:17:01Z"
 #   digest: sha256:...
 #   urls:
-#   - https://eightynine01.github.io/mongodb-operator/mongodb-operator-1.0.0.tgz
+#   - https://keiailab.github.io/mongodb-operator/mongodb-operator-1.0.0.tgz
 ```
 
 ### 2. Artifact Hub 웹 페이지 확인
@@ -64,7 +64,7 @@ curl -s https://eightynine01.github.io/mongodb-operator/index.yaml | grep -A 10 
 
 ```bash
 # Helm 레포지토리 추가
-helm repo add mongodb-operator https://eightynine01.github.io/mongodb-operator
+helm repo add mongodb-operator https://keiailab.github.io/mongodb-operator
 helm repo update
 
 # v1.0.0 버전 확인
@@ -115,7 +115,7 @@ git fetch origin gh-pages
 git log origin/gh-pages --oneline | head -5
 
 # 2. index.yaml에 버전 확인
-curl -s https://eightynine01.github.io/mongodb-operator/index.yaml | grep "version: 1.0.0"
+curl -s https://keiailab.github.io/mongodb-operator/index.yaml | grep "version: 1.0.0"
 
 # 3. 60분 후에도 표시되지 않으면, Artifact Hub에 문의
 # https://github.com/artifacthub/hub/issues
@@ -160,7 +160,7 @@ rm -rf ~/.cache/helm/repository/*
 
 # 레포지토리 재추가
 helm repo remove mongodb-operator
-helm repo add mongodb-operator https://eightynine01.github.io/mongodb-operator
+helm repo add mongodb-operator https://keiailab.github.io/mongodb-operator
 helm repo update
 ```
 

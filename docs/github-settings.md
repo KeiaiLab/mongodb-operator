@@ -48,7 +48,7 @@ A Kubernetes Operator for deploying and managing MongoDB ReplicaSets and Sharded
 ### Social Preview Settings
 
 - **Description**: MongoDB Operator for Kubernetes - Deploy and manage MongoDB clusters with ease
-- **Website**: `https://eightynine01.github.io/mongodb-operator/` (when docs are published)
+- **Website**: `https://keiailab.github.io/mongodb-operator/` (when docs are published)
 - **Topics**: As listed above
 
 ---

@@ -15,7 +15,7 @@ Before deploying MongoDB Operator, ensure you have:
 
 ```bash
 # Add the Helm repository
-helm repo add mongodb-operator https://eightynine01.github.io/mongodb-operator
+helm repo add mongodb-operator https://keiailab.github.io/mongodb-operator
 helm repo update
 
 # Install the operator in a dedicated namespace

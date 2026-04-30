@@ -51,6 +51,27 @@ test: manifests generate fmt vet envtest ## Run tests.
 test-unit: fmt vet ## Run unit tests only (no envtest required).
 	go test -race ./internal/resources/... ./internal/mongodb/... -coverprofile cover-unit.out
 
+.PHONY: helm-publish
+helm-publish: ## Publish helm chart to gh-pages (RFC 0002 helm-publish.yml 대체 로컬 자동화).
+	@echo "=== helm package ==="
+	@mkdir -p /tmp/release
+	helm package charts/mongodb-operator -d /tmp/release/
+	@echo "=== gh-pages worktree ==="
+	@mkdir -p /tmp/ghpages-publish
+	@if [ ! -d /tmp/ghpages-publish/gh-pages ]; then \
+		cd /tmp/ghpages-publish && git clone --branch gh-pages --single-branch git@github.com:keiailab/mongodb-operator.git gh-pages; \
+	else \
+		cd /tmp/ghpages-publish/gh-pages && git fetch origin gh-pages && git reset --hard origin/gh-pages; \
+	fi
+	@echo "=== copy chart + regen index ==="
+	cp /tmp/release/mongodb-operator-*.tgz /tmp/ghpages-publish/gh-pages/
+	cd /tmp/ghpages-publish/gh-pages && helm repo index . --merge index.yaml --url https://keiailab.github.io/mongodb-operator
+	@echo "=== commit + push ==="
+	@cd /tmp/ghpages-publish/gh-pages && git add -A && \
+		(git diff --cached --quiet || git commit -m "chore(helm): publish $$(grep -E '^version' $(CURDIR)/charts/mongodb-operator/Chart.yaml | awk '{print $$2}')" ) && \
+		git push origin gh-pages
+	@echo "✓ Helm chart published. ArtifactHub은 ~30분 내 인덱싱."
+
 .PHONY: setup
 setup: ## RFC 0002 로컬 게이트 설치 (pre-commit + pre-push hook).
 	@command -v pre-commit >/dev/null 2>&1 || { echo "pre-commit not installed: pip install pre-commit"; exit 1; }
