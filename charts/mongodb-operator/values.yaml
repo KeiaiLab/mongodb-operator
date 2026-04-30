@@ -179,10 +179,11 @@ extraVolumes: []
 # enable=true로 켤 경우 운영자가 잔여 위험을 인지한 것으로 간주됨 (CHANGELOG 참조).
 # ----------------------------------------------------------------------------
 features:
-  # Sharded 모드 — v1.3.0 HPA 통합 후 ConfigServer init/HPA ordering 미해결 (P1).
-  # mongos.total/ready status 정합성 깨짐 사례 24h 재현. 베타 미지원.
+  # Sharded 모드 — v1.4.1에서 P1 2건 fix (HPA ordering + status truth source).
+  # ADR-0010 참조. 베타 carve-out 종료. 운영 권장 path는 ReplicaSet이지만
+  # Sharded는 모든 게이트(테스트·24h soak)를 통과해 default-on.
   sharded:
-    enabled: false
+    enabled: true
   # Backup 컨트롤러 — 자동 테스트 0건. connectionString 평문 노출(P0). 베타 미지원.
   backup:
     enabled: false

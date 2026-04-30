@@ -156,17 +156,6 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.updateStatusError(ctx, mdbsh, "NetworkPolicies", err)
 	}
 
-	// 6.7. Mongos HPA (opt-in via Spec.Mongos.AutoScaling.Enabled — ADR-0007)
-	if err := r.reconcileMongosHPA(ctx, mdbsh); err != nil {
-		return r.updateStatusError(ctx, mdbsh, "MongosHPA", err)
-	}
-
-	// 6.8. ConfigServer HPA (opt-in via Spec.ConfigServer.AutoScaling.Enabled +
-	// ScalePolicy.Deliberate — ADR-0008/0009 이중 가드)
-	if err := r.reconcileConfigServerHPA(ctx, mdbsh); err != nil {
-		return r.updateStatusError(ctx, mdbsh, "ConfigServerHPA", err)
-	}
-
 	// 7. Initialize Config Server replica set.
 	// 이전: 모든 단계가 silent. 운영자는 cfg server가 "no replset config"로
 	// 영구 멈춰도 conditions에서 인지 불가. updateStatusError로 ReconcileError
@@ -207,6 +196,21 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// 11. Add shards to cluster — reconcileAddShards도 errors.Join 누적 패턴.
 	if err := r.reconcileAddShards(ctx, mdbsh); err != nil {
 		return r.updateStatusError(ctx, mdbsh, "AddShards", err)
+	}
+
+	// 11.5. Mongos HPA (opt-in via Spec.Mongos.AutoScaling.Enabled — ADR-0007).
+	// v1.4.1: ConfigServer/Shards rs.initiate + mongos ready + admin user + addShards
+	// 모두 완료된 *후*에만 HPA 활성화. 이전(v1.3.0~v1.4.0)에는 단계 6.7/6.8에서
+	// HPA를 먼저 만들어 cfg RS 미초기화 상태의 mongos crashloop pod를 HPA가
+	// metric 으로 sample 해 잘못된 스케일링이 발생했다(P1).
+	if err := r.reconcileMongosHPA(ctx, mdbsh); err != nil {
+		return r.updateStatusError(ctx, mdbsh, "MongosHPA", err)
+	}
+
+	// 11.6. ConfigServer HPA (opt-in via Spec.ConfigServer.AutoScaling.Enabled +
+	// ScalePolicy.Deliberate — ADR-0008/0009 이중 가드).
+	if err := r.reconcileConfigServerHPA(ctx, mdbsh); err != nil {
+		return r.updateStatusError(ctx, mdbsh, "ConfigServerHPA", err)
 	}
 
 	// 12. Update status
@@ -289,6 +293,23 @@ func (r *MongoDBShardedReconciler) reconcileShardScriptsConfigMap(ctx context.Co
 		return nil
 	}
 	return applyConfigMap(ctx, r.Client, r.Scheme, mdbsh, resources.BuildShardScriptsConfigMap(mdbsh, shardIndex))
+}
+
+// areShardsInitialized는 모든 shard의 rs.initiate가 완료됐는지 검사한다.
+// v1.4.1 HPA readiness gate에서 사용 — Status.ShardsInitialized 슬라이스의
+// 길이가 spec.Shards.Count와 일치하고 모든 인덱스가 true여야 한다.
+// reconcileShardsInit이 인덱스별로 true를 누적하므로 부분 초기화 상태를
+// (false) 로 안전하게 보고한다.
+func (r *MongoDBShardedReconciler) areShardsInitialized(mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
+	if int32(len(mdbsh.Status.ShardsInitialized)) < mdbsh.Spec.Shards.Count {
+		return false
+	}
+	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
+		if !mdbsh.Status.ShardsInitialized[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *MongoDBShardedReconciler) areShardsReady(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
@@ -612,17 +633,29 @@ func (r *MongoDBShardedReconciler) getAdminPassword(ctx context.Context, mdbsh *
 }
 
 func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+	// v1.4.1 status truth source 분기:
+	// HPA active 컴포넌트는 .spec.replicas의 owner가 HPA controller로 넘어가므로
+	// Total을 mdbsh.Spec.X.Replicas에서 읽으면 영구 divergence가 발생한다(P1).
+	// HPA active 시 obj.Spec.Replicas (HPA가 patch한 desired), inactive 시
+	// CR.Spec을 source-of-truth로 사용한다.
+
 	// Update ConfigServer status
 	cfgSts := &appsv1.StatefulSet{}
 	if err := r.Get(ctx, types.NamespacedName{Name: mdbsh.Name + "-cfg", Namespace: mdbsh.Namespace}, cfgSts); err == nil {
+		cfgTotal := mdbsh.Spec.ConfigServer.Members
+		if resources.IsConfigServerHPAActive(mdbsh) && cfgSts.Spec.Replicas != nil {
+			cfgTotal = *cfgSts.Spec.Replicas
+		}
 		mdbsh.Status.ConfigServer = mongodbv1alpha1.ComponentStatus{
 			Ready: cfgSts.Status.ReadyReplicas,
-			Total: mdbsh.Spec.ConfigServer.Members,
-			Phase: r.getComponentPhase(cfgSts.Status.ReadyReplicas, mdbsh.Spec.ConfigServer.Members),
+			Total: cfgTotal,
+			Phase: r.getComponentPhase(cfgSts.Status.ReadyReplicas, cfgTotal),
 		}
+	} else if !errors.IsNotFound(err) {
+		return fmt.Errorf("get cfg statefulset for status: %w", err)
 	}
 
-	// Update Shards status
+	// Update Shards status (shard는 HPA 미지원이므로 분기 불필요)
 	mdbsh.Status.Shards = []mongodbv1alpha1.ShardStatus{}
 	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
 		shardSts := &appsv1.StatefulSet{}
@@ -634,17 +667,25 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 				Total: mdbsh.Spec.Shards.MembersPerShard,
 				Phase: r.getComponentPhase(shardSts.Status.ReadyReplicas, mdbsh.Spec.Shards.MembersPerShard),
 			})
+		} else if !errors.IsNotFound(err) {
+			return fmt.Errorf("get shard %d statefulset for status: %w", i, err)
 		}
 	}
 
 	// Update Mongos status
 	mongosDeploy := &appsv1.Deployment{}
 	if err := r.Get(ctx, types.NamespacedName{Name: mdbsh.Name + "-mongos", Namespace: mdbsh.Namespace}, mongosDeploy); err == nil {
+		mongosTotal := mdbsh.Spec.Mongos.Replicas
+		if resources.IsMongosHPAActive(mdbsh) && mongosDeploy.Spec.Replicas != nil {
+			mongosTotal = *mongosDeploy.Spec.Replicas
+		}
 		mdbsh.Status.Mongos = mongodbv1alpha1.ComponentStatus{
 			Ready: mongosDeploy.Status.ReadyReplicas,
-			Total: mdbsh.Spec.Mongos.Replicas,
-			Phase: r.getComponentPhase(mongosDeploy.Status.ReadyReplicas, mdbsh.Spec.Mongos.Replicas),
+			Total: mongosTotal,
+			Phase: r.getComponentPhase(mongosDeploy.Status.ReadyReplicas, mongosTotal),
 		}
+	} else if !errors.IsNotFound(err) {
+		return fmt.Errorf("get mongos deployment for status: %w", err)
 	}
 
 	// Update overall phase
@@ -683,12 +724,22 @@ func (r *MongoDBShardedReconciler) isClusterReady(mdbsh *mongodbv1alpha1.MongoDB
 		return false
 	}
 	// Spec=0이면 잘못된 설정 — never ready.
-	if mdbsh.Spec.ConfigServer.Members <= 0 ||
-		mdbsh.Status.ConfigServer.Ready != mdbsh.Spec.ConfigServer.Members {
+	// HPA active 시 ready 판정 기준은 Spec.Replicas(절대값)가 아니라 *현재
+	// Status.Total*(=HPA가 patch한 desired). HPA가 traffic 변동에 따라 scale-up/
+	// down 한 직후에도 ready가 정확히 desired와 일치하면 cluster ready로 본다.
+	// (이전 v1.4.0에서는 Spec.Replicas 고정 비교 → HPA scale-down 후 영구 Initializing)
+	cfgTarget := mdbsh.Spec.ConfigServer.Members
+	if resources.IsConfigServerHPAActive(mdbsh) && mdbsh.Status.ConfigServer.Total > 0 {
+		cfgTarget = mdbsh.Status.ConfigServer.Total
+	}
+	if cfgTarget <= 0 || mdbsh.Status.ConfigServer.Ready != cfgTarget {
 		return false
 	}
-	if mdbsh.Spec.Mongos.Replicas <= 0 ||
-		mdbsh.Status.Mongos.Ready != mdbsh.Spec.Mongos.Replicas {
+	mongosTarget := mdbsh.Spec.Mongos.Replicas
+	if resources.IsMongosHPAActive(mdbsh) && mdbsh.Status.Mongos.Total > 0 {
+		mongosTarget = mdbsh.Status.Mongos.Total
+	}
+	if mongosTarget <= 0 || mdbsh.Status.Mongos.Ready != mongosTarget {
 		return false
 	}
 	if mdbsh.Spec.Shards.MembersPerShard <= 0 {
@@ -832,6 +883,14 @@ func (r *MongoDBShardedReconciler) reconcileMongosHPA(ctx context.Context, mdbsh
 	if !r.EnableAutoscaling {
 		return nil
 	}
+	// v1.4.1 readiness gate: ConfigServer + 모든 Shard의 rs.initiate가 완료된
+	// 후에만 HPA를 활성화한다. Reconcile()의 단계 순서가 RS init → HPA로 보장
+	// 되지만, 외부 호출/재진입/순서 리팩터링 회귀를 방어하기 위한 이중 가드.
+	// gate fail 시 nil 반환 — 다음 reconcile에서 자연 재시도되며, 기존 HPA가
+	// 있다면 *유지*된다(삭제하면 stable cluster의 replica를 흔든다).
+	if !mdbsh.Status.ConfigServerInitialized || !r.areShardsInitialized(mdbsh) {
+		return nil
+	}
 	desired := resources.BuildMongosHPA(mdbsh)
 	if desired == nil {
 		// disabled — 기존 HPA 정리
@@ -871,6 +930,12 @@ func (r *MongoDBShardedReconciler) reconcileMongosHPA(ctx context.Context, mdbsh
 // 강제하므로 별도 검사 없이 builder 결과 nil/non-nil로 분기.
 func (r *MongoDBShardedReconciler) reconcileConfigServerHPA(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
 	if !r.EnableAutoscaling {
+		return nil
+	}
+	// v1.4.1 readiness gate: cfg HPA는 cfg RS의 PRIMARY 선출이 완료된 후에만
+	// 의미가 있다. ConfigServerInitialized=false면 HPA가 기존 STS에 부착되어
+	// crashloop pod의 metric을 sample하므로 부정확한 스케일링 발생.
+	if !mdbsh.Status.ConfigServerInitialized {
 		return nil
 	}
 	desired := resources.BuildConfigServerHPA(mdbsh)
@@ -984,6 +1049,11 @@ func (r *MongoDBShardedReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Recorder == nil {
 		r.Recorder = mgr.GetEventRecorderFor("mongodbsharded-controller")
 	}
+	// v1.4.1 P1 fix: HPA를 Owns에 등록한다. 누락 시 controller-runtime 의 default
+	// cached reader가 HPA informer를 lazy 생성 시도 → cache sync wait timeout
+	// (default 2분) → r.Get(... HPA ...) 가 영구 hang. RS controller (mongodb_controller.go)
+	// 는 v1.2.0 도입 시 추가됐으나 Sharded controller는 v1.2.0 (mongos HPA) +
+	// v1.3.0 (cfg HPA) 시점에 누락. 24h soak 의 informer cache timeout 증상과 일치.
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mongodbv1alpha1.MongoDBSharded{}).
 		Owns(&appsv1.StatefulSet{}).
@@ -993,5 +1063,6 @@ func (r *MongoDBShardedReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.ConfigMap{}).
 		Owns(&policyv1.PodDisruptionBudget{}).
 		Owns(&networkingv1.NetworkPolicy{}).
+		Owns(&autoscalingv2.HorizontalPodAutoscaler{}).
 		Complete(r)
 }
