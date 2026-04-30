@@ -28,8 +28,20 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+manifests: controller-gen sync-crds ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+
+# v1.4.3 — config/crd/bases (controller-gen 출력) 와 charts/mongodb-operator/crds
+# (helm chart 번들) 의 drift 방지. v1.4.0~v1.4.2 까지 chart bundle 이 stale 한
+# 상태로 남아 status 신규 필드들이 K8s API server 에 의해 silently drop 됐고,
+# 이로 인해 reconcileAddShards 가 empty slice index panic 으로 영구 stuck.
+.PHONY: sync-crds
+sync-crds: ## Sync config/crd/bases → charts/mongodb-operator/crds (release 전 의무 — drift 차단).
+	@echo "=== sync CRD bundles (config/crd/bases → charts/mongodb-operator/crds) ==="
+	@cp config/crd/bases/mongodb.keiailab.com_mongodbs.yaml charts/mongodb-operator/crds/
+	@cp config/crd/bases/mongodb.keiailab.com_mongodbshardeds.yaml charts/mongodb-operator/crds/
+	@cp config/crd/bases/mongodb.keiailab.com_mongodbbackups.yaml charts/mongodb-operator/crds/
+	@echo "✓ CRD bundles synced"
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.

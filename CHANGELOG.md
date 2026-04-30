@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.3] - 2026-05-01
+
+Sharded P0 — Helm chart 의 bundled CRD 가 v1.x 시점에서 멈춰 있었고 (`charts/mongodb-operator/crds/*.yaml` 586 줄 vs `config/crd/bases/*.yaml` 5,858 줄, 5,272 줄 drift), 이로 인해 K8s API server 가 `Status.AdminUserCreated`/`ConfigServerInitialized`/`ShardsInitialized`/`ShardsAdded` 등 status 신규 필드를 OpenAPI schema validation 단계에서 silently drop. 결과적으로 reconcile flag 가 영구 empty 로 유지되어 `reconcileAddShards` 가 `Status.ShardsInitialized[i]` 에서 `index out of range [0] with length 0` panic, MongoDBSharded.phase=Failed 영속화. v1.4.1/v1.4.2 모두 동일 결함 (chart bundle 만 stale 했으므로 코드 fix 만으로는 무용).
+
+### Fixed
+- **Sharded P0 — Helm chart bundled CRD drift** (`charts/mongodb-operator/crds/`):
+  `config/crd/bases/*.yaml` (controller-gen 출력) 으로 모든 3 CRD (mongodbs, mongodbshardeds, mongodbbackups) 일괄 sync. 이전 chart bundle 은 v1.x 시점에 수동 복사된 후 갱신 누락. v1.4.3 부터 `make manifests` 가 `sync-crds` target 을 자동 의존성으로 호출 → drift 영구 차단.
+- **Sharded P0 — `reconcileAddShards` index panic** (`internal/controller/mongodbsharded_controller.go:537`):
+  CRD drop 으로 `Status.ShardsInitialized` 가 empty/short 일 때 `[i]` 접근 panic. 길이 가드 추가 — 미초기화 상태면 `return nil` 로 wait. CRD sync 가 root cause fix 이지만 본 가드는 향후 schema 회귀 / partial status update 시나리오 방어.
+
+### Added
+- **`make sync-crds` Makefile target**: `manifests` target 의 의존성으로 자동 호출. 향후 `controller-gen` 출력과 chart bundle 의 drift 를 release pipeline 에서 차단.
+
 ## [1.4.2] - 2026-04-30
 
 Sharded mongos Deployment 무한 reconcile fight P0 fix.
