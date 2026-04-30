@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-04-30
+
+Sharded 모드 P1 2건 fix — 베타 carve-out 종료. `features.sharded.enabled` 기본값 false → true.
+
+### Fixed
+- **Sharded P1 #3 — HPA informer cache timeout** (`SetupWithManager`):
+  Sharded controller 의 `Owns(...)` 목록에 `autoscalingv2.HorizontalPodAutoscaler` 가 누락 → controller-runtime 의 default cached reader 가 HPA informer 를 lazy 생성 시도 → cache sync wait timeout (default 2분) → `r.Get(... HPA ...)` 가 영구 hang. RS controller (`mongodb_controller.go:724`) 는 v1.2.0 도입 시 추가됐으나 Sharded 는 v1.2.0 (mongos HPA) + v1.3.0 (cfg HPA) 시점에 *누락*. v1.4.1 에서 동일 라인 추가.
+- **Sharded P1 #1 — ConfigServer init/HPA ordering** (`internal/controller/mongodbsharded_controller.go`):
+  Reconcile() 단계 6.7/6.8 (mongos/cfg HPA reconcile) 이 단계 7/8 (rs.initiate) 이전에 실행되어, HPA controller가 cfg RS 미초기화 상태의 mongos crashloop pod를 metric으로 sample → 잘못된 스케일링 발생. HPA reconcile을 단계 11.5/11.6 (AdminUser + AddShards 이후)으로 이동 + readiness gate (`Status.ConfigServerInitialized` && `areShardsInitialized()`) 이중 가드 추가.
+- **Sharded P1 #2 — Status.Mongos/ConfigServer Total 영구 divergence** (`updateStatus()`):
+  HPA active 시 `Spec.Replicas`의 owner는 HPA controller로 넘어간다(CR.Spec과 별개로 desired 변경). 이전 v1.4.0은 `Total = mdbsh.Spec.X.Replicas` hardcode → 24h soak에서 영구 divergence. v1.4.1은 HPA active 시 `obj.Spec.Replicas`, inactive 시 `CR.Spec`으로 source-of-truth 분기.
+- **`isClusterReady` HPA 호환성**: HPA가 traffic에 따라 scale 한 직후에도 cluster ready 판정 기준이 함께 따라가도록 수정 (`Status.Total` 사용). 이전엔 `Spec.Replicas` 절대값 비교 → HPA scale-down 후 영구 `Initializing` phase에 갇히는 secondary 결함.
+- **`updateStatus` silent skip 차단**: `r.Get` NotFound는 status 보존 후 skip(이전 동작 유지), transient 에러는 `errors.IsNotFound` 분기로 propagate (이전엔 모두 silent).
+
+### Added
+- **`areShardsInitialized` helper**: `Status.ShardsInitialized []bool` 슬라이스의 *모든* 인덱스가 true인지 검사. HPA readiness gate에서 사용.
+- **회귀 테스트 6 케이스** (`internal/controller/mongodbsharded_p1_unit_test.go`):
+  - `TestReconcileMongosHPA_SkipsBeforeRSInit` — gate 미충족 시 HPA 미생성
+  - `TestReconcileMongosHPA_CreatesAfterRSInit` — gate 통과 시 정상 생성 + MinReplicas 검증
+  - `TestUpdateStatus_HPAActiveUsesDeploymentSpec` — CR.Spec=2 vs Deployment.Spec=5 divergence 시나리오에서 Total=5 정확
+  - `TestUpdateStatus_HPAInactiveUsesCRSpec` — HPA inactive 시 Total=CR.Spec
+  - `TestUpdateStatus_DeploymentNotFoundDoesNotError` — NotFound silent skip
+  - `TestAreShardsInitialized` — 5 sub-case (empty/partial/all/short/zero-count)
+
+### Changed
+- **`charts/mongodb-operator/values.yaml`**: `features.sharded.enabled: false → true`. 베타 carve-out 종료.
+- **`charts/mongodb-operator/Chart.yaml`**: `prerelease: "true" → "false"`. v1.4.x line이 GA stable.
+
+### Refs
+- ADR-0010 — sharded HPA ordering + status truth source
+- 영향: Issue #1은 v1.3.0에서 HPA 통합 시점에 도입된 ordering 결함, Issue #2는 v1.2.0에서 mongos HPA 도입 시점에 도입된 truth-source 결함. v1.4.1이 양쪽 동시 해소.
+
+## [1.4.0-rc.1] - 2026-04-30
+
+Tier 1 코드 감소 리팩터링 — release-1.4 브랜치에서 7-commit 단계별 구현. `v1.3.2-beta.*` carve-out 베타 track과 분리하여 *구조 변경*을 SemVer minor bump로 외부에 신호.
+
+### Changed (RFC: Tier 1 리팩터링)
+- **`internal/mongodb/retry.go` 일괄 제거** (-80 prod, -375 test): RetryWithBackoff/RetryUntilSuccess/WaitForCondition/WaitForConditionWithBackoff/WithTimeout/WithDeadline 6 함수가 production 호출처 0건. 표준 `k8s.io/apimachinery/pkg/util/wait` + `context.WithTimeout`로 충분.
+- **`int32Ptr`/`int64Ptr`/`boolPtr` → `k8s.io/utils/ptr.To` 표준 채택** (35 사용처 일괄 교체): k8s.io/utils 의존성을 indirect → direct 승격.
+- **3 reconciler 중복 패턴 통합 (`internal/controller/helpers.go` 신규)**:
+  - `reconcileSecretIfNotExists`: keyfile Secret 멱등 생성 — RS/Sharded 99% 동일 코드 통합 (-32 LoC)
+  - `handleFinalizerCleanup`: deletionTimestamp + finalizer 패턴 — 3 reconciler 통합 (-32 LoC, type-specific cleanup은 closure로 보존)
+  - `applyErrorCondition` + `Statusable` interface: ReconcileError condition + EventRecorder Warning 발행 통합 (-32 LoC, MongoDBSharded에 EventRecorder 자동 주입 추가)
+- **bash 스크립트 외부화 (`internal/assets/scripts/*.sh.tpl` + `//go:embed`)**:
+  - `readiness.sh.tpl`, `bootstrap-admin.sh.tpl`, `backup-s3.sh.tpl`, `backup-pvc.sh.tpl` 4 템플릿 분리
+  - `text/template` 변수 주입으로 type-safe (이전 `fmt.Sprintf` 위치 인자 대비)
+  - IDE syntax highlight + shellcheck 적용 가능
+  - 5 회귀 보호 테스트 추가 (RS init 12 핵심 토큰 검증)
+
+### Added
+- **`Makefile setup` 타겟**: `make setup`이 `pre-commit install --hook-type pre-commit --hook-type pre-push`를 일괄 실행 — pre-push hook silent skip 위험 해소.
+
+### Removed
+- **`MongoDBReconciler.eventf` wrapper**: helpers.go::applyErrorCondition 통합 후 unused (staticcheck U1000) 정리.
+
+### LoC 변화 (v1.3.2-beta.6 → v1.4.0-rc.1)
+- Production Go: **8,215 → 8,088 (-127)**
+- Test Go: 미사용 retry_test.go 삭제 (-375), embed asset test 추가 (+115)
+- 가장 큰 가치는 *3 reconciler drift 위험 제거* + *bash 스크립트 외부 도구 적용 가능성*.
+
+### Migration
+- 본 RC는 v1.3.2 carve-out 정책 동일 적용 (`features.{sharded,backup,autoscaling}.enabled=false` 기본).
+- 외부 사용자 영향 0 — 모든 변경은 internal package 리팩터링.
+- 정식 1.4.0 GA는 잔여 P1 (테스트 커버리지 70%+, PodMonitor 자동 생성, PrometheusRule) 후 진행.
+
 ## [1.3.2-beta.6] - 2026-04-30
 
 Release 자동화 — `make release VERSION=v1.x.y` 단일 명령 도입.

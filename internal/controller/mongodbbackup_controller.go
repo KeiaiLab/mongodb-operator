@@ -123,25 +123,19 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 func (r *MongoDBBackupReconciler) handleDeletion(ctx context.Context, backup *mongodbv1alpha1.MongoDBBackup) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("Handling MongoDBBackup deletion")
-
-	if controllerutil.ContainsFinalizer(backup, mongodbBackupFinalizer) {
-		// Delete backup job if exists
+	// Backup Job은 OwnerReference만으로 GC되지 않으므로 명시 cleanup 필요.
+	cleanup := func(ctx context.Context) error {
 		job := &batchv1.Job{}
 		if err := r.Get(ctx, types.NamespacedName{Name: backup.Name, Namespace: backup.Namespace}, job); err == nil {
-			propagationPolicy := metav1.DeletePropagationBackground
-			if err := r.Delete(ctx, job, &client.DeleteOptions{PropagationPolicy: &propagationPolicy}); err != nil {
+			propagation := metav1.DeletePropagationBackground
+			if err := r.Delete(ctx, job, &client.DeleteOptions{PropagationPolicy: &propagation}); err != nil {
 				logger.Error(err, "Failed to delete backup job")
+				// Job 삭제 실패는 finalizer 유지 사유로는 약하므로 silently 진행 (기존 동작 보존).
 			}
 		}
-
-		// Remove finalizer
-		controllerutil.RemoveFinalizer(backup, mongodbBackupFinalizer)
-		if err := r.Update(ctx, backup); err != nil {
-			return ctrl.Result{}, err
-		}
+		return nil
 	}
-
-	return ctrl.Result{}, nil
+	return handleFinalizerCleanup(ctx, r.Client, backup, mongodbBackupFinalizer, cleanup)
 }
 
 func (r *MongoDBBackupReconciler) getClusterConnectionString(ctx context.Context, backup *mongodbv1alpha1.MongoDBBackup) (string, error) {

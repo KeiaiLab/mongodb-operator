@@ -59,14 +59,6 @@ type MongoDBReconciler struct {
 	Recorder record.EventRecorder
 }
 
-// eventf는 nil-safe wrapper — Recorder가 미주입된 단위 테스트 환경에서도 panic 없이 동작.
-func (r *MongoDBReconciler) eventf(obj *mongodbv1alpha1.MongoDB, eventType, reason, fmtStr string, args ...interface{}) {
-	if r.Recorder == nil {
-		return
-	}
-	r.Recorder.Eventf(obj, eventType, reason, fmtStr, args...)
-}
-
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs/finalizers,verbs=update
@@ -247,42 +239,15 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 }
 
 func (r *MongoDBReconciler) handleDeletion(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("Handling MongoDB deletion")
-
-	if controllerutil.ContainsFinalizer(mdb, mongodbFinalizer) {
-		// Perform cleanup logic here if needed
-
-		// Remove finalizer
-		controllerutil.RemoveFinalizer(mdb, mongodbFinalizer)
-		if err := r.Update(ctx, mdb); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-
-	return ctrl.Result{}, nil
+	log.FromContext(ctx).Info("Handling MongoDB deletion")
+	// RS는 PVC retain 정책으로 별도 cleanup 불필요 (StatefulSet OwnerReference로 GC됨).
+	return handleFinalizerCleanup(ctx, r.Client, mdb, mongodbFinalizer, nil)
 }
 
 func (r *MongoDBReconciler) reconcileKeyfileSecret(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
-	// Check if keyfile secret already exists - DO NOT regenerate if it exists
-	// Keyfile must remain constant across all pods for replica set authentication
-	existingSecret := &corev1.Secret{}
-	secretName := mdb.Name + "-keyfile"
-	err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: mdb.Namespace}, existingSecret)
-	if err == nil {
-		// Secret exists, do not update
-		return nil
-	}
-	if !apierrors.IsNotFound(err) {
-		return err
-	}
-
-	// Secret doesn't exist, create it
-	secret := resources.BuildKeyfileSecret(mdb)
-	if err := controllerutil.SetControllerReference(mdb, secret, r.Scheme); err != nil {
-		return err
-	}
-	return r.Create(ctx, secret)
+	// Keyfile은 RS 인증용 — 모든 pod에 *동일한* 값이 유지되어야 함. 멱등 helper로 통합.
+	return reconcileSecretIfNotExists(ctx, r.Client, r.Scheme, mdb, mdb.Name+"-keyfile",
+		func() *corev1.Secret { return resources.BuildKeyfileSecret(mdb) })
 }
 
 func (r *MongoDBReconciler) reconcileConfigMap(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
@@ -740,26 +705,7 @@ func filterConditionsByType(conds []metav1.Condition, t string) []metav1.Conditi
 }
 
 func (r *MongoDBReconciler) updateStatusError(ctx context.Context, mdb *mongodbv1alpha1.MongoDB, component string, err error) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	logger.Error(err, "Failed to reconcile component", "component", component)
-	r.eventf(mdb, corev1.EventTypeWarning, "ReconcileError", "Failed to reconcile %s: %v", component, err)
-
-	mdb.Status.Phase = mongodbv1alpha1.PhaseFailed
-	// 동일 type append 시 condition이 무한 누적되는 P2 버그 차단 — 항상 1건만.
-	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, "ReconcileError")
-	mdb.Status.Conditions = append(mdb.Status.Conditions, metav1.Condition{
-		Type:               "ReconcileError",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "ReconcileFailed",
-		Message:            fmt.Sprintf("Failed to reconcile %s: %v", component, err),
-	})
-
-	if statusErr := updateStatusWithRetry(ctx, r.Client, mdb); statusErr != nil {
-		logger.Error(statusErr, "Failed to update status")
-	}
-
-	return ctrl.Result{RequeueAfter: requeueAfter}, err
+	return applyErrorCondition(ctx, r.Client, mdb, component, err, r.Recorder)
 }
 
 // SetupWithManager sets up the controller with the Manager.
