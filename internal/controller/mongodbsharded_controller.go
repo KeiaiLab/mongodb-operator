@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -54,6 +55,9 @@ type MongoDBShardedReconciler struct {
 	// EnableAutoscaling 게이트 — false면 reconcileMongosHPA / reconcileConfigServerHPA가
 	// no-op로 종료. cmd/main.go의 --enable-autoscaling flag에서 주입.
 	EnableAutoscaling bool
+	// Recorder는 K8s Events 발행용. SetupWithManager에서 자동 주입.
+	// nil-safe (helpers.go::applyErrorCondition에서 nil 체크).
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbshardeds,verbs=get;list;watch;create;update;patch;delete
@@ -699,25 +703,7 @@ func (r *MongoDBShardedReconciler) isClusterReady(mdbsh *mongodbv1alpha1.MongoDB
 }
 
 func (r *MongoDBShardedReconciler) updateStatusError(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, component string, err error) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	logger.Error(err, "Failed to reconcile component", "component", component)
-
-	mdbsh.Status.Phase = mongodbv1alpha1.ShardedPhaseFailed
-	// 동일 type append 시 condition이 무한 누적되는 P2 버그 차단 — 항상 1건만.
-	mdbsh.Status.Conditions = filterConditionsByType(mdbsh.Status.Conditions, "ReconcileError")
-	mdbsh.Status.Conditions = append(mdbsh.Status.Conditions, metav1.Condition{
-		Type:               "ReconcileError",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "ReconcileFailed",
-		Message:            fmt.Sprintf("Failed to reconcile %s: %v", component, err),
-	})
-
-	if statusErr := updateStatusWithRetry(ctx, r.Client, mdbsh); statusErr != nil {
-		logger.Error(statusErr, "Failed to update status")
-	}
-
-	return ctrl.Result{RequeueAfter: requeueAfter}, err
+	return applyErrorCondition(ctx, r.Client, mdbsh, component, err, r.Recorder)
 }
 
 // reconcileScaleIn은 spec.Shards.Count < status.shardCount일 때 잉여 shard들을
@@ -995,6 +981,9 @@ func (r *MongoDBShardedReconciler) cleanupShardedNetworkPolicies(ctx context.Con
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *MongoDBShardedReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.Recorder == nil {
+		r.Recorder = mgr.GetEventRecorderFor("mongodbsharded-controller")
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mongodbv1alpha1.MongoDBSharded{}).
 		Owns(&appsv1.StatefulSet{}).

@@ -713,26 +713,7 @@ func filterConditionsByType(conds []metav1.Condition, t string) []metav1.Conditi
 }
 
 func (r *MongoDBReconciler) updateStatusError(ctx context.Context, mdb *mongodbv1alpha1.MongoDB, component string, err error) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	logger.Error(err, "Failed to reconcile component", "component", component)
-	r.eventf(mdb, corev1.EventTypeWarning, "ReconcileError", "Failed to reconcile %s: %v", component, err)
-
-	mdb.Status.Phase = mongodbv1alpha1.PhaseFailed
-	// 동일 type append 시 condition이 무한 누적되는 P2 버그 차단 — 항상 1건만.
-	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, "ReconcileError")
-	mdb.Status.Conditions = append(mdb.Status.Conditions, metav1.Condition{
-		Type:               "ReconcileError",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "ReconcileFailed",
-		Message:            fmt.Sprintf("Failed to reconcile %s: %v", component, err),
-	})
-
-	if statusErr := updateStatusWithRetry(ctx, r.Client, mdb); statusErr != nil {
-		logger.Error(statusErr, "Failed to update status")
-	}
-
-	return ctrl.Result{RequeueAfter: requeueAfter}, err
+	return applyErrorCondition(ctx, r.Client, mdb, component, err, r.Recorder)
 }
 
 // SetupWithManager sets up the controller with the Manager.
