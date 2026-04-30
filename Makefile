@@ -51,6 +51,66 @@ test: manifests generate fmt vet envtest ## Run tests.
 test-unit: fmt vet ## Run unit tests only (no envtest required).
 	go test -race ./internal/resources/... ./internal/mongodb/... -coverprofile cover-unit.out
 
+# ──────────────────────────────────────────────────────────────────────────
+# RELEASE 자동화 (RFC 0002 release.yml + helm-publish.yml 대체)
+# 사용법:
+#   make release VERSION=v1.3.2-beta.6
+#
+# 순서: gate → image build/push → git tag → tag push → GH release → helm-publish
+# 모든 단계가 PASS여야 진행. 1단계라도 실패 시 즉시 중단.
+# ──────────────────────────────────────────────────────────────────────────
+.PHONY: release
+release: ## Full release pipeline. VERSION=v1.x.y 필수 (e.g., make release VERSION=v1.3.2-beta.6).
+	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수 (예- make release VERSION=v1.3.2-beta.6)"; exit 1; fi
+	@echo "=== Step 1/6- 로컬 게이트 (lint/test/audit/validate) ==="
+	@$(MAKE) gate
+	@echo ""
+	@echo "=== Step 2/6- Chart.yaml + CHANGELOG version 일치 확인 ==="
+	@CHART_VER=$$(grep '^version:' charts/mongodb-operator/Chart.yaml | awk '{print $$2}'); \
+	TARGET_VER=$$(echo "$(VERSION)" | sed 's/^v//'); \
+	if [ "$$CHART_VER" != "$$TARGET_VER" ]; then \
+		echo "ERROR- Chart.yaml version=$$CHART_VER, but release VERSION=$$TARGET_VER"; \
+		echo "  먼저 charts/mongodb-operator/Chart.yaml 의 version + appVersion 갱신"; \
+		exit 1; \
+	fi
+	@echo "✓ Chart.yaml version=$$(echo $(VERSION) | sed 's/^v//')"
+	@echo ""
+	@echo "=== Step 3/6- Docker image build + push (linux/amd64, default builder) ==="
+	docker --context=default buildx build --platform linux/amd64 \
+		-t ghcr.io/keiailab/mongodb-operator:$(VERSION) \
+		-t ghcr.io/keiailab/mongodb-operator:$$(echo $(VERSION) | sed 's/^v//') \
+		--push .
+	@echo ""
+	@echo "=== Step 4/6- Git tag + push ==="
+	@if git tag -l $(VERSION) | grep -q .; then \
+		echo "WARN- tag $(VERSION) 이미 존재 — skip"; \
+	else \
+		git tag -a $(VERSION) -m "$(VERSION)"; \
+	fi
+	git push origin $(VERSION)
+	@echo ""
+	@echo "=== Step 5/6- GitHub Release (prerelease if -beta/-rc) ==="
+	@PREFLAG=""; \
+	case "$(VERSION)" in *beta*|*rc*|*alpha*) PREFLAG="--prerelease";; esac; \
+	if gh release view $(VERSION) -R keiailab/mongodb-operator >/dev/null 2>&1; then \
+		echo "WARN- GH release $(VERSION) 이미 존재 — skip"; \
+	else \
+		mkdir -p /tmp/release && helm package charts/mongodb-operator -d /tmp/release/; \
+		gh release create $(VERSION) -R keiailab/mongodb-operator $$PREFLAG \
+			--title "$(VERSION)" \
+			--notes "Release $(VERSION). 변경 내역은 CHANGELOG.md 참조." \
+			/tmp/release/mongodb-operator-$$(echo $(VERSION) | sed 's/^v//').tgz; \
+	fi
+	@echo ""
+	@echo "=== Step 6/6- Helm chart publish to gh-pages ==="
+	@$(MAKE) helm-publish
+	@echo ""
+	@echo "✓ Release $(VERSION) 완료"
+	@echo "  - Image- ghcr.io/keiailab/mongodb-operator:$(VERSION)"
+	@echo "  - GH Release- https://github.com/keiailab/mongodb-operator/releases/tag/$(VERSION)"
+	@echo "  - Helm Repo- helm repo update + helm search repo keiailab/mongodb-operator"
+	@echo "  - ArtifactHub은 ~30분 내 인덱스 자동 갱신"
+
 .PHONY: helm-publish
 helm-publish: ## Publish helm chart to gh-pages (RFC 0002 helm-publish.yml 대체 로컬 자동화).
 	@echo "=== helm package ==="

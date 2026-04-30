@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2-beta.6] - 2026-04-30
+
+Release 자동화 — `make release VERSION=v1.x.y` 단일 명령 도입.
+
+### Added (RFC 0002 release.yml + helm-publish.yml 대체)
+- **`Makefile release` 타겟**: 6단계 자동 pipeline.
+  1. `make gate` (lint/test/audit/validate)
+  2. Chart.yaml ↔ VERSION 일치 확인
+  3. `docker buildx build --push` (linux/amd64)
+  4. `git tag` + `git push` tag
+  5. `gh release create` (--prerelease auto-detect for beta/rc/alpha)
+  6. `make helm-publish` (gh-pages worktree + index merge + push)
+- 1단계라도 실패 시 즉시 중단. tag/release 중복 시 skip + 경고.
+
+### Verified
+- 본 v1.3.2-beta.6 release 자체가 `make release VERSION=v1.3.2-beta.6` 한 줄로 출시되어 자동화의 첫 라이브 검증 사례.
+
 ## [1.3.2-beta.5] - 2026-04-30
 
 EventRecorder 도입 + gosec G115 정합 + Makefile/pre-commit 운영 친화 개선. 1.4.0 GA P0 (관측성)을 부분 해소.
