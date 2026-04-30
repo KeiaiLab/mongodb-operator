@@ -532,9 +532,12 @@ func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh
 		mdbsh.Status.ShardsAdded = newSlice
 	}
 
-	// All shards must be initialized first
+	// All shards must be initialized first.
+	// v1.4.3: 슬라이스 길이 가드 — Status.ShardsInitialized 가 empty/short 면
+	// reconcileShardsInit 가 아직 첫 패스를 완료하지 않은 상태이므로 wait. 가드
+	// 부재 시 CRD schema drop 등으로 슬라이스가 비어 있을 때 인덱스 panic 발생.
 	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
-		if !mdbsh.Status.ShardsInitialized[i] {
+		if int(i) >= len(mdbsh.Status.ShardsInitialized) || !mdbsh.Status.ShardsInitialized[i] {
 			return nil // Wait for all shards to be initialized
 		}
 	}
