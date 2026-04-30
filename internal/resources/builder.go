@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
@@ -43,10 +44,6 @@ const (
 )
 
 // Helper functions
-func int32Ptr(i int32) *int32 { return &i }
-func int64Ptr(i int64) *int64 { return &i }
-func boolPtr(b bool) *bool    { return &b }
-
 func generateRandomKey(length int) string {
 	bytes := make([]byte, length)
 	rand.Read(bytes)
@@ -78,19 +75,19 @@ func buildResourceRequirements(spec mongodbv1alpha1.ResourcesSpec) corev1.Resour
 
 func buildDefaultSecurityContext() *corev1.PodSecurityContext {
 	return &corev1.PodSecurityContext{
-		FSGroup:      int64Ptr(999),
-		RunAsUser:    int64Ptr(999),
-		RunAsGroup:   int64Ptr(999),
-		RunAsNonRoot: boolPtr(true),
+		FSGroup:      ptr.To[int64](999),
+		RunAsUser:    ptr.To[int64](999),
+		RunAsGroup:   ptr.To[int64](999),
+		RunAsNonRoot: ptr.To(true),
 	}
 }
 
 func buildDefaultContainerSecurityContext() *corev1.SecurityContext {
 	return &corev1.SecurityContext{
-		RunAsNonRoot:             boolPtr(true),
-		RunAsUser:                int64Ptr(999),
-		AllowPrivilegeEscalation: boolPtr(false),
-		ReadOnlyRootFilesystem:   boolPtr(false),
+		RunAsNonRoot:             ptr.To(true),
+		RunAsUser:                ptr.To[int64](999),
+		AllowPrivilegeEscalation: ptr.To(false),
+		ReadOnlyRootFilesystem:   ptr.To(false),
 		Capabilities: &corev1.Capabilities{
 			Drop: []corev1.Capability{"ALL"},
 		},
@@ -241,7 +238,7 @@ func buildAdminCredentialsVolume(secretName string) corev1.Volume {
 		VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName:  secretName,
-				DefaultMode: int32Ptr(0400),
+				DefaultMode: ptr.To[int32](0400),
 			},
 		},
 	}
@@ -267,7 +264,7 @@ func buildScriptsVolume(configMapName string) corev1.Volume {
 				LocalObjectReference: corev1.LocalObjectReference{
 					Name: configMapName,
 				},
-				DefaultMode: int32Ptr(0755),
+				DefaultMode: ptr.To[int32](0755),
 			},
 		},
 	}
@@ -425,7 +422,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  mdb.Name + "-keyfile",
-					DefaultMode: int32Ptr(0400),
+					DefaultMode: ptr.To[int32](0400),
 				},
 			},
 		},
@@ -467,10 +464,10 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 				{Name: "keyfile", MountPath: "/keyfile"},
 			},
 			SecurityContext: &corev1.SecurityContext{
-				RunAsUser:                int64Ptr(999),
-				RunAsGroup:               int64Ptr(999),
-				RunAsNonRoot:             boolPtr(true),
-				AllowPrivilegeEscalation: boolPtr(false),
+				RunAsUser:                ptr.To[int64](999),
+				RunAsGroup:               ptr.To[int64](999),
+				RunAsNonRoot:             ptr.To(true),
+				AllowPrivilegeEscalation: ptr.To(false),
 			},
 		},
 	}
@@ -701,7 +698,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  mdbsh.Name + "-keyfile",
-					DefaultMode: int32Ptr(0400),
+					DefaultMode: ptr.To[int32](0400),
 				},
 			},
 		},
@@ -759,10 +756,10 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 								{Name: "keyfile", MountPath: "/keyfile"},
 							},
 							SecurityContext: &corev1.SecurityContext{
-								RunAsUser:                int64Ptr(999),
-								RunAsGroup:               int64Ptr(999),
-								RunAsNonRoot:             boolPtr(true),
-								AllowPrivilegeEscalation: boolPtr(false),
+								RunAsUser:                ptr.To[int64](999),
+								RunAsGroup:               ptr.To[int64](999),
+								RunAsNonRoot:             ptr.To(true),
+								AllowPrivilegeEscalation: ptr.To(false),
 							},
 						},
 					},
@@ -854,7 +851,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  mdbsh.Name + "-keyfile",
-					DefaultMode: int32Ptr(0400),
+					DefaultMode: ptr.To[int32](0400),
 				},
 			},
 		},
@@ -912,10 +909,10 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 								{Name: "keyfile", MountPath: "/keyfile"},
 							},
 							SecurityContext: &corev1.SecurityContext{
-								RunAsUser:                int64Ptr(999),
-								RunAsGroup:               int64Ptr(999),
-								RunAsNonRoot:             boolPtr(true),
-								AllowPrivilegeEscalation: boolPtr(false),
+								RunAsUser:                ptr.To[int64](999),
+								RunAsGroup:               ptr.To[int64](999),
+								RunAsNonRoot:             ptr.To(true),
+								AllowPrivilegeEscalation: ptr.To(false),
 							},
 						},
 					},
@@ -1159,10 +1156,10 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 								{Name: "keyfile", MountPath: "/keyfile"},
 							},
 							SecurityContext: &corev1.SecurityContext{
-								RunAsUser:                int64Ptr(999),
-								RunAsGroup:               int64Ptr(999),
-								RunAsNonRoot:             boolPtr(true),
-								AllowPrivilegeEscalation: boolPtr(false),
+								RunAsUser:                ptr.To[int64](999),
+								RunAsGroup:               ptr.To[int64](999),
+								RunAsNonRoot:             ptr.To(true),
+								AllowPrivilegeEscalation: ptr.To(false),
 							},
 						},
 					},
@@ -1184,7 +1181,7 @@ func buildMongosVolumes(mdbsh *mongodbv1alpha1.MongoDBSharded) []corev1.Volume {
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  mdbsh.Name + "-keyfile",
-					DefaultMode: int32Ptr(0400),
+					DefaultMode: ptr.To[int32](0400),
 				},
 			},
 		},
@@ -1204,7 +1201,7 @@ func buildMongosVolumes(mdbsh *mongodbv1alpha1.MongoDBSharded) []corev1.Volume {
 						LocalObjectReference: corev1.LocalObjectReference{
 							Name: mdbsh.Name + "-mongos-config",
 						},
-						DefaultMode: int32Ptr(0755),
+						DefaultMode: ptr.To[int32](0755),
 					},
 				},
 			},
@@ -1213,7 +1210,7 @@ func buildMongosVolumes(mdbsh *mongodbv1alpha1.MongoDBSharded) []corev1.Volume {
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
 						SecretName:  mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name,
-						DefaultMode: int32Ptr(0400),
+						DefaultMode: ptr.To[int32](0400),
 					},
 				},
 			},
