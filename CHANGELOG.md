@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2-beta.2] - 2026-04-30
+
+긴급 hotfix — v1.3.2-beta.1 게시 직후 trivy 이미지 스캔에서 stdlib CVE 8건(CRITICAL 1, HIGH 7) 발견. Go builder를 1.25.5 → 1.25.9로 업그레이드하여 stdlib CVE 전건 해소. otel exporter 잔존 v1.39.0 → v1.40.0으로 정렬.
+
+### Security
+- **stdlib CVE 7건 fix**: Go builder image 1.25.5 → **1.25.9** (`Dockerfile`).
+  - CVE-2025-68121 (CRITICAL) — crypto/tls 세션 재개 인증서 검증
+  - CVE-2025-61726, CVE-2025-61728, CVE-2026-25679, CVE-2026-32280, CVE-2026-32281, CVE-2026-32283 (HIGH)
+- **otel exporter 동반 업그레이드**: `otlptrace`, `otlptracegrpc` v1.39.0 → v1.40.0 (`go.mod`). v1.3.2-beta.1에서 SDK만 v1.40.0이고 exporter는 v1.39.0에 머물러 trace export silent fail 위험 있던 부분 정정.
+
+### Fixed
+- **Dependabot orphan PR 방지**: `.github/dependabot.yml`의 `reviewers`/`assignees`를 `eightynine01` → `keiailab`로 수정. 옛 owner 참조로 인한 PR 할당 404 → 자동 보안 업데이트가 사실상 무력화되어 있던 부분 정정.
+
+### 검증 후 잔여 P1 (다음 출시 대상)
+- carve-out 정합성 — `cmd/main.go`에 features flag 미적용. RBAC는 거부하나 controller가 등록되어 Forbidden 로그 발생.
+- CRD 무조건 install — helm 표준 동작. 미지원 CR 생성 차단 webhook 필요.
+- README/examples/docs 베타 경고 부재.
+- mongos optimistic lock 24h+ 응고 (sharded 자체가 carve-out이라 베타 영향 없음).
+
 ## [1.3.2-beta.1] - 2026-04-30
 
 긴급 carve-out 베타 출시 — 출시 1시간 전 QA에서 P0 6건(CVE 2건 포함) 발견. 정식 출시는 연기되며 본 베타는 **MongoDB ReplicaSet 한정** 범위로 carve-out하여 공개한다. Sharded / Backup / Auto-scaling은 검증 미완료로 기본 비활성화된다.
