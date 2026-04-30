@@ -175,6 +175,12 @@ func applyPDB(ctx context.Context, c client.Client, scheme *runtime.Scheme, owne
 //
 // preserveReplicas=true 시 운영 중인 Deployment의 spec.Replicas를 보존한다 — HPA
 // controller의 patch와 operator의 reconcile이 충돌하지 않게 함(ADR-0007).
+//
+// v1.4.2 P0 fix: RevisionHistoryLimit / ProgressDeadlineSeconds 는 K8s Deployment
+// 컨트롤러가 자동으로 서버 기본값(10, 600)을 채우는 *pointer 필드*다. 빌더가 nil 을
+// desired 로 넘기면 매 reconcile 마다 nil 로 덮어씌워지고, K8s 가 즉시 기본값을
+// 재주입 → 무한 ping-pong (mongos Deployment generation 116k+ 재현). desired 가
+// 비어 있으면 운영 중인 객체의 server-defaulted 값을 그대로 두어 fight 차단.
 func applyDeployment(ctx context.Context, c client.Client, scheme *runtime.Scheme, owner client.Object, desired *appsv1.Deployment, preserveReplicas bool) error {
 	target := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
@@ -191,8 +197,13 @@ func applyDeployment(ctx context.Context, c client.Client, scheme *runtime.Schem
 			target.Spec.Template = desired.Spec.Template
 			target.Spec.Strategy = desired.Spec.Strategy
 			target.Spec.MinReadySeconds = desired.Spec.MinReadySeconds
-			target.Spec.RevisionHistoryLimit = desired.Spec.RevisionHistoryLimit
-			target.Spec.ProgressDeadlineSeconds = desired.Spec.ProgressDeadlineSeconds
+			// nil-guard: desired 가 비어 있으면 server-default 보존.
+			if desired.Spec.RevisionHistoryLimit != nil {
+				target.Spec.RevisionHistoryLimit = desired.Spec.RevisionHistoryLimit
+			}
+			if desired.Spec.ProgressDeadlineSeconds != nil {
+				target.Spec.ProgressDeadlineSeconds = desired.Spec.ProgressDeadlineSeconds
+			}
 			target.Spec.Paused = desired.Spec.Paused
 		}
 		return controllerutil.SetControllerReference(owner, target, scheme)

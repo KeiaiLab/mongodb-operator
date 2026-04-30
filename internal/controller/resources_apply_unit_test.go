@@ -176,6 +176,77 @@ func TestApplyDeployment_PreserveReplicas_True(t *testing.T) {
 	}
 }
 
+// TestApplyDeployment_IdempotentWithServerDefaults 는 v1.4.2 P0 회귀 테스트다.
+// 빌더가 RevisionHistoryLimit / ProgressDeadlineSeconds 를 nil 로 두고 K8s 가
+// 서버 기본값(10/600)을 재주입한 운영 중 Deployment 에 대해 apply 를 2회 호출했을
+// 때 server-defaulted 값이 그대로 보존되는지 검증한다. 보존 안 되면 controller
+// 와 K8s defaulter 사이 무한 fight 발생 (mongos Deployment generation 116k+).
+func TestApplyDeployment_IdempotentWithServerDefaults(t *testing.T) {
+	s := newApplyScheme(t)
+	owner := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "mongos", Namespace: "ns"},
+	}
+	// 운영 중 Deployment: K8s 가 server default 를 채워둔 상태.
+	existing := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "mongos", Namespace: "ns",
+			CreationTimestamp: metav1.Now(),
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas:                ptr32(3),
+			Selector:                &metav1.LabelSelector{MatchLabels: map[string]string{"app": "mongos"}},
+			Template:                podTemplateSpec("mongos"),
+			RevisionHistoryLimit:    ptr32(10),  // K8s server default
+			ProgressDeadlineSeconds: ptr32(600), // K8s server default
+		},
+	}
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(owner, existing).Build()
+
+	// 빌더 출력: server-defaulted pointer 필드는 nil.
+	desired := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "mongos", Namespace: "ns"},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr32(3),
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "mongos"}},
+			Template: podTemplateSpec("mongos"),
+			// RevisionHistoryLimit / ProgressDeadlineSeconds 의도적 nil
+		},
+	}
+
+	// 1차 apply: 서버 기본값 보존되어야 함.
+	if err := applyDeployment(context.Background(), cl, s, owner, desired, false); err != nil {
+		t.Fatalf("applyDeployment 1: %v", err)
+	}
+	got := &appsv1.Deployment{}
+	if err := cl.Get(context.Background(), client.ObjectKey{Name: "mongos", Namespace: "ns"}, got); err != nil {
+		t.Fatalf("get deploy: %v", err)
+	}
+	if got.Spec.RevisionHistoryLimit == nil || *got.Spec.RevisionHistoryLimit != 10 {
+		t.Fatalf("기대 RevisionHistoryLimit=10 (server default 보존), got=%v", got.Spec.RevisionHistoryLimit)
+	}
+	if got.Spec.ProgressDeadlineSeconds == nil || *got.Spec.ProgressDeadlineSeconds != 600 {
+		t.Fatalf("기대 ProgressDeadlineSeconds=600 (server default 보존), got=%v", got.Spec.ProgressDeadlineSeconds)
+	}
+
+	// 2차 apply: 멱등 — spec 변동 없어야 함 (generation-bump 시뮬레이션).
+	rv1 := got.ResourceVersion
+	if err := applyDeployment(context.Background(), cl, s, owner, desired, false); err != nil {
+		t.Fatalf("applyDeployment 2: %v", err)
+	}
+	got2 := &appsv1.Deployment{}
+	if err := cl.Get(context.Background(), client.ObjectKey{Name: "mongos", Namespace: "ns"}, got2); err != nil {
+		t.Fatalf("get deploy 2: %v", err)
+	}
+	if got2.Spec.RevisionHistoryLimit == nil || *got2.Spec.RevisionHistoryLimit != 10 {
+		t.Fatalf("2차: 기대 RevisionHistoryLimit=10, got=%v", got2.Spec.RevisionHistoryLimit)
+	}
+	// fake client 는 spec 변경 없으면 ResourceVersion 을 bump 하지 않음 → 멱등 증거.
+	if got2.ResourceVersion != rv1 {
+		t.Fatalf("기대 멱등 (ResourceVersion 불변), 1차=%s 2차=%s — fight 재현",
+			rv1, got2.ResourceVersion)
+	}
+}
+
 // podTemplateSpec은 테스트용 최소 PodTemplateSpec을 반환한다.
 func podTemplateSpec(app string) corev1.PodTemplateSpec {
 	return corev1.PodTemplateSpec{
