@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.4.1
-appVersion: "1.4.1"
+version: 1.4.2
+appVersion: "1.4.2"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -114,13 +114,15 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:1.4.1
+      image: ghcr.io/keiailab/mongodb-operator:1.4.2
     - name: mongodb
       image: mongo:8.2
     - name: mongodb-exporter
       image: percona/mongodb_exporter:0.40
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
+    - kind: fixed
+      description: "Sharded P0 — applyDeployment server-default ping-pong (mongos Deployment generation 116k+ 무한 fight 해소; RevisionHistoryLimit/ProgressDeadlineSeconds nil-guard)"
     - kind: fixed
       description: "Sharded P1 #3 — HPA informer cache timeout fix (SetupWithManager Owns에 HorizontalPodAutoscaler 추가, RS controller와 동일하게 정렬)"
     - kind: fixed

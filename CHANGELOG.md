@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-04-30
+
+Sharded mongos Deployment 무한 reconcile fight P0 fix.
+
+### Fixed
+- **Sharded P0 — applyDeployment server-default ping-pong** (`internal/controller/resources_apply.go`):
+  `BuildMongosDeployment` 가 `RevisionHistoryLimit` / `ProgressDeadlineSeconds` 를 nil 로 두지만 `applyDeployment` 가 매 reconcile 마다 desired (=nil) 를 운영 객체에 그대로 덮어씌움 → K8s Deployment 컨트롤러가 즉시 server default (10/600) 를 재주입 → 다음 reconcile 에서 또 nil 화. `argos` 클러스터에서 mongos Deployment generation 이 4시간 23분 만에 **116,128** 까지 증가하면서 `MongoDBSharded.status.phase=Failed` 영속화, `sh.addShard()` 자동 호출 단계까지 도달 못함을 재현. v1.4.2 는 `desired.Spec.RevisionHistoryLimit != nil` / `desired.Spec.ProgressDeadlineSeconds != nil` 가드를 추가해 server-defaulted 필드를 운영 중 객체에 보존. STS 6 개는 generation=1 로 안정 — `applyStatefulSet` 가 동일 패턴을 가지지 않아 본 결함은 mongos Deployment 단독.
+
+### Added
+- **회귀 테스트 1 케이스** (`internal/controller/resources_apply_unit_test.go`):
+  - `TestApplyDeployment_IdempotentWithServerDefaults` — server-defaulted (10/600) Deployment 에 nil-pointer desired 로 apply 2회 호출 시 ResourceVersion 불변(멱등) 검증. 가드 부재 시 fight 재현.
+
 ## [1.4.1] - 2026-04-30
 
 Sharded 모드 P1 2건 fix — 베타 carve-out 종료. `features.sharded.enabled` 기본값 false → true.
