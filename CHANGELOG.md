@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2-beta.5] - 2026-04-30
+
+EventRecorder 도입 + gosec G115 정합 + Makefile/pre-commit 운영 친화 개선. 1.4.0 GA P0 (관측성)을 부분 해소.
+
+### Added (관측성 P0 — 부분 해소)
+- **`internal/controller/mongodb_controller.go` EventRecorder 통합**:
+  - `MongoDBReconciler.Recorder record.EventRecorder` 필드 추가 + nil-safe `eventf` 래퍼.
+  - `SetupWithManager`에서 `mgr.GetEventRecorderFor("mongodb-controller")` 자동 주입.
+  - `updateStatusError`에서 `Warning ReconcileError` 이벤트 발행 — `kubectl describe mongodb`로 즉시 디버깅 가능.
+  - RBAC `+kubebuilder:rbac:groups=core,resources=events,verbs=create;patch` 추가.
+- **`Makefile setup` 타겟**: `pre-commit install --hook-type pre-commit --hook-type pre-push` 일괄 — pre-push 게이트가 silent 미설치되는 P1 해소.
+
+### Fixed
+- **gosec G115 integer overflow 2건 fix** (`mongodbsharded_controller.go:701, 764`): `int(len(slice)) → int32` 변환 전 `math.MaxInt32` bounds check 추가. 실용적으로 슬라이스 2^31 초과는 etcd object size limit으로 불가능하지만 명시 가드. `make audit` gosec HIGH issues **2 → 0**.
+- **`internal/controller/resources_apply_unit_test.go` 신규 추가**: `applyStatefulSet`/`applyDeployment`의 `preserveReplicas` 분기 fake-client 단위 테스트 3건 (HPA 활성 시 STS replicas 보존, deliberate=false guard, Deployment preserve). envtest 불필요. **16/16 PASS**.
+
+### Security 검증
+- trivy v1.3.2-beta.5: debian 0건 / gobinary 0건 (예상)
+- govulncheck: No vulnerabilities found
+- gosec HIGH: **0** (이전 2건 → 0)
+- make gate: All RFC 0002 local gates passed
+
 ## [1.3.2-beta.4] - 2026-04-30
 
 긴급 hotfix — code-reviewer 에이전트가 v1.3.2-beta.3에서 발견한 carve-out 구멍 + 잔존 옛 owner 참조 + 본질적 재발 방지 (pre-push hook).

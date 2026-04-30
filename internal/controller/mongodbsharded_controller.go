@@ -20,6 +20,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -698,7 +699,10 @@ func (r *MongoDBShardedReconciler) getComponentPhase(ready, total int32) string 
 func (r *MongoDBShardedReconciler) isClusterReady(mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
 	// 모든 shard가 status에 보고됐는지 정합성 검사 — 부분 누락된 상태에서
 	// 잘못 ready로 판정되는 silent bug를 차단.
-	if int32(len(mdbsh.Status.Shards)) != mdbsh.Spec.Shards.Count {
+	// gosec G115- int(len) → int32 변환은 슬라이스 길이 2^31 이상에서 오버플로우.
+	// shard 수는 K8s 실용 범위(<10000)이므로 안전하지만 명시적 bounds check로 가드.
+	shardLen := len(mdbsh.Status.Shards)
+	if shardLen > math.MaxInt32 || int32(shardLen) != mdbsh.Spec.Shards.Count {
 		return false
 	}
 	// Spec=0이면 잘못된 설정 — never ready.
@@ -761,7 +765,12 @@ func (r *MongoDBShardedReconciler) updateStatusError(ctx context.Context, mdbsh 
 // in progress — caller(Reconcile)는 그 RequeueAfter를 사용해 polling 빈도를
 // adaptive하게 조정한다(elapsed < 5m: 30s, 5-30m: 1m, >30m: 5m).
 func (r *MongoDBShardedReconciler) reconcileScaleIn(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) (ctrl.Result, error) {
-	statusShardCount := int32(len(mdbsh.Status.Shards))
+	// gosec G115 bounds check — shard 수는 K8s 실용 범위(<10000)지만 명시 가드.
+	shardLen := len(mdbsh.Status.Shards)
+	if shardLen > math.MaxInt32 {
+		return ctrl.Result{}, nil // 비현실적 — 무시
+	}
+	statusShardCount := int32(shardLen) //nolint:gosec // bounds checked above
 	if mdbsh.Spec.Shards.Count >= statusShardCount {
 		// scale-out 또는 stable. ShardDraining condition은 cleanup.
 		mdbsh.Status.Conditions = filterConditionsByType(mdbsh.Status.Conditions, "ShardDraining")

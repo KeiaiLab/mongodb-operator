@@ -31,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -53,6 +54,17 @@ type MongoDBReconciler struct {
 	// EnableAutoscaling 게이트 — false면 reconcileRSHPA가 no-op로 종료.
 	// cmd/main.go의 --enable-autoscaling flag에서 주입.
 	EnableAutoscaling bool
+	// Recorder는 K8s Events 발행용. SetupWithManager에서 자동 주입.
+	// nil이어도 안전 (eventf 래퍼가 guard) — 단위 테스트에서 미주입 허용.
+	Recorder record.EventRecorder
+}
+
+// eventf는 nil-safe wrapper — Recorder가 미주입된 단위 테스트 환경에서도 panic 없이 동작.
+func (r *MongoDBReconciler) eventf(obj *mongodbv1alpha1.MongoDB, eventType, reason, fmtStr string, args ...interface{}) {
+	if r.Recorder == nil {
+		return
+	}
+	r.Recorder.Eventf(obj, eventType, reason, fmtStr, args...)
 }
 
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs,verbs=get;list;watch;create;update;patch;delete
@@ -63,6 +75,7 @@ type MongoDBReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
@@ -729,6 +742,7 @@ func filterConditionsByType(conds []metav1.Condition, t string) []metav1.Conditi
 func (r *MongoDBReconciler) updateStatusError(ctx context.Context, mdb *mongodbv1alpha1.MongoDB, component string, err error) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Error(err, "Failed to reconcile component", "component", component)
+	r.eventf(mdb, corev1.EventTypeWarning, "ReconcileError", "Failed to reconcile %s: %v", component, err)
 
 	mdb.Status.Phase = mongodbv1alpha1.PhaseFailed
 	// 동일 type append 시 condition이 무한 누적되는 P2 버그 차단 — 항상 1건만.
@@ -750,6 +764,9 @@ func (r *MongoDBReconciler) updateStatusError(ctx context.Context, mdb *mongodbv
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *MongoDBReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.Recorder == nil {
+		r.Recorder = mgr.GetEventRecorderFor("mongodb-controller")
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mongodbv1alpha1.MongoDB{}).
 		Owns(&appsv1.StatefulSet{}).

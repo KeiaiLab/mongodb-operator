@@ -51,10 +51,12 @@ test: manifests generate fmt vet envtest ## Run tests.
 test-unit: fmt vet ## Run unit tests only (no envtest required).
 	go test -race ./internal/resources/... ./internal/mongodb/... -coverprofile cover-unit.out
 
-GOBIN ?= $(shell go env GOBIN)
-ifeq ($(GOBIN),)
-GOBIN := $(shell go env GOPATH)/bin
-endif
+.PHONY: setup
+setup: ## RFC 0002 로컬 게이트 설치 (pre-commit + pre-push hook).
+	@command -v pre-commit >/dev/null 2>&1 || { echo "pre-commit not installed: pip install pre-commit"; exit 1; }
+	pre-commit install --hook-type pre-commit --hook-type pre-push
+	@echo "✓ pre-commit + pre-push hooks installed"
+	@echo "  L2 pre-push hooks- govulncheck / trivy fs / gitleaks / go test"
 
 .PHONY: lint
 lint: ## Run go vet + staticcheck (RFC 0002 L3 lint 게이트).
