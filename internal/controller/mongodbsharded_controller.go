@@ -232,25 +232,9 @@ func (r *MongoDBShardedReconciler) handleDeletion(ctx context.Context, mdbsh *mo
 }
 
 func (r *MongoDBShardedReconciler) reconcileKeyfileSecret(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
-	// Check if keyfile secret already exists - DO NOT regenerate if it exists
-	// Keyfile must remain constant across all pods for replica set authentication
-	existingSecret := &corev1.Secret{}
-	secretName := mdbsh.Name + "-keyfile"
-	err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: mdbsh.Namespace}, existingSecret)
-	if err == nil {
-		// Secret exists, do not update
-		return nil
-	}
-	if !errors.IsNotFound(err) {
-		return err
-	}
-
-	// Secret doesn't exist, create it
-	secret := resources.BuildShardedKeyfileSecret(mdbsh)
-	if err := controllerutil.SetControllerReference(mdbsh, secret, r.Scheme); err != nil {
-		return err
-	}
-	return r.Create(ctx, secret)
+	// Keyfile은 sharded 인증용 — 모든 pod에 동일 값 유지. 멱등 helper로 통합.
+	return reconcileSecretIfNotExists(ctx, r.Client, r.Scheme, mdbsh, mdbsh.Name+"-keyfile",
+		func() *corev1.Secret { return resources.BuildShardedKeyfileSecret(mdbsh) })
 }
 
 func (r *MongoDBShardedReconciler) reconcileConfigServer(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {

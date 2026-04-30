@@ -264,25 +264,9 @@ func (r *MongoDBReconciler) handleDeletion(ctx context.Context, mdb *mongodbv1al
 }
 
 func (r *MongoDBReconciler) reconcileKeyfileSecret(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
-	// Check if keyfile secret already exists - DO NOT regenerate if it exists
-	// Keyfile must remain constant across all pods for replica set authentication
-	existingSecret := &corev1.Secret{}
-	secretName := mdb.Name + "-keyfile"
-	err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: mdb.Namespace}, existingSecret)
-	if err == nil {
-		// Secret exists, do not update
-		return nil
-	}
-	if !apierrors.IsNotFound(err) {
-		return err
-	}
-
-	// Secret doesn't exist, create it
-	secret := resources.BuildKeyfileSecret(mdb)
-	if err := controllerutil.SetControllerReference(mdb, secret, r.Scheme); err != nil {
-		return err
-	}
-	return r.Create(ctx, secret)
+	// Keyfile은 RS 인증용 — 모든 pod에 *동일한* 값이 유지되어야 함. 멱등 helper로 통합.
+	return reconcileSecretIfNotExists(ctx, r.Client, r.Scheme, mdb, mdb.Name+"-keyfile",
+		func() *corev1.Secret { return resources.BuildKeyfileSecret(mdb) })
 }
 
 func (r *MongoDBReconciler) reconcileConfigMap(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
