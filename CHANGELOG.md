@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.4] - 2026-05-01
+
+Sharded scale-back-out (scale-in 후 다시 scale-out) cycle 영구 stuck 결함 fix.
+
+### Fixed
+- **Sharded P0 — `cleanupShardResources` 가 stale PVC 보존 + Status flag 미리셋** (`internal/controller/mongodbsharded_controller.go`):
+  v1.4.3 까지 `cleanupShardResources` 가 STS/Service/PDB/NetworkPolicy/CM 만 삭제하고 PVC 와 `Status.ShardsAdded[i]`/`ShardsInitialized[i]` 플래그는 유지. scale-back-out 시 (a) STS 가 retained PVC 의 stale RS config 와 cluster config DB 의 shard 미등록 사이 모순 → mongod 가 `ShardNotFound: Shard argos-mongo-shard-N not found` 영구 CrashLoopBackOff, (b) operator 가 `ShardsAdded[i]=true` 상태 유지로 `sh.addShard()` 재호출 skip → cluster 등록 영구 미완료. argos 5→3→5 사이클 재현. v1.4.4 는 cleanup 시 ① 라벨 매칭 PVC 모두 삭제 (drain 완료된 데이터는 살아있는 샤드의 redundant copy 이므로 무손실) ② 두 status slice 의 해당 인덱스 false 리셋 → 다음 reconcile 의 `reconcileShard` 가 fresh STS+PVC 프로비저닝, `reconcileShardsInit` 가 IsInitialized=false 로 RS init, `reconcileAddShards` 가 sh.addShard 등록.
+
+### Changed
+- **PVC 보존 정책 supersession**: 이전 (`cleanupShardResources` 본문 주석) 의 "PVC 는 보존(데이터 손실 방지)" → drain 이 이미 살아있는 샤드로 데이터 마이그레이션 *완료* 했으므로 cleanup 대상 PVC 는 redundant copy. scale-back-out 시 stale data 재사용 결함을 제거하기 위해 PVC 도 cleanup. **운영 영향**: scale-in 후 scale-back-out 시 새 샤드는 fresh PVC 사용 (storage class 의 dynamic provisioning).
+
 ## [1.4.3] - 2026-05-01
 
 Sharded P0 — Helm chart 의 bundled CRD 가 v1.x 시점에서 멈춰 있었고 (`charts/mongodb-operator/crds/*.yaml` 586 줄 vs `config/crd/bases/*.yaml` 5,858 줄, 5,272 줄 drift), 이로 인해 K8s API server 가 `Status.AdminUserCreated`/`ConfigServerInitialized`/`ShardsInitialized`/`ShardsAdded` 등 status 신규 필드를 OpenAPI schema validation 단계에서 silently drop. 결과적으로 reconcile flag 가 영구 empty 로 유지되어 `reconcileAddShards` 가 `Status.ShardsInitialized[i]` 에서 `index out of range [0] with length 0` panic, MongoDBSharded.phase=Failed 영속화. v1.4.1/v1.4.2 모두 동일 결함 (chart bundle 만 stale 했으므로 코드 fix 만으로는 무용).

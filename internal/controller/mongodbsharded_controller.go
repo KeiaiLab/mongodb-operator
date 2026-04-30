@@ -854,7 +854,20 @@ func (r *MongoDBShardedReconciler) recordShardDrainingCondition(mdbsh *mongodbv1
 }
 
 // cleanupShardResources는 drain 완료된 shard의 STS/Service/scripts CM/PDB/
-// NetworkPolicy를 삭제한다. PVC는 보존(데이터 손실 방지).
+// NetworkPolicy + 관련 PVC를 삭제하고 Status flag 를 리셋한다.
+//
+// v1.4.4 (2026-05-01) - PVC 보존 정책 supersession:
+//
+//	기존(~v1.4.3) 은 "PVC 보존 (데이터 손실 방지)" 였으나, scale-back-out 시
+//	stale PVC 의 mongod 가 옛 RS config + 새 cluster 의 shard 미등록 상태로
+//	ShardNotFound 영구 CrashLoopBackOff 재현. drain 이 이미 데이터를 살아있는
+//	샤드로 마이그레이션 *완료*했으므로 (removeShard state=completed 보장), 본
+//	shard 의 PVC 데이터는 **redundant copy** — 삭제해도 무손실. 대신 scale-
+//	back-out 시 fresh PVC 가 프로비저닝되어 깨끗한 RS init + sh.addShard 등록.
+//
+//	Status.ShardsAdded[i] / ShardsInitialized[i] 도 false 로 리셋 — scale-back-
+//	out 시 reconcileShardsInit / reconcileAddShards 가 본 인덱스를 fresh shard
+//	로 재인식.
 func (r *MongoDBShardedReconciler) cleanupShardResources(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int32) error {
 	prefix := fmt.Sprintf("%s-shard-%d", mdbsh.Name, shardIndex)
 	candidates := []client.Object{
@@ -868,6 +881,30 @@ func (r *MongoDBShardedReconciler) cleanupShardResources(ctx context.Context, md
 		if err := r.Delete(ctx, obj); err != nil && !errors.IsNotFound(err) {
 			return fmt.Errorf("delete %T %s: %w", obj, obj.GetName(), err)
 		}
+	}
+
+	// v1.4.4: PVC 정리. PVC label = component:"shard-<i>" + instance:<mdbsh.Name>
+	// (builder 가 STS volumeClaimTemplates 에 부여한 라벨).
+	pvcList := &corev1.PersistentVolumeClaimList{}
+	if err := r.List(ctx, pvcList, client.InNamespace(mdbsh.Namespace), client.MatchingLabels{
+		"app.kubernetes.io/component": fmt.Sprintf("shard-%d", shardIndex),
+		"app.kubernetes.io/instance":  mdbsh.Name,
+	}); err != nil {
+		return fmt.Errorf("list PVCs for %s: %w", prefix, err)
+	}
+	for i := range pvcList.Items {
+		pvc := &pvcList.Items[i]
+		if err := r.Delete(ctx, pvc); err != nil && !errors.IsNotFound(err) {
+			return fmt.Errorf("delete PVC %s: %w", pvc.Name, err)
+		}
+	}
+
+	// v1.4.4: Status flag 리셋 — scale-back-out 시 fresh shard 로 재인식.
+	if int(shardIndex) < len(mdbsh.Status.ShardsAdded) {
+		mdbsh.Status.ShardsAdded[shardIndex] = false
+	}
+	if int(shardIndex) < len(mdbsh.Status.ShardsInitialized) {
+		mdbsh.Status.ShardsInitialized[shardIndex] = false
 	}
 	return nil
 }
