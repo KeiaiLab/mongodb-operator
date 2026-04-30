@@ -50,6 +50,9 @@ const (
 type MongoDBReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// EnableAutoscaling 게이트 — false면 reconcileRSHPA가 no-op로 종료.
+	// cmd/main.go의 --enable-autoscaling flag에서 주입.
+	EnableAutoscaling bool
 }
 
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs,verbs=get;list;watch;create;update;patch;delete
@@ -763,6 +766,9 @@ func (r *MongoDBReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // builder의 BuildReplicaSetHPA가 가드 체크를 내장하므로 호출자는 nil/non-nil로
 // 분기. nil이면 기존 HPA cleanup.
 func (r *MongoDBReconciler) reconcileRSHPA(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
+	if !r.EnableAutoscaling {
+		return nil
+	}
 	desired := resources.BuildReplicaSetHPA(mdb)
 	if desired == nil {
 		existing := &autoscalingv2.HorizontalPodAutoscaler{}

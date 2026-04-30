@@ -50,6 +50,9 @@ const (
 type MongoDBShardedReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// EnableAutoscaling 게이트 — false면 reconcileMongosHPA / reconcileConfigServerHPA가
+	// no-op로 종료. cmd/main.go의 --enable-autoscaling flag에서 주입.
+	EnableAutoscaling bool
 }
 
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbshardeds,verbs=get;list;watch;create;update;patch;delete
@@ -858,6 +861,9 @@ func (r *MongoDBShardedReconciler) cleanupShardResources(ctx context.Context, md
 // HPA controller가 매 reconcile cycle에서 자체 patch로 정렬하기 때문(<60s 안에
 // 수렴).
 func (r *MongoDBShardedReconciler) reconcileMongosHPA(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+	if !r.EnableAutoscaling {
+		return nil
+	}
 	desired := resources.BuildMongosHPA(mdbsh)
 	if desired == nil {
 		// disabled — 기존 HPA 정리
@@ -896,6 +902,9 @@ func (r *MongoDBShardedReconciler) reconcileMongosHPA(ctx context.Context, mdbsh
 // HPA와 동일 패턴이지만 BuildConfigServerHPA가 이중 가드(enabled+deliberate)를
 // 강제하므로 별도 검사 없이 builder 결과 nil/non-nil로 분기.
 func (r *MongoDBShardedReconciler) reconcileConfigServerHPA(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+	if !r.EnableAutoscaling {
+		return nil
+	}
 	desired := resources.BuildConfigServerHPA(mdbsh)
 	if desired == nil {
 		existing := &autoscalingv2.HorizontalPodAutoscaler{}

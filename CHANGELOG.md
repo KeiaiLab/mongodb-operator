@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2-beta.4] - 2026-04-30
+
+긴급 hotfix — code-reviewer 에이전트가 v1.3.2-beta.3에서 발견한 carve-out 구멍 + 잔존 옛 owner 참조 + 본질적 재발 방지 (pre-push hook).
+
+### Security / Carve-out (P0)
+- **`--enable-autoscaling` flag가 reconciler에 미주입되어 carve-out 무력화 fix**: `MongoDBReconciler` / `MongoDBShardedReconciler` struct에 `EnableAutoscaling bool` 필드 추가. `reconcileRSHPA` / `reconcileMongosHPA` / `reconcileConfigServerHPA` 진입부에 guard 추가. `cmd/main.go`에서 struct 초기화 시 주입. **이전 베타에서는 helm `features.autoscaling.enabled=false`로 설정해도 HPA reconcile이 계속 일어나는 silent 무력화 상태였음**.
+
+### Fixed
+- **README.md 옛 owner 참조 정리**: `eightynine01.github.io` helm repo URL + Issues/Discussions 링크 등 잔존 4건을 `keiailab`로 정정 (line 125, 472, 473).
+- **`.github/dependabot.yml`**: `reviewers: [keiailab]` 제거 — Organization명 단독은 GitHub Dependabot에서 invalid (404 → orphan PR). 유효 user/team 정해지면 `keiailab/team-slug` 형태로 추가. `open-pull-requests-limit` 50 → 10 (운영 부담 감소).
+- **`internal/mongodb/replicaset.go`**: 사용 안 되는 `notYetInitializedCode` const 제거 (staticcheck U1000).
+
+### Added (RFC 0002 본질적 재발 방지)
+- **`.pre-commit-config.yaml`**: hook stage 분리 + 보안 scanner 통합.
+  - `pre-commit` stage: `go-fmt`, `go-vet` (빠른 피드백)
+  - `pre-push` stage: `go-test` (race), **`govulncheck`** (call-graph CVE), **`trivy fs`** (lockfile/base CVE), `gitleaks` (시크릿)
+  - 이번 사이클의 stdlib CVE 7건 + carve-out flag 누락이 *둘 다* 이 게이트로 차단되어야 했음.
+- **`Makefile`** 신규 타겟 4개 (RFC 0002 L3 게이트):
+  - `make lint` — go vet + staticcheck + golangci-lint
+  - `make audit` — govulncheck + trivy + gosec
+  - `make validate` — helm lint + helm template
+  - `make gate` — `lint test-unit audit validate` 일괄 (pre-push 동등)
+
+### Documentation
+- README의 Helm repo `helm repo add` 명령 URL 정정 (옛 owner → keiailab).
+
 ## [1.3.2-beta.3] - 2026-04-30
 
 Carve-out 정합성 강화 — 코드 레벨 feature gate 도입 + 문서/예제 베타 경고 + otel SDK v1.43.0 false positive 제거. v1.3.2-beta.2의 잔여 P1 일괄 해소.

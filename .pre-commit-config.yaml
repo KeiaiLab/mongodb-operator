@@ -69,14 +69,17 @@ repos:
         pass_filenames: false
 
   # Go-specific hooks from pre-commit
+  # Stage 분리: pre-commit에는 빠른 fmt/vet만, pre-push에 무거운 test/scanner 배치
   - repo: local
     hooks:
+      # ── pre-commit (commit 시점, 빠른 피드백) ───────────────────────
       - id: go-fmt
         name: go fmt
         description: Auto-formats Go code to gofmt standards
         entry: gofmt -w
         language: system
         types: [go]
+        stages: [pre-commit]
 
       - id: go-vet
         name: go vet
@@ -85,15 +88,44 @@ repos:
         language: system
         types: [go]
         pass_filenames: false
+        stages: [pre-commit]
 
-      - id: go-test
-        name: go test
-        description: Runs unit tests (`go test ./...`) to catch regressions
-        entry: go test -v -race ./...
+      # ── pre-push (push 시점, 무거운 검증) ──────────────────────────
+      - id: go-test-unit
+        name: go test (unit, race)
+        description: Unit tests with race detector. envtest는 make test로 분리.
+        entry: go test -race -count=1 -short ./internal/resources/... ./internal/mongodb/...
         language: system
-        types: [go]
         pass_filenames: false
-        always_run: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: govulncheck
+        name: govulncheck (Go module CVE — call graph 기반)
+        description: 코드가 실제 호출하는 취약 함수만 차단. 설치- go install golang.org/x/vuln/cmd/govulncheck@latest
+        entry: govulncheck ./...
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: trivy-fs
+        name: trivy fs (lockfile + Dockerfile CVE — 버전 비교 기반)
+        description: stdlib/transitive CVE 차단 (이번 사이클의 stdlib CVE 7건 패턴). 설치- brew install trivy
+        entry: trivy fs --exit-code 1 --severity HIGH,CRITICAL --quiet --skip-dirs vendor .
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: gitleaks
+        name: gitleaks (시크릿 누출 차단)
+        description: staged 변경에서 시크릿 누출 검사
+        entry: gitleaks protect --staged --no-banner --redact
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
 
   # Commit message hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks

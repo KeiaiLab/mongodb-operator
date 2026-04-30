@@ -143,8 +143,9 @@ func main() {
 
 	// Setup MongoDB controller (always enabled — ReplicaSet은 베타 scope)
 	if err = (&controller.MongoDBReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		EnableAutoscaling: enableAutoscaling,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MongoDB")
 		os.Exit(1)
@@ -153,8 +154,9 @@ func main() {
 	// Setup MongoDBSharded controller — feature gate
 	if enableShardedController {
 		if err = (&controller.MongoDBShardedReconciler{
-			Client: mgr.GetClient(),
-			Scheme: mgr.GetScheme(),
+			Client:            mgr.GetClient(),
+			Scheme:            mgr.GetScheme(),
+			EnableAutoscaling: enableAutoscaling,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "MongoDBSharded")
 			os.Exit(1)

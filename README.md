@@ -122,7 +122,7 @@ The operator automatically handles MongoDB cluster initialization:
 
 ```bash
 # Add Helm repository
-helm repo add mongodb-operator https://eightynine01.github.io/mongodb-operator
+helm repo add mongodb-operator https://keiailab.github.io/mongodb-operator
 helm repo update
 
 # Install the operator
@@ -469,8 +469,8 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/eightynine01/mongodb-operator/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/eightynine01/mongodb-operator/discussions)
+- **Issues**: [GitHub Issues](https://github.com/keiailab/mongodb-operator/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/keiailab/mongodb-operator/discussions)
 
 ## Roadmap
 

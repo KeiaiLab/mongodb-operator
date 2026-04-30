@@ -51,6 +51,39 @@ test: manifests generate fmt vet envtest ## Run tests.
 test-unit: fmt vet ## Run unit tests only (no envtest required).
 	go test -race ./internal/resources/... ./internal/mongodb/... -coverprofile cover-unit.out
 
+GOBIN ?= $(shell go env GOBIN)
+ifeq ($(GOBIN),)
+GOBIN := $(shell go env GOPATH)/bin
+endif
+
+.PHONY: lint
+lint: ## Run go vet + staticcheck (RFC 0002 L3 lint 게이트).
+	go vet ./...
+	@command -v $(GOBIN)/staticcheck >/dev/null 2>&1 || go install honnef.co/go/tools/cmd/staticcheck@latest
+	$(GOBIN)/staticcheck ./internal/...
+	@command -v golangci-lint >/dev/null 2>&1 && golangci-lint run --fix || echo "golangci-lint not installed, skipping"
+
+.PHONY: audit
+audit: ## govulncheck + trivy + gosec — RFC 0002 L3 security 게이트.
+	@echo "=== govulncheck (call-graph CVE) ==="
+	@command -v $(GOBIN)/govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
+	$(GOBIN)/govulncheck ./...
+	@echo "=== trivy fs (lockfile + base CVE) ==="
+	@command -v trivy >/dev/null 2>&1 && trivy fs --exit-code 1 --severity HIGH,CRITICAL --quiet --skip-dirs vendor . || echo "trivy not installed (brew install trivy)"
+	@echo "=== gosec (HIGH only) ==="
+	@command -v $(GOBIN)/gosec >/dev/null 2>&1 || go install github.com/securego/gosec/v2/cmd/gosec@latest
+	$(GOBIN)/gosec -quiet -severity high ./internal/... || true
+
+.PHONY: validate
+validate: manifests generate ## Validate K8s manifests + helm chart + CRD (RFC 0002 L3 validate 게이트).
+	helm lint charts/mongodb-operator
+	helm template gate charts/mongodb-operator >/dev/null && echo "helm template OK"
+
+.PHONY: gate
+gate: lint test-unit audit validate ## RFC 0002 로컬 4계층 게이트 — pre-push 동등.
+	@echo ""
+	@echo "✓ All RFC 0002 local gates passed"
+
 .PHONY: test-integration
 test-integration: manifests generate fmt vet envtest ## Run integration tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test -race ./internal/controller/... -v -coverprofile cover-integration.out

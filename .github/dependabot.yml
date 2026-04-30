@@ -8,7 +8,7 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "UTC"
-    open-pull-requests-limit: 50
+    open-pull-requests-limit: 10
     target-branch: "main"
     labels:
       - "dependencies"
@@ -45,7 +45,5 @@ updates:
       - dependency-name: "sigs.k8s.io/controller-runtime"
         update-types: ["version-update:semver-major"]
     rebase-strategy: "auto"
-    reviewers:
-      - "keiailab"
-    assignees:
-      - "keiailab"
+    # reviewers/assignees 비움: org 단독("keiailab")은 GitHub Dependabot에서 invalid이며
+    # 유효 user/team이 정해지면 "keiailab/team-slug" 형태로 추가. 비우면 자동 할당 없음.

@@ -95,7 +95,6 @@ func NewReplicaSetManagerWithPort(port int) (*ReplicaSetManager, error) {
 
 // notYetInitializedCode는 mongod이 replica set으로 초기화되지 않았을 때
 // replSetGetStatus에서 반환하는 server error code이다.
-const notYetInitializedCode int32 = 94
 
 // helloNoConfigInfoSubstr는 mongod이 RS init 전(`--replSet`로 떠 있으나
 // replSetInitiate 미수신) 상태에서 hello 응답에 포함시키는 info 문구다.
