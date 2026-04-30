@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0-rc.1] - 2026-04-30
+
+Tier 1 코드 감소 리팩터링 — release-1.4 브랜치에서 7-commit 단계별 구현. `v1.3.2-beta.*` carve-out 베타 track과 분리하여 *구조 변경*을 SemVer minor bump로 외부에 신호.
+
+### Changed (RFC: Tier 1 리팩터링)
+- **`internal/mongodb/retry.go` 일괄 제거** (-80 prod, -375 test): RetryWithBackoff/RetryUntilSuccess/WaitForCondition/WaitForConditionWithBackoff/WithTimeout/WithDeadline 6 함수가 production 호출처 0건. 표준 `k8s.io/apimachinery/pkg/util/wait` + `context.WithTimeout`로 충분.
+- **`int32Ptr`/`int64Ptr`/`boolPtr` → `k8s.io/utils/ptr.To` 표준 채택** (35 사용처 일괄 교체): k8s.io/utils 의존성을 indirect → direct 승격.
+- **3 reconciler 중복 패턴 통합 (`internal/controller/helpers.go` 신규)**:
+  - `reconcileSecretIfNotExists`: keyfile Secret 멱등 생성 — RS/Sharded 99% 동일 코드 통합 (-32 LoC)
+  - `handleFinalizerCleanup`: deletionTimestamp + finalizer 패턴 — 3 reconciler 통합 (-32 LoC, type-specific cleanup은 closure로 보존)
+  - `applyErrorCondition` + `Statusable` interface: ReconcileError condition + EventRecorder Warning 발행 통합 (-32 LoC, MongoDBSharded에 EventRecorder 자동 주입 추가)
+- **bash 스크립트 외부화 (`internal/assets/scripts/*.sh.tpl` + `//go:embed`)**:
+  - `readiness.sh.tpl`, `bootstrap-admin.sh.tpl`, `backup-s3.sh.tpl`, `backup-pvc.sh.tpl` 4 템플릿 분리
+  - `text/template` 변수 주입으로 type-safe (이전 `fmt.Sprintf` 위치 인자 대비)
+  - IDE syntax highlight + shellcheck 적용 가능
+  - 5 회귀 보호 테스트 추가 (RS init 12 핵심 토큰 검증)
+
+### Added
+- **`Makefile setup` 타겟**: `make setup`이 `pre-commit install --hook-type pre-commit --hook-type pre-push`를 일괄 실행 — pre-push hook silent skip 위험 해소.
+
+### Removed
+- **`MongoDBReconciler.eventf` wrapper**: helpers.go::applyErrorCondition 통합 후 unused (staticcheck U1000) 정리.
+
+### LoC 변화 (v1.3.2-beta.6 → v1.4.0-rc.1)
+- Production Go: **8,215 → 8,088 (-127)**
+- Test Go: 미사용 retry_test.go 삭제 (-375), embed asset test 추가 (+115)
+- 가장 큰 가치는 *3 reconciler drift 위험 제거* + *bash 스크립트 외부 도구 적용 가능성*.
+
+### Migration
+- 본 RC는 v1.3.2 carve-out 정책 동일 적용 (`features.{sharded,backup,autoscaling}.enabled=false` 기본).
+- 외부 사용자 영향 0 — 모든 변경은 internal package 리팩터링.
+- 정식 1.4.0 GA는 잔여 P1 (테스트 커버리지 70%+, PodMonitor 자동 생성, PrometheusRule) 후 진행.
+
 ## [1.3.2-beta.6] - 2026-04-30
 
 Release 자동화 — `make release VERSION=v1.x.y` 단일 명령 도입.
