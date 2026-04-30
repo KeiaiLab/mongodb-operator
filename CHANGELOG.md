@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2-beta.1] - 2026-04-30
+
+긴급 carve-out 베타 출시 — 출시 1시간 전 QA에서 P0 6건(CVE 2건 포함) 발견. 정식 출시는 연기되며 본 베타는 **MongoDB ReplicaSet 한정** 범위로 carve-out하여 공개한다. Sharded / Backup / Auto-scaling은 검증 미완료로 기본 비활성화된다.
+
+### Security
+- **CVE GO-2026-4762 — gRPC 인증 우회 fix**: `google.golang.org/grpc` v1.78.0 → **v1.79.3**. govulncheck "Authorization bypass via missing leading slash in :path" 취약점 해소. (`go.mod`)
+- **CVE GO-2026-4394 — OpenTelemetry SDK 임의코드 실행 fix**: `go.opentelemetry.io/otel/sdk` v1.39.0 → **v1.40.0**. PATH hijacking 취약점 해소. otel/{otel,metric,trace}도 동반 v1.40.0으로 정렬. (`go.mod`)
+
+### Changed (Carve-out)
+- **`charts/mongodb-operator/values.yaml`**: `features.sharded.enabled`, `features.backup.enabled`, `features.autoscaling.enabled` 게이트 추가. 모두 기본 `false`. 운영자가 `true`로 명시 활성화한 경우에만 해당 RBAC 권한이 부여됨.
+- **`charts/mongodb-operator/templates/clusterrole.yaml`**: `mongodbshardeds`, `mongodbbackups`, `batch:cronjobs`, `autoscaling:horizontalpodautoscalers`, `apps:deployments`, `apps:replicasets` 권한을 features 게이트 조건부 렌더링으로 전환. 기본 설치는 ReplicaSet에 필요한 최소 권한만 부여.
+
+### Known Issues / Beta Scope
+- **MongoDBSharded CR**: 활성화 시 ConfigServer init과 HPA 간 ordering race 가능성, mongos status 정합성 깨짐(24h 재현) 케이스 존재. 베타에서 미지원.
+- **MongoDBBackup CR**: 자동 테스트 0건. `connectionString` 평문이 Job spec에 노출될 가능성. 베타에서 미지원.
+- **HorizontalPodAutoscaler 통합**: RS/cfg drift 방지 mutex 부재. 베타에서 미지원.
+- **관측성**: ServiceMonitor 자동 생성, PrometheusRule, EventRecorder 모두 부재. 운영 진입 시 별도 alert 구성 필요.
+- **테스트 커버리지**: total 39.1% (controller 26.7%). DoD 80% 목표 대비 미달. 정식 출시 전 보강 필요.
+
+### 운영 가이드
+- 베타 사용자는 `MongoDB` (ReplicaSet) CR만 사용한다.
+- `MongoDBSharded` / `MongoDBBackup` CR을 만들지 않는다 — RBAC가 권한을 거부하므로 reconcile되지 않음.
+- 정식 1.4.0 출시까지 본 베타는 *비프로덕션 데이터* 한정 사용을 권장.
+
 ## [1.3.1] - 2026-04-29
 
 배포 경로 복구 — owner가 `eightynine01` → `keiailab`로 이전됐는데 release/helm-publish 워크플로와 chart 메타데이터가 옛 owner를 참조해 v1.1.1~v1.3.0 release 워크플로가 모두 ghcr push 단계에서 fail했고, `index.yaml`의 .tgz URL이 죽은 도메인을 가리켜 ArtifactHub이 chart 본체를 가져가지 못한 문제를 일괄 정정한다.

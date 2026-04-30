@@ -173,6 +173,23 @@ extraVolumeMounts: []
 # -- Extra volumes for the operator
 extraVolumes: []
 
+# ----------------------------------------------------------------------------
+# Carve-out feature gates (v1.3.2-beta.1)
+# 베타 출시 범위: ReplicaSet 한정. 다음 기능은 검증 미완료로 기본 비활성화.
+# enable=true로 켤 경우 운영자가 잔여 위험을 인지한 것으로 간주됨 (CHANGELOG 참조).
+# ----------------------------------------------------------------------------
+features:
+  # Sharded 모드 — v1.3.0 HPA 통합 후 ConfigServer init/HPA ordering 미해결 (P1).
+  # mongos.total/ready status 정합성 깨짐 사례 24h 재현. 베타 미지원.
+  sharded:
+    enabled: false
+  # Backup 컨트롤러 — 자동 테스트 0건. connectionString 평문 노출(P0). 베타 미지원.
+  backup:
+    enabled: false
+  # Auto-scaling (HPA) — RS/cfg drift 방지 mutex 부재(P1). 베타 미지원.
+  autoscaling:
+    enabled: false
+
 # Network Policy configuration
 networkPolicy:
   # -- Enable network policy
