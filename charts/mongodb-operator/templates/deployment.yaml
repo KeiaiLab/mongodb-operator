@@ -54,6 +54,16 @@ spec:
             {{- if .Values.logging.development }}
             - --zap-devel=true
             {{- end }}
+            # Feature gates (v1.3.2-beta.x carve-out — values.features 참조)
+            {{- if .Values.features.sharded.enabled }}
+            - --enable-sharded-controller=true
+            {{- end }}
+            {{- if .Values.features.backup.enabled }}
+            - --enable-backup-controller=true
+            {{- end }}
+            {{- if .Values.features.autoscaling.enabled }}
+            - --enable-autoscaling=true
+            {{- end }}
           ports:
             - name: metrics
               containerPort: {{ .Values.service.metricsPort }}

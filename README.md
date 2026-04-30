@@ -1,15 +1,25 @@
 # MongoDB Operator for Kubernetes
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)](https://golang.org/)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go)](https://golang.org/)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes)](https://kubernetes.io/)
-[![Build Status](https://github.com/eightynine01/mongodb-operator/actions/workflows/ci.yml/badge.svg)](https://github.com/eightynine01/mongodb-operator/actions)
-[![GitHub Container Registry](https://img.shields.io/docker/image-size/ghcr.io/eightynine01/mongodb-operator/latest)](https://github.com/eightynine01/mongodb-operator/pkgs/container/mongodb-operator)
-[![Helm Chart](https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/eightynine01/mongodb-operator/main/charts/mongodb-operator/Chart.yaml&label=helm%20v)](https://github.com/eightynine01/mongodb-operator)
-[![Go Report Card](https://goreportcard.com/badge/github.com/eightynine01/mongodb-operator)](https://goreportcard.com/report/github.com/eightynine01/mongodb-operator)
-[![codecov](https://codecov.io/gh/eightynine01/mongodb-operator/branch/main/graph/badge.svg)](https://codecov.io/gh/eightynine01/mongodb-operator)
+[![Container Image](https://img.shields.io/badge/ghcr.io-keiailab%2Fmongodb--operator-blue?logo=github)](https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator)
+[![Helm Chart](https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/keiailab/mongodb-operator/main/charts/mongodb-operator/Chart.yaml&label=helm%20v)](https://github.com/keiailab/mongodb-operator)
 
 A Kubernetes Operator for deploying and managing MongoDB ReplicaSets and Sharded Clusters.
+
+> ## ⚠️ 베타 출시 — v1.3.2-beta.x (carve-out)
+>
+> 현재 최신 release는 **prerelease 베타**입니다 — 정식 1.4.0 GA 출시 전까지 *비프로덕션 데이터* 한정 사용을 권장합니다.
+>
+> **베타 scope (기본 활성)**: MongoDB ReplicaSet
+>
+> **베타 scope 밖 (기본 비활성, RBAC + reconciler feature gate로 차단)**:
+> - `MongoDBSharded` — ConfigServer init/HPA ordering 미해결 (`features.sharded.enabled=true`로 활성)
+> - `MongoDBBackup` — 자동 테스트 0건, connectionString 평문 노출 위험 (`features.backup.enabled=true`로 활성)
+> - HorizontalPodAutoscaler — RS/cfg drift mutex 부재 (`features.autoscaling.enabled=true`로 활성)
+>
+> 자세한 잔여 위험은 [CHANGELOG.md](CHANGELOG.md) 의 Known Issues 섹션 참조.
 
 ## Overview
 
@@ -18,11 +28,11 @@ MongoDB Operator automates the deployment, scaling, and management of MongoDB cl
 ### Features
 
 - **MongoDB ReplicaSet**: Deploy highly available 3+ member replica sets with automatic failover
-- **Sharded Cluster**: Deploy distributed clusters with config servers, shards, and mongos routers
+- **Sharded Cluster** *(베타 비활성)*: Deploy distributed clusters with config servers, shards, and mongos routers
 - **TLS Encryption**: Automatic TLS certificate management with cert-manager integration
 - **Authentication**: SCRAM-SHA-256 authentication with keyfile support for internal cluster communication
 - **Monitoring**: Prometheus metrics export with ServiceMonitor support
-- **Backup/Restore**: Automated backups to S3-compatible storage or PVC
+- **Backup/Restore** *(베타 비활성)*: Automated backups to S3-compatible storage or PVC
 - **Auto-scaling**: Horizontal Pod Autoscaler support for Mongos routers
 
 ## Architecture

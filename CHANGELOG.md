@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.2-beta.3] - 2026-04-30
+
+Carve-out 정합성 강화 — 코드 레벨 feature gate 도입 + 문서/예제 베타 경고 + otel SDK v1.43.0 false positive 제거. v1.3.2-beta.2의 잔여 P1 일괄 해소.
+
+### Added (Carve-out — 코드 레벨)
+- **`cmd/main.go`**: `--enable-sharded-controller`, `--enable-backup-controller`, `--enable-autoscaling` flag 도입. 기본값 모두 `false`. flag가 `false`이면 reconciler 자체가 등록되지 않아 controller log에 Forbidden 에러 발생 자체가 차단됨.
+- **`charts/mongodb-operator/templates/deployment.yaml`**: helm values의 `features.{sharded,backup,autoscaling}.enabled`에 따라 위 cli flag를 deploy args에 주입. RBAC carve-out과 *코드 carve-out*이 정합되어 진정한 carve-out 달성.
+
+### Changed
+- **otel SDK v1.40.0 → v1.43.0**: trivy의 `CVE-2026-39883` (BSD kenv PATH hijacking) false positive 제거. 본 이미지는 Linux distroless 기반이라 코드 경로 실행 자체가 불가능했지만, scanner 신호 정리 차원에서 정식 업그레이드. otel/{otel,metric,trace,sdk} + grpc 동반 업그레이드.
+
+### Documentation (베타 carve-out 경고)
+- **`README.md`**: 상단에 베타 출시 안내 블록 추가. Features 섹션의 Sharded/Backup/Auto-scaling 항목에 `(베타 비활성)` 표기.
+- **`README.md` 배지**: 옛 `eightynine01` 참조 정리 (`Build Status`, `Container Image`, `Helm Chart`, `Go Report Card`, `codecov` 5건). keiailab GHCR + Helm으로 일관 정정.
+- **`examples/minimal/mongodb-sharded.yaml`**: YAML 헤더에 `features.sharded.enabled=true` 필요 경고.
+- **`examples/production/mongodb-sharded-prod.yaml`**: 1.4.0 GA 전 production 사용 권장 안 함 경고.
+- **`examples/backups/s3-backup.yaml`**: YAML 헤더에 `features.backup.enabled=true` 필요 + 보안 위험 경고.
+
 ## [1.3.2-beta.2] - 2026-04-30
 
 긴급 hotfix — v1.3.2-beta.1 게시 직후 trivy 이미지 스캔에서 stdlib CVE 8건(CRITICAL 1, HIGH 7) 발견. Go builder를 1.25.5 → 1.25.9로 업그레이드하여 stdlib CVE 전건 해소. otel exporter 잔존 v1.39.0 → v1.40.0으로 정렬.

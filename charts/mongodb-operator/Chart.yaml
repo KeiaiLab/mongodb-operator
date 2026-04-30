@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.3.2-beta.2
-appVersion: "1.3.2-beta.2"
+version: 1.3.2-beta.3
+appVersion: "1.3.2-beta.3"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -114,7 +114,7 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:1.3.2-beta.2
+      image: ghcr.io/keiailab/mongodb-operator:1.3.2-beta.3
     - name: mongodb
       image: mongo:8.2
     - name: mongodb-exporter

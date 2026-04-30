@@ -2,6 +2,11 @@
 # Minimal MongoDB Sharded Cluster Example
 # Production-ready but simplified configuration for moderate workloads
 # Features: 2 shards (3 members each), config server (3 members), mongos (2 replicas)
+#
+# ⚠️ WARNING: v1.3.2-beta.x 에서는 Sharded 모드가 *기본 비활성*입니다.
+# 본 예제를 적용하려면 helm values에 `features.sharded.enabled=true`를 명시 설정해야 합니다.
+# 베타에서는 ConfigServer init/HPA ordering race + mongos status 정합성 깨짐 케이스가 미해결입니다.
+# 정식 1.4.0 GA 전까지 *비프로덕션 데이터* 한정 사용을 권장합니다. CHANGELOG.md 참조.
 
 apiVersion: mongodb.keiailab.com/v1alpha1
 kind: MongoDBSharded

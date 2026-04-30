@@ -55,6 +55,9 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var enableShardedController bool
+	var enableBackupController bool
+	var enableAutoscaling bool
 	var tlsOpts []func(*tls.Config)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -70,6 +73,15 @@ func main() {
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	// Feature gates — v1.3.2-beta.x carve-out. 베타에서는 모두 false 기본.
+	// 여기서 false면 reconciler 자체가 등록되지 않아 controller log 오염도 막음.
+	// helm chart의 features.* 게이트에서 true 설정 시 args로 주입되어 활성화.
+	flag.BoolVar(&enableShardedController, "enable-sharded-controller", false,
+		"Enable MongoDBSharded reconciler. Beta default: false (carve-out scope).")
+	flag.BoolVar(&enableBackupController, "enable-backup-controller", false,
+		"Enable MongoDBBackup reconciler. Beta default: false (carve-out scope, no automated tests).")
+	flag.BoolVar(&enableAutoscaling, "enable-autoscaling", false,
+		"Enable HorizontalPodAutoscaler reconciliation. Beta default: false (carve-out scope, drift mutex absent).")
 
 	opts := zap.Options{
 		Development: true,
@@ -129,7 +141,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup MongoDB controller
+	// Setup MongoDB controller (always enabled — ReplicaSet은 베타 scope)
 	if err = (&controller.MongoDBReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
@@ -138,22 +150,36 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Setup MongoDBSharded controller
-	if err = (&controller.MongoDBShardedReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "MongoDBSharded")
-		os.Exit(1)
+	// Setup MongoDBSharded controller — feature gate
+	if enableShardedController {
+		if err = (&controller.MongoDBShardedReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MongoDBSharded")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("MongoDBSharded controller disabled by feature gate (--enable-sharded-controller=false)")
 	}
 
-	// Setup MongoDBBackup controller
-	if err = (&controller.MongoDBBackupReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "MongoDBBackup")
-		os.Exit(1)
+	// Setup MongoDBBackup controller — feature gate
+	if enableBackupController {
+		if err = (&controller.MongoDBBackupReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MongoDBBackup")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("MongoDBBackup controller disabled by feature gate (--enable-backup-controller=false)")
+	}
+
+	// Autoscaling 게이트는 reconciler 내부에서 enableAutoscaling 검사 — 현재 cmd 단에서는
+	// log 표시만. (HPA reconcile 로직 자체는 mongodb_controller / mongodbsharded_controller 내부에 있음)
+	if !enableAutoscaling {
+		setupLog.Info("HorizontalPodAutoscaler reconciliation disabled by feature gate (--enable-autoscaling=false)")
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
