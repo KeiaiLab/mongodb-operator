@@ -59,14 +59,6 @@ type MongoDBReconciler struct {
 	Recorder record.EventRecorder
 }
 
-// eventf는 nil-safe wrapper — Recorder가 미주입된 단위 테스트 환경에서도 panic 없이 동작.
-func (r *MongoDBReconciler) eventf(obj *mongodbv1alpha1.MongoDB, eventType, reason, fmtStr string, args ...interface{}) {
-	if r.Recorder == nil {
-		return
-	}
-	r.Recorder.Eventf(obj, eventType, reason, fmtStr, args...)
-}
-
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs/finalizers,verbs=update

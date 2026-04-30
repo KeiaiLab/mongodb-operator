@@ -34,6 +34,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
+	"github.com/keiailab/mongodb-operator/internal/assets"
 )
 
 const (
@@ -127,10 +128,13 @@ func BuildShardedKeyfileSecret(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.Se
 // buildReadinessScript는 mongod ping을 수행하는 readiness probe 스크립트를 만든다.
 // port가 다르면(cfg=27019, shard=27018, replicaset/mongos=27017) --port 인자가 필요.
 func buildReadinessScript(port int) string {
-	return fmt.Sprintf(`#!/bin/bash
-set -e
-mongosh --quiet --port %d --eval "db.adminCommand('ping')" > /dev/null 2>&1
-`, port)
+	// assets/scripts/readiness.sh.tpl로 외부화. embed error는 발생할 수 없는
+	// 상황(컴파일 타임 검증)이라 panic이 안전.
+	out, err := assets.RenderReadiness(port)
+	if err != nil {
+		panic(fmt.Sprintf("render readiness script: %v", err))
+	}
+	return out
 }
 
 // buildAdminBootstrapScript는 lifecycle.postStart에서 localhost-exception을 사용해
@@ -161,73 +165,12 @@ mongosh --quiet --port %d --eval "db.adminCommand('ping')" > /dev/null 2>&1
 //     읽음. ps/audit 로그 노출 없음, JS literal 인젝션 차단.
 //   - 이미 RS init/user가 있으면 idempotent no-op.
 func buildAdminBootstrapScript(port int) string {
-	return fmt.Sprintf(`#!/bin/bash
-set -eu
-PORT="${MONGO_PORT:-%d}"
-RS_NAME="${MONGO_REPLSET:-}"
-MEMBERS="${MONGO_MEMBERS:-}"
-CONFIGSVR_FLAG="${MONGO_CONFIGSVR:-}"
-
-# mongod이 응답할 때까지 최대 120초 대기 (60회 × 2초).
-for i in $(seq 1 60); do
-  if mongosh --quiet --host 127.0.0.1 --port "$PORT" --eval "db.adminCommand('ping').ok" > /dev/null 2>&1; then
-    break
-  fi
-  sleep 2
-done
-
-ORDINAL="${HOSTNAME##*-}"
-if [ "$ORDINAL" != "0" ]; then
-  echo "ordinal=$ORDINAL — bootstrap is ordinal-0 only, skipping"
-  exit 0
-fi
-
-# RS init (idempotent). NotYetInitialized(94)이면 initiate, 아니면 skip.
-RS_OK=$(mongosh --quiet --host 127.0.0.1 --port "$PORT" --eval 'try{rs.status().ok}catch(e){if(e.code===94){print("init")}else{print("err:"+e.code)}}' 2>/dev/null || echo "err:dial")
-if [ "$RS_OK" = "init" ]; then
-  if [ -z "$RS_NAME" ] || [ -z "$MEMBERS" ]; then
-    echo "FATAL: MONGO_REPLSET or MONGO_MEMBERS unset" >&2
-    exit 1
-  fi
-  echo "rs.initiate: replSet=$RS_NAME members=$MEMBERS configsvr=$CONFIGSVR_FLAG"
-  # JS literal 안에 환경변수를 안전하게 주입 (process.env 사용).
-  RS_NAME="$RS_NAME" MEMBERS="$MEMBERS" CONFIGSVR_FLAG="$CONFIGSVR_FLAG" \
-    mongosh --quiet --host 127.0.0.1 --port "$PORT" <<'EOF'
-const rsName = process.env.RS_NAME;
-const members = process.env.MEMBERS.split(',').map((host, i) => ({ _id: i, host: host.trim() }));
-const cfg = { _id: rsName, members: members };
-if (process.env.CONFIGSVR_FLAG === 'true') { cfg.configsvr = true; }
-const r = rs.initiate(cfg);
-if (r.ok !== 1) { print('rs.initiate FAILED: ' + JSON.stringify(r)); quit(2); }
-print('rs.initiate OK');
-EOF
-fi
-
-# PRIMARY 대기 (writable).
-for i in $(seq 1 60); do
-  WP=$(mongosh --quiet --host 127.0.0.1 --port "$PORT" --eval 'db.adminCommand({hello:1}).isWritablePrimary' 2>/dev/null || echo "")
-  [ "$WP" = "true" ] && break
-  sleep 2
-done
-
-# createUser (idempotent — UserAlreadyExists/DuplicateKey 에러는 무시).
-mongosh --quiet --host 127.0.0.1 --port "$PORT" admin <<'EOF'
-const fs = require('fs');
-const pw = fs.readFileSync('/etc/mongodb-admin/password', 'utf8').trim();
-try {
-  db.createUser({ user: 'admin', pwd: pw, roles: [{ role: 'root', db: 'admin' }] });
-  print('createUser OK');
-} catch (e) {
-  if (e.code === 11000 || e.code === 51003 || /already exists/.test(e.message || '')) {
-    print('createUser: already exists, idempotent skip');
-  } else {
-    print('createUser FAILED: ' + e.message);
-    quit(3);
-  }
-}
-EOF
-echo "bootstrap complete"
-`, port)
+	// assets/scripts/bootstrap-admin.sh.tpl로 외부화.
+	out, err := assets.RenderBootstrap(port)
+	if err != nil {
+		panic(fmt.Sprintf("render bootstrap script: %v", err))
+	}
+	return out
 }
 
 // buildAdminCredentialsVolume은 admin password Secret을 0400으로 mount하는 Volume을
@@ -1309,32 +1252,13 @@ func buildBackupScript(backup *mongodbv1alpha1.MongoDBBackup) string {
 	if backup.Spec.CompressionType == "zstd" {
 		compressionFlag = "--archive"
 	}
-
-	if backup.Spec.Storage.Type == "s3" {
-		return fmt.Sprintf(`
-set -e
-BACKUP_NAME="%s-$(date +%%Y%%m%%d-%%H%%M%%S)"
-echo "Starting backup: ${BACKUP_NAME}"
-
-# Install aws-cli
-apt-get update && apt-get install -y awscli
-
-# Create backup and upload to S3
-mongodump --uri="${MONGODB_URI}" %s --archive | \
-    aws s3 cp - "s3://${S3_BUCKET}/${S3_PREFIX}${BACKUP_NAME}.archive.gz" \
-    --endpoint-url="${S3_ENDPOINT}"
-
-echo "Backup completed: ${BACKUP_NAME}"
-`, backup.Spec.ClusterRef.Name, compressionFlag)
+	// S3 변형은 mongodump --archive를 stdin으로 piping해 stdout에 쓴 뒤 aws s3 cp -.
+	// PVC 변형은 --out으로 directory에 직접 출력. assets/scripts/backup-{s3,pvc}.sh.tpl 분기.
+	out, err := assets.RenderBackup(backup.Spec.Storage.Type, backup.Spec.ClusterRef.Name, compressionFlag)
+	if err != nil {
+		panic(fmt.Sprintf("render backup script: %v", err))
 	}
-
-	return fmt.Sprintf(`
-set -e
-BACKUP_NAME="%s-$(date +%%Y%%m%%d-%%H%%M%%S)"
-echo "Starting backup: ${BACKUP_NAME}"
-mongodump --uri="${MONGODB_URI}" --out="/backup/${BACKUP_NAME}" %s
-echo "Backup completed: ${BACKUP_NAME}"
-`, backup.Spec.ClusterRef.Name, compressionFlag)
+	return out
 }
 
 // BuildMongoDBPDB는 MongoDB ReplicaSet workload를 위한 PodDisruptionBudget을 생성한다.
