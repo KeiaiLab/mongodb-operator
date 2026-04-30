@@ -104,3 +104,7 @@ type MongoDBBackupList struct {
 func init() {
 	SchemeBuilder.Register(&MongoDBBackup{}, &MongoDBBackupList{})
 }
+
+// Statusable interface 구현.
+func (m *MongoDBBackup) GetConditions() *[]metav1.Condition { return &m.Status.Conditions }
+func (m *MongoDBBackup) SetPhase(phase string)              { m.Status.Phase = phase }

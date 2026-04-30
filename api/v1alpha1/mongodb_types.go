@@ -235,3 +235,7 @@ type MongoDBList struct {
 func init() {
 	SchemeBuilder.Register(&MongoDB{}, &MongoDBList{})
 }
+
+// Statusable interface 구현 — internal/controller/helpers.go의 generic helper에서 사용.
+func (m *MongoDB) GetConditions() *[]metav1.Condition { return &m.Status.Conditions }
+func (m *MongoDB) SetPhase(phase string)              { m.Status.Phase = MongoDBPhase(phase) }

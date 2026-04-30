@@ -331,3 +331,7 @@ type MongoDBShardedList struct {
 func init() {
 	SchemeBuilder.Register(&MongoDBSharded{}, &MongoDBShardedList{})
 }
+
+// Statusable interface 구현.
+func (m *MongoDBSharded) GetConditions() *[]metav1.Condition { return &m.Status.Conditions }
+func (m *MongoDBSharded) SetPhase(phase string)              { m.Status.Phase = MongoDBShardedPhase(phase) }
