@@ -247,20 +247,9 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 }
 
 func (r *MongoDBReconciler) handleDeletion(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("Handling MongoDB deletion")
-
-	if controllerutil.ContainsFinalizer(mdb, mongodbFinalizer) {
-		// Perform cleanup logic here if needed
-
-		// Remove finalizer
-		controllerutil.RemoveFinalizer(mdb, mongodbFinalizer)
-		if err := r.Update(ctx, mdb); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-
-	return ctrl.Result{}, nil
+	log.FromContext(ctx).Info("Handling MongoDB deletion")
+	// RS는 PVC retain 정책으로 별도 cleanup 불필요 (StatefulSet OwnerReference로 GC됨).
+	return handleFinalizerCleanup(ctx, r.Client, mdb, mongodbFinalizer, nil)
 }
 
 func (r *MongoDBReconciler) reconcileKeyfileSecret(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {

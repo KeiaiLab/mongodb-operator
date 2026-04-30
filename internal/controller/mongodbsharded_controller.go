@@ -215,20 +215,9 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 func (r *MongoDBShardedReconciler) handleDeletion(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("Handling MongoDBSharded deletion")
-
-	if controllerutil.ContainsFinalizer(mdbsh, mongodbShardedFinalizer) {
-		// Perform cleanup logic here if needed
-
-		// Remove finalizer
-		controllerutil.RemoveFinalizer(mdbsh, mongodbShardedFinalizer)
-		if err := r.Update(ctx, mdbsh); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-
-	return ctrl.Result{}, nil
+	log.FromContext(ctx).Info("Handling MongoDBSharded deletion")
+	// 모든 sub-resource는 OwnerReference로 GC. shard PVC는 retain 정책 그대로.
+	return handleFinalizerCleanup(ctx, r.Client, mdbsh, mongodbShardedFinalizer, nil)
 }
 
 func (r *MongoDBShardedReconciler) reconcileKeyfileSecret(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
