@@ -550,6 +550,36 @@ func TestBuildAdminBootstrapScript_NoSecretLeak(t *testing.T) {
 	}
 }
 
+// v1.4.5 회귀 가드. v1.4.4 까지 createUser 가 first-init 가드 (`if [ "$RS_OK" = "init" ]`)
+// 밖에서 무조건 실행됐던 결함을 재발 차단. ordinal-0 SECONDARY 재부팅 시 createUser →
+// NotWritablePrimary(10107) / Unauthorized(13) → quit(3) → FailedPostStartHook
+// → CrashLoopBackOff 의 root cause.
+func TestBuildAdminBootstrapScript_FirstInitGuard(t *testing.T) {
+	for _, port := range []int{27017, 27018, 27019} {
+		script := buildAdminBootstrapScript(port)
+
+		// (1) RS_OK != "init" 분기에서 즉시 exit 0 가 있어야 한다.
+		assert.Contains(t, script, `if [ "$RS_OK" != "init" ]; then`,
+			"port %d: RS 가 이미 초기화된 경우 first-init bootstrap 을 skip 하는 가드가 있어야 함", port)
+		assert.Contains(t, script, "first-init bootstrap skipped, exit 0",
+			"port %d: skip 분기에서 명시적 exit 0 가 있어야 함", port)
+
+		// (2) createUser 호출은 RS init 가드 *뒤* 에 위치해야 한다.
+		guardIdx := strings.Index(script, `if [ "$RS_OK" != "init" ]; then`)
+		createUserIdx := strings.Index(script, "db.createUser")
+		require.Greater(t, guardIdx, 0, "port %d: RS init 가드가 존재해야 함", port)
+		require.Greater(t, createUserIdx, 0, "port %d: createUser 호출이 존재해야 함", port)
+		assert.Greater(t, createUserIdx, guardIdx,
+			"port %d: createUser 는 first-init 가드 뒤에 위치해야 함 (재시작 시 SECONDARY 에서 실행 차단)", port)
+
+		// (3) rs.initiate 도 동일하게 가드 뒤에 위치해야 한다.
+		rsInitiateIdx := strings.Index(script, "rs.initiate(cfg)")
+		require.Greater(t, rsInitiateIdx, 0, "port %d: rs.initiate 호출이 존재해야 함", port)
+		assert.Greater(t, rsInitiateIdx, guardIdx,
+			"port %d: rs.initiate 는 first-init 가드 뒤에 위치해야 함", port)
+	}
+}
+
 func TestBuildMongosDeployment(t *testing.T) {
 	mdbsh := &mongodbv1alpha1.MongoDBSharded{
 		ObjectMeta: metav1.ObjectMeta{
