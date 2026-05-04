@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.5] - 2026-05-04
+
+ConfigServer / Shard ordinal-0 pod 의 영구 CrashLoopBackOff (FailedPostStartHook) 결함 fix.
+
+### Fixed
+- **Sharded P0 — `bootstrap-admin.sh` 비-멱등 createUser** (`internal/assets/scripts/bootstrap-admin.sh.tpl`):
+  v1.4.4 까지 `if [ "$RS_OK" = "init" ]` 가드는 *오직 `rs.initiate` 만* 감쌌고, `isWritablePrimary` 대기 + `createUser` 는 가드 *밖* 에서 매 컨테이너 재시작마다 실행됐음. ordinal-0 pod 가 재기동되어 PRIMARY 가 cfg-1/cfg-2 등으로 이미 fail-over 된 상태 → ordinal-0 가 SECONDARY 로 부팅 → WP 대기 120 초 timeout → SECONDARY 에 `createUser` 호출 → MongoDB 가 `NotWritablePrimary(10107)` 또는 `Unauthorized(13)` 반환 → catch 의 idempotent skip 코드 (`11000/51003/'already exists'`) 미매치 → `quit(3)` → kubelet `FailedPostStartHook` → 영구 CrashLoopBackOff. `argos` 클러스터 cfg-0 가 300 회 재시작으로 40h+ 소요 (mongod 본체는 무결, RS quorum 2/3 으로 운영 지속). v1.4.5 는 RS init 분기를 *early-exit 가드* 로 평탄화 — `RS_OK != "init"` 이면 즉시 `exit 0` 으로 스크립트 종료. WP 대기 + createUser 는 first-init 에서만 실행. **운영 영향**: 기존 v1.4.0~v1.4.4 클러스터에서 ordinal-0 가 재시작되면 본 결함 노출 (RS quorum 1/3 이상 살아있으면 운영 지속, fault-tolerance 0 으로 저하). v1.4.5 부터 정상 멱등.
+
+### Added
+- **회귀 테스트 1 케이스** (`internal/resources/builder_test.go`):
+  - `TestBuildAdminBootstrapScript_FirstInitGuard` — 모든 RS port (27017/27018/27019) 에 대해 (1) `RS_OK != "init"` early-exit 가드 존재 (2) `db.createUser` 호출이 가드 *뒤* 에 위치 (3) `rs.initiate(cfg)` 호출이 가드 *뒤* 에 위치. 가드 부재 또는 createUser 가 가드 앞에 위치하면 fail.
+
 ## [1.4.4] - 2026-05-01
 
 Sharded scale-back-out (scale-in 후 다시 scale-out) cycle 영구 stuck 결함 fix.
