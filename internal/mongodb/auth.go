@@ -61,10 +61,10 @@ func BootstrapAdminUser(ctx context.Context, firstHost, username, password strin
 	defer disconnectQuiet(anonClient)
 
 	var res bson.M
-	err = anonClient.Database("admin").RunCommand(ctx, bson.D{
+	err = anonClient.Database(adminUserDB).RunCommand(ctx, bson.D{
 		{Key: "createUser", Value: username},
 		{Key: "pwd", Value: password},
-		{Key: "roles", Value: bson.A{bson.M{"role": "root", "db": "admin"}}},
+		{Key: "roles", Value: bson.A{bson.M{"role": "root", "db": adminUserDB}}},
 	}).Decode(&res)
 	if err != nil {
 		if isUserAlreadyExistsErr(err) || isAuthRequiredErr(err) {
@@ -181,7 +181,7 @@ func (a *AuthManager) CreateAdminUser(ctx context.Context, podName, namespace, u
 // CreateAdminUserInContainer는 CreateAdminUser와 같지만 container 인자는 driver
 // 모델에서 의미가 없으므로 무시된다. (mongosh exec 시대의 잔재)
 func (a *AuthManager) CreateAdminUserInContainer(ctx context.Context, podName, namespace, container, username, password string, port int) error {
-	exists, err := a.UserExistsInContainer(ctx, podName, namespace, container, username, "admin", port)
+	exists, err := a.UserExistsInContainer(ctx, podName, namespace, container, username, adminUserDB, port)
 	if err != nil {
 		return fmt.Errorf("verify admin user: %w", err)
 	}
@@ -220,11 +220,11 @@ func (a *AuthManager) UserExistsInContainer(ctx context.Context, podName, namesp
 // DefaultAdminUser returns the default admin user configuration
 func DefaultAdminUser(password string) MongoUser {
 	return MongoUser{
-		Username: "admin",
+		Username: adminUserDB,
 		Password: password,
-		Database: "admin",
+		Database: adminUserDB,
 		Roles: []UserRole{
-			{Role: "root", DB: "admin"},
+			{Role: "root", DB: adminUserDB},
 		},
 	}
 }
@@ -234,11 +234,11 @@ func ClusterAdminUser(username, password string) MongoUser {
 	return MongoUser{
 		Username: username,
 		Password: password,
-		Database: "admin",
+		Database: adminUserDB,
 		Roles: []UserRole{
-			{Role: "clusterAdmin", DB: "admin"},
-			{Role: "userAdminAnyDatabase", DB: "admin"},
-			{Role: "readWriteAnyDatabase", DB: "admin"},
+			{Role: "clusterAdmin", DB: adminUserDB},
+			{Role: "userAdminAnyDatabase", DB: adminUserDB},
+			{Role: "readWriteAnyDatabase", DB: adminUserDB},
 		},
 	}
 }

@@ -27,6 +27,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 )
 
+// adminUserDB 는 MongoDB 의 admin database 이자 root user 명. RS 부트스트랩,
+// 인증, 권한 부여 등 다수의 호출자가 동일 문자열을 사용 — goconst 검출 차단 +
+// 의미 일관 보장을 위한 single source of truth.
+const adminUserDB = "admin"
+
 // ConnectOpts는 mongo-go-driver client 생성에 필요한 파라미터를 모은다.
 //
 // 자격증명(Username/Password)은 URI 문자열에 직접 포함하지 않고
@@ -83,10 +88,10 @@ func NewClient(ctx context.Context, opts ConnectOpts) (*mongo.Client, error) {
 
 	if opts.Username != "" {
 		// AuthSource 누락 시 SCRAM이 default DB("test")를 인증 DB로 시도해 실패한다.
-		// 호출자가 비워서 넘기는 실수를 차단하기 위해 명시적으로 "admin" 기본값을 보강.
+		// 호출자가 비워서 넘기는 실수를 차단하기 위해 명시적으로 adminUserDB 기본값을 보강.
 		authDB := opts.AuthDB
 		if authDB == "" {
-			authDB = "admin"
+			authDB = adminUserDB
 		}
 		// v2 driver에서 SetAuth는 receiver in-place mutate(*ClientOptions)이지만,
 		// 반환값을 재할당해 두면 향후 driver가 immutable builder로 바뀌더라도 안전.

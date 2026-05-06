@@ -104,7 +104,7 @@ func (s *ShardManager) RemoveShardWithStatus(ctx context.Context, mongosPod, nam
 	defer disconnectQuiet(c)
 
 	var res RemoveShardResult
-	if err := c.Database("admin").RunCommand(ctx, bson.D{{Key: "removeShard", Value: shardName}}).Decode(&res); err != nil {
+	if err := c.Database(adminUserDB).RunCommand(ctx, bson.D{{Key: "removeShard", Value: shardName}}).Decode(&res); err != nil {
 		return nil, fmt.Errorf("removeShard: %w", err)
 	}
 	return &res, nil
@@ -122,7 +122,7 @@ func (s *ShardManager) ListShards(ctx context.Context, mongosPod, namespace stri
 		Shards []ShardStatus `bson:"shards"`
 		OK     float64       `bson:"ok"`
 	}
-	if err := c.Database("admin").RunCommand(ctx, bson.D{{Key: "listShards", Value: 1}}).Decode(&result); err != nil {
+	if err := c.Database(adminUserDB).RunCommand(ctx, bson.D{{Key: "listShards", Value: 1}}).Decode(&result); err != nil {
 		return nil, fmt.Errorf("listShards: %w", err)
 	}
 	return result.Shards, nil
@@ -166,7 +166,7 @@ func (s *ShardManager) runAdminCommand(ctx context.Context, mongosPod, namespace
 	defer disconnectQuiet(c)
 
 	var result bson.M
-	err = c.Database("admin").RunCommand(ctx, cmd).Decode(&result)
+	err = c.Database(adminUserDB).RunCommand(ctx, cmd).Decode(&result)
 	if err == nil {
 		return nil
 	}

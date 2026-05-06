@@ -45,6 +45,8 @@ import (
 const (
 	mongodbFinalizer = "mongodb.keiailab.com/finalizer"
 	requeueAfter     = 30 * time.Second
+
+	conditionTypePrimaryUnreachable = "PrimaryUnreachable"
 )
 
 // MongoDBReconciler reconciles a MongoDB object
@@ -624,9 +626,9 @@ func (r *MongoDBReconciler) setPrimaryUnreachableCondition(ctx context.Context, 
 	logger := log.FromContext(ctx)
 	msg := firstLine(err.Error())
 	// 동일 type의 기존 condition은 제거하고 최신만 유지.
-	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, "PrimaryUnreachable")
+	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, conditionTypePrimaryUnreachable)
 	mdb.Status.Conditions = append(mdb.Status.Conditions, metav1.Condition{
-		Type:               "PrimaryUnreachable",
+		Type:               conditionTypePrimaryUnreachable,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: mdb.Generation,
 		LastTransitionTime: metav1.Now(),
@@ -645,7 +647,7 @@ func (r *MongoDBReconciler) clearPrimaryUnreachableCondition(ctx context.Context
 	logger := log.FromContext(ctx)
 	hasIt := false
 	for _, c := range mdb.Status.Conditions {
-		if c.Type == "PrimaryUnreachable" && c.Status == metav1.ConditionTrue {
+		if c.Type == conditionTypePrimaryUnreachable && c.Status == metav1.ConditionTrue {
 			hasIt = true
 			break
 		}
@@ -653,9 +655,9 @@ func (r *MongoDBReconciler) clearPrimaryUnreachableCondition(ctx context.Context
 	if !hasIt {
 		return
 	}
-	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, "PrimaryUnreachable")
+	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, conditionTypePrimaryUnreachable)
 	mdb.Status.Conditions = append(mdb.Status.Conditions, metav1.Condition{
-		Type:               "PrimaryUnreachable",
+		Type:               conditionTypePrimaryUnreachable,
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: mdb.Generation,
 		LastTransitionTime: metav1.Now(),
@@ -672,9 +674,9 @@ func (r *MongoDBReconciler) clearPrimaryUnreachableCondition(ctx context.Context
 // 자가 buildConditions 후 updateStatusWithRetry로 영속화). reason은 호출자가
 // 단계(ManagerCreateFailed / PrimaryLookupFailed)를 명시.
 func (r *MongoDBReconciler) recordPrimaryUnreachable(mdb *mongodbv1alpha1.MongoDB, reason string, err error) {
-	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, "PrimaryUnreachable")
+	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, conditionTypePrimaryUnreachable)
 	mdb.Status.Conditions = append(mdb.Status.Conditions, metav1.Condition{
-		Type:               "PrimaryUnreachable",
+		Type:               conditionTypePrimaryUnreachable,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: mdb.Generation,
 		LastTransitionTime: metav1.Now(),

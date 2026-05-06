@@ -38,6 +38,9 @@ import (
 
 const (
 	mongodbBackupFinalizer = "mongodbbackup.keiailab.com/finalizer"
+
+	backupPhaseCompleted = "Completed"
+	backupPhaseFailed    = "Failed"
 )
 
 // MongoDBBackupReconciler reconciles a MongoDBBackup object
@@ -81,7 +84,7 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// Check if backup is already completed or failed
-	if backup.Status.Phase == "Completed" || backup.Status.Phase == "Failed" {
+	if backup.Status.Phase == backupPhaseCompleted || backup.Status.Phase == backupPhaseFailed {
 		return ctrl.Result{}, nil
 	}
 
@@ -222,7 +225,7 @@ func (r *MongoDBBackupReconciler) updateBackupStatus(ctx context.Context, backup
 			break
 		}
 		if condition.Type == batchv1.JobFailed && condition.Status == corev1.ConditionTrue {
-			backup.Status.Phase = "Failed"
+			backup.Status.Phase = backupPhaseFailed
 			backup.Status.Error = condition.Message
 			backup.Status.CompletionTime = condition.LastTransitionTime.DeepCopy()
 			break
@@ -249,7 +252,7 @@ func (r *MongoDBBackupReconciler) updateStatusError(ctx context.Context, backup 
 	logger := log.FromContext(ctx)
 	logger.Error(err, "Backup failed")
 
-	backup.Status.Phase = "Failed"
+	backup.Status.Phase = backupPhaseFailed
 	backup.Status.Error = err.Error()
 	backup.Status.CompletionTime = &metav1.Time{Time: time.Now()}
 

@@ -99,7 +99,11 @@ func NewReplicaSetManagerWithPort(port int) (*ReplicaSetManager, error) {
 // helloNoConfigInfoSubstr는 mongod이 RS init 전(`--replSet`로 떠 있으나
 // replSetInitiate 미수신) 상태에서 hello 응답에 포함시키는 info 문구다.
 // mongo 4.x ~ 8.x 일관 — server 메시지 변경 시 회귀 가드 단위 테스트가 잡는다.
-const helloNoConfigInfoSubstr = "valid replica set config"
+const (
+	helloNoConfigInfoSubstr = "valid replica set config"
+
+	rsStateStrPrimary = "PRIMARY"
+)
 
 // IsInitialized는 RS 멤버 등록 여부를 hello 명령으로 판정한다.
 //
@@ -128,7 +132,7 @@ func (r *ReplicaSetManager) IsInitialized(ctx context.Context, podName, namespac
 	defer disconnectQuiet(c)
 
 	var hello bson.M
-	if err := c.Database("admin").RunCommand(ctx, bson.D{{Key: "hello", Value: 1}}).Decode(&hello); err != nil {
+	if err := c.Database(adminUserDB).RunCommand(ctx, bson.D{{Key: "hello", Value: 1}}).Decode(&hello); err != nil {
 		return false, fmt.Errorf("hello: %w", err)
 	}
 	return classifyHelloForRSInit(hello), nil
@@ -161,7 +165,7 @@ func (r *ReplicaSetManager) Initiate(ctx context.Context, podName, namespace str
 	defer disconnectQuiet(c)
 
 	var result bson.M
-	err = c.Database("admin").RunCommand(ctx, bson.D{{Key: "replSetInitiate", Value: config}}).Decode(&result)
+	err = c.Database(adminUserDB).RunCommand(ctx, bson.D{{Key: "replSetInitiate", Value: config}}).Decode(&result)
 	if err != nil {
 		return fmt.Errorf("replSetInitiate: %w", err)
 	}
@@ -177,7 +181,7 @@ func (r *ReplicaSetManager) GetStatus(ctx context.Context, podName, namespace st
 	defer disconnectQuiet(c)
 
 	var status ReplicaSetStatus
-	if err := c.Database("admin").RunCommand(ctx, bson.D{{Key: "replSetGetStatus", Value: 1}}).Decode(&status); err != nil {
+	if err := c.Database(adminUserDB).RunCommand(ctx, bson.D{{Key: "replSetGetStatus", Value: 1}}).Decode(&status); err != nil {
 		return nil, fmt.Errorf("replSetGetStatus: %w", err)
 	}
 	return &status, nil
@@ -191,7 +195,7 @@ func (r *ReplicaSetManager) GetPrimaryPod(ctx context.Context, podName, namespac
 		return "", err
 	}
 	for _, m := range status.Members {
-		if m.StateStr == "PRIMARY" {
+		if m.StateStr == rsStateStrPrimary {
 			parts := strings.Split(m.Name, ".")
 			if len(parts) > 0 {
 				return parts[0], nil
@@ -208,7 +212,7 @@ func (r *ReplicaSetManager) HasPrimary(ctx context.Context, podName, namespace s
 		return false, err
 	}
 	for _, m := range status.Members {
-		if m.StateStr == "PRIMARY" && m.Health == 1 {
+		if m.StateStr == rsStateStrPrimary && m.Health == 1 {
 			return true, nil
 		}
 	}
@@ -289,7 +293,7 @@ func (r *ReplicaSetManager) Reconfigure(ctx context.Context, podName, namespace 
 	defer disconnectQuiet(c)
 
 	var result bson.M
-	err = c.Database("admin").RunCommand(ctx, bson.D{
+	err = c.Database(adminUserDB).RunCommand(ctx, bson.D{
 		{Key: "replSetReconfig", Value: config},
 		{Key: "force", Value: force},
 	}).Decode(&result)
@@ -312,7 +316,7 @@ func (r *ReplicaSetManager) GetConfig(ctx context.Context, podName, namespace st
 		OK     float64          `bson:"ok"`
 	}
 	var res confResult
-	if err := c.Database("admin").RunCommand(ctx, bson.D{{Key: "replSetGetConfig", Value: 1}}).Decode(&res); err != nil {
+	if err := c.Database(adminUserDB).RunCommand(ctx, bson.D{{Key: "replSetGetConfig", Value: 1}}).Decode(&res); err != nil {
 		return nil, fmt.Errorf("replSetGetConfig: %w", err)
 	}
 	return &res.Config, nil

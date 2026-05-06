@@ -44,7 +44,7 @@
 본 ADR 채택과 동시에:
 1. `git rm .github/dependabot.yml`.
 2. README / CONTRIBUTING 의 Dependabot 언급 제거 (현재 없음).
-3. (별 트랙) Renovate `packageRules` 에 `kubernetes-dependencies` 그룹 추가 — 기존 Dependabot 의 `k8s.io/* + sigs.k8s.io/*` 묶음 패턴 이전.
+3. ~~Renovate `packageRules` 에 `kubernetes-dependencies` 그룹 추가~~ — *이미 적용 완료* (3-repo 의 `renovate.json` 모두 `groupName: "kubernetes"` + `matchPackagePrefixes: ["k8s.io/", "sigs.k8s.io/"]` 보유. opentelemetry 그룹 + dockerfile golang 룰도 동일 정합).
 
 ## Alternatives Considered
 

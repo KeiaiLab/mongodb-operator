@@ -2,14 +2,15 @@ version: "2"
 run:
   allow-parallel-runners: true
 linters:
-  # 첫 도입 baseline (2026-05-07) — strict 미검출 + correctness 위주.
-  # 잔여 대상 (goconst / gocyclo / unparam / dupl / lll) 은 별 트랙에서
-  # 점진 enable. ADR-0011 Consequences 의 "마이그레이션 트리거" 와 별개.
+  # 점진 강화 baseline (2026-05-07) — postgres 의 18 linter 수준에 가까이 정합.
+  # 잔여 (dupl / lll / depguard / modernize / logcheck) 은 별 트랙.
   default: none
   enable:
     - copyloopvar
     - errcheck
     - ginkgolinter
+    - goconst
+    - gocyclo
     - govet
     - ineffassign
     - misspell
@@ -18,15 +19,24 @@ linters:
     - revive
     - staticcheck
     - unconvert
+    - unparam
     - unused
   settings:
     revive:
       rules:
         - name: comment-spacings
         - name: import-shadowing
+    gocyclo:
+      # kubebuilder Reconcile 패턴은 32 ~ 35 수준이 표준. postgres 와 정합.
+      min-complexity: 35
   exclusions:
     generated: lax
     rules:
+      # test code 패턴 — fixture 의 const 반복 / 미사용 helper param 은 정상.
+      - linters:
+          - goconst
+          - unparam
+        path: _test\.go
       - linters:
           - dupl
           - lll
