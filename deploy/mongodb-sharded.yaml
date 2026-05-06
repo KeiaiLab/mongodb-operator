@@ -2,7 +2,7 @@ apiVersion: mongodb.keiailab.com/v1alpha1
 kind: MongoDBSharded
 metadata:
   name: mongodb-sharded
-  namespace: db
+  namespace: data
 spec:
   version:
     version: "8.2"
@@ -10,7 +10,7 @@ spec:
     members: 3
     storage:
       size: 10Gi
-      storageClassName: ceph-block
+      storageClassName: ceph-rbd
     resources:
       requests:
         cpu: 500m
@@ -23,7 +23,7 @@ spec:
     membersPerShard: 2
     storage:
       size: 1Ti
-      storageClassName: ceph-block
+      storageClassName: ceph-rbd
     resources:
       requests:
         cpu: 1000m
