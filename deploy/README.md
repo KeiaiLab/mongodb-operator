@@ -14,6 +14,12 @@ deploy/
 
 운영 모델: **operator 와 workload 는 별개 ArgoCD application** 으로 분리한다. operator 라이프사이클 (CRD/RBAC/Deployment) 은 prod ns 에, 사용자 데이터 (MongoDBSharded CR) 는 db ns 에 둔다.
 
+## 현 운영 상태 (2026-05-06)
+
+실 클러스터 ArgoCD source 는 `keiailab/argos-platform-data/mongodb` umbrella chart (revision=stable). umbrella 가 본 repo 의 helm chart (mongodb-operator 1.4.5) 를 dependency 로 흡수하여 operator + MongoDBSharded CR 을 단일 helm release 로 묶는다 (`platform/data/application.yaml` ApplicationSet path).
+
+본 디렉터리는 *대안/예비 진입점* — argos-platform-data 의 ApplicationSet generator path 가 본 path 를 직접 가리키도록 마이그레이션 가능하나, 현 단계에서는 helm umbrella 와 *동일 cluster state 산출* 의 parity 가 검증되지 않았다. 직접 적용은 *기존 helm release 와 충돌* 위험. 적용 전 ArgoCD application 또는 helm release 중 하나를 비활성화해야 한다.
+
 ## 사전 조건 (cluster)
 
 - [ ] `prod` namespace 사전 생성 (ArgoCD 가 만들지 않음 — `delete-namespace.yaml` patch).
