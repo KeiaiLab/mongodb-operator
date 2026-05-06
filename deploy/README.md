@@ -6,13 +6,13 @@
 
 ```
 deploy/
-├── overlays/prod/                 # ArgoCD application path: operator 자체
-│   ├── kustomization.yaml         # config/{crd,rbac,manager} → namespace=prod
-│   └── delete-namespace.yaml      # 자동 생성 Namespace 제거 (prod ns 외부 사전생성)
-└── mongodb-sharded.yaml           # ArgoCD application path: workload (CR 인스턴스, db ns)
+├── overlays/prod/                 # ArgoCD application path: operator 자체 (envName=prod, ns=data)
+│   ├── kustomization.yaml         # config/{crd,rbac,manager} → namespace=data
+│   └── delete-namespace.yaml      # 자동 생성 Namespace 제거 (data ns 외부 사전생성)
+└── mongodb-sharded.yaml           # ArgoCD application path: workload (CR 인스턴스, data ns)
 ```
 
-운영 모델: **operator 와 workload 는 별개 ArgoCD application** 으로 분리한다. operator 라이프사이클 (CRD/RBAC/Deployment) 은 prod ns 에, 사용자 데이터 (MongoDBSharded CR) 는 db ns 에 둔다.
+운영 모델: **operator 와 workload 는 별개 ArgoCD application** 으로 분리한다 — 단, 클러스터 ns 통합 정책 (argos 2026-05-06 cycle: 5 차트 모두 `data` ns 단일) 에 따라 operator 와 CR 이 *동일 ns* 를 공유한다. envName 분리 (`overlays/prod`) 는 환경 식별자로만 유지하고 namespace 는 `data`.
 
 ## 현 운영 상태 (2026-05-06)
 
@@ -22,12 +22,10 @@ deploy/
 
 ## 사전 조건 (cluster)
 
-- [ ] `prod` namespace 사전 생성 (ArgoCD 가 만들지 않음 — `delete-namespace.yaml` patch).
-- [ ] `db` namespace 사전 생성.
-- [ ] StorageClass `ceph-block` 이용 가능.
-- [ ] `mongodb-admin-creds` Secret (db ns) — ExternalSecret 또는 SealedSecret 으로 주입.
-  - keys: `username`, `password` (mechanism=SCRAM-SHA-256).
-- [ ] Prometheus Operator (monitoring.enabled=true 사용 시).
+- [x] `data` namespace 사전 생성 (argos 2026-05-06 cycle 으로 이미 Active).
+- [ ] StorageClass `ceph-block` 이용 가능 (현 클러스터: `ceph-rbd` 사용 중 — argos-platform-data/mongodb values.yaml 인용. 필요 시 storageClassName 동기 조정).
+- [ ] `mongodb-admin-creds` Secret (data ns) — argos-platform-data/mongodb 의 manual K8s Secret 패턴 (ESO Phase 3 차단으로 임시 manual; ESO ≥ v0.18 이후 ExternalSecret 자동화).
+- [ ] Prometheus Operator (monitoring.enabled=true 사용 시 — VictoriaMetrics operator 합류 후).
 
 ## 적용 (수동 검증)
 
@@ -40,13 +38,13 @@ kustomize build deploy/overlays/prod | grep -c "kind: Namespace"   # 0
 kustomize build deploy/overlays/prod | kubectl apply -f -
 
 # 3) operator readiness
-kubectl -n prod rollout status deploy/mongodb-operator-controller-manager
+kubectl -n data rollout status deploy/mongodb-operator-controller-manager
 
 # 4) workload 적용
 kubectl apply -f deploy/mongodb-sharded.yaml
 
 # 5) workload readiness
-kubectl -n db get mongodbsharded mongodb-sharded -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+kubectl -n data get mongodbsharded mongodb-sharded -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
 ```
 
 ## 롤백
