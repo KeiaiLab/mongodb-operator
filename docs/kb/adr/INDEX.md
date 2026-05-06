@@ -17,6 +17,7 @@
 | [ADR-0008](0008-rs-deliberate-scale-policy.md) | ReplicaSet 멤버 수 변경의 deliberate 가드 | Accepted | 2026-04-29 |
 | [ADR-0009](0009-shard-cfg-hpa-with-deliberate-guard.md) | shard / cfg HPA의 RS 부작용과 이중 가드 | Accepted | 2026-04-29 |
 | [ADR-0010](0010-sharded-hpa-ordering-and-status-truth.md) | Sharded HPA — informer cache + reconcile ordering + status truth source (P1 #1/#2/#3 fix, 베타 carve-out 종료) | Accepted | 2026-04-30 |
+| [ADR-0011](0011-pre-commit-instead-of-lefthook.md) | Hook 도구로 pre-commit 채택 (글로벌 lefthook 표준 분기) | Accepted | 2026-05-06 |
 
 ## 작성 가이드
 
