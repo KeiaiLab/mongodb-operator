@@ -4,6 +4,59 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 운영 장애 + PodSecurity 사고 종료 (ralph-loop iteration 2 — 사용자 권한 부여 후 자동 진행)
+
+### 실행 결과 요약 (모든 차단점 해소)
+
+| 단계 | 작업 | 결과 |
+|---|---|---|
+| **P0 운영 장애** | e121/e122 etcd 노드 tailscaled 폭주 진단 | systemd watchdog restart counter 210, wireguard-go panic stack JSON dump → /var/log/syslog 847GB |
+| | tailscaled.service stop + disable + mask | ✓ 양 노드 (`active=inactive enabled=masked`) |
+| | /var/log/syslog truncate (847GB → ~1KB) | ✓ 양 노드 디스크 100% → 4% |
+| | kubelet DiskPressure transition 확인 | ✓ e121 + e122 `DiskPressure=False` |
+| | Evicted/Failed pod 35건 일괄 정리 | ✓ 1차 정리 완료 |
+| **P1 코드 fix** | mongodb-operator commit `85c692d` (PodSecurity SC fix + 회귀 가드) | ✓ go test 4 패키지 PASS |
+| | mongodb-operator commit `c5b26de` (chart 1.4.5 → 1.4.6 + CHANGELOG) | ✓ push origin main |
+| | docker buildx + push (`ghcr.io/keiailab/mongodb-operator:1.4.6@c4d59112`) | ✓ ghcr.io 등록 |
+| | `make helm-publish` (gh-pages 1.4.6.tgz publish) | ✓ index.yaml + chart fetchable |
+| **P2 GitOps deploy** | argos-platform-data commit `b378590` (Chart.yaml: dependency + appVersion 1.4.6) | ✓ push main + stable |
+| | helm v4.1.4 dep update 버그 회피 — helm v3.18.4 로 정확한 Chart.lock 재생성 | digest sha256:897ed69a... |
+| | argos-platform-data commit `87ce471` (Chart.lock digest 정합) | ✓ push main + stable |
+| | ArgoCD `platform-data-mongodb` 강제 sync | ✓ `Synced/Progressing rev=87ce471...` |
+| | mongodb-operator pod image rollout (1.4.5 → 1.4.6) | ✓ 새 ReplicaSet `868bdf55b-rmbg6` 1/1 Running |
+| | argos-mongo-cfg StatefulSet pod admission 회복 | ✓ 0/3 → 3 pod 생성 (Init phase 진입) |
+| **부수 처리** | mongodb-admin K8s Secret 누락 발견 (ADR-0041 Phase 3 차단의 manual secret) | ✓ `kubectl create secret generic mongodb-admin -n data ...` 생성 |
+
+### 검증 인용
+
+```
+kubectl get nodes (e121,e122):
+  e121: DiskPressure=False, Ready=True
+  e122: DiskPressure=False, Ready=True
+
+ArgoCD platform-data-mongodb:
+  Synced/Progressing rev=87ce4716f44e03e7c96889bf600d46cf20b9e458
+
+mongodb-operator pod images:
+  platform-data-mongodb-mongodb-operator-868bdf55b-rmbg6: ghcr.io/keiailab/mongodb-operator:1.4.6  (1/1 Running 69s)
+
+argos-mongo-cfg StatefulSet:
+  argos-mongo-cfg-0: Init:0/1 (이전 admission 거부 → 현재 정상 Init phase)
+  argos-mongo-cfg-1: Init:0/1
+  argos-mongo-cfg-2: Init:0/1
+```
+
+### 후속 (다음 iteration 또는 사용자 판단)
+
+- argos-mongo-cfg-* pod 의 Init phase → Running 도달 확인 (monitor 진행 중).
+- valkey-operator 동일 결함 fix 적용 commit `eeaade8` (4 곳 SC + helper + 회귀 가드) 별도 진행 — 운영 영향 없음 (CRD 미배포).
+- valkey-operator 동등 수준화 잔여 항목: CODE_OF_CONDUCT / GOVERNANCE / MAINTAINERS / ROADMAP 문서 추가 + operator 자체 클러스터 배포.
+- ADR-0041 Phase 3 (Infisical Cloud / ESO ExternalSecret 자동화) — manual secret 의 영구 해소 경로.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 운영 장애 진단 + PodSecurity 코드 결함 수정 (ralph-loop iteration 1)
 
 ### 장애 사실 (kubectl 검증, context: argos)
