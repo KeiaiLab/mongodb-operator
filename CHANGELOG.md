@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `deploy/README.md` — GitOps 배포 디렉터리 운영 런북 (사전 조건, 적용, 롤백 절차).
+  postgresql-operator / valkey-operator 와 3-repo 문서 정합.
+
 ## [1.4.5] - 2026-05-04
 
 ConfigServer / Shard ordinal-0 pod 의 영구 CrashLoopBackOff (FailedPostStartHook) 결함 fix.
