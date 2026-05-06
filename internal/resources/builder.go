@@ -92,6 +92,29 @@ func buildDefaultContainerSecurityContext() *corev1.SecurityContext {
 		Capabilities: &corev1.Capabilities{
 			Drop: []corev1.Capability{"ALL"},
 		},
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+}
+
+// PodSecurity "restricted" 정책을 만족하는 init container용 SecurityContext.
+// keyfile 복사 init container 4곳 (replicaset / config server / shard / mongos) 에서
+// 동일 정의가 인라인 중복되어 있던 것을 단일 진실원으로 통일.
+// 클러스터 사고 (2026-05-07): copy-keyfile container 가 capabilities.drop 과
+// seccompProfile 누락으로 PodSecurity restricted 위반 → StatefulSet pod 생성 거부.
+func buildKeyfileInitContainerSecurityContext() *corev1.SecurityContext {
+	return &corev1.SecurityContext{
+		RunAsUser:                ptr.To[int64](999),
+		RunAsGroup:               ptr.To[int64](999),
+		RunAsNonRoot:             ptr.To(true),
+		AllowPrivilegeEscalation: ptr.To(false),
+		Capabilities: &corev1.Capabilities{
+			Drop: []corev1.Capability{"ALL"},
+		},
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
 	}
 }
 
@@ -406,12 +429,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 				{Name: "keyfile-secret", MountPath: "/keyfile-secret", ReadOnly: true},
 				{Name: "keyfile", MountPath: "/keyfile"},
 			},
-			SecurityContext: &corev1.SecurityContext{
-				RunAsUser:                ptr.To[int64](999),
-				RunAsGroup:               ptr.To[int64](999),
-				RunAsNonRoot:             ptr.To(true),
-				AllowPrivilegeEscalation: ptr.To(false),
-			},
+			SecurityContext: buildKeyfileInitContainerSecurityContext(),
 		},
 	}
 
@@ -698,12 +716,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 								{Name: "keyfile-secret", MountPath: "/keyfile-secret", ReadOnly: true},
 								{Name: "keyfile", MountPath: "/keyfile"},
 							},
-							SecurityContext: &corev1.SecurityContext{
-								RunAsUser:                ptr.To[int64](999),
-								RunAsGroup:               ptr.To[int64](999),
-								RunAsNonRoot:             ptr.To(true),
-								AllowPrivilegeEscalation: ptr.To(false),
-							},
+							SecurityContext: buildKeyfileInitContainerSecurityContext(),
 						},
 					},
 					Containers: []corev1.Container{
@@ -851,12 +864,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 								{Name: "keyfile-secret", MountPath: "/keyfile-secret", ReadOnly: true},
 								{Name: "keyfile", MountPath: "/keyfile"},
 							},
-							SecurityContext: &corev1.SecurityContext{
-								RunAsUser:                ptr.To[int64](999),
-								RunAsGroup:               ptr.To[int64](999),
-								RunAsNonRoot:             ptr.To(true),
-								AllowPrivilegeEscalation: ptr.To(false),
-							},
+							SecurityContext: buildKeyfileInitContainerSecurityContext(),
 						},
 					},
 					Containers: []corev1.Container{
@@ -1098,12 +1106,7 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 								{Name: "keyfile-secret", MountPath: "/keyfile-secret", ReadOnly: true},
 								{Name: "keyfile", MountPath: "/keyfile"},
 							},
-							SecurityContext: &corev1.SecurityContext{
-								RunAsUser:                ptr.To[int64](999),
-								RunAsGroup:               ptr.To[int64](999),
-								RunAsNonRoot:             ptr.To(true),
-								AllowPrivilegeEscalation: ptr.To(false),
-							},
+							SecurityContext: buildKeyfileInitContainerSecurityContext(),
 						},
 					},
 					Containers: containers,

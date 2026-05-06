@@ -862,3 +862,62 @@ func TestScaleDeliberateHelpers(t *testing.T) {
 		assert.False(t, IsShardScaleDeliberate(shardedWithAuth()))
 	})
 }
+
+// TestPodSecurityRestrictedCompliance 는 PodSecurity "restricted" 정책 위반으로
+// argos-mongo-cfg StatefulSet pod 가 거부된 사고 (2026-05-07) 의 회귀 가드다.
+// MongoDB / MongoDBSharded 가 만드는 모든 StatefulSet 의 컨테이너 + init container 가
+// (1) capabilities.drop=[ALL] (2) seccompProfile.type=RuntimeDefault 둘 다 만족해야 한다.
+func TestPodSecurityRestrictedCompliance(t *testing.T) {
+	assertRestricted := func(t *testing.T, name string, sc *corev1.SecurityContext) {
+		t.Helper()
+		require.NotNil(t, sc, "%s: SecurityContext nil", name)
+		require.NotNil(t, sc.Capabilities, "%s: Capabilities nil", name)
+		assert.Contains(t, sc.Capabilities.Drop, corev1.Capability("ALL"),
+			"%s: capabilities.drop must include ALL", name)
+		require.NotNil(t, sc.SeccompProfile, "%s: SeccompProfile nil", name)
+		assert.Equal(t, corev1.SeccompProfileTypeRuntimeDefault, sc.SeccompProfile.Type,
+			"%s: seccompProfile.type must be RuntimeDefault", name)
+		require.NotNil(t, sc.AllowPrivilegeEscalation, "%s: AllowPrivilegeEscalation nil", name)
+		assert.False(t, *sc.AllowPrivilegeEscalation, "%s: AllowPrivilegeEscalation must be false", name)
+	}
+
+	t.Run("MongoDB ReplicaSet StatefulSet", func(t *testing.T) {
+		mdb := &mongodbv1alpha1.MongoDB{
+			ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "default"},
+			Spec: mongodbv1alpha1.MongoDBSpec{
+				Members:        3,
+				ReplicaSetName: "rs0",
+				Version:        mongodbv1alpha1.MongoDBVersion{Version: "8.0"},
+				Storage:        mongodbv1alpha1.StorageSpec{Size: resource.MustParse("1Gi"), DataDirPath: "/data/db"},
+			},
+		}
+		sts := BuildReplicaSetStatefulSet(mdb)
+		for _, c := range sts.Spec.Template.Spec.InitContainers {
+			assertRestricted(t, "init/"+c.Name, c.SecurityContext)
+		}
+		for _, c := range sts.Spec.Template.Spec.Containers {
+			assertRestricted(t, "container/"+c.Name, c.SecurityContext)
+		}
+	})
+
+	t.Run("MongoDBSharded ConfigServer StatefulSet", func(t *testing.T) {
+		sts := BuildConfigServerStatefulSet(shardedWithAuth())
+		for _, c := range sts.Spec.Template.Spec.InitContainers {
+			assertRestricted(t, "init/"+c.Name, c.SecurityContext)
+		}
+		for _, c := range sts.Spec.Template.Spec.Containers {
+			assertRestricted(t, "container/"+c.Name, c.SecurityContext)
+		}
+	})
+
+	t.Run("MongoDBSharded Shard StatefulSet", func(t *testing.T) {
+		sh := shardedWithAuth()
+		sts := BuildShardStatefulSet(sh, 0)
+		for _, c := range sts.Spec.Template.Spec.InitContainers {
+			assertRestricted(t, "init/"+c.Name, c.SecurityContext)
+		}
+		for _, c := range sts.Spec.Template.Spec.Containers {
+			assertRestricted(t, "container/"+c.Name, c.SecurityContext)
+		}
+	})
+}
