@@ -301,7 +301,8 @@ func (r *MongoDBShardedReconciler) reconcileShardScriptsConfigMap(ctx context.Co
 // reconcileShardsInit이 인덱스별로 true를 누적하므로 부분 초기화 상태를
 // (false) 로 안전하게 보고한다.
 func (r *MongoDBShardedReconciler) areShardsInitialized(mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
-	if int32(len(mdbsh.Status.ShardsInitialized)) < mdbsh.Spec.Shards.Count {
+	// gosec G115 (int → int32 overflow) 회피 — int32 → int upcast 는 항상 안전.
+	if len(mdbsh.Status.ShardsInitialized) < int(mdbsh.Spec.Shards.Count) {
 		return false
 	}
 	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
