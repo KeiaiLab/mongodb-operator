@@ -38,3 +38,6 @@ build/
 # Temporary files
 tmp/
 temp/
+
+# Ralph loop state (local-only, 3-repo 정합)
+.claude/ralph-loop.local.md

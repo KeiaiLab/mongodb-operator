@@ -44,20 +44,25 @@ echo "════════════════════════�
 echo " release-smoke-test  ${GH_OWNER}/${GH_REPO}  ${VERSION}"
 echo "════════════════════════════════════════════════════════════════"
 
-# 1. GH Release
+# 1. GH Release + assets (chart .tgz + SBOM)
 echo ""
-echo "▸ [1/5] GH Release tag + asset"
+echo "▸ [1/6] GH Release tag + assets"
 if gh release view "$VERSION" -R "${GH_OWNER}/${GH_REPO}" >/dev/null 2>&1; then
   pass "release ${VERSION} 존재"
-  ASSET="$(gh release view "$VERSION" -R "${GH_OWNER}/${GH_REPO}" --json assets --jq '.assets[].name' | grep "${CHART_NAME}-${TAG_VER}.tgz" || true)"
-  if [ -n "$ASSET" ]; then pass "chart .tgz asset 첨부 ($ASSET)"; else fail "chart .tgz asset 누락"; fi
+  ASSETS="$(gh release view "$VERSION" -R "${GH_OWNER}/${GH_REPO}" --json assets --jq '.assets[].name')"
+  if echo "$ASSETS" | grep -q "${CHART_NAME}-${TAG_VER}.tgz"; then pass "chart .tgz asset 첨부"; else fail "chart .tgz asset 누락"; fi
+  if echo "$ASSETS" | grep -Eq "${CHART_NAME}-${VERSION}\.spdx\.json"; then
+    pass "SBOM (SPDX) asset 첨부 — supply chain 표준"
+  else
+    fail "SBOM asset 누락 (${CHART_NAME}-${VERSION}.spdx.json) — make sbom 후 gh release upload 필요"
+  fi
 else
   fail "release ${VERSION} 없음"
 fi
 
 # 2. GHCR image
 echo ""
-echo "▸ [2/5] GHCR image manifest"
+echo "▸ [2/6] GHCR image manifest"
 # Image name 은 GH repo name 을 따름 (chart name 과 다를 수 있음 — postgresql-operator
 # chart 가 ghcr.io/keiailab/postgres-operator 로 push 되는 패턴 등).
 IMAGE_REF="ghcr.io/${GH_OWNER}/${GH_REPO}:${VERSION}"
@@ -70,7 +75,7 @@ fi
 
 # 3. GitHub Pages
 echo ""
-echo "▸ [3/5] GitHub Pages status"
+echo "▸ [3/6] GitHub Pages status"
 PAGES_STATUS="$(gh api "repos/${GH_OWNER}/${GH_REPO}/pages/builds" --jq '.[0].status' 2>/dev/null || echo "missing")"
 if [ "$PAGES_STATUS" = "built" ]; then
   pass "Pages status=built"
@@ -80,7 +85,7 @@ fi
 
 # 4. Helm repo index.yaml — 파일 기반 (bash 변수 long-string echo race 회피)
 echo ""
-echo "▸ [4/5] Helm repo index.yaml fetch"
+echo "▸ [4/6] Helm repo index.yaml fetch"
 INDEX_FILE="/tmp/release-smoke-index-$$.yaml"
 if curl -sfo "$INDEX_FILE" "${HELM_REPO_URL}/index.yaml" 2>/dev/null; then
   SIZE=$(wc -c < "$INDEX_FILE" | tr -d ' ')
@@ -98,7 +103,7 @@ fi
 
 # 5. helm pull + template
 echo ""
-echo "▸ [5/5] helm pull + template (default + all-features)"
+echo "▸ [5/6] helm pull + template (default + all-features)"
 TMP_REPO="smoke-test-$$"
 if helm repo add "$TMP_REPO" "${HELM_REPO_URL}" >/dev/null 2>&1; then
   helm repo update "$TMP_REPO" >/dev/null 2>&1
@@ -132,6 +137,24 @@ if helm repo add "$TMP_REPO" "${HELM_REPO_URL}" >/dev/null 2>&1; then
   helm repo remove "$TMP_REPO" >/dev/null 2>&1
 else
   fail "helm repo add ${HELM_REPO_URL} 실패"
+fi
+
+# 6. trivy image post-publish vulnerability scan (exit-code 기반)
+echo ""
+echo "▸ [6/6] trivy image post-publish scan (HIGH+CRITICAL, fixed only)"
+if command -v trivy >/dev/null 2>&1; then
+  TRIVY_OUT="/tmp/release-smoke-trivy-$$.txt"
+  # --exit-code 1 → CVE 검출 시 exit 1 (정직한 fail). --ignore-unfixed → fix 가능한 것만.
+  if trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+       --quiet --no-progress --skip-version-check "$IMAGE_REF" > "$TRIVY_OUT" 2>&1; then
+    pass "trivy image: 0 HIGH+CRITICAL (fixed CVE 없음)"
+  else
+    fail "trivy image: HIGH/CRITICAL CVE 검출 — $TRIVY_OUT 참조"
+    head -20 "$TRIVY_OUT" | sed 's/^/    /'
+  fi
+  rm -f "$TRIVY_OUT"
+else
+  echo "  ○ trivy 미설치 — skip (brew install trivy 권장)"
 fi
 
 # Summary
