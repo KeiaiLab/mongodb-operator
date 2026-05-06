@@ -37,6 +37,24 @@
 | smoke-test 12 step | ✓ | ✓ | ✓ | 3-repo 정합 |
 | make lint PASS | ✓ (staticcheck) | ✓ (golangci-lint) | ✓ (golangci-lint) | linting.md |
 
+## Quality baseline (2026-05-07 실측)
+
+`enforcement.md §3.4 (Coverage 합산)` 의 P2 측정 — 본 세션 baseline.
+
+```
+$ make test    # exit 0 / FAIL: 0
+internal/controller    coverage: 31.9% of statements
+internal/mongodb       coverage: 41.3% of statements
+internal/resources     coverage: 72.7% of statements
+internal/webhook       (no test 패키지)
+```
+
+**80% 목표 (enforcement §3.4)** 대비:
+- ✓ resources 72.7% (근접)
+- ✗ controller 31.9% / mongodb 41.3% — envtest 기반 reconcile 시나리오 추가 권장
+
+`enforcement` 의 "절대치보다 *변경된 코드의 커버 여부*가 우선" 원칙 적용 — 본 baseline 은 회귀 비교 기준점.
+
 ## 알려진 잔여 gap (별 트랙)
 
 1. **golangci-lint 미설치**: 본 repo 의 `make lint` 는 `go vet + staticcheck` 만 실행 (golangci-lint 가 없으면 silent skip). postgres + valkey 패턴 (golangci-lint v2.x) 으로 정합 권장.
