@@ -164,7 +164,8 @@ audit: ## govulncheck + trivy + gosec — RFC 0002 L3 security 게이트.
 	@command -v $(GOBIN)/govulncheck >/dev/null 2>&1 || go install golang.org/x/vuln/cmd/govulncheck@latest
 	$(GOBIN)/govulncheck ./...
 	@echo "=== trivy fs (lockfile + base CVE) ==="
-	@command -v trivy >/dev/null 2>&1 && trivy fs --exit-code 1 --severity HIGH,CRITICAL --quiet --skip-dirs vendor . || echo "trivy not installed (brew install trivy)"
+	@command -v trivy >/dev/null 2>&1 || { echo "[error] trivy not installed: brew install trivy"; exit 1; }
+	trivy fs --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed --skip-dirs vendor,bin,tmp .
 	@echo "=== gosec (HIGH only) ==="
 	@command -v $(GOBIN)/gosec >/dev/null 2>&1 || go install github.com/securego/gosec/v2/cmd/gosec@latest
 	$(GOBIN)/gosec -quiet -severity high ./internal/... || true
