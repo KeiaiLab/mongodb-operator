@@ -7,10 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [1.4.6] - 2026-05-07
 
+PodSecurity restricted 정책 위반으로 `argos-mongo-cfg` StatefulSet pod 가 생성 거부되던 결함 fix.
+
+### Fixed
+- **PodSecurity P0 — `copy-keyfile` init container 가 capabilities.drop / seccompProfile 누락** (`internal/resources/builder.go`):
+  4 곳 (replicaset / config server / shard / mongos) 에 인라인 중복된 init container 정의가 모두 PodSecurity restricted 정책 (`capabilities.drop=[ALL]` + `seccompProfile.type=RuntimeDefault`) 위반. mongodb 컨테이너용 `buildDefaultContainerSecurityContext()` 도 동일 위반에 노출. `argos` 클러스터 운영 중 PSA admission 거부로 StatefulSet pod 0 개 생성 → 데이터 가용성 영향. 신규 helper `buildKeyfileInitContainerSecurityContext()` 도입 + 4 곳 인라인 SC → helper 호출로 통일 (DRY 회복). `buildDefaultContainerSecurityContext()` 에 SeccompProfile 추가.
+
+### Added
+- **회귀 가드 1 케이스** (`internal/resources/builder_test.go`):
+  - `TestPodSecurityRestrictedCompliance` — ReplicaSet / ConfigServer / Shard StatefulSet 의 모든 컨테이너 + init container 가 capabilities.drop=[ALL] + seccompProfile.type=RuntimeDefault + AllowPrivilegeEscalation=false 를 만족하는지 검증.
+
+### Operational
 - `deploy/README.md` — GitOps 배포 디렉터리 운영 런북 (사전 조건, 적용, 롤백 절차).
   postgresql-operator / valkey-operator 와 3-repo 문서 정합.
+
+### Note
+본 릴리스는 코드 결함만 수정. 별도 운영 사고 (etcd 노드 e121/e122 의 `tailscaled` 무한 panic restart 루프 → `/var/log/syslog` 847GB 폭주 → DiskPressure → mongodb-operator pod 11회 evict) 는 인프라 영역 처리 — `tailscaled.service` mask + syslog truncate 로 해소.
 
 ## [1.4.5] - 2026-05-04
 
