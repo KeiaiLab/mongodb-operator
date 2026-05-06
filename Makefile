@@ -123,11 +123,28 @@ release: ## Full release pipeline. VERSION=v1.x.y 필수 (e.g., make release VER
 	@echo "  - Helm Repo- helm repo update + helm search repo keiailab/mongodb-operator"
 	@echo "  - ArtifactHub은 ~30분 내 인덱스 자동 갱신"
 
+# PGP signing 옵션 — HELM_SIGN=1 시 helm package --sign 으로 .prov 파일 생성.
+HELM_SIGN     ?= 0
+HELM_GPG_KEY  ?= 89A409476828CB992338C378651E51AF520BCB78
+HELM_KEYRING  ?= $(HOME)/.gnupg/secring.gpg
+
+.PHONY: release-notes
+release-notes: ## git-cliff 로 release notes 자동 생성 — /tmp/release-notes-VERSION.md.
+	@command -v git-cliff >/dev/null 2>&1 || { echo "[error] git-cliff not installed: brew install git-cliff"; exit 1; }
+	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
+	git-cliff --strip all --tag "$(VERSION)" --unreleased > "/tmp/release-notes-$(VERSION).md"
+	@echo "✓ release notes: /tmp/release-notes-$(VERSION).md"
+
 .PHONY: helm-publish
-helm-publish: ## Publish helm chart to gh-pages (RFC 0002 helm-publish.yml 대체 로컬 자동화).
+helm-publish: ## Publish helm chart to gh-pages (RFC 0002 helm-publish.yml 대체 로컬 자동화). HELM_SIGN=1 시 PGP .prov 동반.
 	@echo "=== helm package ==="
 	@mkdir -p /tmp/release
-	helm package charts/mongodb-operator -d /tmp/release/
+	@if [ "$(HELM_SIGN)" = "1" ]; then \
+		echo "INFO- chart 서명 활성 (PGP key $(HELM_GPG_KEY))"; \
+		helm package --sign --key "$(HELM_GPG_KEY)" --keyring "$(HELM_KEYRING)" charts/mongodb-operator -d /tmp/release/; \
+	else \
+		helm package charts/mongodb-operator -d /tmp/release/; \
+	fi
 	@echo "=== gh-pages worktree ==="
 	@mkdir -p /tmp/ghpages-publish
 	@if [ ! -d /tmp/ghpages-publish/gh-pages ]; then \
@@ -137,6 +154,8 @@ helm-publish: ## Publish helm chart to gh-pages (RFC 0002 helm-publish.yml 대�
 	fi
 	@echo "=== copy chart + regen index ==="
 	cp /tmp/release/mongodb-operator-*.tgz /tmp/ghpages-publish/gh-pages/
+	@cp /tmp/release/mongodb-operator-*.tgz.prov /tmp/ghpages-publish/gh-pages/ 2>/dev/null || true
+	@cp $(CURDIR)/charts/artifacthub-repo.yml /tmp/ghpages-publish/gh-pages/ 2>/dev/null || true
 	cd /tmp/ghpages-publish/gh-pages && helm repo index . --merge index.yaml --url https://keiailab.github.io/mongodb-operator
 	@echo "=== commit + push ==="
 	@cd /tmp/ghpages-publish/gh-pages && git add -A && \
