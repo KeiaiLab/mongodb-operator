@@ -171,11 +171,11 @@ setup: ## RFC 0002 로컬 게이트 설치 (pre-commit + pre-push hook).
 	@echo "  L2 pre-push hooks- govulncheck / trivy fs / gitleaks / go test"
 
 .PHONY: lint
-lint: ## Run go vet + staticcheck (RFC 0002 L3 lint 게이트).
+lint: golangci-lint ## Run go vet + staticcheck + golangci-lint (RFC 0002 L3 lint 게이트, 3-repo 정합).
 	go vet ./...
 	@command -v $(GOBIN)/staticcheck >/dev/null 2>&1 || go install honnef.co/go/tools/cmd/staticcheck@latest
 	$(GOBIN)/staticcheck ./internal/...
-	@command -v golangci-lint >/dev/null 2>&1 && golangci-lint run --fix || echo "golangci-lint not installed, skipping"
+	"$(GOLANGCI_LINT)" run
 
 .PHONY: audit
 audit: ## govulncheck + trivy + gosec — RFC 0002 L3 security 게이트.
@@ -261,11 +261,13 @@ KUBECTL ?= kubectl
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
+GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.3.0
 CONTROLLER_TOOLS_VERSION ?= v0.17.0
 ENVTEST_VERSION ?= release-0.19
+GOLANGCI_LINT_VERSION ?= v2.8.0
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -281,6 +283,11 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download setup-envtest locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	$(call go-install-tool,$(ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest,$(ENVTEST_VERSION))
+
+.PHONY: golangci-lint
+golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary (3-repo 정합 — postgres/valkey 패턴).
+$(GOLANGCI_LINT): $(LOCALBIN)
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
 # go-install-tool will 'go install' any package with custom target and target directory
 define go-install-tool

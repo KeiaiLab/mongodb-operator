@@ -114,7 +114,7 @@ func (r *MongoDBReconciler) acquireBootstrapLease(ctx context.Context, mdb *mong
 		*existing.Spec.HolderIdentity != holder &&
 		existing.Spec.RenewTime != nil &&
 		existing.Spec.LeaseDurationSeconds != nil {
-		deadline := existing.Spec.RenewTime.Time.Add(time.Duration(*existing.Spec.LeaseDurationSeconds) * time.Second)
+		deadline := existing.Spec.RenewTime.Add(time.Duration(*existing.Spec.LeaseDurationSeconds) * time.Second)
 		if time.Now().Before(deadline) {
 			return nil, false, nil
 		}

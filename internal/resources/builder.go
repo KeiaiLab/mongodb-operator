@@ -47,7 +47,7 @@ const (
 // Helper functions
 func generateRandomKey(length int) string {
 	bytes := make([]byte, length)
-	rand.Read(bytes)
+	_, _ = rand.Read(bytes)
 	return base64.StdEncoding.EncodeToString(bytes)
 }
 

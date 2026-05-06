@@ -1,0 +1,47 @@
+version: "2"
+run:
+  allow-parallel-runners: true
+linters:
+  # 첫 도입 baseline (2026-05-07) — strict 미검출 + correctness 위주.
+  # 잔여 대상 (goconst / gocyclo / unparam / dupl / lll) 은 별 트랙에서
+  # 점진 enable. ADR-0011 Consequences 의 "마이그레이션 트리거" 와 별개.
+  default: none
+  enable:
+    - copyloopvar
+    - errcheck
+    - ginkgolinter
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - prealloc
+    - revive
+    - staticcheck
+    - unconvert
+    - unused
+  settings:
+    revive:
+      rules:
+        - name: comment-spacings
+        - name: import-shadowing
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - dupl
+          - lll
+        path: internal/*
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
