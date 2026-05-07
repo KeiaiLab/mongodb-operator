@@ -61,6 +61,21 @@ denial* 가 *real apiserver 통해 도달 불가능* 함을 발견:
 - **Type A — Dead invariant (절대 불가능)**: CRD default 가 *non-zero* 값
   으로 zero-value 를 채우고 *json tag 가 omitempty* 인 경우 → invariant 의
   *check 조건 자체* 가 모든 admission 환경에서 unreachable. → invariant 제거.
+  - **추가 Errata (cluster-ops cycle 26+)**: *API 진화 차원* 의 Type A —
+    library API (controller-runtime 등) 의 *type system 강화* 로 인해
+    *runtime invariant 가 compile-time guarantee 로 격상* 시 unit test 자체
+    *컴파일 불가*. 즉 invariant 가 *runtime 가드* 영역에서 *컴파일러 보장*
+    영역으로 자연 이동.
+  - 사례: controller-runtime v0.22.4 (non-generic, `runtime.Object` +
+    type assertion) → v0.23+ (generic, `*MyResource`). v0.22.4 시절의
+    `TestMongoDBCustomValidator_TypeAssertionFailure` (잘못된 GVK reject
+    runtime test) 가 v0.23+ 환경에서 *컴파일 거부* — admission framework 가
+    *컴파일 시점* 정확한 type 강제. commit `76269ec` 에서 본 unit test 3건
+    제거 + 코드 주석 reference.
+  - **검증 의무**: library API bump (특히 controller-runtime / kubebuilder)
+    시 invariant 의 *Type A 격상 가능성* 점검. unit test 가 *컴파일 거부*
+    하는 시나리오는 *실제 invariant 효과 ↑* 의 신호 (runtime 가드 → compile-time
+    guarantee) — 단순 *test 깨짐* 이 아닌 *governance 진화* 인지 의무.
 - **Type A' — 조건부 unreachable (Errata, it47 step 8 발견)**:
   CRD default 가 non-zero + *json tag omitempty 부재* 인 경우, K8s OpenAPI
   v3 의 default 동작이 *missing field* 만 채우고 *explicit zero value* 는
