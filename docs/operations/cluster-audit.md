@@ -98,6 +98,8 @@ platform-data-valkey               Synced   Healthy
 | Node 가용성 | 11 nodes Ready (100%) — single DC onprem-seoul 환경 의도된 spec |
 | CoreDNS health | kube-system/coredns 38h Running (1 restart 19h ago), single replica 운영 |
 | PSS enforcement 작동 검증 | audit-dns 임시 pod 시도 시 PSS restricted (allowPrivilegeEscalation/capabilities/runAsNonRoot/seccompProfile) 모두 거부 — *정책 동작 직접 증거* |
+| ConfigMap usage data ns | 38 ConfigMaps — 워크로드 다양성 정합, leak 없음 (helm release v1-v4 history 4건 + 워크로드별 chart values) |
+| HPA cluster capability | platform-system 의 gitlab-* 영역 HPA 4건 활성 (cpu/memory targeting) — cluster *기술 capability 보유* + data ns *의도된 미활용* (mongodb-operator features.autoscaling=false default) |
 
 ## Audit trail — 격차 발견 commit 매핑
 
