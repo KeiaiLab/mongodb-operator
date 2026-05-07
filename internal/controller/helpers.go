@@ -135,7 +135,10 @@ func applyErrorCondition(
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, reconcileErr
 }
 
-const conditionTypeReconcileError = "ReconcileError"
+const (
+	conditionTypeReady          = "Ready"
+	conditionTypeReconcileError = "ReconcileError"
+)
 
 func clearReconcileErrorCondition(conds []metav1.Condition, generation int64) []metav1.Condition {
 	found := false

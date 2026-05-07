@@ -548,7 +548,7 @@ func (r *MongoDBReconciler) buildConditions(mdb *mongodbv1alpha1.MongoDB) []meta
 	// 관리한다. 다른 type(PrimaryUnreachable 등)은 외부에서
 	// set한 상태를 그대로 보존해 silent로 사라지지 않게 한다.
 	managedTypes := map[string]bool{
-		"Ready":                 true,
+		conditionTypeReady:      true,
 		"ReplicaSetInitialized": true,
 		"AuthenticationReady":   true,
 	}
@@ -566,12 +566,12 @@ func (r *MongoDBReconciler) buildConditions(mdb *mongodbv1alpha1.MongoDB) []meta
 
 	if mdb.Status.ReadyMembers == mdb.Spec.Members && mdb.Status.ReplicaSetInitialized && mdb.Status.AdminUserCreated {
 		readyStatus = metav1.ConditionTrue
-		readyReason = "Ready"
+		readyReason = conditionTypeReady
 		readyMessage = "All members are ready and cluster is fully initialized"
 	}
 
 	conditions = append(conditions, metav1.Condition{
-		Type:               "Ready",
+		Type:               conditionTypeReady,
 		Status:             readyStatus,
 		ObservedGeneration: mdb.Generation,
 		LastTransitionTime: metav1.Now(),

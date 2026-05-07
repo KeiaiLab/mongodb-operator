@@ -286,7 +286,7 @@ func TestBuildConditions_PreservesExternalConditions(t *testing.T) {
 
 func TestClearReconcileErrorCondition(t *testing.T) {
 	conds := []metav1.Condition{
-		{Type: "Ready", Status: metav1.ConditionTrue, LastTransitionTime: metav1.Now()},
+		{Type: conditionTypeReady, Status: metav1.ConditionTrue, LastTransitionTime: metav1.Now()},
 		{Type: conditionTypeReconcileError, Status: metav1.ConditionTrue, Reason: "ReconcileFailed", LastTransitionTime: metav1.Now()},
 	}
 
@@ -307,9 +307,9 @@ func TestClearReconcileErrorCondition(t *testing.T) {
 		t.Fatalf("ReconcileError=False condition 미발견: %+v", out)
 	}
 
-	withoutError := []metav1.Condition{{Type: "Ready", Status: metav1.ConditionTrue, LastTransitionTime: metav1.Now()}}
+	withoutError := []metav1.Condition{{Type: conditionTypeReady, Status: metav1.ConditionTrue, LastTransitionTime: metav1.Now()}}
 	unchanged := clearReconcileErrorCondition(withoutError, 7)
-	if len(unchanged) != 1 || unchanged[0].Type != "Ready" {
+	if len(unchanged) != 1 || unchanged[0].Type != conditionTypeReady {
 		t.Fatalf("ReconcileError 미존재 시 condition 추가 금지: %+v", unchanged)
 	}
 }
