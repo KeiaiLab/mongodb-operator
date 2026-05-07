@@ -142,6 +142,62 @@ var _ = Describe("MongoDB webhook admission round-trip", func() {
 		Expect(err.Error()).To(ContainSubstring("bucket"))
 	})
 
+	It("rejects MongoDBSharded with shards.count > 64", func() {
+		m := &mongodbv1alpha1.MongoDBSharded{
+			ObjectMeta: metav1.ObjectMeta{Name: "rt-shardstoo", Namespace: "default"},
+			Spec: mongodbv1alpha1.MongoDBShardedSpec{
+				Version:      mongodbv1alpha1.MongoDBVersion{Version: "8.3"},
+				ConfigServer: mongodbv1alpha1.ConfigServerSpec{Members: 3, Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("10Gi")}},
+				Mongos:       mongodbv1alpha1.MongosSpec{Replicas: 2},
+				Shards:       mongodbv1alpha1.ShardSpec{Count: 100, MembersPerShard: 3, Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("10Gi")}},
+				Auth: mongodbv1alpha1.AuthSpec{
+					AdminCredentialsSecretRef: corev1.LocalObjectReference{Name: "admin-secret"},
+				},
+			},
+		}
+		err := k8sClient.Create(ctx, m)
+		Expect(err).To(HaveOccurred())
+		Expect(apierrors.IsInvalid(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("shards.count"))
+	})
+
+	It("rejects MongoDBSharded with even membersPerShard", func() {
+		m := &mongodbv1alpha1.MongoDBSharded{
+			ObjectMeta: metav1.ObjectMeta{Name: "rt-evenmps", Namespace: "default"},
+			Spec: mongodbv1alpha1.MongoDBShardedSpec{
+				Version:      mongodbv1alpha1.MongoDBVersion{Version: "8.3"},
+				ConfigServer: mongodbv1alpha1.ConfigServerSpec{Members: 3, Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("10Gi")}},
+				Mongos:       mongodbv1alpha1.MongosSpec{Replicas: 2},
+				Shards:       mongodbv1alpha1.ShardSpec{Count: 3, MembersPerShard: 4, Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("10Gi")}},
+				Auth: mongodbv1alpha1.AuthSpec{
+					AdminCredentialsSecretRef: corev1.LocalObjectReference{Name: "admin-secret"},
+				},
+			},
+		}
+		err := k8sClient.Create(ctx, m)
+		Expect(err).To(HaveOccurred())
+		Expect(apierrors.IsInvalid(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("membersPerShard"))
+	})
+
+	It("accepts valid MongoDBSharded — admission round-trip 통과", func() {
+		m := &mongodbv1alpha1.MongoDBSharded{
+			ObjectMeta: metav1.ObjectMeta{Name: "rt-shardedhappy", Namespace: "default"},
+			Spec: mongodbv1alpha1.MongoDBShardedSpec{
+				Version:      mongodbv1alpha1.MongoDBVersion{Version: "8.3"},
+				ConfigServer: mongodbv1alpha1.ConfigServerSpec{Members: 3, Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("10Gi")}},
+				Mongos:       mongodbv1alpha1.MongosSpec{Replicas: 2},
+				Shards:       mongodbv1alpha1.ShardSpec{Count: 3, MembersPerShard: 3, Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("10Gi")}},
+				Auth: mongodbv1alpha1.AuthSpec{
+					AdminCredentialsSecretRef: corev1.LocalObjectReference{Name: "admin-secret"},
+				},
+			},
+		}
+		err := k8sClient.Create(ctx, m)
+		Expect(err).NotTo(HaveOccurred(), "valid sharded spec 은 admission 통과")
+		Expect(k8sClient.Delete(ctx, m)).To(Succeed())
+	})
+
 	It("accepts valid MongoDB CR — admission round-trip 통과", func() {
 		m := &mongodbv1alpha1.MongoDB{
 			ObjectMeta: metav1.ObjectMeta{
