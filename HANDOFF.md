@@ -4,6 +4,47 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 41 — race-tolerant cross-operator audit (it40 cross-cut)
+
+| Iteration | Repo | Commit | 산출물 |
+|---|---|---|---|
+| **it41** | mongodb-operator | `a0a0cff` | mongodbbackup_controller.go + helpers.go 의 *2 호출 사이트* IsAlreadyExists guard 추가. valkey it40 (ac1421f) cross-cut audit. |
+
+### 3 operator race-tolerant 매트릭스 (post it41)
+
+| Operator | 호출 사이트 | 패턴 | 상태 |
+|---|---|---|---|
+| **mongodb** | bootstrap_lease.go:99 (Lease) | 자체 IsAlreadyExists guard (모범) | ✅ 기존 |
+| **mongodb** | mongodbbackup_controller.go:200 (Job/PVC apply) | IsAlreadyExists guard | ✅ **it41 fix** |
+| **mongodb** | helpers.go:60 (auth secret) | IsAlreadyExists guard | ✅ **it41 fix** |
+| **valkey** | valkeybackup_controller.go:370 (backup copy Job) | IsAlreadyExists guard | ✅ it40 (ac1421f) |
+| **valkey** | valkeybackup_controller.go:514 (upload Job) | IsAlreadyExists guard | ✅ it40 (ac1421f) |
+| **postgres** | postgrescluster_controller.go:305 | `controllerutil.CreateOrUpdate` | ✅ controller-runtime 자체 race-tolerant |
+
+### 핵심 학습
+
+1. **Cross-operator audit 의 가치**: it40 단일 incident 발견 후 *3 operator 모두
+   같은 패턴* 검토 → mongodb 2 사이트 *동일 deviation* 발견 + 사전 차단. 향후
+   incident chain 방지.
+2. **postgres 의 *우월한 추상화* 발견**: postgres 는 *raw r.Create 미사용* —
+   `controllerutil.CreateOrUpdate` 만 사용. controller-runtime 이 *AlreadyExists
+   자동 retry* — race-tolerant *기본 보장*. mongodb / valkey 의 *수동 IsAlreadyExists
+   guard* 패턴보다 *robust*. 향후 mongodb / valkey 도 *CreateOrUpdate 패턴 도입*
+   고려 (별 iteration).
+3. **bootstrap_lease 의 *기존 모범 패턴* 회귀 가드**: audit 시점에 *이미 정상*
+   인 코드 검증 — 향후 *deviation 회귀* 방지의 baseline.
+
+### 다음 iteration 자연 진입점
+
+- it42+: mongodb / valkey 의 *raw Create → controllerutil.CreateOrUpdate*
+  마이그레이션 (race-tolerance + 추상화 ↑)
+- it43+: mongodb webhook server 부트스트랩 (cert-manager) — 큰 작업
+- M4 / V3 / P4 큰 기능
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 40 — valkey backup end-to-end 검증 + race-tolerant fix
 
 ### 진척 (cluster e2e validation chain)
