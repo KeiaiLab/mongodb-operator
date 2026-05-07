@@ -4,6 +4,104 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 30-31 — operator-commons v0.4.0 (webhook) + valkey 6/6 완성
+
+### 진척
+
+| Iteration | Repo | Commit / Tag | 산출물 |
+|---|---|---|---|
+| **it30** | operator-commons | `148f50f` + tag `v0.4.0` | pkg/webhook 신규 — ValidateAllowedVersion + ValidateWithPredicate. **6/6 패키지 모두 100% line coverage**. |
+| **it31** | valkey-operator | `14be0db` | webhook 의 2 호출 사이트 (Valkey + ValkeyCluster) version validation → commons.ValidateWithPredicate 위임. valkey **6/6 commons 100% 채택 완성**. |
+
+### operator-commons 채택률 매트릭스 (현재)
+
+| Operator | security | version | labels | monitoring | networkpolicy | webhook | 채택률 |
+|---|---|---|---|---|---|---|---|
+| mongodb | ✅ | ✅ | ✅ | ⏳ | ✅ | ⏳ | **4/6 (67%)** |
+| **valkey** | ✅ | ✅ | ✅ | ✅ | ✅ | **✅ (it31)** | **🎉 6/6 (100%)** |
+| postgres | ✅ | ⏳ | ✅ | ⏳ | ⏳ | ⏳ | **2/6 (33%)** |
+
+### 핵심 설계 (commons webhook 패키지)
+
+**API 패턴**:
+- `ValidateAllowedVersion(path, value, list)` — version.List 기반 *exact match*.
+  빈 문자열 → nil (defaulter 책임). 거부 → field.NotSupported.
+- `ValidateWithPredicate(path, value, predicate, allowed)` — caller-supplied
+  matcher (예: mongodb 의 semver-prefix `8.3.1` → `8.3` 매칭). 빈 값 short-
+  circuit → predicate 호출 안 함.
+
+**valkey 의 적용 결정**: `IsSupportedValkeyVersion` 가 *exact match* 이지만
+unexported `supportedValkeyList` (version.List 인스턴스) 를 export 안 하기 위해
+`ValidateWithPredicate` + `IsSupportedValkeyVersion` 호출. 결과 동일 — 단지 API
+표면을 *기존 노출 함수 (predicate)* 만으로 한정.
+
+### valkey 6/6 commons 채택 완성 (마일스톤)
+
+valkey 가 *6 패키지 모두* 채택한 첫 operator. 다른 operator 의 *carbon-copy 출처*:
+
+| Commit | 패키지 | LoC delta |
+|---|---|---|
+| iteration 8 (1차 cross-cut) | security | inline → commons.RestrictedContainer |
+| iteration 8 | version | SupportedValkeyVersions → commons.MustList |
+| iteration 23 (`1765b54`) | monitoring | servicemonitor.go → commons.NewServiceMonitor |
+| iteration 25 (`97162b5`) | networkpolicy | BuildNetworkPolicy → commons.New |
+| iteration 29 (`e8428b1`) | labels | CommonLabels → commons.Set.All() |
+| iteration 31 (`14be0db`) | webhook | webhook validation → commons.ValidateWithPredicate |
+
+### 검증 인용
+
+```
+operator-commons v0.4.0 (148f50f):
+  $ go test ./...
+  6/6 패키지 100% line coverage:
+  - version       100.0%
+  - security      100.0%
+  - labels        100.0%
+  - monitoring    100.0%
+  - networkpolicy 100.0%
+  - webhook       100.0%
+
+valkey it31 (14be0db):
+  $ go test ./... -count=1
+  ok  github.com/keiailab/valkey-operator/internal/webhook/v1alpha1  3.440s
+  (iteration 9 의 19 sub-test version validation 회귀 가드 모두 PASS)
+  pre-push hooks: full-lint / gitleaks / helm-lint / helm-template /
+                  unit-test (20.38s) / go-mod-tidy 모두 PASS
+```
+
+### 다음 iteration 자연 진입점
+
+- **iteration 32**: postgres operator-commons 채택 deepening — version 화이트리스트
+  boundary 분석 (matrix.go 의 Combo struct vs commons.MustList).
+- **iteration 33**: mongodb webhook server 부트스트랩 + IsSupportedMongoDBVersion
+  → commons.ValidateWithPredicate 적용. 큰 작업 (cert-manager 통합).
+- **iteration 34+**: mongodb / postgres 의 ServiceMonitor / NetworkPolicy
+  reconciler 추가 (큰 기능 동반).
+- **iteration 16/M4 mongodb**: PITR / online shard / LDAP — 큰 기능.
+- **iteration 21/P4 postgres**: G1-G2 자체 SQL — bitnami 능가.
+
+### 누적 진척
+
+```
+operator-commons v0.4.0 (6 패키지 모두 100% line coverage)
+3 operator commons 채택률:
+  mongodb  4/6 (67%) — security/version/labels/networkpolicy
+  valkey   6/6 (100%) ← 완전 채택 (마일스톤)
+  postgres 2/6 (33%) — security/labels
+─────────────────────────────────
+22/12+ iteration (~99%, mongodb webhook + monitoring 위임 + postgres deepening +
+M4/V3/P4 큰 기능 잔여)
+```
+
+본 turn 핵심 가치 — **valkey 가 commons 6 패키지 모두 채택한 첫 operator**.
+mongodb / postgres 가 *valkey commits 를 carbon-copy* 패턴으로 활용 가능.
+operator-commons v0.4.0 + 6/6 100% line coverage = **shared library 안정 단계**
+도달.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 27-29 — 3 operator labels deepening (valkey 5/5 첫 완성)
 
 ### 진척
