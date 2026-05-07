@@ -68,7 +68,7 @@ platform-data-valkey               Synced   Healthy
 | PodSecurity Standards | data ns `pod-security.kubernetes.io/enforce=restricted` (latest) — B17/F12 회귀 가드 정합 |
 | RBAC least privilege | 3 operator ClusterRole 의 *wildcard verbs/resources 0건* — `kubectl get clusterrole <op> -o yaml \| grep '\*'` 결과 empty |
 | ImagePullSecrets governance | 모든 SA imagePullSecrets 비어있음 — public ghcr 사용 (인증 secret leak risk 0) |
-| ArgoCD GitOps (mongodb / postgres-operator) | argos-platform-data umbrella + platform-data-mongodb / platform-data-postgres-operator app Synced/Healthy |
+| ArgoCD GitOps (mongodb / postgres-operator) | argos-platform-data umbrella + platform-data-mongodb / platform-data-postgres-operator app Synced/Healthy. **Drift 0 검증** (2026-05-07): git values vs live spec 비교 — mongodb (version 8.2 / shards 5×3 / cfg 3 / mongos 3 일치) + postgres (PG 18 / initialCount 1 / replicas 0 의도된 dev) |
 | controller-runtime + envtest dual-layer | 3 operator 통일 (mongodb / valkey 95.1% / 클린, postgres 94.3% coverage) |
 | webhook ADR 7건 (0013-0018) | 결정 추적성 + cross-cut audit pattern 자동화 candidate |
 | 운영 안정 | 3 operator log errors 0 (5min), data ns events 0 (1h+) |
