@@ -4,6 +4,32 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 38 — docs ship (incident reasoning 영구 기록)
+
+| Iteration | Repo | Commit | 산출물 |
+|---|---|---|---|
+| **it38** | valkey-operator | `46d1732` | ValkeyBackup.spec.targetPVC field godoc + sample CR 명확화. iteration 37 incident reasoning ("FailedScheduling stuck when PVC not pre-created") 영구 기록. behavior 변경 없음 — *user education* 강화. |
+| **it38b** | operator-commons | `d3e843b` | README adoption matrix (mongodb 4/6 / valkey 6/6 / postgres 3/6) + 6 패키지 적용 commits 인용 + v0.5.0+ planned 갱신 (conditions 는 upstream 활용 권장 — boundary 결정). |
+
+### 핵심 가치
+
+1. **incident reasoning 영구 기록 패턴**: it37 의 *PVC 사용자 사전 생성 의무* 가
+   *intentional design* — behavior 변경 보다 *field godoc + sample comment* 로
+   *사용자 혼동 차단*. ralph-loop 의 *작은 docs ship* 가 *큰 incident 재발 방지*.
+2. **commons adoption matrix 사용자 가시**: 6 패키지 적용 사례 commits 인용 →
+   *향후 새 operator / contributor* 의 carbon-copy reference. valkey 가 *first
+   100% 채택* 으로 *모든 패키지의 사용 예* 보유.
+
+### 다음 iteration 자연 진입점
+
+- it39: ssot-cluster-gap% governance metric (RFC-0004)
+- M4 / V3 / P4 큰 기능
+- mongodb / postgres ServiceMonitor reconciler 추가 (큰 작업)
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 36-37 — 3 operator docker-build 통일 + valkey backup PodSecurity fix
 
 ### 진척
