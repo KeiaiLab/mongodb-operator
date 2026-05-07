@@ -1,0 +1,112 @@
+//go:build e2e
+// +build e2e
+
+/*
+Copyright 2026 Keiailab.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// e2e_suite_test.go — mongodb-operator e2e 진입점 (iteration 10, Phase 1 M2).
+//
+// 패턴 차용: keiailab/valkey-operator/test/e2e/e2e_suite_test.go (검증된).
+// 차이점:
+//   - managerImage default 가 mongodb-operator:e2e-dev.
+//   - Prometheus Operator CRDs 부재 (mongodb 는 ServiceMonitor 가 chart values
+//     opt-in 이므로 e2e 단계에서 불필요 — 시나리오 별 BeforeAll 에서 enable).
+package e2e
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/keiailab/mongodb-operator/test/utils"
+)
+
+var (
+	// managerImage — make docker-build 의 IMG 와 일치. IMG env 로 override 가능.
+	managerImage = func() string {
+		if v := os.Getenv("IMG"); v != "" {
+			return v
+		}
+		return "ghcr.io/keiailab/mongodb-operator:e2e-dev"
+	}()
+	shouldCleanupCertManager = false
+)
+
+// TestE2E — Ginkgo 진입점.
+// 환경변수:
+//   - IMG: 빌드/로드할 manager image (default ghcr.io/keiailab/mongodb-operator:e2e-dev)
+//   - KIND_CLUSTER: kind cluster 이름 (default kind, valkey 호환 차용 — 단,
+//     본 e2e 는 utils.LoadImageToKindClusterWithName 가 hardcoded "kind" 사용)
+//   - CERT_MANAGER_INSTALL_SKIP=true: cert-manager install skip (이미 설치된 경우)
+//   - KUBECTL_KUBERC: 설정 시 kubectl kuberc 활성화 (default disabled — 격리)
+func TestE2E(t *testing.T) {
+	RegisterFailHandler(Fail)
+	_, _ = fmt.Fprintf(GinkgoWriter, "Starting mongodb-operator e2e test suite\n")
+	RunSpecs(t, "e2e suite")
+}
+
+var _ = BeforeSuite(func() {
+	By("building the manager image")
+	cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", managerImage))
+	_, err := utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager image")
+
+	By("loading the manager image on Kind")
+	err = utils.LoadImageToKindClusterWithName(managerImage)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager image into Kind")
+
+	configureKubectlKubeRC()
+	setupCertManager()
+})
+
+var _ = AfterSuite(func() {
+	teardownCertManager()
+})
+
+func configureKubectlKubeRC() {
+	if os.Getenv("KUBECTL_KUBERC") != "true" {
+		By("disabling kubectl kuberc for test isolation")
+		err := os.Setenv("KUBECTL_KUBERC", "false")
+		ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to disable kubectl kuberc")
+	}
+}
+
+func setupCertManager() {
+	if os.Getenv("CERT_MANAGER_INSTALL_SKIP") == "true" {
+		_, _ = fmt.Fprintf(GinkgoWriter, "Skipping CertManager installation (CERT_MANAGER_INSTALL_SKIP=true)\n")
+		return
+	}
+	By("checking if CertManager is already installed")
+	if utils.IsCertManagerCRDsInstalled() {
+		_, _ = fmt.Fprintf(GinkgoWriter, "CertManager already installed\n")
+		return
+	}
+	shouldCleanupCertManager = true
+	By("installing CertManager")
+	Expect(utils.InstallCertManager()).To(Succeed(), "Failed to install CertManager")
+}
+
+func teardownCertManager() {
+	if !shouldCleanupCertManager {
+		return
+	}
+	By("uninstalling CertManager")
+	utils.UninstallCertManager()
+}

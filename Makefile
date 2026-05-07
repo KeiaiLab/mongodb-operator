@@ -206,6 +206,34 @@ test-integration: manifests generate fmt vet envtest ## Run integration tests.
 ## Envtest K8s version
 ENVTEST_K8S_VERSION ?= 1.31.0
 
+##@ E2E Testing (iteration 10, Phase 1 M2)
+
+KIND ?= kind
+KIND_CLUSTER ?= mongodb-operator-test-e2e
+
+.PHONY: setup-test-e2e
+setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist.
+	@command -v $(KIND) >/dev/null 2>&1 || { \
+		echo "Kind is not installed. Please install Kind manually."; \
+		exit 1; \
+	}
+	@case "$$($(KIND) get clusters)" in \
+		*"$(KIND_CLUSTER)"*) \
+			echo "Kind cluster '$(KIND_CLUSTER)' already exists. Skipping creation." ;; \
+		*) \
+			echo "Creating Kind cluster '$(KIND_CLUSTER)'..."; \
+			$(KIND) create cluster --name $(KIND_CLUSTER) ;; \
+	esac
+
+.PHONY: test-e2e
+test-e2e: setup-test-e2e manifests generate fmt vet ## Run e2e tests against the Kind cluster.
+	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
+	$(MAKE) cleanup-test-e2e
+
+.PHONY: cleanup-test-e2e
+cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests.
+	@$(KIND) delete cluster --name $(KIND_CLUSTER)
+
 ##@ Build
 
 .PHONY: build
