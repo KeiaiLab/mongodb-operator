@@ -16,15 +16,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	commonswebhook "github.com/keiailab/operator-commons/pkg/webhook"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
-
-var mongodbshardedlog = logf.Log.WithName("mongodbsharded-resource")
 
 // SetupMongoDBShardedWebhookWithManager registers the validating webhook.
 func SetupMongoDBShardedWebhookWithManager(mgr ctrl.Manager) error {

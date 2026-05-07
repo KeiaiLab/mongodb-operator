@@ -63,7 +63,6 @@ func TestValidateMongoDBSpec_QuorumMembers(t *testing.T) {
 		{5, false, "odd 5 — quorum"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 			m := &mongodbv1alpha1.MongoDB{}
@@ -256,9 +255,9 @@ func TestMongoDBCustomValidator_ApplyMessage_Reject(t *testing.T) {
 	// admission denial message 가 운영자에게 *원인 식별 가능* 한 keyword 포함
 	// 검증 — UX 회귀 가드.
 	cases := []struct {
-		desc      string
-		spec      func(*mongodbv1alpha1.MongoDB)
-		mustHave  string
+		desc     string
+		spec     func(*mongodbv1alpha1.MongoDB)
+		mustHave string
 	}{
 		{"version reject contains version keyword",
 			func(m *mongodbv1alpha1.MongoDB) {
@@ -273,7 +272,6 @@ func TestMongoDBCustomValidator_ApplyMessage_Reject(t *testing.T) {
 	}
 	v := &MongoDBCustomValidator{}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 			m := &mongodbv1alpha1.MongoDB{}
