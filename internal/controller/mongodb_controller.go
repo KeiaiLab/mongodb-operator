@@ -43,7 +43,9 @@ import (
 )
 
 const (
-	mongodbFinalizer = "mongodb.keiailab.com/finalizer"
+	// mongodbFinalizer — api/v1alpha1.FinalizerMongoDB 의 local alias (B-P0-1
+	// SSoT 후 보존 — controller-local 호출 사이트 영향 0).
+	mongodbFinalizer = mongodbv1alpha1.FinalizerMongoDB
 	requeueAfter     = 30 * time.Second
 
 	conditionTypePrimaryUnreachable = "PrimaryUnreachable"

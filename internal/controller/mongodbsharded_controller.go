@@ -46,7 +46,8 @@ import (
 )
 
 const (
-	mongodbShardedFinalizer = "mongodbsharded.keiailab.com/finalizer"
+	// mongodbShardedFinalizer — api/v1alpha1.FinalizerMongoDBSharded local alias.
+	mongodbShardedFinalizer = mongodbv1alpha1.FinalizerMongoDBSharded
 )
 
 // MongoDBShardedReconciler reconciles a MongoDBSharded object

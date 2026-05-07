@@ -37,7 +37,8 @@ import (
 )
 
 const (
-	mongodbBackupFinalizer = "mongodbbackup.keiailab.com/finalizer"
+	// mongodbBackupFinalizer — api/v1alpha1.FinalizerMongoDBBackup local alias.
+	mongodbBackupFinalizer = mongodbv1alpha1.FinalizerMongoDBBackup
 
 	backupPhaseCompleted = "Completed"
 	backupPhaseFailed    = "Failed"
