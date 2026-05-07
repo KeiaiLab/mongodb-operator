@@ -57,6 +57,18 @@ platform-data-valkey               Synced   Healthy
 | **C31** | data ns ResourceQuota / LimitRange 0건 — runaway resource consumption 잠재 | 발견 | 단일 워크로드 OOM cluster-wide 영향 가능 | `data` ns 에 ResourceQuota + LimitRange 추가 (argos-platform-data 의 ns manifest, 외부 effect) | Medium |
 | **C32** | TLS encryption in transit 부재 — mongodb (27017/27018/27019) + valkey (6379) 평문 | 발견 | data plane 내부 통신 보안 표면 | argos-mongo + keiailab-valkey-prod CR 에 `spec.tls.{enabled,certManager.issuerRef}` 설정. cert-manager 의 letsencrypt-prod 또는 별도 internal CA ClusterIssuer 사용. operator 코드 + webhook invariant 모두 보유 (it46) — chart values 만 활성화. | Medium |
 
+## Clean 영역 (격차 0, 상용제품 수준 충족)
+
+| 영역 | 검증 |
+|---|---|
+| PodSecurity Standards | data ns `pod-security.kubernetes.io/enforce=restricted` (latest) — B17/F12 회귀 가드 정합 |
+| RBAC least privilege | 3 operator ClusterRole 의 *wildcard verbs/resources 0건* — `kubectl get clusterrole <op> -o yaml \| grep '\*'` 결과 empty |
+| ImagePullSecrets governance | 모든 SA imagePullSecrets 비어있음 — public ghcr 사용 (인증 secret leak risk 0) |
+| ArgoCD GitOps (mongodb / postgres-operator) | argos-platform-data umbrella + platform-data-mongodb / platform-data-postgres-operator app Synced/Healthy |
+| controller-runtime + envtest dual-layer | 3 operator 통일 (mongodb / valkey 95.1% / 클린, postgres 94.3% coverage) |
+| webhook ADR 7건 (0013-0018) | 결정 추적성 + cross-cut audit pattern 자동화 candidate |
+| 운영 안정 | 3 operator log errors 0 (5min), data ns events 0 (1h+) |
+
 ## DR Snapshots (임시 보관)
 
 git 추적 0 인 CR spec 의 disaster recovery snapshot:
