@@ -105,6 +105,50 @@ platform-data-valkey               Synced   Healthy
 | I26 | 발견 `f234517` → ADR-0018 `64e34af` → Phase 1 `165631a` → TASKS 갱신 `744a380` | MonitoringSpec orphan Phase 1 deprecation marker |
 | F23 | webhook server 도입 it45-47 (5 cycles, 11 commits 종합) | 11 invariant + 18 envtest specs + ADR 6건 |
 
+## 상용제품 수준 KPI 정의
+
+본 audit 의 *진전 측정 baseline*. 이상 도달이 아닌 *측정 가능한 진전* 추구.
+
+### 필수 KPI (production blocker)
+
+| KPI | 현재 | 목표 | 격차 ID |
+|---|---|---|---|
+| ArgoCD GitOps coverage | 8/9 apps (89%) | 9/9 (100%) | C24 |
+| Disaster recovery 가능성 | 2/3 operator | 3/3 | C24 (valkey CR git 추적 0) |
+| Backup CronJob 활성 | 0/3 operator | 3/3 (mongodb pitr + postgres + valkey RDB) | C34 |
+| TLS in transit | 0/3 operator | 3/3 | C32 |
+| Webhook 검증 invariants | 16건 (mongodb 11 + valkey 4 + postgres 1) | 20+ (3 operator 통일) | F23 후속 |
+| Production release lag | 1.4.11 (1.4.12 main 미적용) | 0 cycles lag | T27 |
+
+### Quality KPI (shouldness)
+
+| KPI | 현재 | 목표 |
+|---|---|---|
+| envtest admission round-trip coverage | 18 specs (3 operator) | 25+ specs (각 operator 의 잔여 invariant) |
+| Test coverage (webhook 패키지) | mongodb 95.1% / valkey clean / postgres 94.3% | 95%+ 일관 |
+| ADR cross-reference 의무 | 8 ADR 보유 | 신규 결정 즉시 ADR 의무 |
+| Cross-cut audit (ADR-0016) 적용 | 5+ 사례 | 100% (모든 invariant 도입 PR) |
+| Docs accuracy (ADR-0016 Errata) | 1 정정 (monitoring.md) | 0 false claim |
+
+### Scaling KPI (장기)
+
+| KPI | 현재 | 목표 |
+|---|---|---|
+| operator-commons helper 승격 | 4 패키지 (security/labels/networkpolicy/version/webhook/monitoring) | 추가 helper 2건 (validateStorageSize + apiError, ADR-0019) |
+| Multi-DC / topology spread | 1 DC (onprem-seoul, 11 nodes) | (장기 요구사항 별 RFC) |
+| Service mesh | 미설치 | (C33 RFC 결정) |
+| Resource governance | LimitRange/Quota 0 | C31 + C36 |
+
+### *상용제품 수준* 도달 = 다음 모두 충족
+
+1. **필수 KPI**: 모두 목표 도달.
+2. **Quality KPI**: 5/5 영역 *목표 80%+* 도달.
+3. **Scaling KPI**: *각 항목 명시 결정* (도달 또는 *의도된 미도달* 의 ADR/RFC 기록).
+4. **운영 안정**: 30일 연속 errors 0 / events 0 / ArgoCD 9/9 Synced/Healthy.
+
+본 KPI baseline 은 *progress measurement* 의 SSoT. 후속 cycle 마다 본 표
+갱신 (해소 시 ✅ 표시).
+
 ## DR Snapshots (임시 보관)
 
 git 추적 0 인 CR spec 의 disaster recovery snapshot:
