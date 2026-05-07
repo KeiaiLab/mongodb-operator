@@ -114,6 +114,45 @@ helm release history (data ns):
 
 후속 통합 작업 시 *둘 다* GitOps-managed 로 마이그레이션 필요.
 
+---
+
+### Critical 격차 #2 — Prometheus Operator 부재 (observability scrape 무력화)
+
+cluster ops audit deeper 결과 *상용제품 수준* 의 두번째 결정적 격차 발견.
+
+증거 (live):
+```
+$ kubectl api-resources | grep -iE "prometheus|monitoring|service.*monitor"
+podlogs    monitoring.grafana.com/v1alpha2   true   PodLogs
+# monitoring.coreos.com (Prometheus Operator group) 부재.
+
+$ kubectl get application -n argocd | grep -iE "prometheus|monitor|grafana"
+platform-observability-grafana   Synced   Healthy
+# Prometheus 자체 부재. Grafana 만 존재.
+```
+
+영향:
+- 3 operator 의 metrics endpoint (`mongodb-operator-metrics:8443` /
+  `valkey-operator-prod-metrics:8443` / `postgres-operator` 의 metrics)
+  모두 *expose 만 됨 / scrape 0*.
+- 워크로드 metrics 도 동일: `keiailab-valkey-prod-metrics:9121`,
+  `argos-mongo-mongos:9216`, `gitlab-redis-metrics:9121`,
+  `shared-valkey-metrics:9121`, `ch-operator-metrics:8888,9999` 등.
+- Grafana 는 *데이터 소스 부재* → 대시보드 / alerting 무력.
+
+valkey-operator 코드에 `commons.monitoring.NewServiceMonitor` 호출이 있지만
+`servicemonitors.monitoring.coreos.com` CRD 부재로 *생성 시 graceful skip*
+또는 *fail 후 reconcile 영구 retry* 가능. controller log 에 errors 0 인
+이유 별도 audit 필요 (skip vs silent fail).
+
+상용제품 도달 영역:
+- platform-observability stack 에 `kube-prometheus-stack` 또는 `Prometheus
+  Operator` 추가 (별 ArgoCD app).
+- ServiceMonitor CRD 등록 후 모든 operator + 워크로드 자동 scrape.
+- alerting rules (PrometheusRule CRD) 정착.
+
+이외 운영 안정 — 3 operator log errors 0, events 0 (1h+).
+
 `platform-data-valkey` ArgoCD app 은 *bitnami valkey* (shared-valkey-primary/replicas)
 만 sync. keiailab-valkey-prod 인스턴스 (6 pods, 16384 slots) 는 *helm install*
 직접 배포 → drift 발생 시 ArgoCD self-heal 불가.
