@@ -1,0 +1,98 @@
+{{- /*
+Admission webhooks (it45 — mongodb-operator validation 도입).
+
+valkey-operator cycle 73 패턴 차용. mongodb-operator 는 *validating only*
+(mutating 부재 — controller 가 default 처리).
+
+.Values.webhook.enabled=true 시:
+1. webhook serving Service (port 443 → 9443).
+2. cert-manager Issuer (selfSigned) + Certificate.
+3. ValidatingWebhookConfiguration — caBundle 자동 주입 (cert-manager.io/inject-ca-from).
+
+cert-manager 미설치 시 helm install 실패. 클러스터 차원 cert-manager 1 instance
+공유 권장 (chart 의존성으로 자동 설치 안 함 — scope 외).
+*/}}
+{{- if .Values.webhook.enabled }}
+{{- $serviceName := printf "%s-webhook" (include "mongodb-operator.fullname" .) }}
+{{- $certName := printf "%s-webhook-cert" (include "mongodb-operator.fullname" .) }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-operator.labels" . | nindent 4 }}
+spec:
+  ports:
+    - name: https
+      port: 443
+      protocol: TCP
+      targetPort: {{ .Values.webhook.port | default 9443 }}
+  selector:
+    {{- include "mongodb-operator.selectorLabels" . | nindent 4 }}
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ printf "%s-selfsigned" (include "mongodb-operator.fullname" .) }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-operator.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $certName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-operator.labels" . | nindent 4 }}
+spec:
+  dnsNames:
+    - {{ $serviceName }}.{{ .Release.Namespace }}.svc
+    - {{ $serviceName }}.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: {{ printf "%s-selfsigned" (include "mongodb-operator.fullname" .) }}
+  secretName: {{ printf "%s-webhook-server-cert" (include "mongodb-operator.fullname" .) }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ printf "%s-validating" (include "mongodb-operator.fullname" .) }}
+  labels:
+    {{- include "mongodb-operator.labels" . | nindent 4 }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ printf "%s/%s" .Release.Namespace $certName }}
+webhooks:
+  - admissionReviewVersions: [v1]
+    clientConfig:
+      service:
+        name: {{ $serviceName }}
+        namespace: {{ .Release.Namespace }}
+        path: /validate-mongodb-keiailab-com-v1alpha1-mongodb
+    failurePolicy: Fail
+    name: vmongodb-v1alpha1.kb.io
+    rules:
+      - apiGroups: [mongodb.keiailab.com]
+        apiVersions: [v1alpha1]
+        operations: [CREATE, UPDATE]
+        resources: [mongodbs]
+    sideEffects: None
+  - admissionReviewVersions: [v1]
+    clientConfig:
+      service:
+        name: {{ $serviceName }}
+        namespace: {{ .Release.Namespace }}
+        path: /validate-mongodb-keiailab-com-v1alpha1-mongodbsharded
+    failurePolicy: Fail
+    name: vmongodbsharded-v1alpha1.kb.io
+    rules:
+      - apiGroups: [mongodb.keiailab.com]
+        apiVersions: [v1alpha1]
+        operations: [CREATE, UPDATE]
+        resources: [mongodbshardeds]
+    sideEffects: None
+{{- end }}

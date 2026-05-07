@@ -1,0 +1,46 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-mongodb-keiailab-com-v1alpha1-mongodb
+  failurePolicy: Fail
+  name: vmongodb-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - mongodb.keiailab.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - mongodbs
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-mongodb-keiailab-com-v1alpha1-mongodbsharded
+  failurePolicy: Fail
+  name: vmongodbsharded-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - mongodb.keiailab.com
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - mongodbshardeds
+  sideEffects: None

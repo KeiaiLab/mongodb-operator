@@ -37,6 +37,7 @@ import (
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"github.com/keiailab/mongodb-operator/internal/controller"
+	webhookv1alpha1 "github.com/keiailab/mongodb-operator/internal/webhook/v1alpha1"
 )
 
 var (
@@ -58,6 +59,7 @@ func main() {
 	var enableShardedController bool
 	var enableBackupController bool
 	var enableAutoscaling bool
+	var enableWebhooks bool
 	var tlsOpts []func(*tls.Config)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -82,6 +84,8 @@ func main() {
 		"Enable MongoDBBackup reconciler. Beta default: false (carve-out scope, no automated tests).")
 	flag.BoolVar(&enableAutoscaling, "enable-autoscaling", false,
 		"Enable HorizontalPodAutoscaler reconciliation. Beta default: false (carve-out scope, drift mutex absent).")
+	flag.BoolVar(&enableWebhooks, "enable-webhooks", false,
+		"Enable validating admission webhooks for MongoDB / MongoDBSharded. Default false — cert-manager 의존성으로 helm chart 게이트로 활성화.")
 
 	opts := zap.Options{
 		Development: true,
@@ -182,6 +186,21 @@ func main() {
 	// log 표시만. (HPA reconcile 로직 자체는 mongodb_controller / mongodbsharded_controller 내부에 있음)
 	if !enableAutoscaling {
 		setupLog.Info("HorizontalPodAutoscaler reconciliation disabled by feature gate (--enable-autoscaling=false)")
+	}
+
+	// it45 — admission webhook 등록 (validating only, no mutating).
+	if enableWebhooks {
+		if err = webhookv1alpha1.SetupMongoDBWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "MongoDB")
+			os.Exit(1)
+		}
+		if err = webhookv1alpha1.SetupMongoDBShardedWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "MongoDBSharded")
+			os.Exit(1)
+		}
+		setupLog.Info("admission webhooks enabled (MongoDB / MongoDBSharded)")
+	} else {
+		setupLog.Info("admission webhooks disabled by feature gate (--enable-webhooks=false)")
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

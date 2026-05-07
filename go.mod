@@ -3,7 +3,7 @@ module github.com/keiailab/mongodb-operator
 go 1.26.2
 
 require (
-	github.com/keiailab/operator-commons v0.3.0
+	github.com/keiailab/operator-commons v0.4.0
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
 	github.com/stretchr/testify v1.11.1
