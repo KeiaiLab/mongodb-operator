@@ -4,6 +4,91 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 27-29 — 3 operator labels deepening (valkey 5/5 첫 완성)
+
+### 진척
+
+| Iteration | Repo | Commit | 산출물 |
+|---|---|---|---|
+| **it27** | mongodb-operator | `ebc5803` | buildLabels → commons.labels.Set.All() 위임. 4-key (no Version/PartOf) 동작 보존. |
+| **it28** | postgres-operator | `c68b451` | SelectorLabels → commons.labels 위임 + postgres-specific shard label 별도 추가 보존. |
+| **it29** | valkey-operator | `e8428b1` | CommonLabels → commons.labels 위임. 5-key (PartOf 포함). valkey **5/5 commons 100% 첫 완성**. |
+
+### operator-commons 채택률 매트릭스 (현재)
+
+| Operator | security | version | labels | monitoring | networkpolicy | 채택률 |
+|---|---|---|---|---|---|---|
+| mongodb | ✅ (it8) | ✅ (it9) | **✅ (it27)** | ⏳ chart only | ✅ (it26) | **4/5 (80%)** |
+| **valkey** | ✅ (it8) | ✅ (it8) | **✅ (it29)** | ✅ (it23) | ✅ (it25) | **🎉 5/5 (100%)** |
+| postgres | ✅ (it8) | ⏳ | **✅ (it28)** | ⏳ 부재 | ⏳ 부재 | **2/5 (40%)** |
+
+### 핵심 발견
+
+1. **3 operator labels 패턴 통일**: mongodb (4-key), valkey (5-key with PartOf),
+   postgres (4-key + shard label). commons.Set 의 *optional 필드 omit* 동작이
+   3 operator 의 *기존 출력 보존* 가능 — Set 의 functional 성격 입증.
+2. **Selector 패턴 차이**: mongodb / postgres 는 commons.Set.Selector() 와 동일
+   (4-key 또는 그 이하). valkey 는 *2-key* (Name + Instance 만 — cluster mode 의
+   다중 component 가 같은 service 매칭) → commons.Set.Selector() 보다 좁아
+   *위임 부적합*. valkey 는 *map literal 유지*.
+3. **valkey 가 commons 첫 5/5 도달**: 본 turn 으로 valkey 가 *commons 의 모든
+   적용 가능 영역* 채택. 다른 operator 가 향후 *valkey 를 carbon-copy 패턴 출처*
+   로 활용.
+
+### 검증 인용
+
+```
+mongodb (ebc5803):
+  $ go test ./... -count=1
+  ok  github.com/keiailab/mongodb-operator/internal/controller  19.370s
+  (전 패키지 PASS)
+
+postgres (c68b451):
+  $ go test ./internal/... -count=1
+  ok  github.com/keiailab/postgres-operator/internal/version           5.524s
+  ok  github.com/keiailab/postgres-operator/internal/webhook/v1alpha1  4.501s
+
+valkey (e8428b1):
+  $ go test ./... -count=1
+  ok  github.com/keiailab/valkey-operator/internal/controller         17.900s
+  ok  github.com/keiailab/valkey-operator/internal/resources           3.591s
+  pre-push hooks: full-lint / gitleaks / helm-lint / helm-template /
+                  unit-test (22.15s) / go-mod-tidy 모두 PASS
+```
+
+### 다음 iteration 자연 진입점
+
+- **iteration 30 (v0.4.0)**: pkg/webhook 신규 — mongodb iteration 9의
+  IsSupportedMongoDBVersion + valkey 의 webhook validation 패턴 통합.
+- **iteration 31**: postgres version 화이트리스트 deepening — internal/version/
+  matrix.go 의 Combo struct 가 commons.MustList 보다 풍부 (Image / Channel /
+  FeatureGate). 위임 시 *기능 손실* 위험 — *boundary 분석* 후 결정 (commons 확장
+  vs postgres 자체 유지).
+- **iteration 32**: mongodb / postgres 의 ServiceMonitor reconciler 추가 (큰 작업).
+- **iteration 16/M4 mongodb**: PITR / online shard / LDAP — 기능 구현 동반.
+- **iteration 21/P4 postgres**: G1-G2 자체 SQL — bitnami 능가.
+
+### 누적 진척
+
+```
+operator-commons v0.3.0 (5 패키지 100% line coverage)
+3 operator commons 채택률:
+  mongodb  4/5 (80%) — security/version/networkpolicy/labels
+  valkey   5/5 (100%) ← 첫 완성 (마일스톤)
+  postgres 2/5 (40%) — security/labels
+─────────────────────────────────
+20/12+ iteration (~99%, mongodb monitoring 위임 + postgres deepening +
+v0.4.0 webhook + M4/V3/P4 큰 기능 잔여)
+```
+
+본 turn 핵심 가치 — **valkey 가 commons 첫 100% 채택 도달**. 3 operator labels
+패턴 통일. mongodb / postgres 가 향후 valkey 의 commit (it29 e8428b1) 을 *carbon-
+copy 출처* 로 활용 가능.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 26 — mongodb NetworkPolicy → commons v0.3.0 위임
 
 ### 진척
