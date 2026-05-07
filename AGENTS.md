@@ -88,9 +88,35 @@ make test                      # go test ./internal/... + envtest
 - **Mongo built-in 인증 우회** — keyfile + admin user 둘 다 필수. AdminCredentialsSecretRef 비워두면 bootstrap 자동 skip 되지만 production 에선 필수.
 - **인라인 SecurityContext** — 위 PodSecurity helper 사용 강제. 회귀 가드가 catch.
 
+## Cluster Ops Mode (운영자 / 인계 시)
+
+argos data plane 의 *상태 audit + 격차 추적 + sprint plan* 진입.
+
+```bash
+# 1. 자동 KPI 측정 (5 영역, 30초 이내)
+./scripts/audit-cluster-state.sh
+
+# 2. 격차 + clean 영역 표 + KPI 정의
+$EDITOR docs/operations/cluster-audit.md
+
+# 3. 격차 해소 procedure (7 phase)
+$EDITOR docs/operations/production-grade-sprint.md
+```
+
+진입점 단축: [docs/operations/README.md](docs/operations/README.md) — 운영자
+single entry point. 사용자 의도별 *4 시나리오 표* 제공.
+
+cluster-ops mode 의 ADR (cluster-side governance):
+- ADR-0015 webhook failurePolicy=Fail
+- ADR-0016 cross-cut audit pattern (+ Errata: docs accuracy)
+- ADR-0017 CRD default vs webhook invariant (Type A/A'/B/C)
+- ADR-0018 MonitoringSpec orphan 단계적 해소
+- ADR-0019 operator-commons v0.5.0 helper 승격 (Proposed)
+
 ## Refs
 
 - 글로벌 규약: `~/.claude/CLAUDE.md` + `standards/*.md`
 - 본 프로젝트 거버넌스: [GOVERNANCE.md](GOVERNANCE.md), [MAINTAINERS.md](MAINTAINERS.md)
 - 운영 사고 분석: [HANDOFF.md](HANDOFF.md) (2026-05-07)
 - 기능 우선순위: [ROADMAP.md](ROADMAP.md), [TASKS.md](TASKS.md)
+- 운영자 진입점: [docs/operations/README.md](docs/operations/README.md)
