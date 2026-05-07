@@ -30,6 +30,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -693,7 +694,8 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 	}
 
 	// Update overall phase
-	if r.isClusterReady(mdbsh) {
+	ready := r.isClusterReady(mdbsh)
+	if ready {
 		mdbsh.Status.Phase = mongodbv1alpha1.ShardedPhaseRunning
 	} else {
 		mdbsh.Status.Phase = mongodbv1alpha1.ShardedPhaseInitializing
@@ -705,6 +707,41 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 
 	mdbsh.Status.ObservedGeneration = mdbsh.Generation
 	mdbsh.Status.Conditions = clearReconcileErrorCondition(mdbsh.Status.Conditions, mdbsh.Generation)
+
+	// C37 (ADR-0013 helpers.go SetStatusCondition 활용): operational visibility
+	// 격차 해소 — valkey/postgres 의 풍부한 conditions 패턴 차용. Ready /
+	// Progressing 2건 minimum (후속 cycle 에 ShardsReady / MongosReady 등 확장).
+	readyStatus := metav1.ConditionFalse
+	readyReason := "Initializing"
+	readyMessage := "MongoDBSharded cluster is initializing components"
+	if ready {
+		readyStatus = metav1.ConditionTrue
+		readyReason = "Available"
+		readyMessage = "All components (config server, shards, mongos) ready"
+	}
+	meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+		Type:               "Ready",
+		Status:             readyStatus,
+		ObservedGeneration: mdbsh.Generation,
+		Reason:             readyReason,
+		Message:            readyMessage,
+	})
+
+	progressingStatus := metav1.ConditionFalse
+	progressingReason := "Available"
+	progressingMessage := "Cluster reached desired state"
+	if !ready {
+		progressingStatus = metav1.ConditionTrue
+		progressingReason = "Initializing"
+		progressingMessage = "Cluster components transitioning to ready state"
+	}
+	meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+		Type:               "Progressing",
+		Status:             progressingStatus,
+		ObservedGeneration: mdbsh.Generation,
+		Reason:             progressingReason,
+		Message:            progressingMessage,
+	})
 
 	return updateStatusWithRetry(ctx, r.Client, mdbsh)
 }
