@@ -46,7 +46,6 @@ const (
 	// mongodbFinalizer — api/v1alpha1.FinalizerMongoDB 의 local alias (B-P0-1
 	// SSoT 후 보존 — controller-local 호출 사이트 영향 0).
 	mongodbFinalizer = mongodbv1alpha1.FinalizerMongoDB
-	requeueAfter     = 30 * time.Second
 
 	conditionTypePrimaryUnreachable = "PrimaryUnreachable"
 )
@@ -157,7 +156,7 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 	if !allReady {
 		logger.Info("Waiting for all pods to be ready")
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
 	}
 
 	// 7. Initialize replica set if not initialized
@@ -183,12 +182,12 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		if err != nil {
 			logger.Info("Primary unreachable, will retry", "error", err)
 			r.setPrimaryUnreachableCondition(ctx, mdb, err)
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+			return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
 		}
 		if !hasPrimary {
 			logger.Info("Waiting for primary election")
 			r.clearPrimaryUnreachableCondition(ctx, mdb)
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+			return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
 		}
 		r.clearPrimaryUnreachableCondition(ctx, mdb)
 	} else {
@@ -202,11 +201,11 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		case err != nil:
 			logger.Info("Primary unreachable (pre-bootstrap), will retry", "error", err)
 			r.setPrimaryUnreachableCondition(ctx, mdb, err)
-			return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+			return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
 		case !hasPrimary:
 			logger.Info("Waiting for primary election (pre-bootstrap)")
 			r.clearPrimaryUnreachableCondition(ctx, mdb)
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+			return ctrl.Result{RequeueAfter: requeueWaitForExternal}, nil
 		default:
 			r.clearPrimaryUnreachableCondition(ctx, mdb)
 		}
@@ -217,7 +216,7 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		if err := r.reconcileAdminUser(ctx, mdb); err != nil {
 			// busy lease는 transient — phase=Failed로 전이시키지 않고 양보.
 			if errors.Is(err, errBootstrapBusy) {
-				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+				return ctrl.Result{RequeueAfter: requeueWaitForExternal}, nil
 			}
 			return r.updateStatusError(ctx, mdb, "AdminUser", err)
 		}
@@ -239,7 +238,7 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	logger.Info("Successfully reconciled MongoDB")
-	return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	return ctrl.Result{RequeueAfter: requeueSteady}, nil
 }
 
 func (r *MongoDBReconciler) handleDeletion(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (ctrl.Result, error) {
@@ -716,6 +715,7 @@ func (r *MongoDBReconciler) updateStatusError(ctx context.Context, mdb *mongodbv
 // SetupWithManager sets up the controller with the Manager.
 func (r *MongoDBReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Recorder == nil {
+		//lint:ignore SA1019 client-go record.EventRecorder 유지. events.k8s.io 전환은 Recorder field migration 과 함께 별 cycle.
 		r.Recorder = mgr.GetEventRecorderFor("mongodb-controller")
 	}
 	return ctrl.NewControllerManagedBy(mgr).

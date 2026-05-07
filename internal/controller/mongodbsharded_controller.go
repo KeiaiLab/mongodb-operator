@@ -127,7 +127,7 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// 3. Wait for Config Server to be ready
 	if !r.isConfigServerReady(ctx, mdbsh) {
 		logger.Info("Waiting for config server to be ready")
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
 	}
 
 	// 4. Shards
@@ -140,7 +140,7 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// 5. Wait for Shards to be ready
 	if !r.areShardsReady(ctx, mdbsh) {
 		logger.Info("Waiting for shards to be ready")
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
 	}
 
 	// 6. Mongos
@@ -177,7 +177,7 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// 9. Wait for mongos to be ready
 	if !r.isMongosReady(ctx, mdbsh) {
 		logger.Info("Waiting for mongos to be ready")
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
 	}
 
 	// 10. Create admin user
@@ -221,7 +221,7 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	logger.Info("Successfully reconciled MongoDBSharded")
-	return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	return ctrl.Result{RequeueAfter: requeueSteady}, nil
 }
 
 func (r *MongoDBShardedReconciler) handleDeletion(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) (ctrl.Result, error) {
@@ -1218,6 +1218,7 @@ func (r *MongoDBShardedReconciler) cleanupShardedNetworkPolicies(ctx context.Con
 // SetupWithManager sets up the controller with the Manager.
 func (r *MongoDBShardedReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Recorder == nil {
+		//lint:ignore SA1019 client-go record.EventRecorder 유지. events.k8s.io 전환은 Recorder field migration 과 함께 별 cycle.
 		r.Recorder = mgr.GetEventRecorderFor("mongodbsharded-controller")
 	}
 	// v1.4.1 P1 fix: HPA를 Owns에 등록한다. 누락 시 controller-runtime 의 default

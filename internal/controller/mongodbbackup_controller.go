@@ -117,7 +117,7 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// If still running, requeue
 	if backup.Status.Phase == "Running" || backup.Status.Phase == "Pending" {
-		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
 	}
 
 	logger.Info("Successfully reconciled MongoDBBackup")
