@@ -17,7 +17,7 @@
 | T20 | 3-repo governance 자산 정합 — GOVERNANCE / MAINTAINERS / AGENTS / TASKS | 완료 | 100% | - | - | 2026-05-07. 본 commit. CoC ✓ / Gov ✓ / Maint ✓ / Roadmap ✓ / AGENTS ✓ / TASKS ✓ — 6/6. |
 | F12 | Sharded P0 회귀 가드 강화 — controller 측 podSpec 변환 경로도 PodSecurity 검증 | 완료 | 100% | B17 | - | 2026-05-07. envtest 로 controller-created cfg/shard/mongos PodSpec restricted 검사 추가. Monitoring enabled 시 mongos exporter sidecar `SecurityContext=nil` 공백 발견 → restricted SC 적용. |
 | T21 | latest 기본값 정렬 — MongoDB 8.3.1 + 8.2/8.0 milestone 렌더 가드 | 완료 | 100% | F12 | chart/API/deploy | 2026-05-07. 공식 current 8.3.1 기준으로 values/docs/samples/GitOps workload/default backup image/ArtifactHub images 를 8.3.1 로 정렬. `mongo:8.3.1`, `mongo:8.2`, `mongo:8.0` manifest 확인. builder matrix test 로 cfg/shard/mongos image 렌더 검증. `make test`, `make lint`, `make validate`, deploy overlay render PASS. |
-| F13 | release-smoke-test.sh 자동화 강화 — flaky 회피 + retry policy | 설계 | 10% | - | - | 12 PASS / 0 FAIL 이미 도달했으나 indexed network 의존성 (gh-pages CDN 지연 등) 으로 1-3 분 retry 필요. |
+| F13 | release-smoke-test.sh 자동화 강화 — flaky 회피 + retry policy | 완료 | 100% | - | - | 2026-05-07 it45. retry_check 헬퍼 + 단계 3/4/5 적용. SMOKE_RETRY_ATTEMPTS(default 12)/SMOKE_RETRY_SLEEP(default 15) env override. fast-path 첫 시도 통과 시 회귀 0 (latest v1.4.11 11 PASS / 1 FAIL — SBOM asset 누락 사전이슈). 3×2s override 13s 빠른 fail PASS. |
 | I14 | webhook validation rule 통합 — replicaset count / sharded.shards 하한 / storageClass | 설계 | 10% | - | - | CRD CEL XValidation 으로 가능한 부분과 webhook 으로만 가능한 부분 분리. |
 
 ## 차단됨

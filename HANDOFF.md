@@ -4,6 +4,58 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 45 — F13 release-smoke retry policy (gh-pages CDN flake 흡수)
+
+| Iteration | Repo | Commit | 산출물 |
+|---|---|---|---|
+| **it45** | mongodb-operator | (pending) | `scripts/release-smoke-test.sh` 에 `retry_check` 헬퍼 추가, 단계 3 (Pages status) / 4 (index.yaml fetch + version entry) / 5 (helm pull) 에 retry 적용. `SMOKE_RETRY_ATTEMPTS` (default 12) / `SMOKE_RETRY_SLEEP` (default 15) env override. fast-path 첫 시도 통과 시 출력 형식 회귀 0. F13 100% 처리. |
+
+### 동기
+
+it40-44 chain 은 controller 측 CreateOrUpdate / IsAlreadyExists guard 정합 작업이었다. 본 it45 는 *release pipeline 의 false-negative* 를 제거하는 별도 축. TASKS.md F13 가 "12 PASS / 0 FAIL 도달했으나 gh-pages CDN 인덱싱 지연으로 1-3 분 retry 필요" 로 설계 10% 잔존 → 본 iteration 으로 100% 종결.
+
+### 변경 요약
+
+- `retry_check <pass_msg> <fail_msg> <cmd...>` 헬퍼 추가 (top, `pass`/`fail` 직후).
+- 단계 3 Pages status: `_check_pages_built` 함수 분리 후 `retry_check` 로 wrapping.
+- 단계 4 index.yaml: fetch-only retry + version-entry retry 두 단계 분리. 기존 inline `if/then/else` 제거.
+- 단계 5 helm pull: `_helm_update_and_pull` 으로 `helm repo update + helm pull` 묶어서 retry. 인덱스 캐시 갱신을 매 시도 강제.
+- env override: `SMOKE_RETRY_ATTEMPTS` (default 12) / `SMOKE_RETRY_SLEEP` (default 15) — 12 × 15s = 최대 ~3 분.
+- shellcheck 결과 SC2034 1 건은 *기존 dead var* `TMP_TGZ` (line 149, 본 변경 전부터 존재). `principles.md §3 Surgical Changes` 에 따라 발견사항으로만 보고하고 보존.
+
+### 검증 인용
+
+```
+$ ./scripts/release-smoke-test.sh
+RESULT: 11 PASS / 1 FAIL
+# 회귀 0. 단계 3/4/5 전부 fast-path 첫 시도 통과 (출력 형식 동일).
+# 1 FAIL = SBOM asset 누락 (v1.4.11 release 자체 사전 이슈, retry policy 무관).
+
+$ time SMOKE_RETRY_ATTEMPTS=3 SMOKE_RETRY_SLEEP=2 ./scripts/release-smoke-test.sh v999.999.999
+✗ index.yaml 에 version: 999.999.999 누락 (after 3 attempts × 2s)
+✗ helm pull smoke-test-NNNNN/mongodb-operator 실패 (after 3 attempts × 2s)
+real 0m13.052s
+# fast-fail env override 동작 PASS — retry 메시지 정상 출력.
+
+$ shellcheck scripts/release-smoke-test.sh
+SC2034 1 건 (TMP_TGZ — 기존 dead var, 본 변경 무관)
+# 본 변경으로 신규 발생 0.
+```
+
+### 자연스러운 cross-repo 후속 (별 iteration)
+
+postgres-operator / valkey-operator 의 release-smoke-test.sh 도 동일 골격이므로 같은 `retry_check` 패턴 이식 가능. *별 task 로 분리* (atomic + Surgical) — 본 iteration 범위 외.
+
+### 다음 iteration 자연 진입점
+
+- it46+: postgres / valkey 에 동일 retry 패턴 이식 (cross-repo 정합)
+- it47+: mongodb webhook server 부트스트랩 (cert-manager) — it44 HANDOFF 에서 이미 식별한 큰 진입점
+- mongodb I14 (webhook validation rule 통합) 본격 구현
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 44 — ADR-0014 (intentional design 보존)
 
 | Iteration | Repo | Commit | 산출물 |
