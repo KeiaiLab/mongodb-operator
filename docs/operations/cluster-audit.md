@@ -79,6 +79,7 @@ platform-data-valkey               Synced   Healthy
 | cert-manager infrastructure | platform-system 의 argos-wildcard-tls / trust-manager + 2 ClusterIssuer (letsencrypt-prod/staging) 보유. 우리 operator 는 미활용 (C32 격차) |
 | ImagePullPolicy 일관성 | 3 operator 모두 `IfNotPresent` (production 권장). image bump 시 tag 변경으로 강제 재pull (latest tag 미사용) |
 | Liveness/Readiness probes | 3 operator controller-runtime 표준 `/healthz` + `/readyz` 구비 — kubelet 자동 health check |
+| Resource requests/limits | 3 operator 동일 (`requests: cpu=100m memory=128Mi`, `limits: cpu=500m memory=512Mi`) — cross-cut consistency. 모든 data ns pods 자체 명시 (C31 ns Quota 부재 환경에서 best practice) |
 
 ## DR Snapshots (임시 보관)
 
