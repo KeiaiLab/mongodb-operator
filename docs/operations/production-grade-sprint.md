@@ -106,22 +106,46 @@ neue webhook template + cert-manager 의존성 검증 필요.
 
 ## Sprint 진행 의존성 그래프
 
+```mermaid
+flowchart TD
+    classDef independent fill:#d4edda,stroke:#28a745
+    classDef sequential fill:#fff3cd,stroke:#ffc107
+    classDef blocked fill:#f8d7da,stroke:#dc3545
+    classDef longterm fill:#cce5ff,stroke:#0d6efd
+
+    A1[A1: dead RBAC cleanup<br/>5분]:::independent
+    A2[A2: mongodb TLS<br/>30분]:::independent
+    A4[A4: mongodb NetworkPolicy<br/>20분]:::independent
+
+    B1[B1: valkey-operator Chart.yaml]:::sequential
+    B2[B2: values + webhook + NP]:::sequential
+    B3[B3: ValkeyCluster manifest 흡수]:::sequential
+    B4[B4: ArgoCD app 등록]:::sequential
+    B5[B5: helm release adoption]:::sequential
+    B6[B6: CR 라벨 추가]:::sequential
+    B7[B7: cluster-snapshots 정리]:::sequential
+    B8[B8: TASKS 갱신]:::sequential
+
+    A3_5[A3, A5, C30 valkey, C32 valkey, C35<br/>1 PR 가능]:::sequential
+
+    C[C: kube-prometheus-stack 도입<br/>+ 자동 ServiceMonitor]:::independent
+    I28[I28: 30일 후 trigger<br/>spec.monitoring 사용 측정]:::blocked
+
+    D[D: 1.4.12 release pipeline<br/>4 외부 effect]:::independent
+    E[E: Backup CronJob 활성화<br/>mongodb + postgres]:::independent
+    F[F: ResourceQuota + PriorityClass<br/>ns governance]:::independent
+    G[G: Service mesh<br/>장기 RFC]:::longterm
+
+    B1 --> B2 --> B3 --> B4 --> B5 --> B6 --> B7 --> B8
+    B8 --> A3_5
+    C --> I28
 ```
-A1 (cleanup)              ← independent
-A2 (mongodb TLS)          ← independent
-A4 (mongodb NP)           ← independent
-B (valkey GitOps)         ← independent (B 내부 sequential)
-  ↓ B 완료 후
-A3, A5, C30 (valkey),
-C32 (valkey), C35 모두 1 PR 가능
-C (Prometheus)            ← independent
-  ↓ C 완료 후
-I28 trigger (30일 후)
-D (1.4.12 release)        ← independent
-E (Backup)                ← independent
-F (Quota/Priority)        ← independent
-G (Service mesh)          ← G 외 모두 완료 후 결정
-```
+
+레전드:
+- 🟢 independent: 다른 phase 무관, 즉시 실행 가능.
+- 🟡 sequential: 같은 phase 내 순서 의무.
+- 🔴 blocked: 선결 조건 (다른 phase 완료) 의무.
+- 🔵 long-term: 별 RFC 결정.
 
 ## 예상 결과 (Phase A-F 완료 후)
 
