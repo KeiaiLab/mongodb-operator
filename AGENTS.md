@@ -38,6 +38,13 @@ Makefile                         Build / test / deploy / docker / helm-publish
 ### bootstrap-admin script 멱등성
 `internal/assets/scripts/bootstrap-admin.sh.tpl` 의 `RS_OK != "init"` early-exit 가드 변경 금지. `db.createUser` 가드 *바깥* 호출 시 ordinal-0 SECONDARY 재기동에서 영구 CrashLoopBackOff (v1.4.0~v1.4.4 사고 — CHANGELOG [1.4.5] 참조).
 
+### Webhook invariant 추가 시 의무 audit (it46-47)
+- **ADR-0015**: `failurePolicy=Fail` 채택 — 가용성 vs validation 가치 trade-off.
+- **ADR-0016**: *Cross-cut audit pattern* — 새 invariant 추가 시 mongodb / valkey / postgres 3 operator 동시 점검 의무. PR 본문에 audit 표 포함.
+- **ADR-0017**: *CRD default vs webhook invariant* — `+kubebuilder:default=N` (N≠0) 가 있는 field 의 zero-value 거부 invariant 는 admission unreachable. type A/B/C 분류 후 작성.
+- 작성 위치: `internal/webhook/v1alpha1/`. helper 는 `validateXxx` 패턴 (mongodb_webhook.go 의 validateStorageSize / validateAuthSecretRef 참조).
+- **검증 dual-layer 의무**: unit (`mongodb_validation_test.go`) + envtest round-trip (`admission_roundtrip_test.go`). unit-only 통과는 false positive 가능 (ADR-0017).
+
 ## After Making Changes
 
 ### Always run
