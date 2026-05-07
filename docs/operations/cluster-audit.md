@@ -110,6 +110,9 @@ platform-data-valkey               Synced   Healthy
 | SA permission 직접 검증 | `kubectl auth can-i --as=...mongodb-operator '*' '*'` = no, `delete clusterrole` = no — least privilege 직접 입증 (RBAC wildcards 부재 + 직접 시뮬레이션) |
 | ArgoCD tracking-id | `argocd.argoproj.io/tracking-id` annotation 보유 — GitOps source 명시화 (mongodb-operator deploy) |
 | Deployment revision history | `deployment.kubernetes.io/revision: 7` — 7 revisions 누적, rollout history 추적 가능 |
+| Probe timing 통일 | 3 operator 동일 (liveness 15s/20s, readiness 5s/10s) — kubebuilder scaffold + chart values 정합 cross-cut |
+| StatefulSet podManagementPolicy | argos-mongo-cfg / shard-0 / keiailab-valkey-prod 모두 `Parallel` — startup 가속 (ordered vs parallel 의 production 권장 적용) |
+| app.kubernetes.io/component label 정합 | mongodb 의 configsvr / mongos / shard-N 정확 분류, 우리 operator (controller-manager) component 명시 — Prometheus / Grafana selector 표준 |
 
 ## Audit trail — 격차 발견 commit 매핑
 
