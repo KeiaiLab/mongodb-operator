@@ -65,7 +65,20 @@ LocalObjectReference 등) 에서 *single-operator 발견 → cross-cut transfera
 4. **N/A 영역 명시**: 다른 operator 가 해당 영역 미구현이면 *future
    invariant 작성 계약* 을 ADR 또는 plan 에 기록.
 
-### 적용 범위
+5. **Docs accuracy audit (Errata, it cluster-ops cycle 발견)**: 코드/ADR
+   변경 시 *user-facing docs* 가 *동일 사실 진술* 인지 검증. mongodb-operator
+   의 `docs/advanced/monitoring.md` 가 commit `edbb35b` 이전 *"operator
+   automatically creates ServiceMonitor"* false claim 보유 — controller 실제
+   미구현 (I16 orphan). 이는 *docs ↔ 코드 drift* 의 사례.
+   - **검증 명령**:
+     ```bash
+     # 변경 영역의 docs grep — 잘못된 "automatic" / "controller-managed"
+     # 진술이 실제 controller 코드에 대응하는지.
+     grep -nrE "automatically (create|manage|reconcile)" docs/
+     ```
+   - **MUST**: 코드 동작 변경 (controller add/remove, spec deprecation,
+     invariant 추가) 시 docs 동시 정정. 별 PR 분리 가능지만 같은 cycle 내.
+   - **검증**: ADR 의 "후속 작업" 에 `docs/<path>.md 정정` 명시.
 
 - **MUST**: webhook validating invariant, security 표면 변경, 데이터 영역
   검증, struct value omitempty trap 류.
