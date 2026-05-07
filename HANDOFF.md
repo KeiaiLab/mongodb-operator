@@ -55,7 +55,33 @@ Synced/Healthy
 
 ### Active 디버깅 영역
 
-부재 — 운영 안정 상태. cluster ops mode monitoring 만.
+**Critical 격차 발견** (2026-05-07 추가 audit): data plane GitOps 일관성 미충족.
+
+3 operator 의 argos-platform-data umbrella 통합 audit (`gh api ... contents/<op>/Chart.yaml?ref=stable`):
+
+| operator | argos-platform-data path | dependency | ArgoCD-managed | 격차 |
+|---|---|---|---|---|
+| mongodb-operator | `mongodb/` | `mongodb-operator: 1.4.11` | ✅ `platform-data-mongodb` | — |
+| postgres-operator | `postgres-operator/` | `postgres-operator: 0.3.0-alpha.4` | ✅ `platform-data-postgres-operator` | — |
+| **valkey-operator** | (부재) | (bitnami valkey 5.6.1 만) | ❌ keiailab-valkey-prod 별도 helm install | **GitOps drift detection 부재** |
+
+증거 (live):
+```
+$ kubectl get deploy -n data valkey-operator-prod -o jsonpath='{.metadata.labels}'
+{"app.kubernetes.io/managed-by":"Helm",...,"helm.sh/chart":"valkey-operator-1.0.3"}
+```
+
+`platform-data-valkey` ArgoCD app 은 *bitnami valkey* (shared-valkey-primary/replicas)
+만 sync. keiailab-valkey-prod 인스턴스 (6 pods, 16384 slots) 는 *helm install*
+직접 배포 → drift 발생 시 ArgoCD self-heal 불가.
+
+상용제품 수준 진전 영역:
+- argos-platform-data 에 `valkey-operator/` umbrella 추가 (mongodb 패턴 차용).
+- helm install 로 배포된 ValkeyCluster CR + Helm release 를 ArgoCD-managed
+  로 마이그레이션.
+- 별 cycle (release pipeline 외부 effect 동반).
+
+이외 운영 안정 — 3 operator log errors 0, events 0 (1h+).
 
 ---
 
