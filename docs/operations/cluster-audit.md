@@ -113,6 +113,10 @@ platform-data-valkey               Synced   Healthy
 | Probe timing 통일 | 3 operator 동일 (liveness 15s/20s, readiness 5s/10s) — kubebuilder scaffold + chart values 정합 cross-cut |
 | StatefulSet podManagementPolicy | argos-mongo-cfg / shard-0 / keiailab-valkey-prod 모두 `Parallel` — startup 가속 (ordered vs parallel 의 production 권장 적용) |
 | app.kubernetes.io/component label 정합 | mongodb 의 configsvr / mongos / shard-N 정확 분류, 우리 operator (controller-manager) component 명시 — Prometheus / Grafana selector 표준 |
+| Distroless image (operator) | mongodb-operator pod 에 wget / sh 부재 (`exec wget: executable file not found`) — kubebuilder scaffold 의 distroless base, *minimum attack surface* |
+| Pod readiness stability | argos-mongo-cfg-0 Ready=True since 2026-05-07T09:34:09Z (12h+ 안정), probe transition 부재 |
+| Volume mounts minimum | mongodb-operator pod = `kube-api-access-w46lj` 만 (BoundServiceAccountTokenVolume) — webhook 비활성 시 cert volume 부재 정합, no excess |
+| Operator pod node spread | mongodb e121 / valkey e122 / postgres 별 node — 서로 다른 노드 분산, single node failure 시 *모든 operator 동시 영향* 부재 |
 
 ## Audit trail — 격차 발견 commit 매핑
 
