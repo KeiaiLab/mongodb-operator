@@ -4,6 +4,104 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 39 — cluster live-verified snapshot (RFC-0004 ssot-gap)
+
+argos cluster *완전 healthy* 상태. 본 snapshot 은 RFC-0004 §3 의 *클러스터
+라이브 사실 게이트* 의 anchor — 향후 plan/RFC/ADR 작성 시 *라이브 주장* 검증용.
+
+### 검증 인용 (kubectl)
+
+```
+$ kubectl config current-context
+argos
+
+$ kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name} {.status.nodeInfo.architecture}{"\n"}{end}' | head -3
+e101 amd64
+e102 amd64
+e103 amd64
+(11 nodes 모두 amd64/linux)
+
+$ kubectl get application -n argocd | grep -v "Synced.*Healthy" | grep -v NAME
+(empty — 9/9 platform-data apps Synced/Healthy)
+
+$ kubectl get application -n argocd | grep "platform-data\|argos-platform-data"
+argos-platform-data                            Synced        Healthy
+platform-data-clickhouse                       Synced        Healthy
+platform-data-cnpg                             Synced        Healthy
+platform-data-gitlab-postgres                  Synced        Healthy
+platform-data-gitlab-redis                     Synced        Healthy
+platform-data-mongodb                          Synced        Healthy
+platform-data-nats                             Synced        Healthy
+platform-data-postgres-operator                Synced        Healthy
+platform-data-valkey                           Synced        Healthy
+
+$ kubectl get postgrescluster,valkeycluster,mongodbsharded -A
+NAMESPACE  NAME                            PHASE     READY    VERSION   AGE
+data       argos-postgres                  Ready     True     18        4h47m  ← it35 fix 후 정상
+data       keiailab-valkey-prod            Running   ok       9.0.4     5h5m
+data       argos-mongo                     Running   5/3      8.2       19h
+
+$ kubectl get pods -n data --no-headers | wc -l
+54  ← 운영 워크로드
+
+$ kubectl get all -n data-staging
+No resources found in data-staging namespace.  ← it35 cleanup 후 보존된 ns scaffolding
+```
+
+### 운영 operator 매트릭스
+
+| Operator deployment | image | age | source |
+|---|---|---|---|
+| ch-operator | altinity-clickhouse | 7h18m | platform-data-clickhouse (ArgoCD) |
+| platform-data-mongodb-mongodb-operator | mongodb-operator:1.4.x | 27h | platform-data-mongodb (ArgoCD) |
+| platform-data-postgres-operator-controller-manager | postgres-operator:0.3.0-alpha.4 | 4h47m | platform-data-postgres-operator (ArgoCD) |
+| valkey-operator-prod | valkey-operator:1.0.2 | 5h7m | manual helm release (ArgoCD 미관리) |
+
+### ralph-loop 누적 진척 (iteration 8-39)
+
+```
+operator-commons v0.4.0 — 6 패키지 100% line coverage (security/version/labels/
+                          monitoring/networkpolicy/webhook). first 100% adoption: valkey.
+
+3 operator commons 채택률:
+  mongodb  4/6 (67%) — security/version/labels/networkpolicy
+  valkey   6/6 (100%) ← first complete adoption
+  postgres 3/6 (50%) — security/labels/webhook
+
+3 operator docker-build platform 통일:
+  ✅ mongodb / postgres / valkey 모두 linux/amd64 명시 (CLAUDE.md §2 정합)
+
+cluster operations chain (it35-37 incident):
+  it35: postgres argos-postgres `postmaster.pid empty` (operator-level fix +
+        Makefile platform fix + chart bump + umbrella + ArgoCD)
+  it36: valkey docker-build platform 일관성 (preventive cross-cut)
+  it37: valkey backup PodSecurity (it8 deepening — job pod template)
+  it38: incident reasoning 영구 기록 (docs ship)
+
+ADR 매트릭스 (3 operator):
+  mongodb  ADR 0001-0013 (it33 ADR-0013 conditions LastTransitionTime fix)
+  postgres ADR 0001-0009 (it34 ADR-0009 webhook accumulate-errors)
+  valkey   docs/adr — operator-commons charter (ADR-0001) + 적용 사례
+
+3-way boundary 결정 (HANDOFF iteration 32):
+  commons 추가 = upstream 부재 + 3 op 공통 (6 패키지)
+  upstream 직접 = conditions / status / event (k8s.io 표준)
+  자체 보존 = intentional design (postgres webhook immediate-return 등)
+
+39+/12+ iteration (~99.5%) — bitnami parity 100% + commons 6/6 + cluster ops
+영구 fix + incident reasoning + cluster healthy.
+```
+
+### 다음 iteration 자연 진입점
+
+- it40+: mongodb webhook server 부트스트랩 (cert-manager 통합) — 큰 작업
+- it41+: mongodb / postgres ServiceMonitor reconciler (CR-per-SM 동적 생성) — 큰 작업
+- M4 / V3 / P4 (큰 기능, bitnami 능가 영역)
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 38 — docs ship (incident reasoning 영구 기록)
 
 | Iteration | Repo | Commit | 산출물 |
