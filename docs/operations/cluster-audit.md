@@ -103,6 +103,9 @@ platform-data-valkey               Synced   Healthy
 | Services data ns | 38 ClusterIP (cluster-internal only, Ingress 0 정합) |
 | Endpoints binding | 모든 service endpoint binding 정상, empty endpoints 0건 — pod selector 정합 |
 | Cert validity (cert-manager) | platform-system/argos-wildcard-tls + trust-manager + services/mailstory-tls 모두 *2026-08-04~05* (~3 months 후) 만료, cert-manager 자동 갱신 영역 |
+| Admission denial events | cluster-wide 1h FailedCreate 0건 — webhook + CRD validation 통과율 100% |
+| Pod failure modes | data ns Pending / CrashLoopBackOff 0건 — 모든 pods Running |
+| PVC claim retention policy (STS) | argos-mongo-cfg / shard STS 의 `whenDeleted=Retain, whenScaled=Retain` — STS 삭제 / scale-down 시 PVC 보존, *데이터 손실 방지* |
 
 ## Audit trail — 격차 발견 commit 매핑
 
