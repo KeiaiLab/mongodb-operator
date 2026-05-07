@@ -66,6 +66,7 @@ platform-data-valkey               Synced   Healthy
 | **C34** | data plane Backup CronJob 0건 — mongodb pitr / postgres backup spec 미활성 | 발견 | DR 시점 데이터 손실 가능 (현재 oplog tailer 만 보유) | argos-mongo + argos-postgres CR 에 `spec.backup.{enabled,schedule,storage.s3}` 설정. mongodb-operator webhook backup invariant (it46 step 9) 즉시 가드. | High |
 | **C35** | keiailab-valkey-prod anti-affinity 부재 — 우연 7-node spread, scheduler 의존 | 발견 | node failure 시 *동일 노드 다중 pod* 위험 (현재 e121/e122 각 2 pods) | keiailab-valkey-prod CR 에 affinity 추가 또는 chart values 의 `affinity.podAntiAffinity` 활성. argos-mongo 의 preferredDuringScheduling weight=100 + hostname topologyKey 패턴 차용. | Medium |
 | **C36** | application-level PriorityClass 부재 — data ns 54 pods 모두 priority 0 (default) | 발견 | preemption 시 critical workload (argos-mongo, gitlab-postgres) 와 secondary (gitlab-redis, postgres-default) 동등 우선순위 | argos-platform-data 의 ns manifest 또는 platform-base-namespaces 에 PriorityClass 정의 (`argos-data-critical=10000`, `argos-data-default=1000`) + 워크로드 spec 에 priorityClassName 적용. | Low |
+| **C37** | mongodb CR status conditions 빈약 — `ReconcileError=False` 1개만 (vs valkey 5 / postgres 4 conditions) | 발견 | operational visibility 격차 — Ready / Progressing / ShardsReady / TLSReady / BackupReady 등 lifecycle tracking 부재 | controller status 갱신 코드에 condition 추가 (valkey 패턴 차용) — Ready / ClusterReady / ScalePending / UpgradeInProgress 등. 또한 `status.shardCount` / `mongosCount` field 비어있음 — controller reconcile 갱신 누락. | Medium |
 
 ## Clean 영역 (격차 0, 상용제품 수준 충족)
 
