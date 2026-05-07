@@ -13,15 +13,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Validating admission webhook** (`internal/webhook/v1alpha1/`, `cmd/main.go`,
   `charts/mongodb-operator/templates/webhook.yaml`): MongoDB / MongoDBSharded CR
-  의 admission validation. version 화이트리스트 (8.0/8.2/8.3) 위반 + replica set
-  quorum 위반 (members=2/4 같은 even count) + shards.count >64 + membersPerShard
-  even 거부. controller-runtime v0.22.4 non-generic API + cert-manager Issuer /
-  Certificate + `--enable-webhooks` flag (default false, opt-in). it45 — Phase 1
-  M1 (multi-version validation) 의 admission 표면. helm chart 의 `webhook.enabled`
-  gate 활성화 시 cert-manager 1 instance 클러스터 차원 공유 필요.
-  ADR-0015 (failurePolicy=Fail trade-off).
+  의 admission validation. controller-runtime v0.22.4 non-generic API +
+  cert-manager Issuer / Certificate + `--enable-webhooks` flag (default false,
+  opt-in). helm chart 의 `webhook.enabled` gate 활성화 시 cert-manager 1
+  instance 클러스터 차원 공유 필요.
+- **Webhook invariants 11건** (it45-47):
+  - `version.version` 화이트리스트 (8.0/8.2/8.3).
+  - `members` 1 또는 odd >= 3 (split-brain 방지).
+  - `shards.count` <= 64 (operational limit).
+  - `shards.membersPerShard` 1 또는 odd >= 3.
+  - `storage.size` >= 1Gi (3 곳: MongoDB / Sharded.ConfigServer / Sharded.Shards).
+  - `auth.adminCredentialsSecretRef.name` non-empty (omitempty trap).
+  - `tls.certManager.issuerRef.name` non-empty (활성 시).
+  - `tls.customCert.secretName` non-empty (활성 시).
+  - `backup.schedule` non-empty cron (Enabled 시).
+  - `backup.storage.s3.bucket` + `credentialsRef.name` non-empty.
+- **envtest admission round-trip suite** (9 ginkgo specs): real apiserver
+  통과 검증. unit-only 통과는 false positive 가능 (ADR-0017).
+- **MonitoringSpec deprecation** (Phase 1, ADR-0018): `Spec.Monitoring.{Service
+  Monitor,PrometheusRules,Exporter}` 4 type 에 godoc `Deprecated:` marker.
+  controller 미구현 (silent ignore UX 함정 명시화). breaking change 0.
 - **operator-commons v0.4.0** dependency bump (pkg/webhook 의
   `ValidateWithPredicate` helper 사용 — 3 operator 통일).
+- **사용자 가이드** (`docs/advanced/webhook.md`): 13 invariants 매트릭스 +
+  failurePolicy 영향 + troubleshooting + Type A' unreachable patterns.
+- **ADR 6건 신규** (`docs/kb/adr/0013-0018.md`): conditions / Create 패턴 /
+  failurePolicy / cross-cut audit / CRD default vs invariant / MonitoringSpec
+  단계적 해소.
+
+### Operations (internal, 사용자 영향 0)
+
+- **Cluster ops audit framework**: `docs/operations/cluster-audit.md` (격차
+  11건 + clean 영역 15건 + KPI baseline) + `production-grade-sprint.md` (7
+  phase 행동 plan, Mermaid 시각화) + `audit-cluster-state.sh` (자동 측정
+  도구) + `cluster-snapshots/` (DR 임시 보관).
+- **ADR-0019 Proposed**: operator-commons v0.5.0 helper 승격 plan
+  (validateStorageSize + apiError 3-of-3 입증).
 
 ## [1.4.11] - 2026-05-07
 
