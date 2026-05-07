@@ -212,8 +212,8 @@ var _ = Describe("MongoDBSharded Controller", func() {
 			sharded := newTestMongoDBSharded(name, 1, 1, "1Gi")
 			sharded.Spec.ConfigServer.Members = 1
 			sharded.Spec.Mongos.Replicas = 1
-			//nolint:staticcheck // ADR-0018 Phase 1: MonitoringSpec deprecated 명시, test 영역 보존 (Phase 2 trigger 후 결정)
-			sharded.Spec.Monitoring = &mongodbv1alpha1.MonitoringSpec{Enabled: true}
+			//lint:ignore SA1019 ADR-0018 Phase 1: MonitoringSpec deprecated 명시, test 영역 보존 (Phase 2 trigger 후 결정).
+			sharded.Spec.Monitoring = &mongodbv1alpha1.MonitoringSpec{Enabled: true} //nolint:staticcheck
 			Expect(k8sClient.Create(ctx, sharded)).Should(Succeed())
 
 			cfg := &appsv1.StatefulSet{}

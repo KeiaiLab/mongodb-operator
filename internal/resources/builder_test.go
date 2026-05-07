@@ -312,7 +312,8 @@ func TestBuildReplicaSetStatefulSetWithMonitoring(t *testing.T) {
 				Size:        resource.MustParse("10Gi"),
 				DataDirPath: "/data/db",
 			},
-			Monitoring: &mongodbv1alpha1.MonitoringSpec{
+			//lint:ignore SA1019 ADR-0018 Phase 1: deprecated MonitoringSpec 의 기존 exporter sidecar 렌더 회귀 가드.
+			Monitoring: &mongodbv1alpha1.MonitoringSpec{ //nolint:staticcheck
 				Enabled: true,
 			},
 		},
