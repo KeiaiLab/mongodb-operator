@@ -3656,7 +3656,12 @@ spec:
                     description: Enabled enables Prometheus monitoring
                     type: boolean
                   exporter:
-                    description: Exporter configures the MongoDB exporter sidecar
+                    description: |-
+                      Exporter configures the MongoDB exporter sidecar
+
+                      Deprecated: ADR-0018 Phase 1 — controller 미구현. argos 운영의 mongodb
+                      exporter 는 chart values `mongodb.exporterImage` + sharded mongos pod 의
+                      sidecar 정적 정의로 cover.
                     properties:
                       image:
                         default: percona/mongodb_exporter:0.40
@@ -3686,7 +3691,11 @@ spec:
                         type: object
                     type: object
                   prometheusRules:
-                    description: PrometheusRules enables PrometheusRule creation
+                    description: |-
+                      PrometheusRules enables PrometheusRule creation
+
+                      Deprecated: ADR-0018 Phase 1 — controller 미구현. PrometheusRule CRD 도
+                      클러스터에 미설치 가능 (C25 cluster-ops audit).
                     properties:
                       enabled:
                         description: Enabled enables default alerting rules
@@ -3700,7 +3709,13 @@ spec:
                     - enabled
                     type: object
                   serviceMonitor:
-                    description: ServiceMonitor enables ServiceMonitor creation
+                    description: |-
+                      ServiceMonitor enables ServiceMonitor creation
+
+                      Deprecated: ADR-0018 Phase 1 — controller 미구현. 설정해도 ServiceMonitor
+                      자동 생성 안 됨. valkey-operator `internal/resources/servicemonitor.go`
+                      패턴 (commons.monitoring 위임 + fail-soft applyServiceMonitor) 차용은
+                      Phase 2 결정 영역.
                     properties:
                       interval:
                         default: 30s
