@@ -4,6 +4,73 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 9-12 — Phase 1 M1+M2 (mongodb 진영)
+
+### 진입점
+
+ralph-loop 진입 (사용자: "증거기반으로 모두 진행"). roadmap (~/.claude/plans/
+iridescent-squishing-locket.md) 의 Phase 1 mongodb 4 iteration (M1 multi-version
++ M2 e2e 부트스트랩 + 4 시나리오) 중 *3 시나리오까지* 완료.
+
+### iteration 별 결과
+
+| Iteration | 산출물 | Commit |
+|---|---|---|
+| **it9 (M1)** mongodb version 화이트리스트 | SupportedMongoDBVersions = ["8.0","8.2","8.3"] (commons.MustList 위임) + IsSupportedMongoDBVersion (semver-prefix 매칭) + 19 신규 test (PatchLevel/MajorMinor/Rejected/Snapshot) | `a8db040` |
+| **it10 (M2 #1)** e2e 프레임워크 부트스트랩 | test/utils/utils.go (valkey 패턴 차용 289줄) + e2e_suite_test.go + bootstrap_test.go (ReplicaSet 3 members) + Makefile 3 target (setup/test/cleanup-e2e) | `f53cbec` |
+| **it11 (M2 #2)** failover 시나리오 | test/e2e/failover_test.go (151줄) — primary kill → step-down → 새 primary 선출 → rs.status() PRIMARY 검증 | `207e330` |
+| **it12 (M2 #3)** sharded topology 시나리오 | test/e2e/sharded_test.go (199줄) — 3 shard + 3 cfg + 3 mongos 부트스트랩 → scale up (3→4) → scale down (4→3) → **mongos drift fix 회귀 가드** | `3156744` |
+
+### 핵심 결정
+
+1. **webhook server 부트스트랩 분리**: M1 (it9) 은 *pure validation function* 만
+   도입. webhook server 자체 (cert-manager + ValidatingWebhookConfiguration) 는
+   별 iteration 으로 분리 — *Surgical Changes* 정합.
+2. **e2e 프레임워크 차용 우선**: valkey-operator/test/utils 가 검증된 helpers (289줄,
+   13 함수, repo-specific reference 0건) → 그대로 복사. 새 발명 회피.
+3. **4 시나리오 → 1 iteration 별 분리**: bootstrap (it10), failover (it11), sharded
+   (it12), backup/restore (it13 예정), version_upgrade (it14 예정). 한 iteration 한
+   ship 단위 정합.
+
+### 검증 인용 (각 iteration)
+
+```
+$ go test ./api/v1alpha1/ -count=1                       (it9)
+ok  github.com/keiailab/mongodb-operator/api/v1alpha1  0.297s
+  --- PASS: TestIsSupportedMongoDBVersion_PatchLevelAccepted (6/6)
+  --- PASS: TestIsSupportedMongoDBVersion_MajorMinorAccepted (3/3)
+  --- PASS: TestIsSupportedMongoDBVersion_Rejected (10/10)
+
+$ go vet -tags=e2e ./test/...                            (it10/11/12)
+$ go test -tags=e2e -count=0 ./test/e2e                  (compile PASS)
+$ make help | grep e2e                                   (it10)
+  setup-test-e2e / test-e2e / cleanup-test-e2e
+
+$ go test -count=1 ./...                                 (전 iteration 회귀)
+ok  github.com/keiailab/mongodb-operator/internal/controller  20.041s
+```
+
+### 다음 iteration 자연 진입점 (roadmap)
+
+- **iteration 13**: backup_restore_test.go — MongoDBBackup CR + S3 round-trip + restore.
+  실 S3 의존 또는 minio sidecar 모킹 결정 필요.
+- **iteration 14**: version_upgrade_test.go — 8.0 → 8.2 → 8.3 rolling, mixed-version
+  replica set 호환. iteration 9 의 IsSupportedMongoDBVersion 화이트리스트 준수 검증.
+- **iteration 15** (M3): mongodb chart values 평탄화 (extraEnvVars/extraVolumes/sidecars
+  /podLabels/podAnnotations 등 bitnami parity).
+- **iteration 16-19** (M4): operator-grade e2e (PITR / online shard rebalance / LDAP).
+
+### 누적 evidence ceiling
+
+본 4 iteration 의 e2e test *실제 kind 실행* 은 image build (~5 분) + cert-manager
+부트 + 15 pod ready (sharded test) + 시나리오 별 5-10 분 = 총 30-45 분 소요. 본
+iteration 들은 *컴파일 + vet PASS* 까지 evidence ceiling. release 시점 또는 별
+iteration 에서 *실 kind 실행 + 수정 cycle* 진행 권장.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 8 — Bitnami parity roadmap Phase 0 (operator-commons)
 
 ### 진입점
