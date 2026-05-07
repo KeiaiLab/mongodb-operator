@@ -80,6 +80,74 @@ tolerations: []
 # -- Affinity rules for operator pod scheduling
 affinity: {}
 
+# -- Topology spread constraints for operator pod scheduling
+topologySpreadConstraints: []
+
+# -- Priority class name for operator pod (e.g., system-cluster-critical)
+priorityClassName: ""
+
+# -- Runtime class name for operator pod (e.g., gvisor, kata)
+runtimeClassName: ""
+
+# -- DNS policy (ClusterFirst, ClusterFirstWithHostNet, Default, None)
+dnsPolicy: ""
+
+# -- DNS config — used when dnsPolicy=None or supplemental config
+dnsConfig: {}
+
+# -- Host aliases — additional /etc/hosts entries
+hostAliases: []
+
+# -- Termination grace period seconds (default 30 — k8s default)
+terminationGracePeriodSeconds: null
+
+# -- Operator container additional environment variables (raw EnvVar list)
+extraEnvVars: []
+# Example:
+#   - name: GOMEMLIMIT
+#     value: "400MiB"
+
+# -- Operator container additional env vars from ConfigMaps (raw EnvFromSource ConfigMapRef list)
+extraEnvVarsCM: []
+# Example:
+#   - name: my-config
+
+# -- Operator container additional env vars from Secrets (raw EnvFromSource SecretRef list)
+extraEnvVarsSecret: []
+
+# -- Additional volumes mounted into the operator pod (raw Volume list)
+extraVolumes: []
+# Example:
+#   - name: ca-bundle
+#     configMap:
+#       name: my-ca-bundle
+
+# -- Additional volume mounts on the operator container (raw VolumeMount list)
+extraVolumeMounts: []
+# Example:
+#   - name: ca-bundle
+#     mountPath: /etc/ssl/custom-ca.pem
+#     subPath: ca.pem
+#     readOnly: true
+
+# -- Additional init containers (raw Container list)
+extraInitContainers: []
+
+# -- Additional sidecar containers running alongside the operator (raw Container list)
+sidecars: []
+
+# -- Custom liveness probe (overrides default if non-empty)
+customLivenessProbe: {}
+
+# -- Custom readiness probe (overrides default if non-empty)
+customReadinessProbe: {}
+
+# -- Custom startup probe
+customStartupProbe: {}
+
+# -- Container lifecycle hooks (postStart / preStop)
+lifecycleHooks: {}
+
 # Leader election configuration
 leaderElection:
   # -- Enable leader election for controller manager
