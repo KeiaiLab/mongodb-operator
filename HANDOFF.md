@@ -4,6 +4,67 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 7 — valkey 차단요인 2 진단 + 회귀 가드
+
+### 진입점
+
+iteration 6 HANDOFF "다음 iteration 자연 진입점" 의 1번 (valkey 차단요인 2 — version
+upgrade reconcile). 사용자 명시 선택 (단일 트랙 집중, T2 등급).
+
+### Step 별 결과
+
+| Step | 결과 | 핵심 인용 / commit |
+|---|---|---|
+| 1. Kind 진단 (가설 A/B/C 좁히기) | **차단요인 2 fresh 시나리오 재현 안됨** — STS image propagate + Pod rotation 정상 | `kubectl patch valkey vk-bak-target ... 9.0.4` → 5s 후 STS image=9.0.4, 60s 후 Pod 재생성 + image=9.0.4 + Phase=Running |
+| 2. 가설 별 fix | **불필요** (Step 1 결과로 skip) | — |
+| 3. e2e 회귀 가드 | `test/e2e/version_upgrade_test.go` 신규 — 3 가설 (STS image / Pod image / CR spec preservation) 모두 회귀 가드 | valkey-operator `d5fbbf8` |
+| 4. ROADMAP 갱신 + commit + push | ROADMAP P0 → narrow scope 명시 (`[~]`), commit + push + lefthook 6 hooks PASS | valkey-operator `d5fbbf8` |
+
+### 핵심 발견
+
+1. **Plan 의 차단점 분기 적용**: plan.md 에 명시한 "Step 1 진단이 재현 안됨 시" 시나리오 발동.
+   d8fa7e8 → 1.0.1 → ab3c18b 사이 어떤 commit 에서 우발 fix 됐거나, 또는 차단요인이 *처음부터*
+   narrow scope (bitnami RDB restore → valkey-migrated → patch chain) 한정이었음.
+2. **envtest 한계 확인**: `internal/controller/valkey_controller_test.go:89-135` 의 version
+   upgrade test 가 PASS 였으나, 이는 fake client 의 in-memory CreateOrUpdate 만 검증. 실제
+   K8s API server 의 server-side merge 거부 행동은 envtest 가 모사 못함 — *e2e 가 유일한
+   회귀 가드*.
+3. **Cross-operator 패턴**: mongodb-operator HEAD (327d639 등) 의 최근 4 commit 이 모두
+   *deployment template propagation* 관련 fix (`preserve deployment revision annotation`,
+   `overlay owned deployment template fields`, `preserve deployment pod template defaults`).
+   valkey 차단요인 2 의 Template propagation 과 동일 카테고리 — K8s operator 의 일반 함정.
+
+### 다음 iteration 자연 진입점
+
+1. **valkey narrow scope 검증** (Phase B 본격 진입 시): `test/e2e/backup_restore_test.go` 확장 —
+   bitnami RDB restore → 자체 operator valkey-migrated → version patch chain 시나리오 재현.
+   ROADMAP `[~]` → `[x]` 또는 P0 별 fix.
+2. **e2e_suite_test.go KIND_CLUSTER override fix**: `kind load --name kind` 가 hardcoded —
+   `KIND_CLUSTER` env 무시. 본 iteration 의 e2e 코드를 *실제로 실행하려면* prerequisite.
+3. **mongodb-operator template fix 패턴 → valkey/postgresql 점검**: 본 iteration 에서 발견한
+   cross-operator 패턴 — 동일 종류 fix 가 valkey/postgresql 에 필요한지 코드 review.
+4. **ADR-0058 Phase 1 잔여** (LimitRange + RBAC) — iteration 6 미완료 잔여.
+5. **postgres staging smoke** — `hack/smoke.sh` ns override + sample CR ns 매개변수화.
+
+### 검증 인용 (CLAUDE.md §7 클러스터 라이브 사실 게이트)
+
+```
+$ kubectl --context kind-valkey-operator-test-e2e get pod vk-bak-target-0 \
+    -o jsonpath='{.spec.containers[0].image}'
+docker.io/valkey/valkey:9.0.4
+
+$ go vet -tags=e2e ./...                   (0 errors)
+$ go test -tags=e2e -count=0 ./test/e2e    (compile PASS)
+$ go test -count=1 ./internal/...          (PASS, 0 fail)
+
+$ git log --oneline -1
+d5fbbf8 test(e2e): version upgrade 회귀 가드 + ROADMAP 차단요인 2 narrow scope 명시
+```
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 T21 — MongoDB latest default 정렬 완료
 
 - **구현**:
