@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.12] - 2026-05-07
+
+### Added
+
+- **Validating admission webhook** (`internal/webhook/v1alpha1/`, `cmd/main.go`,
+  `charts/mongodb-operator/templates/webhook.yaml`): MongoDB / MongoDBSharded CR
+  의 admission validation. version 화이트리스트 (8.0/8.2/8.3) 위반 + replica set
+  quorum 위반 (members=2/4 같은 even count) + shards.count >64 + membersPerShard
+  even 거부. controller-runtime v0.22.4 non-generic API + cert-manager Issuer /
+  Certificate + `--enable-webhooks` flag (default false, opt-in). it45 — Phase 1
+  M1 (multi-version validation) 의 admission 표면. helm chart 의 `webhook.enabled`
+  gate 활성화 시 cert-manager 1 instance 클러스터 차원 공유 필요.
+  ADR-0015 (failurePolicy=Fail trade-off).
+- **operator-commons v0.4.0** dependency bump (pkg/webhook 의
+  `ValidateWithPredicate` helper 사용 — 3 operator 통일).
+
 ## [1.4.11] - 2026-05-07
 
 ### Fixed
