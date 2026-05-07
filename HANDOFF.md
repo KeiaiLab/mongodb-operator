@@ -87,7 +87,30 @@ $ kubectl get valkeycluster -n data keiailab-valkey-prod -o jsonpath='{.metadata
 
 즉 valkey 영역의 GitOps 격차 *2단계*:
 1. operator chart (`valkey-operator-1.0.3`) — helm-direct (ArgoCD 추적 부재).
-2. CR 인스턴스 (`keiailab-valkey-prod`) — helm/argocd 라벨 0건, manual apply 추정.
+2. CR 인스턴스 (`keiailab-valkey-prod`) — helm/argocd 라벨 0건, **manual apply 확정**.
+
+CR 추가 증거 (live):
+```
+$ kubectl get valkeycluster -n data keiailab-valkey-prod -o jsonpath='{.metadata.annotations}'
+{"kubectl.kubernetes.io/last-applied-configuration": "..."}
+$ gh search code "keiailab-valkey-prod" --owner keiailab
+keiailab/mongodb-operator:HANDOFF.md: ... (운영 상태 언급만)
+# 즉 어느 repo 에도 spec yaml 부재 — git 추적 0.
+```
+
+CR 라벨 (의도 단서):
+- `argos.io/component: keiailab-valkey`
+- `argos.io/migration-phase: production-equivalent` ← *production 도달 전
+  임시 단계* 신호. 정상 마이그레이션 진행 중 가능성.
+
+helm release history (data ns):
+- `sh.helm.release.v1.valkey-operator-prod.v1` ~ `.v4` (96m ~ 6h52m).
+- 4 revision = chart bump 4회 진행 중 — *진행 중 작업* 의 일부.
+
+**상용제품 도달 결정적 격차**:
+- spec 변경 history 추적 부재 (git 0).
+- disaster recovery 불가 (CR yaml 누락 시 spec 복원 불가, 운영 메모리만).
+- 6 pods × 16384 slots 의 *유일한 spec 원본* = `kubectl get -o yaml` (cluster only).
 
 후속 통합 작업 시 *둘 다* GitOps-managed 로 마이그레이션 필요.
 
