@@ -4,6 +4,43 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 옵션 C — 4 작업 동시 진입 (ralph-loop iteration 5)
+
+### 진행 결과 (4 작업 모두 첫 단계 통과 또는 식별)
+
+| 작업 | 결과 | Commit |
+|---|---|---|
+| 1. valkey Phase A3 chaos | ✓ 3 shard ValkeyCluster 6 pod 90s, primary kill → 자동 master 재선출 + 데이터 잔존, cluster_state=ok 유지 | valkey-operator `dac77c5` |
+| 2. valkey Phase B RDB PoC | ⚠️ 차단 요인 2 종 발견 + ROADMAP 격상 (Valkey 9.x 지원 prerequisite, version upgrade reconcile 결함). ValkeyRestore mechanism 자체는 ✓ | valkey-operator `dac77c5` |
+| 3. postgresql Phase A1 결정 | ✓ ADR-0058 채택 — argos `data-staging` ns 분리 (별도 클러스터 비용 ↑ 회피, 인프라 동질성 ↑) | argos-infra-bootstrap `e949d99` |
+| 4. postgresql F02 → 100% | ✓ smoke.sh 에 [7/8] WAL lag + [8/8] Failover RTO 측정 step 추가 (kind 실측은 다음 iteration) | postgres-operator `b4317dc` |
+
+### Phase B 차단 요인 (다음 iteration 영역)
+
+1. **Valkey 9.x 지원 1.x 라인 격상** — bitnami/valkey 9.0.4 의 RDB format v80 → 자체 operator 8.1.6 호환 불가. 마이그레이션 prerequisite. ROADMAP 갱신 완료.
+2. **version upgrade reconcile 결함** — `spec.version.version` patch 가 STS template image 로 propagate 안 됨. P0.
+
+### 현재 클러스터 상태 (2026-05-07)
+
+```
+valkey-operator-system ns:
+  valkey-operator (0.1.0-alpha.2, 1/1 Running 14m)
+  valkey-test (Standalone, Running 27m) — Phase A2 smoke 유지
+  valkey-chaos (3 shard, slots=16384, Running 9m) — Phase A3 30 일 soak 진입
+data ns: 변경 없음 (mongodb 21 pod, postgres-default 3 instance, shared-valkey 2 pod 모두 정상)
+```
+
+### 다음 iteration 자연 진입점
+
+- **valkey 차단 요인 fix** (P0): Valkey 9.x 지원 1.x 라인 격상 + version upgrade reconcile 결함. 두 차단 요인 fix 후 Phase B 재시도.
+- **valkey 30 일 soak**: valkey-chaos / valkey-test 유지 + 주간 chaos test 반복.
+- **postgresql Phase A1 구현**: ADR-0058 Phase 1 (data-staging ns + ResourceQuota + NetworkPolicy 매니페스트 적용).
+- **postgresql Phase A1 → A2**: data-staging ns 에 postgresql-operator side-by-side 배포 + smoke.sh 실측 (WAL lag + RTO).
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 옵션 C — valkey-operator Phase A1+A2 통과 (ralph-loop iteration 4)
 
 ### 배경
