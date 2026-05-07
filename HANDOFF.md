@@ -4,6 +4,42 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 43 — valkey CreateOrUpdate 마이그레이션 (mongodb it42 차용)
+
+| Iteration | Repo | Commit | 산출물 |
+|---|---|---|---|
+| **it43** | valkey-operator | `85451ef` | valkeybackup_controller.go 의 *2 호출 사이트* (backup copy Job + upload Job) → controllerutil.CreateOrUpdate. -28/+26 net 단순화. mongodb it42 (aa56f48) + postgres 패턴 차용. |
+
+### Job spec immutable field 안전성
+
+mutate fn 이 *owner ref 만* 설정 → 첫 reconcile 시 Create + owner ref → 성공.
+후속 reconcile 시 owner ref 이미 있음 → spec diff 없음 → no-op (Job spec.selector
+/ spec.template 변경 안 시도). controller-runtime 의 *AlreadyExists 자동 retry*
+가 race-tolerant 자체 보장.
+
+### 3 operator 추상화 매트릭스 (post it43)
+
+| Operator | 패턴 | 사이트 |
+|---|---|---|
+| **mongodb** | mixed | bootstrap_lease 수동 + helpers 수동 + **mongodbbackup CreateOrUpdate** (it42) |
+| **valkey** | **CreateOrUpdate** (post it43) | 2 사이트 (backup copy + upload Job) ✅ |
+| **postgres** | controllerutil.CreateOrUpdate | 표준 (모범) |
+
+valkey 가 *모든 raw Create → CreateOrUpdate* 마이그레이션 완료. mongodb 는 *2 사이트
+잔여* (bootstrap_lease 의 *Lease* + helpers 의 *secret* — 별 평가 필요).
+
+### 다음 iteration 자연 진입점
+
+- it44+: mongodb bootstrap_lease + helpers CreateOrUpdate 평가
+  (단, bootstrap_lease 의 *Lease* race-tolerant 패턴이 *intentional design* —
+  ADR 평가 후 결정)
+- it45+: mongodb webhook server 부트스트랩 (cert-manager) — 큰 작업
+- M4 / V3 / P4 큰 기능
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 42 — mongodbbackup CreateOrUpdate 마이그레이션 (postgres 패턴 차용)
 
 | Iteration | Repo | Commit | 산출물 |
