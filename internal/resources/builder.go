@@ -40,7 +40,7 @@ import (
 const (
 	mongoDBPort   = 27017
 	metricsPort   = 9216
-	defaultImage  = "mongo:8.2"
+	defaultImage  = "mongo:8.3.1"
 	exporterImage = "percona/mongodb_exporter:0.40"
 )
 
@@ -1067,6 +1067,7 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 					corev1.ResourceMemory: resource.MustParse("64Mi"),
 				},
 			},
+			SecurityContext: buildDefaultContainerSecurityContext(),
 		})
 	}
 

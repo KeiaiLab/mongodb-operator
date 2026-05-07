@@ -24,7 +24,7 @@ import (
 
 // MongoDBVersion defines MongoDB version configuration
 type MongoDBVersion struct {
-	// Version is the MongoDB version (e.g., "8.2")
+	// Version is the MongoDB version (e.g., "8.3.1")
 	// +kubebuilder:validation:Pattern=`^\d+\.\d+(\.\d+)?$`
 	Version string `json:"version"`
 

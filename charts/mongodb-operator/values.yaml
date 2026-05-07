@@ -129,7 +129,7 @@ crds:
 # MongoDB default configuration (used as defaults for MongoDB CRs)
 mongodb:
   # -- Default MongoDB version
-  version: "8.2"
+  version: "8.3.1"
   # -- Default storage class
   storageClassName: ""
   # -- Default exporter image for monitoring

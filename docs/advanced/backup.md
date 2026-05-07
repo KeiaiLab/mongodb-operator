@@ -231,13 +231,13 @@ kubectl exec -it my-mongodb-0 -n database -c mongod -- mongorestore \
 
 ```bash
 # 1. Mount backup PVC to temporary pod
-kubectl run restore-pod --rm -it --image=mongo:8.2 \
+kubectl run restore-pod --rm -it --image=mongo:8.3.1 \
   --overrides='
 {
   "spec": {
     "containers": [{
       "name": "restore",
-      "image": "mongo:8.2",
+      "image": "mongo:8.3.1",
       "command": ["sleep", "3600"],
       "volumeMounts": [{
         "name": "backup-pvc",

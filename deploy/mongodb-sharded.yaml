@@ -5,7 +5,7 @@ metadata:
   namespace: data
 spec:
   version:
-    version: "8.2"
+    version: "8.3.1"
   configServer:
     members: 3
     storage:

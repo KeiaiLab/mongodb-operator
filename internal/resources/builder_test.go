@@ -366,6 +366,36 @@ func TestGetMongoDBImage(t *testing.T) {
 	}
 }
 
+func TestBuildMongoDBShardedVersionMatrix(t *testing.T) {
+	for _, version := range []string{"8.3.1", "8.2", "8.0"} {
+		t.Run(version, func(t *testing.T) {
+			sh := shardedWithAuth()
+			sh.Spec.Version.Version = version
+			expected := "mongo:" + version
+
+			cfg := BuildConfigServerStatefulSet(sh)
+			assert.Equal(t, expected, containerImageByName(t, cfg.Spec.Template.Spec.Containers, "mongodb"))
+
+			shard := BuildShardStatefulSet(sh, 0)
+			assert.Equal(t, expected, containerImageByName(t, shard.Spec.Template.Spec.Containers, "mongodb"))
+
+			mongos := BuildMongosDeployment(sh)
+			assert.Equal(t, expected, containerImageByName(t, mongos.Spec.Template.Spec.Containers, "mongos"))
+		})
+	}
+}
+
+func containerImageByName(t *testing.T, containers []corev1.Container, name string) string {
+	t.Helper()
+	for _, c := range containers {
+		if c.Name == name {
+			return c.Image
+		}
+	}
+	t.Fatalf("container %q not found", name)
+	return ""
+}
+
 func TestBuildMongoDBConfigMap(t *testing.T) {
 	mdb := &mongodbv1alpha1.MongoDB{
 		ObjectMeta: metav1.ObjectMeta{

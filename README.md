@@ -143,7 +143,7 @@ metadata:
 spec:
   members: 3
   version:
-    version: "8.2"
+    version: "8.3.1"
   storage:
     storageClassName: standard
     size: 10Gi
@@ -177,7 +177,7 @@ metadata:
   namespace: database
 spec:
   version:
-    version: "8.2"
+    version: "8.3.1"
   configServer:
     members: 3
     storage:
@@ -200,7 +200,7 @@ spec:
 | Field | Description | Default |
 |-------|-------------|---------|
 | `spec.members` | Number of replica set members | `3` |
-| `spec.version.version` | MongoDB version | `8.2` |
+| `spec.version.version` | MongoDB version | `8.3.1` |
 | `spec.storage.storageClassName` | Storage class name | - |
 | `spec.storage.size` | PVC size per member | `10Gi` |
 | `spec.auth.mechanism` | Authentication mechanism | `SCRAM-SHA-256` |

@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -73,6 +74,43 @@ func deleteShardedAndWait(ctx context.Context, sh *mongodbv1alpha1.MongoDBSharde
 		err := k8sClient.Get(ctx, key, &mongodbv1alpha1.MongoDBSharded{})
 		return errors.IsNotFound(err)
 	}, shardedTestTimeout, shardedTestInterval).Should(BeTrue())
+}
+
+func markShardedStatefulSetReady(ctx context.Context, name string, ready int32) {
+	key := types.NamespacedName{Name: name, Namespace: shardedTestNS}
+	Eventually(func() error {
+		sts := &appsv1.StatefulSet{}
+		if err := k8sClient.Get(ctx, key, sts); err != nil {
+			return err
+		}
+		sts.Status.Replicas = ready
+		sts.Status.ReadyReplicas = ready
+		return k8sClient.Status().Update(ctx, sts)
+	}, shardedTestTimeout, shardedTestInterval).Should(Succeed())
+}
+
+func assertRestrictedPodSpec(spec corev1.PodSpec) {
+	Expect(spec.SecurityContext).NotTo(BeNil())
+	Expect(spec.SecurityContext.RunAsNonRoot).NotTo(BeNil())
+	Expect(*spec.SecurityContext.RunAsNonRoot).To(BeTrue())
+	for _, c := range spec.InitContainers {
+		assertRestrictedContainer(c.Name, c.SecurityContext)
+	}
+	for _, c := range spec.Containers {
+		assertRestrictedContainer(c.Name, c.SecurityContext)
+	}
+}
+
+func assertRestrictedContainer(name string, sc *corev1.SecurityContext) {
+	Expect(sc).NotTo(BeNil(), "%s: SecurityContext nil", name)
+	Expect(sc.AllowPrivilegeEscalation).NotTo(BeNil(), "%s: AllowPrivilegeEscalation nil", name)
+	Expect(*sc.AllowPrivilegeEscalation).To(BeFalse(), "%s: AllowPrivilegeEscalation must be false", name)
+	Expect(sc.Capabilities).NotTo(BeNil(), "%s: Capabilities nil", name)
+	Expect(sc.Capabilities.Drop).To(ContainElement(corev1.Capability("ALL")),
+		"%s: capabilities.drop must include ALL", name)
+	Expect(sc.SeccompProfile).NotTo(BeNil(), "%s: SeccompProfile nil", name)
+	Expect(sc.SeccompProfile.Type).To(Equal(corev1.SeccompProfileTypeRuntimeDefault),
+		"%s: seccompProfile.type must be RuntimeDefault", name)
 }
 
 var _ = Describe("MongoDBSharded Controller", func() {
@@ -155,6 +193,52 @@ var _ = Describe("MongoDBSharded Controller", func() {
 			}, shardedTestTimeout, shardedTestInterval).Should(Equal(int32(4)))
 
 			deleteShardedAndWait(ctx, sharded)
+		})
+	})
+
+	Context("When reconciling sharded workload PodSpecs", func() {
+		It("Should keep controller-created cfg, shard, and mongos PodSpecs restricted-compliant", func() {
+			ctx := context.Background()
+			name := "test-sharded-podsecurity"
+			adminSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: name + "-admin", Namespace: shardedTestNS},
+				Data: map[string][]byte{
+					"username": []byte("admin"),
+					"password": []byte("test_password_20260507"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, adminSecret)).Should(Succeed())
+
+			sharded := newTestMongoDBSharded(name, 1, 1, "1Gi")
+			sharded.Spec.ConfigServer.Members = 1
+			sharded.Spec.Mongos.Replicas = 1
+			sharded.Spec.Monitoring = &mongodbv1alpha1.MonitoringSpec{Enabled: true}
+			Expect(k8sClient.Create(ctx, sharded)).Should(Succeed())
+
+			cfg := &appsv1.StatefulSet{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: name + "-cfg", Namespace: shardedTestNS}, cfg)
+			}, shardedTestTimeout, shardedTestInterval).Should(Succeed())
+			assertRestrictedPodSpec(cfg.Spec.Template.Spec)
+
+			markShardedStatefulSetReady(ctx, name+"-cfg", 1)
+
+			shard := &appsv1.StatefulSet{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: name + "-shard-0", Namespace: shardedTestNS}, shard)
+			}, shardedTestTimeout, shardedTestInterval).Should(Succeed())
+			assertRestrictedPodSpec(shard.Spec.Template.Spec)
+
+			markShardedStatefulSetReady(ctx, name+"-shard-0", 1)
+
+			mongos := &appsv1.Deployment{}
+			Eventually(func() error {
+				return k8sClient.Get(ctx, types.NamespacedName{Name: name + "-mongos", Namespace: shardedTestNS}, mongos)
+			}, shardedTestTimeout, shardedTestInterval).Should(Succeed())
+			assertRestrictedPodSpec(mongos.Spec.Template.Spec)
+
+			deleteShardedAndWait(ctx, sharded)
+			Expect(k8sClient.Delete(ctx, adminSecret)).Should(Succeed())
 		})
 	})
 

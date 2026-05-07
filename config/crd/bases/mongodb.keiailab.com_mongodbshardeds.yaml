@@ -5551,7 +5551,7 @@ spec:
                     description: Image is the MongoDB container image
                     type: string
                   version:
-                    description: Version is the MongoDB version (e.g., "8.2")
+                    description: Version is the MongoDB version (e.g., "8.3.1")
                     pattern: ^\d+\.\d+(\.\d+)?$
                     type: string
                 required:

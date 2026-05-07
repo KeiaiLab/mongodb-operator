@@ -4,6 +4,49 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 T21 — MongoDB latest default 정렬 완료
+
+- **구현**:
+  - chart values, ArtifactHub examples/images, README/guide samples, GitOps `deploy/mongodb-sharded.yaml`, backup helper image, internal backup default image 를 MongoDB `8.3.1` 로 정렬.
+  - builder matrix test 추가: `8.3.1`, `8.2`, `8.0` 에 대해 config server / shard / mongos image 가 각각 `mongo:<version>` 으로 렌더되는지 검증.
+  - chart image annotation 의 operator tag 를 chart `appVersion=1.4.6` 과 맞췄다.
+- **검증 인용**:
+  ```
+  $ docker manifest inspect mongo:8.3.1 && docker manifest inspect mongo:8.2 && docker manifest inspect mongo:8.0
+  mongo manifests ok: 6
+
+  $ go test ./internal/resources ./internal/controller -run 'TestGetMongoDBImage|TestBuildMongoDBShardedVersionMatrix|TestPodSecurityRestrictedCompliance|MongoDBSharded' -count=1
+  ok ./internal/resources ./internal/controller
+
+  $ make test
+  PASS
+
+  $ make lint
+  0 issues
+
+  $ make validate
+  helm lint PASS, helm template OK
+
+  $ kustomize build deploy/overlays/prod
+  namespace_count=0, line_count=8773
+  ```
+
+## 2026-05-07 F12 — Sharded PodSecurity controller-path 회귀 가드 완료
+
+- **구현**:
+  - `MongoDBSharded` envtest에 controller-created PodSpec 검증 추가: cfg StatefulSet → shard StatefulSet → mongos Deployment 순서로 실제 reconcile 산출물을 조회하고 restricted 필수 필드(`capabilities.drop=ALL`, `seccompProfile=RuntimeDefault`, `allowPrivilegeEscalation=false`)를 검사.
+  - 테스트 데이터 식별자: `test-sharded-podsecurity`, admin secret password `test_password_20260507`.
+  - 실패 재현: Monitoring enabled 시 mongos exporter sidecar가 `SecurityContext=nil`.
+  - 수정: mongos exporter sidecar에도 `buildDefaultContainerSecurityContext()` 적용.
+- **검증 인용**:
+  ```
+  $ go test ./internal/controller -run TestControllers -ginkgo.focus 'controller-created cfg, shard, and mongos PodSpecs' -count=1
+  ok github.com/keiailab/mongodb-operator/internal/controller 16.711s
+  ```
+- **해석**:
+  - B17의 copy-keyfile init container fix는 builder 단위에만 머무르지 않고 controller reconcile 산출물까지 회귀 가드가 생겼다.
+  - 추가로 monitoring exporter sidecar의 restricted 누락도 닫혔다.
+
 ## 2026-05-07 옵션 C — 4 트랙 병렬 진입 (ralph-loop iteration 6)
 
 ### 진행 결과

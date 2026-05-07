@@ -15,7 +15,8 @@
 | T18 | v1.4.6 release — chart bump + ghcr.io push + helm-publish | 완료 | 100% | B17 | - | 2026-05-07 commit c5b26de. ghcr.io/keiailab/mongodb-operator:1.4.6@c4d59112. gh-pages 1.4.6.tgz publish. |
 | T19 | argos-platform-data/mongodb dependency 1.4.5 → 1.4.6 | 완료 | 100% | T18 | - | 2026-05-07 argos-platform-data b378590 + 87ce471 (Chart.lock helm v3 재생성). ArgoCD auto-sync 통과, image rollout 확인. |
 | T20 | 3-repo governance 자산 정합 — GOVERNANCE / MAINTAINERS / AGENTS / TASKS | 완료 | 100% | - | - | 2026-05-07. 본 commit. CoC ✓ / Gov ✓ / Maint ✓ / Roadmap ✓ / AGENTS ✓ / TASKS ✓ — 6/6. |
-| F12 | Sharded P0 회귀 가드 강화 — controller 측 podSpec 변환 경로도 PodSecurity 검증 | 설계 | 10% | - | - | 현재 회귀 가드는 builder 출력만 검증. controller reconcile 후 actual PodSpec 도 검증해야 *완전* 회귀 가드. |
+| F12 | Sharded P0 회귀 가드 강화 — controller 측 podSpec 변환 경로도 PodSecurity 검증 | 완료 | 100% | B17 | - | 2026-05-07. envtest 로 controller-created cfg/shard/mongos PodSpec restricted 검사 추가. Monitoring enabled 시 mongos exporter sidecar `SecurityContext=nil` 공백 발견 → restricted SC 적용. |
+| T21 | latest 기본값 정렬 — MongoDB 8.3.1 + 8.2/8.0 milestone 렌더 가드 | 완료 | 100% | F12 | chart/API/deploy | 2026-05-07. 공식 current 8.3.1 기준으로 values/docs/samples/GitOps workload/default backup image/ArtifactHub images 를 8.3.1 로 정렬. `mongo:8.3.1`, `mongo:8.2`, `mongo:8.0` manifest 확인. builder matrix test 로 cfg/shard/mongos image 렌더 검증. `make test`, `make lint`, `make validate`, deploy overlay render PASS. |
 | F13 | release-smoke-test.sh 자동화 강화 — flaky 회피 + retry policy | 설계 | 10% | - | - | 12 PASS / 0 FAIL 이미 도달했으나 indexed network 의존성 (gh-pages CDN 지연 등) 으로 1-3 분 retry 필요. |
 | I14 | webhook validation rule 통합 — replicaset count / sharded.shards 하한 / storageClass | 설계 | 10% | - | - | CRD CEL XValidation 으로 가능한 부분과 webhook 으로만 가능한 부분 분리. |
 

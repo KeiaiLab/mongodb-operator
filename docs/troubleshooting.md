@@ -84,7 +84,7 @@ kubectl delete pvc data-my-mongodb-0 -n database
 kubectl get secrets -n database
 
 # Verify image is accessible
-docker pull mongo:8.2
+docker pull mongo:8.3.1
 
 # Check if registry requires authentication
 kubectl describe pod my-mongodb-0 -n database | grep Image
@@ -137,7 +137,7 @@ rs.conf()
 **Diagnosis:**
 ```bash
 # Test connectivity from another pod
-kubectl run debug --rm -it --image=mongo:8.2 -- sh
+kubectl run debug --rm -it --image=mongo:8.3.1 -- sh
 # Inside pod
 mongosh mongodb://admin:password@my-mongodb.database.svc.cluster.local:27017/admin
 
