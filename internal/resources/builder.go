@@ -33,6 +33,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
+	"github.com/keiailab/operator-commons/pkg/security"
+
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"github.com/keiailab/mongodb-operator/internal/assets"
 )
@@ -84,38 +86,23 @@ func buildDefaultSecurityContext() *corev1.PodSecurityContext {
 }
 
 func buildDefaultContainerSecurityContext() *corev1.SecurityContext {
-	return &corev1.SecurityContext{
-		RunAsNonRoot:             ptr.To(true),
-		RunAsUser:                ptr.To[int64](999),
-		AllowPrivilegeEscalation: ptr.To(false),
-		ReadOnlyRootFilesystem:   ptr.To(false),
-		Capabilities: &corev1.Capabilities{
-			Drop: []corev1.Capability{"ALL"},
-		},
-		SeccompProfile: &corev1.SeccompProfile{
-			Type: corev1.SeccompProfileTypeRuntimeDefault,
-		},
-	}
+	return security.RestrictedContainer(
+		security.WithRunAsUser(999),
+		security.WithReadOnlyRootFilesystem(false),
+	)
 }
 
 // PodSecurity "restricted" 정책을 만족하는 init container용 SecurityContext.
 // keyfile 복사 init container 4곳 (replicaset / config server / shard / mongos) 에서
-// 동일 정의가 인라인 중복되어 있던 것을 단일 진실원으로 통일.
+// 동일 정의가 인라인 중복되어 있던 것을 commons 단일 진실원으로 위임.
 // 클러스터 사고 (2026-05-07): copy-keyfile container 가 capabilities.drop 과
 // seccompProfile 누락으로 PodSecurity restricted 위반 → StatefulSet pod 생성 거부.
+// iteration 8: operator-commons/pkg/security 로 통합 — 3 operator 가 동일 패턴 채택.
 func buildKeyfileInitContainerSecurityContext() *corev1.SecurityContext {
-	return &corev1.SecurityContext{
-		RunAsUser:                ptr.To[int64](999),
-		RunAsGroup:               ptr.To[int64](999),
-		RunAsNonRoot:             ptr.To(true),
-		AllowPrivilegeEscalation: ptr.To(false),
-		Capabilities: &corev1.Capabilities{
-			Drop: []corev1.Capability{"ALL"},
-		},
-		SeccompProfile: &corev1.SeccompProfile{
-			Type: corev1.SeccompProfileTypeRuntimeDefault,
-		},
-	}
+	return security.RestrictedContainer(
+		security.WithRunAsUser(999),
+		security.WithRunAsGroup(999),
+	)
 }
 
 // BuildKeyfileSecret creates a keyfile secret for MongoDB internal auth
