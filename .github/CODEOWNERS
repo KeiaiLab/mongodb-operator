@@ -3,34 +3,34 @@
 # 참고: https://docs.github.com/en/repositories/managing-your-repositories-settings-and-features/customizing-your-repository/about-code-owners
 
 # 전체 기본 소유자
-* @eightynine01
+* @keiailab/maintainers
 
 # 핵심 도메인 (mongodb-operator)
-/api/                       @eightynine01
-/cmd/                       @eightynine01
-/internal/controller/       @eightynine01
-/internal/mongodb/          @eightynine01
-/internal/resources/        @eightynine01
-/internal/assets/           @eightynine01
+/api/                       @keiailab/maintainers
+/cmd/                       @keiailab/maintainers
+/internal/controller/       @keiailab/maintainers
+/internal/mongodb/          @keiailab/maintainers
+/internal/resources/        @keiailab/maintainers
+/internal/assets/           @keiailab/maintainers
 
 # 빌드/배포
-/charts/                    @eightynine01
-/deploy/                    @eightynine01
-/config/                    @eightynine01
-/.github/                   @eightynine01
-/Dockerfile                 @eightynine01
-/Makefile                   @eightynine01
-/.lefthook.yml              @eightynine01
-/.pre-commit-config.yaml    @eightynine01
-/renovate.json              @eightynine01
+/charts/                    @keiailab/maintainers
+/deploy/                    @keiailab/maintainers
+/config/                    @keiailab/maintainers
+/.github/                   @keiailab/maintainers
+/Dockerfile                 @keiailab/maintainers
+/Makefile                   @keiailab/maintainers
+/.lefthook.yml              @keiailab/maintainers
+/.pre-commit-config.yaml    @keiailab/maintainers
+/renovate.json              @keiailab/maintainers
 
 # 문서/거버넌스
-/docs/                      @eightynine01
-/CHANGELOG.md               @eightynine01
-/README.md                  @eightynine01
-/SECURITY.md                @eightynine01
-/CONTRIBUTING.md            @eightynine01
-/CODE_OF_CONDUCT.md         @eightynine01
-/LICENSE                    @eightynine01
-/NOTICE                     @eightynine01
-/PROJECT                    @eightynine01
+/docs/                      @keiailab/maintainers
+/CHANGELOG.md               @keiailab/maintainers
+/README.md                  @keiailab/maintainers
+/SECURITY.md                @keiailab/maintainers
+/CONTRIBUTING.md            @keiailab/maintainers
+/CODE_OF_CONDUCT.md         @keiailab/maintainers
+/LICENSE                    @keiailab/maintainers
+/NOTICE                     @keiailab/maintainers
+/PROJECT                    @keiailab/maintainers
