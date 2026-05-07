@@ -53,6 +53,24 @@ Synced/Healthy
 
 `make release VERSION=v1.4.12` 1단계 실행으로 외부 effect 4건. 사용자 명시 승인 시점.
 
+### cluster-ops mode 누적 (it cluster-ops, 14 cycles, 22 commits)
+
+| 영역 | 산출 | 위치 |
+|---|---|---|
+| 격차 audit | 11건 (C24-C36 + T27, 3 High / 5 Medium / 3 Low) | `docs/operations/cluster-audit.md` |
+| Clean 영역 | 15건 (PSS / RBAC / imagePull / GitOps mongodb·postgres / Storage / probe / Resource 등) | `docs/operations/cluster-audit.md` |
+| 통합 sprint plan | 7 phase (A Quick wins → G Service mesh) | `docs/operations/production-grade-sprint.md` |
+| DR snapshot | keiailab-valkey-prod CR 임시 보관 | `docs/operations/cluster-snapshots/2026-05-07/` |
+| ADR | 0015-0018 + Errata 다수 | `docs/kb/adr/` |
+| 운영자 navigation hub | single entry point | `docs/operations/README.md` |
+| Main README link | 3-tier audience (User / Operations / Developer) | `docs/README.md` |
+
+### Progress measurement
+
+- clean ratio 현재: **57.7%** (15/26)
+- Phase A-F 완료 예상: **92.3%** (24/26)
+- 잔여: G Service mesh (장기 RFC) + I28 trigger (30일 후)
+
 ### Active 디버깅 영역
 
 **Critical 격차 발견** (2026-05-07 추가 audit): data plane GitOps 일관성 미충족.
