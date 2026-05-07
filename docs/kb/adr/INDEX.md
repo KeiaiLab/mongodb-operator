@@ -25,6 +25,7 @@
 | [ADR-0016](0016-cross-cut-audit-pattern.md) | Cross-cut Audit Pattern — invariant 도입 시 3 operator 동시 점검 의무화 | Accepted | 2026-05-07 |
 | [ADR-0017](0017-crd-default-vs-webhook-invariant.md) | CRD default 가 있는 field 의 zero-value 거부 invariant 는 dead code (envtest 가 unreachable 발견) | Accepted | 2026-05-07 |
 | [ADR-0018](0018-monitoringspec-orphan-resolution.md) | MonitoringSpec orphan 의 단계적 해소 — Phase 1 deprecation, Phase 2/3 결정 보류 (Prometheus 도입 후) | Accepted | 2026-05-07 |
+| [ADR-0019](0019-operator-commons-v0.5-promotion.md) | operator-commons v0.5.0 helper 승격 — validateStorageSize + apiError 3-of-3 입증 후 통일 | Proposed | 2026-05-07 |
 
 ## 작성 가이드
 
