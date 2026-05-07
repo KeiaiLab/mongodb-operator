@@ -30,6 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
 // reconcileSecretIfNotExists는 Secret이 존재하지 않으면 build()로 생성한다.
@@ -132,7 +134,7 @@ func applyErrorCondition(
 	meta.SetStatusCondition(obj.GetConditions(), metav1.Condition{
 		Type:    conditionTypeReconcileError,
 		Status:  metav1.ConditionTrue,
-		Reason:  "ReconcileFailed",
+		Reason:  mongodbv1alpha1.ReasonReconcileFailed,
 		Message: fmt.Sprintf("Failed to reconcile %s- %v", component, reconcileErr),
 	})
 
@@ -165,7 +167,7 @@ func clearReconcileErrorCondition(conds []metav1.Condition, generation int64) []
 		Type:               conditionTypeReconcileError,
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: generation,
-		Reason:             "ReconcileSucceeded",
+		Reason:             mongodbv1alpha1.ReasonReconcileSucceeded,
 		Message:            "Last reconcile succeeded",
 	})
 	return conds

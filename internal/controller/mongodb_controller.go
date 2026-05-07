@@ -633,7 +633,7 @@ func (r *MongoDBReconciler) setPrimaryUnreachableCondition(ctx context.Context, 
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: mdb.Generation,
 		LastTransitionTime: metav1.Now(),
-		Reason:             "ConnectError",
+		Reason:             mongodbv1alpha1.ReasonConnectError,
 		Message:            fmt.Sprintf("hasPrimary check failed: %s", msg),
 	})
 	if statusErr := updateStatusWithRetry(ctx, r.Client, mdb); statusErr != nil {
@@ -662,7 +662,7 @@ func (r *MongoDBReconciler) clearPrimaryUnreachableCondition(ctx context.Context
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: mdb.Generation,
 		LastTransitionTime: metav1.Now(),
-		Reason:             "Reachable",
+		Reason:             mongodbv1alpha1.ReasonReachable,
 		Message:            "Primary check succeeded",
 	})
 	if statusErr := updateStatusWithRetry(ctx, r.Client, mdb); statusErr != nil {
