@@ -49,6 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   도구) + `cluster-snapshots/` (DR 임시 보관).
 - **ADR-0019 Proposed**: operator-commons v0.5.0 helper 승격 plan
   (validateStorageSize + apiError 3-of-3 입증).
+- **controller-runtime v0.22.4 → v0.23.3**: admission.Validator API 의
+  *non-generic → generic* 진화 정합 (commit `76269ec`). webhook signature
+  `(ctx, runtime.Object)` → `(ctx, *MyResource)` 격상으로 *runtime type
+  assertion 가드 → compile-time guarantee* 격상. unit test 3건 (Type
+  AssertionFailure) 자동 unreachable 분류 (ADR-0017 Errata 2). 사용자 영향
+  0 (webhook chart values 동일).
 
 ## [1.4.11] - 2026-05-07
 
