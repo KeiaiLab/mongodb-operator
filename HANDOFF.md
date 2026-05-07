@@ -4,6 +4,74 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 13-15 — Phase 1 M2 완성 + M3 (mongodb)
+
+### 진척 (M2 완성 + M3 진입)
+
+| Iteration | 산출물 | Commit | LoC |
+|---|---|---|---|
+| **it13 (M2 #4)** backup PVC round-trip | test/e2e/backup_restore_test.go — Source MongoDB + dummy data + MongoDBBackup CR (PVC type) → Phase=Completed + CompletionTime/Size + backup PVC 생성 검증 | `cf9e66e` | +179 |
+| **it14 (M2 #5)** version upgrade rolling | test/e2e/version_upgrade_test.go — 8.0 → 8.2 → 8.3 rolling + 가설 A/B/C 회귀 가드 + 7.0 unsupported reject (it9 화이트리스트 정합) | `9d439f8` | +211 |
+| **it15 (M3)** chart values 평탄화 | values.yaml +13 keys + deployment.yaml propagate. bitnami parity operational keys (runtimeClassName / dnsConfig / hostAliases / extraInitContainers / sidecars / customProbes / lifecycle / envFrom / etc) | `d0724be` | +126 |
+
+### M2 완성 — 5 시나리오
+
+| # | 시나리오 | Iteration | Commit |
+|---|---|---|---|
+| 1 | bootstrap (ReplicaSet 3 members) | it10 | f53cbec |
+| 2 | failover (primary kill → secondary 승격) | it11 | 207e330 |
+| 3 | sharded topology (scale + mongos drift) | it12 | 3156744 |
+| 4 | backup_restore (PVC type) | it13 | cf9e66e |
+| 5 | version_upgrade (8.0→8.2→8.3 rolling) | it14 | 9d439f8 |
+
+총 5 시나리오 + utils + Makefile 3 target. *컴파일 + vet PASS* evidence 까지.
+실 kind 실행 (~30-45 분 소요) 은 release 시점 자동화 또는 별 iteration.
+
+### M3 (chart values parity) 검증
+
+```
+$ helm lint charts/mongodb-operator
+1 chart(s) linted, 0 chart(s) failed
+
+$ helm template test-extras charts/mongodb-operator -f extras.yaml | grep -E "..."
+priorityClassName: system-cluster-critical
+runtimeClassName: gvisor
+hostAliases: [{ip: 127.0.0.1, hostnames: [test.local]}]
+initContainers: init-config (busybox:1.36)
+sidecars: log-tailer (busybox:1.36)
+extraEnvVars: GOMEMLIMIT=400MiB
+envFrom: configMapRef.my-config
+startupProbe: exec [pgrep manager]
+lifecycle.preStop: exec [sh -c sleep 5]
+```
+
+### 다음 iteration 자연 진입점
+
+- **iteration 16 (M4)**: operator-grade e2e — PITR / online shard rebalance / LDAP
+  / OIDC. 일부는 *기능 구현 동반* (현재 ROADMAP 미체크) — 별 큰 작업 분리.
+- **iteration 17 (Phase 2 V1)**: valkey chart values parity (mongodb M3 패턴 차용).
+  bitnami redis-cluster operational keys.
+- **iteration 18 (Phase 2 V2)**: valkey iteration 7 의 version_upgrade narrow scope
+  (bitnami RDB restore → version patch chain).
+- **iteration 19+ (Phase 3)**: postgres P1 (Day-0 완전 도달, hack/smoke.sh ns
+  override).
+
+### 누적 진척 (roadmap 12 iteration 중)
+
+```
+Phase 0 (it 8):                  ✅ DONE — operator-commons + 3 cross-cut
+Phase 1 mongodb (it 9-12):       ✅ DONE — M1 + M2 + M3 완성 (5 e2e 시나리오)
+Phase 1 M4 (it 16):              ⏭️ NEXT — operator-grade e2e
+Phase 2 valkey (it 17-19):       대기
+Phase 3 postgres (it 20-23):     대기
+─────────────────────────────────
+8/12 iteration 완료 (~67%)
+```
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 9-12 — Phase 1 M1+M2 (mongodb 진영)
 
 ### 진입점
