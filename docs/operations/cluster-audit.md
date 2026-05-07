@@ -56,6 +56,9 @@ platform-data-valkey               Synced   Healthy
 | **C30** | NetworkPolicy 비대칭 — mongodb/valkey 인스턴스에 NP 부재 (operator 코드 보유 but spec opt-in 미설정) | 발견 | zero-trust 미충족, lateral movement 위험 (security defense in depth 영역) | argos-mongo + keiailab-valkey-prod CR 에 `spec.networkPolicy.enabled=true` 설정 (외부 effect, GitOps 통해) | Medium |
 | **C31** | data ns ResourceQuota / LimitRange 0건 — runaway resource consumption 잠재 | 발견 | 단일 워크로드 OOM cluster-wide 영향 가능 | `data` ns 에 ResourceQuota + LimitRange 추가 (argos-platform-data 의 ns manifest, 외부 effect) | Medium |
 | **C32** | TLS encryption in transit 부재 — mongodb (27017/27018/27019) + valkey (6379) 평문 | 발견 | data plane 내부 통신 보안 표면 | argos-mongo + keiailab-valkey-prod CR 에 `spec.tls.{enabled,certManager.issuerRef}` 설정. cert-manager 의 letsencrypt-prod 또는 별도 internal CA ClusterIssuer 사용. operator 코드 + webhook invariant 모두 보유 (it46) — chart values 만 활성화. | Medium |
+| **C33** | Service mesh 부재 — Istio/Linkerd/Envoy 0건. e2e mTLS / observability sidecar 영역 | 발견 | application-level TLS (C32) 와 별개의 *infrastructure-level mTLS* 부재 | platform stack 결정 (별 RFC). 단일 DC onprem-seoul 환경에서 mesh ROI 검토 후 진행. | Low (장기) |
+| **C34** | data plane Backup CronJob 0건 — mongodb pitr / postgres backup spec 미활성 | 발견 | DR 시점 데이터 손실 가능 (현재 oplog tailer 만 보유) | argos-mongo + argos-postgres CR 에 `spec.backup.{enabled,schedule,storage.s3}` 설정. mongodb-operator webhook backup invariant (it46 step 9) 즉시 가드. | High |
+| **C35** | keiailab-valkey-prod anti-affinity 부재 — 우연 7-node spread, scheduler 의존 | 발견 | node failure 시 *동일 노드 다중 pod* 위험 (현재 e121/e122 각 2 pods) | keiailab-valkey-prod CR 에 affinity 추가 또는 chart values 의 `affinity.podAntiAffinity` 활성. argos-mongo 의 preferredDuringScheduling weight=100 + hostname topologyKey 패턴 차용. | Medium |
 
 ## Clean 영역 (격차 0, 상용제품 수준 충족)
 
