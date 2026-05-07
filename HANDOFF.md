@@ -4,6 +4,85 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 24 — operator-commons v0.3.0 (networkpolicy 패키지)
+
+### 진척
+
+| Iteration | Repo | Commit / Tag | 산출물 |
+|---|---|---|---|
+| **it24** | operator-commons | `4df1330` + tag `v0.3.0` | pkg/networkpolicy 신규 (NetworkPolicy builder + functional options). 5/5 패키지 100% line coverage. README 갱신 (planned v0.4.0 = webhook). |
+
+### 핵심 설계
+
+**API 패턴** (functional options, valkey BuildNetworkPolicy 의 슈퍼셋):
+- `New(name, namespace, podSelector, opts...)` — deny-by-default skeleton
+- `WithLabels(labels)` — metadata.labels
+- `WithDenyEgress()` — PolicyTypes 에 Egress 추가 (idempotent)
+- `WithSelfIngress(tcpPorts)` — 같은 PodSelector 가 가리키는 pod 간 ingress
+- `WithIngressFromPeers(peers, tcpPorts)` — 명시 peers 로부터 ingress
+- `WithEgressToPeers(peers, tcpPorts)` — 명시 peers 로의 egress
+- `Peer struct {PodSelector, NamespaceSelector}` — k8s LabelSelector wrapping
+
+**Empty input silent skip**: `nil peers` / `nil ports` 시 rule 추가 안 함 — 의도된
+설계. caller 가 *조건부 호출* 부담 회피.
+
+### 검증 인용
+
+```
+$ go test ./pkg/networkpolicy/ -coverprofile=coverage.out
+ok  github.com/keiailab/operator-commons/pkg/networkpolicy  100.0%
+
+$ go tool cover -func=coverage.out | tail -1
+total: 100.0%
+
+(5/5 패키지 모두 100% line coverage)
+```
+
+### 후속 적용 영역 (다음 iteration 잔여)
+
+| Operator | NetworkPolicy 빌더 위치 | 위임 가능성 | 노트 |
+|---|---|---|---|
+| valkey | `internal/resources/networkpolicy.go:18` BuildNetworkPolicy | ✅ 가능 | self-ingress (PortClient + opt PortClusterBus) + AdditionalIngressFrom |
+| mongodb | `internal/resources/builder.go` (search 결과) | ✅ 가능 (확인 필요) | sharded 의 cfg/shard/mongos 별 ingress 차이 |
+| postgres | 부재 | ⏳ | networkpolicy.yaml chart template 만 — runtime builder 없음 |
+
+### Semantic 동등성 노트 (위임 시)
+
+valkey 의 인라인 BuildNetworkPolicy 가 *한 rule 에 self-peer + AdditionalIngressFrom*
+모두 합침 (`From: [self, ...extra]`). commons.WithSelfIngress + WithIngressFromPeers
+는 *별도 두 rule* 생성.
+
+K8s NetworkPolicy 규약: rule 들은 OR — *ingress 효과 동등*. 단 output 비교 시 rule
+개수 차이. 다음 iteration 마이그레이션 시 *회귀 가드 unit test* 가 *동작 동등성*
+(allowed traffic) 만 검증, *rule 개수* 는 비교 안 함.
+
+### 다음 iteration 자연 진입점
+
+- **iteration 25**: valkey BuildNetworkPolicy → commons.New 위임 (semantic 동등성 회귀 가드).
+- **iteration 26**: mongodb NetworkPolicy 빌더 위임 (sharded cfg/shard/mongos 별 호출 패턴 식별).
+- **iteration 16/M4 mongodb**: PITR / online shard / LDAP — 큰 기능 구현.
+- **iteration 21/P4 postgres**: G1-G2 자체 SQL — bitnami 능가 영역.
+
+### 누적 진척
+
+```
+operator-commons:           v0.1.0 (security+version) → v0.2.0 (+labels+monitoring)
+                            → v0.2.1 (NamespaceSelector/ScrapeTimeout) → v0.3.0 (+networkpolicy)
+3 operator commons 채택:    mongodb (security/version), valkey (security/version/monitoring),
+                            postgres (security)
+─────────────────────────────────
+15/12+ iteration (~98%, mongodb/postgres ServiceMonitor reconciler + NetworkPolicy 위임 +
+M4/V3/P4 잔여)
+```
+
+본 turn 핵심 가치 — **commons 5 패키지 완성** (security / version / labels / monitoring /
+networkpolicy). 모두 100% line coverage. 잔여는 *각 operator 의 실 사용처 마이그레이션* +
+*기능 추가 동반 큰 작업* (M4/P4).
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 23 — operator-commons v0.2.1 + valkey ServiceMonitor 위임 (실 사용처 첫 적용)
 
 ### 진척
