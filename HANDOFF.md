@@ -4,6 +4,55 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 42 — mongodbbackup CreateOrUpdate 마이그레이션 (postgres 패턴 차용)
+
+| Iteration | Repo | Commit | 산출물 |
+|---|---|---|---|
+| **it42** | mongodb-operator | `aa56f48` | mongodbbackup createOrUpdate (수동 IsAlreadyExists guard) → controllerutil.CreateOrUpdate (postgres 우월 추상화 차용). -20/+5 단순화. |
+
+### 마이그레이션 가치
+
+**이전** (it41 수동 guard, ~25줄):
+```go
+err := r.Get(...)
+if err != nil {
+    if errors.IsNotFound(err) {
+        if createErr := r.Create(...); createErr != nil && !errors.IsAlreadyExists(createErr) {
+            return createErr
+        }
+        return nil
+    }
+    return err
+}
+return nil
+```
+
+**신규** (CreateOrUpdate, ~5줄):
+```go
+_, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, func() error {
+    return controllerutil.SetControllerReference(backup, obj, r.Scheme)
+})
+return err
+```
+
+### 3 operator 추상화 매트릭스 (post it42)
+
+| Operator | 패턴 | 사이트 |
+|---|---|---|
+| **mongodb** | mixed: bootstrap_lease 수동 + helpers 수동 + **mongodbbackup CreateOrUpdate (it42)** | 3 |
+| **valkey** | 수동 IsAlreadyExists guard (it40) | 2 |
+| **postgres** | controllerutil.CreateOrUpdate | 표준 |
+
+### 다음 iteration 자연 진입점
+
+- it43+: valkey 도 동일 CreateOrUpdate 마이그레이션 (valkeybackup × 2)
+- it44+: mongodb webhook server 부트스트랩 (cert-manager)
+- M4 / V3 / P4 큰 기능
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 41 — race-tolerant cross-operator audit (it40 cross-cut)
 
 | Iteration | Repo | Commit | 산출물 |
