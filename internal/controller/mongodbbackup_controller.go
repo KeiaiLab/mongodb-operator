@@ -201,8 +201,14 @@ func (r *MongoDBBackupReconciler) createOrUpdate(ctx context.Context, backup *mo
 
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Create the object
-			return r.Create(ctx, obj)
+			// iteration 41 (it40 cross-cut): race-tolerant create. Cache stale 또는
+			// parallel reconcile 로 *Get NotFound + Create AlreadyExists* 가능 (valkey
+			// it40 incident: cosmetic Phase=Failed). IsAlreadyExists 시 *기존 object
+			// reuse* — 다음 reconcile cycle 의 Get success 분기로 fall-through.
+			if createErr := r.Create(ctx, obj); createErr != nil && !errors.IsAlreadyExists(createErr) {
+				return createErr
+			}
+			return nil
 		}
 		return err
 	}

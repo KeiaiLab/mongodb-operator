@@ -57,7 +57,12 @@ func reconcileSecretIfNotExists(
 	if err := controllerutil.SetControllerReference(owner, secret, scheme); err != nil {
 		return fmt.Errorf("set owner ref- %w", err)
 	}
-	return c.Create(ctx, secret)
+	// iteration 41 (it40 cross-cut): race-tolerant secret create. parallel reconcile
+	// 의 *Get NotFound + Create AlreadyExists* race 보호.
+	if err := c.Create(ctx, secret); err != nil && !errors.IsAlreadyExists(err) {
+		return err
+	}
+	return nil
 }
 
 // handleFinalizerCleanup는 deletionTimestamp가 설정된 객체에 대해
