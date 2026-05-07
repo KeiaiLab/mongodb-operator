@@ -8,15 +8,29 @@
 
 | Iteration | Repo | Commit | 산출물 |
 |---|---|---|---|
-| **it45 step 1-3** | mongodb-operator | `50b3498` | `internal/webhook/v1alpha1/{mongodb,mongodbsharded}_webhook.go` + `error.go` + 4 unit test, `cmd/main.go` 의 `--enable-webhooks` flag, `charts/mongodb-operator/templates/webhook.yaml` (Issuer + Certificate + Service + ValidatingWebhookConfiguration), deployment.yaml 의 cert volume mount + args + port 9443. operator-commons v0.3.0→v0.4.0. helm lint PASS, go test PASS, helm template (true/false) 양쪽 검증. |
+| **it45 step 1-3** | mongodb-operator | `50b3498` | webhook scaffold + main.go wiring + chart template. operator-commons v0.3.0→v0.4.0. |
+| **it45 step 4-5** | mongodb-operator | `7096bb7` | Chart.yaml 1.4.11→1.4.12 + CHANGELOG + ADR-0015 (failurePolicy=Fail trade-off, 3 alternatives 거절). |
+| **it46 step 1** | mongodb-operator | `e81bb13` | CustomValidator entry-point 가드 — type-assertion failure / happy / reject 10 신규 test. coverage 67.4%→84.8%. |
+| **it46 step 2** | mongodb-operator | `7e9e0da` | webhook lint clean — copyloopvar / gofmt / unused 5건 → 0 issues. |
+| **it46 step 3** | mongodb-operator | `fa44f49` | api/v1alpha1 copyloopvar 3건 (기존 위반) — 전체 repo 0 issues. |
 
-### 다음 단계 (it46 진입점)
+### 검증 누적
 
-1. **image rebuild + push** — `docker buildx build --platform linux/amd64 --load` → ghcr.
-2. **chart bump + gh-pages 발행** — `Chart.yaml` patch +1, `make package-chart` → gh-pages branch push.
-3. **argos-platform-data umbrella bump** + ArgoCD sync.
-4. **e2e 시나리오** (cert-manager 설치된 kind 클러스터): 7.0.5 reject + members=4 reject + members=2 reject + shards.count=100 reject 가드.
-5. **ADR-0015 작성** — webhook failurePolicy=Fail trade-off (가용성 vs validation 가치).
+- `go test ./... -count=1`: 7/7 패키지 PASS (envtest controller suite 18s 포함).
+- `bin/golangci-lint run --timeout=10m ./...`: 0 issues.
+- `helm lint --set webhook.enabled=true`: PASS.
+- webhook 패키지 unit coverage: 84.8% (잔여 = SetupXxxWithManager — envtest 의존 영역).
+
+### 다음 단계 (사용자 명시 승인 필요 — 외부 effect)
+
+1. **release 파이프라인**: `make release VERSION=v1.4.12` — docker buildx push to ghcr + git tag + GH Release + gh-pages publish.
+2. **argos-platform-data umbrella bump** + ArgoCD sync — 실 클러스터 배포.
+3. **e2e 시나리오** (kind + cert-manager 설치 환경) — Phase 1 M2 별도 milestone (envtest binary 다운로드 + 시나리오 5건).
+
+### 다음 단계 (외부 effect 없음 — 즉시 진행 가능)
+
+4. **Phase 2 V1** — valkey-operator bitnami `redis-cluster` values parity (mongodb 와 동일 패턴 차용).
+5. **Phase 3 P1** — postgres-operator Day-0 (G0) 잔여 작업.
 
 ### 차단점 (없음)
 
