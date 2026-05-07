@@ -135,6 +135,15 @@ release-notes: ## git-cliff 로 release notes 자동 생성 — /tmp/release-not
 	git-cliff --strip all --tag "$(VERSION)" --unreleased > "/tmp/release-notes-$(VERSION).md"
 	@echo "✓ release notes: /tmp/release-notes-$(VERSION).md"
 
+.PHONY: sbom
+sbom: ## syft 로 SBOM (SPDX-2.3) 생성 — image 의 binary + Go modules. SLSA / EU CRA 표준.
+	@command -v syft >/dev/null 2>&1 || { echo "[error] syft not installed: brew install syft"; exit 1; }
+	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
+	@echo "=== syft scan ghcr.io/keiailab/mongodb-operator:$(VERSION) ==="
+	syft scan ghcr.io/keiailab/mongodb-operator:$(VERSION) -o spdx-json -q > "/tmp/mongodb-operator-$(VERSION).spdx.json"
+	@SIZE=$$(wc -c < "/tmp/mongodb-operator-$(VERSION).spdx.json" | tr -d ' '); \
+	echo "✓ SBOM: /tmp/mongodb-operator-$(VERSION).spdx.json ($$SIZE bytes)"
+
 .PHONY: helm-publish
 helm-publish: ## Publish helm chart to gh-pages (RFC 0002 helm-publish.yml 대체 로컬 자동화). HELM_SIGN=1 시 PGP .prov 동반.
 	@echo "=== helm package ==="
