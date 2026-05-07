@@ -252,4 +252,24 @@ var _ = Describe("MongoDBSharded Controller", func() {
 			deleteShardedAndWait(ctx, sharded)
 		})
 	})
+
+	// C37 (cluster-ops audit) 회귀 가드 — envtest 한계로 Skip.
+	//
+	// *Why skipped*: reconcile 의 updateStatus 호출은 *config server pods ready
+	// 도달 후* (mongodbsharded_controller.go:reconcile 의 'Waiting for config
+	// server to be ready' 분기 통과 후). envtest 환경에서는 *kube-apiserver +
+	// CRD 만* — *실제 mongo 프로세스 미실행* → config server pod ready 영구
+	// 미도달 → updateStatus 도달 안 함 → conditions 갱신 0.
+	//
+	// 본 conditions 의 정확성 검증은 *별 영역*:
+	//   1. Manual production verification: argos-mongo (운영) 의 kubectl get
+	//      mongodbsharded -o yaml 의 status.conditions 6 baseline 확인.
+	//   2. C37 4차 작업 cycle 에서 isolated unit test (updateStatus 함수 직접
+	//      호출, mock CR + ComponentStatus 주입) 영역.
+	Context("[Skipped C37 conditions test — envtest 한계]", func() {
+		It("Should report 6 baseline conditions (manual/production 검증 영역)", func() {
+			Skip("envtest 환경 한계: config server pod 가 실제 mongo 미실행 → updateStatus 도달 안 함. " +
+				"conditions 정확성은 production cluster 에서 검증 (argos-mongo).")
+		})
+	})
 })
