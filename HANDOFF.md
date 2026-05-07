@@ -4,6 +4,93 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 8 — Bitnami parity roadmap Phase 0 (operator-commons)
+
+### 진입점
+
+사용자 요구 (2026-05-07): bitnami helm chart enterprise 화 대응 — 자체 3 operator
+가 동일 수준 이상 기능 + multi-version 호환 (PG 17/18 등 최소 2 마일스톤) +
+빠짐없는 test. 본 iteration 은 **multi-iteration roadmap 의 Phase 0** —
+shared library `operator-commons` 부트스트랩.
+
+Roadmap (~/.claude/plans/iridescent-squishing-locket.md): Phase 0 (it 8) →
+Phase 1 mongodb (it 9-12) → Phase 2 valkey (it 13-15) → Phase 3 postgres (it 16-19).
+
+사용자 결정 (AskUserQuestion):
+- 우선순위: 3 operator 별 sequential (mongodb → valkey → postgres)
+- Test boundary: unit + e2e (kind real K8s)
+- 공통화: shared library 별도 repo (vs monorepo module)
+- postgres ship-4 범위: container-level 까지 강화 (RestrictedContainer 위임)
+
+### Step 별 결과
+
+| Ship | 결과 | Commit / 인용 |
+|---|---|---|
+| **ship-1** operator-commons MVP | ✅ repo 신규 생성, 2 패키지 (security + version), 100% line coverage | operator-commons `c6bbbb3`, tag v0.1.2 |
+| **ship-2** mongodb cross-cut | ✅ SecurityContext 인라인 → commons 위임, controller envtest 19.754s PASS | mongodb-operator `23fd3da` |
+| **ship-3** valkey cross-cut | ✅ SecurityContext + SupportedValkeyVersions + IsSupportedValkeyVersion 모두 commons 위임 | valkey-operator `a0be4cf` |
+| **ship-4** postgres cross-cut | ✅ dataplaneContainerSecurityContext 강화 (RunAsNonRoot/SeccompProfile 명시 도입) + ADR-0008 | postgres-operator `ac2e647` |
+| **ship-5** 잔여 4 패키지 | ⏭️ 본 iteration 외부 분리 — over-engineering 회피, *실 사용처 발견 시점* 에 추가 |
+
+### 핵심 발견
+
+1. **cascade dependency 함정**: commons 의 `k8s.io/api v0.36.0` 이 mongodb 의
+   `client-go v0.35.0` 와 호환 안됨. controller-runtime v0.22.4 까지 cascade.
+   해결: commons 의 모든 k8s.io 의존성을 *consumer 의 가장 낮은 공통 분모* (v0.35.0)
+   로 정렬. **shared library 의 의존 정책 = "consumer 의 minimum 으로 pin"**.
+
+2. **Go directive cascade**: commons 의 `go 1.26.2` directive 가 valkey 의 go.mod
+   를 자동 1.26 bump → `TestGoVersionDockerfileVsGoMod` fail (Dockerfile 1.25
+   와 mismatch). 해결: commons `go 1.25.0` downgrade. **go directive = minimum
+   required, 낮을수록 consumer 자유 ↑**.
+
+3. **postgres ADR 0006 archived 발견**: builders.go 주석이 *archived ADR* 을
+   가리키는 stale comment. 즉 active 한 SecurityContext invariant 정책 부재 —
+   container-level 에서 RunAsNonRoot + SeccompProfile 누락. 본 iteration 의
+   *invariant 강화 + 명시 도입* 이 신규 ADR-0008 으로 정당화.
+
+4. **Cross-operator pattern 정합**: valkey 만 명시 webhook validation, mongodb
+   는 webhook validation 부재, postgres 는 화이트리스트 자체 부재. iteration 9
+   (Phase 1 M1) 의 mongodb webhook validation 작업이 commons/pkg/webhook (잔여
+   ship-5) 의 첫 사용자 — *실 사용처 발견 후 패키지 추가* 가 §2 Simplicity 정합.
+
+### 검증 인용 (CLAUDE.md §7 클러스터 라이브 사실 게이트)
+
+```
+$ kubectl config current-context
+argos
+
+# operator-commons 부트스트랩 (github)
+$ git ls-remote https://github.com/keiailab/operator-commons HEAD
+c6bbbb3...  HEAD
+$ git ls-remote https://github.com/keiailab/operator-commons refs/tags/v0.1.2
+
+# 3 operator test PASS
+$ cd mongodb-operator && go test ./... -count=1
+ok  github.com/keiailab/mongodb-operator/internal/controller       19.754s
+ok  github.com/keiailab/mongodb-operator/internal/resources         1.393s
+
+$ cd valkey-operator && go test ./... -count=1
+ok  github.com/keiailab/valkey-operator/internal/controller         17.556s
+ok  github.com/keiailab/valkey-operator/internal/webhook/v1alpha1    3.327s
+ok  github.com/keiailab/valkey-operator/internal/observability       1.335s
+
+$ cd postgres-operator && go test ./internal/controller/... -count=1
+ok  github.com/keiailab/postgres-operator/internal/controller        8.578s
+```
+
+### 다음 iteration 자연 진입점 (roadmap)
+
+- **iteration 9 (Phase 1 M1)**: mongodb webhook validation + version 화이트리스트
+  + 4 신규 unit test. commons/pkg/webhook (ship-5 잔여) 의 첫 사용자가 됨.
+- **iteration 10 (Phase 1 M2)**: mongodb e2e 프레임워크 부트스트랩 + 5 시나리오
+  (bootstrap / failover / sharded / backup-restore / version-upgrade).
+- iteration 11-12 (mongodb), 13-15 (valkey), 16-19 (postgres).
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 7 — valkey 차단요인 2 진단 + 회귀 가드
 
 ### 진입점
