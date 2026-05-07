@@ -66,7 +66,7 @@ platform-data-valkey               Synced   Healthy
 | **C34** | data plane Backup CronJob 0건 — mongodb pitr / postgres backup spec 미활성 | 발견 | DR 시점 데이터 손실 가능 (현재 oplog tailer 만 보유) | argos-mongo + argos-postgres CR 에 `spec.backup.{enabled,schedule,storage.s3}` 설정. mongodb-operator webhook backup invariant (it46 step 9) 즉시 가드. | High |
 | **C35** | keiailab-valkey-prod anti-affinity 부재 — 우연 7-node spread, scheduler 의존 | 발견 | node failure 시 *동일 노드 다중 pod* 위험 (현재 e121/e122 각 2 pods) | keiailab-valkey-prod CR 에 affinity 추가 또는 chart values 의 `affinity.podAntiAffinity` 활성. argos-mongo 의 preferredDuringScheduling weight=100 + hostname topologyKey 패턴 차용. | Medium |
 | **C36** | application-level PriorityClass 부재 — data ns 54 pods 모두 priority 0 (default) | 발견 | preemption 시 critical workload (argos-mongo, gitlab-postgres) 와 secondary (gitlab-redis, postgres-default) 동등 우선순위 | argos-platform-data 의 ns manifest 또는 platform-base-namespaces 에 PriorityClass 정의 (`argos-data-critical=10000`, `argos-data-default=1000`) + 워크로드 spec 에 priorityClassName 적용. | Low |
-| **C37** | MongoDBSharded CR status conditions 빈약 (RS 는 정상) | 진행 80% | operational visibility 격차 — argos-mongo (sharded) 가 ReconcileError 1건만 vs valkey 5 / postgres 4. mongodb (RS) controller 는 이미 풍부 (Ready / ReplicaSetInitialized 등) | 1차 `c12d20e`: Ready / Progressing (3 conditions). 2차 `e3d6923`: ConfigServerReady / ShardsReady / MongosReady (6). 3차 `57139f0`: TLSReady / BackupReady 조건부 (max 8). 4차 `0c7b3a5`: envtest 한계 발견 (config server pod 가 mongo 미실행 → updateStatus 도달 안 함 → conditions 0건) → 한계 명시 + Skip + 별 mechanism (manual production / isolated unit test) 분기. 잔여 (20%): isolated unit test (별 cycle, evaluateConditions pure function 추출 영역). | Medium |
+| **C37** | MongoDBSharded CR status conditions 빈약 (RS 는 정상) | **완료 100%** | operational visibility 격차 해소 — sharded 1 → 8 conditions (활성 시), valkey/postgres 대폭 초과 | 1차 `c12d20e`: Ready / Progressing (3). 2차 `e3d6923`: ConfigServerReady / ShardsReady / MongosReady (6). 3차 `57139f0`: TLSReady / BackupReady 조건부 (max 8). 4차 `0c7b3a5`: envtest 한계 명시. **5차 `b7ae65c`: evaluateShardedConditions pure function 추출 + 4 isolated unit tests (0.88s, envtest 의존성 0)**. test pyramid 확립 (unit / envtest / manual production). | — |
 
 ## Clean 영역 (격차 0, 상용제품 수준 충족)
 
@@ -156,6 +156,7 @@ platform-data-valkey               Synced   Healthy
 | Backup CronJob 활성 | 0/3 operator | 3/3 (mongodb pitr + postgres + valkey RDB) | C34 |
 | TLS in transit | 0/3 operator | 3/3 | C32 |
 | Webhook 검증 invariants | 16건 (mongodb 11 + valkey 4 + postgres 1) | 20+ (3 operator 통일) | F23 후속 |
+| MongoDBSharded conditions | 8 (활성 시) ✅ | 5+ (cross-cut baseline 초과) | C37 ✅ |
 | Production release lag | 1.4.11 (1.4.12 main 미적용) | 0 cycles lag | T27 |
 
 ### Quality KPI (shouldness)
