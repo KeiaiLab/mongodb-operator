@@ -4,6 +4,86 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 옵션 C — valkey-operator Phase A1+A2 통과 (ralph-loop iteration 4)
+
+### 배경
+
+운영자 명시 결정 (옵션 C — "디버깅 진행하면서 상용제품 수준의 완성도까지").
+ADR-0056 (CNPG → 자체 postgresql, 8 단계 게이트) + ADR-0057 (bitnami/valkey
+→ 자체 valkey, 6 단계 게이트) 작성 후 *valkey 부터* 단계적 진행 (캐시 특성상
+postgresql 보다 위험 낮음).
+
+### Phase A1+A2 진행 — valkey-operator 측 (PASS)
+
+| 게이트 | 결과 |
+|---|---|
+| A1: side-by-side 사전 배포 (valkey-operator-system ns) | ✓ helm install local chart → pod 1/1 Running, Certificate/Issuer/ValidatingWebhookConfiguration Ready |
+| A2: 빈 ValkeyCluster (실제 Valkey CR Standalone) 동작 검증 | ✓ valkey-test 1/1 Running, valkey 8.1.6, SET/GET smoke round-trip 정상 |
+
+### 발견 + Fix (chart RBAC P0 결함)
+
+published 0.1.0-alpha.1 chart 가 `features.cluster.enabled` /
+`features.backup.enabled` 조건부로 RBAC 부여 — 그러나 operator 코드
+(`cmd/main.go`) 는 *항상* 모든 controller 등록 → flag=false 시
+informer forbidden startup 실패. RBAC 와 코드 mismatch 가
+production-grade 차단 요인.
+
+해소 (commit valkey-operator `06237be`):
+- `charts/valkey-operator/templates/clusterrole.yaml` features 분기 제거
+- chart version 0.1.0-alpha.1 → 0.1.0-alpha.2
+- 새 image 빌드 (linux/amd64) + ghcr.io push (`bd630f9d76228365`)
+- gh-pages 0.1.0-alpha.2.tgz publish
+- 클러스터 helm upgrade → 새 pod 1/1 Running, valkey-test 12m 유지 (zero-downtime)
+
+### 이 iteration 의 모든 commit
+
+| Repo | Commit | 내용 |
+|---|---|---|
+| argos-infra-bootstrap | `43fd542` | ADR-0056 + ADR-0057 (자체 operator 채택 로드맵) |
+| valkey-operator main | `06237be` | RBAC chart fix + 0.1.0-alpha.2 |
+| valkey-operator gh-pages | `55e8327` | 0.1.0-alpha.2.tgz publish |
+
+### 클러스터 현재 상태
+
+```
+namespace valkey-operator-system:
+  pod/valkey-operator-5c85c786c7-mjtvn  1/1 Running  (0.1.0-alpha.2)
+  pod/valkey-test-0                      1/1 Running  (valkey 8.1.6)
+  Certificate/Issuer/ValidatingWebhookConfiguration  Ready
+기존 namespace data 의 shared-valkey-primary/replicas 영향 없음 (side-by-side).
+```
+
+### 다음 단계 (다음 iteration / 차단점)
+
+#### Phase A3 — 1.0 stable 졸업 (30 일 soak 권장)
+- valkey-test 인스턴스 *유지* — 다음 iteration 들에서 chaos engineering / fault injection / 메모리 압박 테스트
+- ValkeyCluster (3 shard, sharded mode) 인스턴스 추가 검증 — Standalone 외 cluster mode 도 검증
+- backup/restore 시나리오 — S3 dump / restore init container 실측
+
+#### Phase B — bitnami/valkey → 자체 operator 마이그레이션 도구 (다음 iteration 영역)
+- RDB dump from `shared-valkey-primary-0` (bitnami)
+- 자체 ValkeyCluster CR 의 restore init container 로 데이터 복원
+- staging 환경에서 1 회 검증
+
+#### Phase C — argos cutover (Phase A3 + B 완료 후)
+- 새 ArgoCD app `platform-data-valkey-operator` 추가
+- 비-critical 워크로드 cutover → bitnami app 제거
+
+### postgresql-operator Phase A (다음 iteration들)
+
+ADR-0056 8 단계 게이트는 더 큰 작업:
+- F02 (instance manager) 100% — kind 실측 + WAL lag 측정 (현재 90%)
+- F03 (election/fencing) 100% — chaos-mesh primary kill 시나리오 (현재 10%)
+- F04 (pgBackRest 통합) 100% — backup CR + WAL archive (현재 10%)
+- F05 (chaos-mesh failover RTO < 30s) 100% — 시나리오 5 종 (현재 10%)
+- 0.3.0-alpha.1 → 1.0.0 stable 90 일 soak
+
+production-mirror 클러스터 별도 필요. 현재 argos 1 클러스터 만으로는 soak 불가. 인프라 결정 필요.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 운영 장애 + PodSecurity 사고 종료 (ralph-loop iteration 2 — 사용자 권한 부여 후 자동 진행)
 
 ### 실행 결과 요약 (모든 차단점 해소)
