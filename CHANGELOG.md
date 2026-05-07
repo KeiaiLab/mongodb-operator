@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.7] - 2026-05-07
+
+### Added
+
+- MongoDB latest default 정렬: chart values, ArtifactHub examples/images,
+  README/guide samples, GitOps workload CR, backup helper image 를 `8.3.1` 로 갱신.
+- Sharded image render matrix 회귀 가드: `8.3.1`, `8.2`, `8.0` 에 대해
+  config server / shard / mongos image 가 `mongo:<version>` 으로 렌더되는지 검증.
+
+### Fixed
+
+- ArtifactHub operator image annotation 을 chart `appVersion=1.4.7` 과 동기화.
+
 ## [1.4.6] - 2026-05-07
 
 PodSecurity restricted 정책 위반으로 `argos-mongo-cfg` StatefulSet pod 가 생성 거부되던 결함 fix.
