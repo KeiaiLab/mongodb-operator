@@ -8,7 +8,7 @@
 
 | Iteration | Repo | Commit | 산출물 |
 |---|---|---|---|
-| **it45** | mongodb-operator | (pending) | `scripts/release-smoke-test.sh` 에 `retry_check` 헬퍼 추가, 단계 3 (Pages status) / 4 (index.yaml fetch + version entry) / 5 (helm pull) 에 retry 적용. `SMOKE_RETRY_ATTEMPTS` (default 12) / `SMOKE_RETRY_SLEEP` (default 15) env override. fast-path 첫 시도 통과 시 출력 형식 회귀 0. F13 100% 처리. |
+| **it45** | mongodb-operator | `b01f5cd` | `scripts/release-smoke-test.sh` 에 `retry_check` 헬퍼 추가, 단계 3 (Pages status) / 4 (index.yaml fetch + version entry) / 5 (helm pull) 에 retry 적용. `SMOKE_RETRY_ATTEMPTS` (default 12) / `SMOKE_RETRY_SLEEP` (default 15) env override. fast-path 첫 시도 통과 시 출력 형식 회귀 0. F13 100% 처리. |
 
 ### 동기
 
