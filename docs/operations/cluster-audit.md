@@ -81,6 +81,30 @@ platform-data-valkey               Synced   Healthy
 | Liveness/Readiness probes | 3 operator controller-runtime 표준 `/healthz` + `/readyz` 구비 — kubelet 자동 health check |
 | Resource requests/limits | 3 operator 동일 (`requests: cpu=100m memory=128Mi`, `limits: cpu=500m memory=512Mi`) — cross-cut consistency. 모든 data ns pods 자체 명시 (C31 ns Quota 부재 환경에서 best practice) |
 
+## Audit trail — 격차 발견 commit 매핑
+
+각 격차의 *발견 cycle commit*. 후속 변경 추적 baseline.
+
+| ID | 발견 commit(s) | 발견 일자 | 비고 |
+|---|---|---|---|
+| C24 | `0e15552` (1차) + `a0337b6` (CR 라벨) + `7213df8` (manual apply 확정) + `82b3f46` (DR snapshot) | 2026-05-07 | 격차 4-step 점진 발견 |
+| C25 | `14ff831` | 2026-05-07 | Prometheus Operator 부재 |
+| T27 | `f234517` (TASKS 등록) + `14ff831` (readiness 표) | 2026-05-07 | 1.4.12 release |
+| C29 | `212406e` | 2026-05-07 | dead RBAC (helm 0.1.0-alpha.2 잔존) |
+| C30 | `5f20e0b` | 2026-05-07 | NetworkPolicy 비대칭 |
+| C31 | `5f20e0b` | 2026-05-07 | ns Quota 부재 (C30 동반 발견) |
+| C32 | `03e0334` | 2026-05-07 | TLS in transit 부재 |
+| C33 | `248f61b` | 2026-05-07 | Service mesh 부재 |
+| C34 | `248f61b` | 2026-05-07 | Backup CronJob 0 |
+| C35 | `248f61b` | 2026-05-07 | valkey anti-affinity 부재 |
+| C36 | `925813c` | 2026-05-07 | PriorityClass 부재 |
+
+**완료 격차** (audit trail 보존):
+| ID | 발견 → 해소 commit | 비고 |
+|---|---|---|
+| I26 | 발견 `f234517` → ADR-0018 `64e34af` → Phase 1 `165631a` → TASKS 갱신 `744a380` | MonitoringSpec orphan Phase 1 deprecation marker |
+| F23 | webhook server 도입 it45-47 (5 cycles, 11 commits 종합) | 11 invariant + 18 envtest specs + ADR 6건 |
+
 ## DR Snapshots (임시 보관)
 
 git 추적 0 인 CR spec 의 disaster recovery snapshot:
