@@ -709,14 +709,17 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 	mdbsh.Status.Conditions = clearReconcileErrorCondition(mdbsh.Status.Conditions, mdbsh.Generation)
 
 	// C37 (ADR-0013 helpers.go SetStatusCondition 활용): operational visibility
-	// 격차 해소 — valkey/postgres 의 풍부한 conditions 패턴 차용. Ready /
-	// Progressing 2건 minimum (후속 cycle 에 ShardsReady / MongosReady 등 확장).
+	// 격차 해소 — valkey/postgres 의 풍부한 conditions 패턴 차용.
+	const (
+		reasonAvailable    = "Available"
+		reasonInitializing = "Initializing"
+	)
 	readyStatus := metav1.ConditionFalse
-	readyReason := "Initializing"
+	readyReason := reasonInitializing
 	readyMessage := "MongoDBSharded cluster is initializing components"
 	if ready {
 		readyStatus = metav1.ConditionTrue
-		readyReason = "Available"
+		readyReason = reasonAvailable
 		readyMessage = "All components (config server, shards, mongos) ready"
 	}
 	meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
@@ -728,11 +731,11 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 	})
 
 	progressingStatus := metav1.ConditionFalse
-	progressingReason := "Available"
+	progressingReason := reasonAvailable
 	progressingMessage := "Cluster reached desired state"
 	if !ready {
 		progressingStatus = metav1.ConditionTrue
-		progressingReason = "Initializing"
+		progressingReason = reasonInitializing
 		progressingMessage = "Cluster components transitioning to ready state"
 	}
 	meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
@@ -741,6 +744,61 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 		ObservedGeneration: mdbsh.Generation,
 		Reason:             progressingReason,
 		Message:            progressingMessage,
+	})
+
+	// C37 2차 — component-level conditions (ConfigServerReady / ShardsReady /
+	// MongosReady). updateStatus 가 이미 ComponentStatus.Ready/Total 갱신.
+	cfgReady := mdbsh.Status.ConfigServer.Ready == mdbsh.Status.ConfigServer.Total && mdbsh.Status.ConfigServer.Total > 0
+	cfgStatus := metav1.ConditionFalse
+	cfgReason := reasonInitializing
+	if cfgReady {
+		cfgStatus = metav1.ConditionTrue
+		cfgReason = reasonAvailable
+	}
+	meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+		Type:               "ConfigServerReady",
+		Status:             cfgStatus,
+		ObservedGeneration: mdbsh.Generation,
+		Reason:             cfgReason,
+		Message: fmt.Sprintf("ConfigServer %d/%d ready",
+			mdbsh.Status.ConfigServer.Ready, mdbsh.Status.ConfigServer.Total),
+	})
+
+	allShardsReady := len(mdbsh.Status.Shards) > 0
+	for _, s := range mdbsh.Status.Shards {
+		if s.Ready != s.Total || s.Total == 0 {
+			allShardsReady = false
+			break
+		}
+	}
+	shardsStatus := metav1.ConditionFalse
+	shardsReason := reasonInitializing
+	if allShardsReady {
+		shardsStatus = metav1.ConditionTrue
+		shardsReason = reasonAvailable
+	}
+	meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+		Type:               "ShardsReady",
+		Status:             shardsStatus,
+		ObservedGeneration: mdbsh.Generation,
+		Reason:             shardsReason,
+		Message:            fmt.Sprintf("%d/%d shards reporting all members ready", len(mdbsh.Status.Shards), mdbsh.Spec.Shards.Count),
+	})
+
+	mongosReady := mdbsh.Status.Mongos.Ready == mdbsh.Status.Mongos.Total && mdbsh.Status.Mongos.Total > 0
+	mongosStatus := metav1.ConditionFalse
+	mongosReason := reasonInitializing
+	if mongosReady {
+		mongosStatus = metav1.ConditionTrue
+		mongosReason = reasonAvailable
+	}
+	meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+		Type:               "MongosReady",
+		Status:             mongosStatus,
+		ObservedGeneration: mdbsh.Generation,
+		Reason:             mongosReason,
+		Message: fmt.Sprintf("Mongos %d/%d ready",
+			mdbsh.Status.Mongos.Ready, mdbsh.Status.Mongos.Total),
 	})
 
 	return updateStatusWithRetry(ctx, r.Client, mdbsh)
