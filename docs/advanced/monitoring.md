@@ -83,17 +83,26 @@ spec:
 
 ## ServiceMonitor Configuration
 
-The operator automatically creates ServiceMonitor resources when monitoring is enabled. Verify:
+> **⚠️ Important (ADR-0018)**: `spec.monitoring.serviceMonitor` field 는 *현재
+> controller 미구현* — 사용자가 설정해도 ServiceMonitor 자동 생성 안 됨
+> (silent ignore, deprecated). 자세한 단계적 해소 plan 은 [ADR-0018](../kb/adr/0018-monitoringspec-orphan-resolution.md)
+> 참조. operator pod 자체의 metrics endpoint 는 `templates/servicemonitor.yaml`
+> 정적 manifest 가 cover.
+
+CR 인스턴스 metrics 의 ServiceMonitor 는 **사용자가 직접 작성** 필요 (아래
+"Custom ServiceMonitor" 섹션). 향후 Phase 2 (ADR-0018) 에서 valkey-operator
+패턴 (controller-level 동적 생성) 도입 결정 가능.
+
+### 운영 pod metrics 자동 ServiceMonitor (chart-level)
+
+operator 자체 metrics scrape:
 
 ```bash
-# Check ServiceMonitor was created
-kubectl get servicemonitor -n database
-
-# Describe ServiceMonitor details
-kubectl describe servicemonitor my-mongodb-metrics -n database
+# Operator pod metrics — chart 의 templates/servicemonitor.yaml 자동 등록
+kubectl get servicemonitor -n <release-namespace> -l app.kubernetes.io/name=mongodb-operator
 ```
 
-Custom ServiceMonitor (optional):
+### Custom ServiceMonitor (CR 인스턴스 metrics)
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1
