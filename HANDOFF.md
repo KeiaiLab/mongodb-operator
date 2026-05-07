@@ -4,6 +4,78 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 옵션 C — 4 트랙 병렬 진입 (ralph-loop iteration 6)
+
+### 진행 결과
+
+| 트랙 | 결과 | Commit / 인용 |
+|---|---|---|
+| 1. valkey 차단요인 1 (9.x 화이트리스트 + DRY) | ✅ 5 hardcoding → const, SupportedValkeyVersions 도입, webhook validation, 4 신규 test PASS | valkey-operator `d8fa7e8` |
+| 1. valkey 차단요인 2 (version upgrade reconcile) | ⏸️ 본 iteration 보류 — 30 일 soak 인스턴스 영향 회피, kind 격리 환경 진단 필요 (다음 iteration) | — |
+| 2. valkey 30 일 soak | ✅ 8 pod 1/1 Running (operator + valkey-test + 6 valkey-chaos), 50m+ uptime 유지 | sanity 통과 |
+| 3. ADR-0058 Phase 1 (data-staging ns) | ✅ ns Active + ResourceQuota (0/4 cpu, 0/16Gi mem, 0/5 PVC) + NetworkPolicy `deny-from-data` | argos-platform-base `4f8af8d` (main + stable) |
+| 4. postgres A1→A2 helm install | ✅ pod 1/1 Running, image 0.3.0-alpha.1 pull 6.875s, leader election won | helm release `postgresql-operator-staging` |
+| 4. postgres smoke step 7/8 실측 | ⏸️ 다음 iteration — `hack/smoke.sh` 가 kind 전용 hardcoded, sample CR ns override 추가 작업 필요 | — |
+
+### 핵심 발견 + 운영 이슈
+
+**ArgoCD branch 추적 발견** (인프라 이해 갱신):
+- argos-platform-base 의 ArgoCD app 들이 `main` 이 아닌 **`stable` 브랜치 추적**.
+- main commit 이 stable 로 promote 되지 않으면 ArgoCD sync 정체 (operationPhase=Error).
+- 본 iteration 에서 `git push origin main:stable` 명시 promote 후 sync 정상화 (~30 초).
+- 다음 iteration 부터 argos-platform-base commit 시 main + stable 동시 push 패턴 적용.
+
+**repo-server cache 진단**:
+- argocd-repo-server 가 manifest cache 를 revision 단위로 hold (`manifest cache hit: ...repoURL/<rev>`).
+- stable promote 만으로는 즉시 picked up 안 됨 → `kubectl annotate ... refresh=hard` 추가 필요.
+
+### 검증 인용 (CLAUDE.md §7 클러스터 라이브 사실 게이트)
+
+```
+$ kubectl config current-context
+argos
+
+$ kubectl get ns data-staging
+NAME           STATUS   AGE
+data-staging   Active   9s
+
+$ kubectl describe resourcequota -n data-staging
+Resource                Used  Hard
+persistentvolumeclaims  0     5
+requests.cpu            0     4
+requests.memory         0     16Gi
+
+$ kubectl get networkpolicy -n data-staging
+NAME             POD-SELECTOR   AGE
+deny-from-data   <none>         9s
+
+$ kubectl get pods -n data-staging
+postgresql-operator-staging-controller-manager-98dd675fc-vmlt8   1/1   Running   0     22s
+
+$ go test ./... (valkey-operator)
+ok  github.com/keiailab/valkey-operator/api/v1alpha1                0.458s
+ok  github.com/keiailab/valkey-operator/internal/controller         6.961s
+ok  github.com/keiailab/valkey-operator/internal/webhook/v1alpha1   2.474s
+(전 패키지 PASS, FAIL 0 건)
+```
+
+### 다음 iteration 자연 진입점
+
+1. **valkey 차단요인 2 진단** (P0, kind 격리): valkey-test 동등 standalone 인스턴스를 kind 에 띄워 `kubectl patch valkey ... spec.version.version: "9.0.4"` → STS image field 변화 + pod 재생성 관찰 → 가설 A/B/C 중 실제 원인 좁히기.
+2. **postgres staging smoke**: `hack/smoke.sh` 의 NAMESPACE override 지원 추가 + sample CR `config/samples/...` 의 ns 매개변수화. SMOKE_FAILOVER=1 으로 step 7 (WAL lag) + step 8 (Failover RTO < 30s) 실측. F02 90% → 100% 게이트.
+3. **PostgresCluster CR 적용** (data-staging): 3 replica 단일 shard 인스턴스 → 24h 안정성 + backup → restore 검증 (ADR-0058 Phase 3 진입점).
+4. **ADR-0058 LimitRange + RBAC 격리** 추가 (Phase 1 의 잔여 — 본 iteration 은 ns + Quota + NetworkPolicy 만).
+
+### 보류 / 차단요인
+
+- valkey-operator 차단요인 2 의 root cause 미규명 — 가설 A/B/C 중 어느 것인지 진단 후 ADR-0059 작성 가능성.
+- argos-platform-base main↔stable 브랜치 동기화 자동화 미설정 — ADR 또는 RFC 후보.
+- staging-smoke wrapper script + sample CR ns override 미작성.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 옵션 C — 4 작업 동시 진입 (ralph-loop iteration 5)
 
 ### 진행 결과 (4 작업 모두 첫 단계 통과 또는 식별)
