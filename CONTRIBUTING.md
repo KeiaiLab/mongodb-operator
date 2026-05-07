@@ -32,6 +32,16 @@ We welcome feature requests! Please:
 
 ### Pull Requests
 
+#### Sign-off (DCO 의무)
+
+모든 commit 은 [Developer Certificate of Origin (DCO)](https://developercertificate.org/) 정합 — `Signed-off-by: Your Name <you@example.com>` trailer 의무. `git commit -s` 옵션 사용. commit-msg lefthook / pre-commit hook 이 자동 검증.
+
+```bash
+git commit -s -m "feat(controller): ..."
+```
+
+미서명 commit 은 PR 머지 차단.
+
 #### Getting Started
 
 1. Fork the repository
