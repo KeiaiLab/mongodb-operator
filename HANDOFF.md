@@ -4,6 +4,26 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 45 (계속) — webhook server 부트스트랩 (M1 Phase 1)
+
+| Iteration | Repo | Commit | 산출물 |
+|---|---|---|---|
+| **it45 step 1-3** | mongodb-operator | `50b3498` | `internal/webhook/v1alpha1/{mongodb,mongodbsharded}_webhook.go` + `error.go` + 4 unit test, `cmd/main.go` 의 `--enable-webhooks` flag, `charts/mongodb-operator/templates/webhook.yaml` (Issuer + Certificate + Service + ValidatingWebhookConfiguration), deployment.yaml 의 cert volume mount + args + port 9443. operator-commons v0.3.0→v0.4.0. helm lint PASS, go test PASS, helm template (true/false) 양쪽 검증. |
+
+### 다음 단계 (it46 진입점)
+
+1. **image rebuild + push** — `docker buildx build --platform linux/amd64 --load` → ghcr.
+2. **chart bump + gh-pages 발행** — `Chart.yaml` patch +1, `make package-chart` → gh-pages branch push.
+3. **argos-platform-data umbrella bump** + ArgoCD sync.
+4. **e2e 시나리오** (cert-manager 설치된 kind 클러스터): 7.0.5 reject + members=4 reject + members=2 reject + shards.count=100 reject 가드.
+5. **ADR-0015 작성** — webhook failurePolicy=Fail trade-off (가용성 vs validation 가치).
+
+### 차단점 (없음)
+
+cert-manager 의존성은 *opt-in* 이므로 미설치 환경 영향 0. webhook.enabled=false default 유지.
+
+---
+
 ## 2026-05-07 ralph-loop iteration 45 — F13 release-smoke retry policy (gh-pages CDN flake 흡수)
 
 | Iteration | Repo | Commit | 산출물 |
