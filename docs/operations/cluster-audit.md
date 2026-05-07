@@ -71,6 +71,11 @@ platform-data-valkey               Synced   Healthy
 | controller-runtime + envtest dual-layer | 3 operator 통일 (mongodb / valkey 95.1% / 클린, postgres 94.3% coverage) |
 | webhook ADR 7건 (0013-0018) | 결정 추적성 + cross-cut audit pattern 자동화 candidate |
 | 운영 안정 | 3 operator log errors 0 (5min), data ns events 0 (1h+) |
+| StorageClass governance | 4 SC (ceph-rbd default / ceph-fs / ceph-rgw / cold-rbd) 모두 `Retain` reclaim policy + ALLOWVOLUMEEXPANSION (DR-friendly) |
+| Ingress data ns | 0건 (의도된 cluster-internal only — 외부 노출 부재) |
+| ServiceAccount tokens | 모든 SA `secrets` 비어있음 (K8s 1.24+ BoundServiceAccountTokenVolume 사용 — legacy long-lived token 부재) |
+| Node disk pressure | DiskPressure=False (sample 5 nodes) |
+| cert-manager infrastructure | platform-system 의 argos-wildcard-tls / trust-manager + 2 ClusterIssuer (letsencrypt-prod/staging) 보유. 우리 operator 는 미활용 (C32 격차) |
 
 ## DR Snapshots (임시 보관)
 
