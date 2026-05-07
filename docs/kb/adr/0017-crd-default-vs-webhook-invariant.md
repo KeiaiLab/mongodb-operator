@@ -47,17 +47,32 @@ denial* 가 *real apiserver 통해 도달 불가능* 함을 발견:
 
 신규 webhook invariant PR 시 다음 표 추가:
 
-| field | CRD default | invariant zero-value 거부? | unreachable? | action |
-|---|---|---|---|---|
-| Spec.X | `+kubebuilder:default=1` | YES | YES | invariant 제거 또는 다른 violation 으로 재작성 |
-| Spec.Y | (none) | YES | NO | 정상 |
-| Spec.Z | `+kubebuilder:default=""` | YES | NO (default 가 zero value 와 동일) | 정상 |
+| field | CRD default | json omitempty | mutating defaulter 변환 | invariant zero 거부 | 분류 |
+|---|---|---|---|---|---|
+| Spec.X | `+kubebuilder:default=1` | yes | — | YES | **Type A** (제거) |
+| Spec.X' | `+kubebuilder:default=1` | no | yes (0→1) | YES | **Type A'** (조건부, 유지 + 환경 의존성 명시) |
+| Spec.X' | `+kubebuilder:default=1` | no | no | YES | **Type A** (제거 — explicit 0 admission 도달 가능하지만 invariant 자체가 default 와 모순) |
+| Spec.Y | (none) | yes/no | — | YES | **Type C** (정상 reachable) |
+| Spec.Z | `+kubebuilder:default=""` | — | — | YES | **Type C** (default 가 zero 와 동일) |
+| Spec.W | `+kubebuilder:default="10Gi"` | yes | — | NO (skip) | **Type B** (defensive IsZero skip) |
 
 ### 분류
 
-- **Type A — Dead invariant (불가능)**: CRD default 가 *non-zero* 값으로
-  zero-value 를 채움 → invariant 의 *check 조건 자체* 가 unreachable.
-  → invariant 제거 (별 PR + ADR refs).
+- **Type A — Dead invariant (절대 불가능)**: CRD default 가 *non-zero* 값
+  으로 zero-value 를 채우고 *json tag 가 omitempty* 인 경우 → invariant 의
+  *check 조건 자체* 가 모든 admission 환경에서 unreachable. → invariant 제거.
+- **Type A' — 조건부 unreachable (Errata, it47 step 8 발견)**:
+  CRD default 가 non-zero + *json tag omitempty 부재* 인 경우, K8s OpenAPI
+  v3 의 default 동작이 *missing field* 만 채우고 *explicit zero value* 는
+  그대로 둠. defaulting (mutating) webhook 이 zero→default 변환 보강 시 *그
+  webhook 활성 환경* 에서만 unreachable. webhook.enabled=false 환경 (helm
+  values opt-out, CRD only 모드) 에서는 reachable.
+  → invariant 유지 (defensive). 단 *환경 의존성* 명시.
+  - 사례: valkey-operator 의 `ValkeyClusterSpec.ReplicasPerShard` (no omitempty,
+    CRD default=1, mutating defaulter 가 0→1 보강). it47 commit `5f3f91c` 의
+    *autoFailover + ReplicasPerShard=0 → unreachable* 분석은 *webhook.enabled=true
+    환경 한정* 이며, helm `webhook.enabled=false` 로 mutating defaulter 우회 시
+    *명시 0 admission 도달* 가능. *완전 unreachable 아님*.
 - **Type B — IsZero() defensive (의도)**: CRD default 가 채워지지 않은
   *dry-run / omitempty* path 보호. invariant 는 zero-value 를 *skip* 처리
   (예: `if size.IsZero() { return nil }` — it46 step 7 패턴).
