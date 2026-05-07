@@ -17,9 +17,13 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	commonsversion "github.com/keiailab/operator-commons/pkg/version"
 )
 
 // MongoDBVersion defines MongoDB version configuration
@@ -31,6 +35,38 @@ type MongoDBVersion struct {
 	// Image is the MongoDB container image
 	// +optional
 	Image string `json:"image,omitempty"`
+}
+
+// supportedMongoDBList — major.minor 화이트리스트. patch 버전은 semver-prefix 매칭.
+// 사용자 요구 (iteration 9, 2026-05-07): 최소 마일스톤 2개 버전 호환 — N + N-1 + N-2.
+// 8.0 = LTS baseline, 8.2 = stable, 8.3 = current. 신규 추가 시 oplog format,
+// replica set wire protocol, sharding chunk format 호환성 검증 후 추가.
+var supportedMongoDBList = commonsversion.MustList("8.0", "8.2", "8.3")
+
+// SupportedMongoDBVersions — 외부 노출 슬라이스 (chart values / docs / 기존 호환).
+// major.minor 형식. 사용자가 8.3.1 같이 patch 까지 명시해도 IsSupportedMongoDBVersion
+// 가 prefix 매칭으로 허용.
+var SupportedMongoDBVersions = supportedMongoDBList.Strings()
+
+// IsSupportedMongoDBVersion — webhook validation / controller 검증 헬퍼.
+// patch 레벨까지 받은 v 에서 major.minor 추출 후 화이트리스트 비교.
+//
+// 예:
+//
+//	IsSupportedMongoDBVersion("8.3.1") == true   (8.3 매칭)
+//	IsSupportedMongoDBVersion("8.3")   == true
+//	IsSupportedMongoDBVersion("8.0.0") == true
+//	IsSupportedMongoDBVersion("7.0.5") == false
+//	IsSupportedMongoDBVersion("9.0")   == false
+//	IsSupportedMongoDBVersion("8")     == false  (major-only 거부)
+//	IsSupportedMongoDBVersion("")      == false
+func IsSupportedMongoDBVersion(v string) bool {
+	parts := strings.SplitN(v, ".", 3)
+	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+		return false
+	}
+	majorMinor := parts[0] + "." + parts[1]
+	return supportedMongoDBList.IsSupported(majorMinor)
 }
 
 // StorageSpec defines storage configuration
