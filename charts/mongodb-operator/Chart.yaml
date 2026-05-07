@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.4.7
-appVersion: "1.4.7"
+version: 1.4.8
+appVersion: "1.4.8"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -114,13 +114,15 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:1.4.7
+      image: ghcr.io/keiailab/mongodb-operator:1.4.8
     - name: mongodb
       image: mongo:8.3.1
     - name: mongodb-exporter
       image: percona/mongodb_exporter:0.40
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
+    - kind: fixed
+      description: "Sharded P0 — mongos Deployment PodTemplate server-default ping-pong (imagePullPolicy/probe defaults/DNS/restart/scheduler 등) 으로 generation 180k+ 증가 + update conflict 반복. applyDeployment가 기존 server-defaulted PodTemplate 값을 보존하도록 확장."
     - kind: fixed
       description: "Sharded P0 — Helm chart bundled CRD drift (5,272 줄 격차) → status 신규 필드 (adminUserCreated/configServerInitialized/shardsInitialized/shardsAdded) 가 K8s API server 에 의해 silently drop 되어 reconcile flag 영구 empty + addShards index-out-of-range panic. CRD 자동 sync (manifests → sync-crds) + reconcileAddShards length 가드 추가."
     - kind: fixed

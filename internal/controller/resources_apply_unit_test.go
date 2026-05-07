@@ -18,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -26,6 +27,8 @@ import (
 )
 
 func ptr32(v int32) *int32 { return &v }
+
+func ptr64(v int64) *int64 { return &v }
 
 func newApplyScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
@@ -244,6 +247,113 @@ func TestApplyDeployment_IdempotentWithServerDefaults(t *testing.T) {
 	if got2.ResourceVersion != rv1 {
 		t.Fatalf("기대 멱등 (ResourceVersion 불변), 1차=%s 2차=%s — fight 재현",
 			rv1, got2.ResourceVersion)
+	}
+}
+
+// TestApplyDeployment_IdempotentWithPodTemplateServerDefaults 는 v1.4.8 회귀 테스트다.
+// K8s가 PodTemplate 내부 기본값(imagePullPolicy/probe thresholds/DNS/restart 등)을
+// 채운 운영 중 Deployment에 대해 operator가 빈 desired 값으로 되돌리지 않아야 한다.
+func TestApplyDeployment_IdempotentWithPodTemplateServerDefaults(t *testing.T) {
+	s := newApplyScheme(t)
+	owner := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "mongos", Namespace: "ns"},
+	}
+
+	existingTemplate := podTemplateSpec("mongos")
+	existingTemplate.Spec.RestartPolicy = corev1.RestartPolicyAlways
+	existingTemplate.Spec.DNSPolicy = corev1.DNSClusterFirst
+	existingTemplate.Spec.SchedulerName = corev1.DefaultSchedulerName
+	existingTemplate.Spec.TerminationGracePeriodSeconds = ptr64(30)
+	existingTemplate.Spec.Containers[0].ImagePullPolicy = corev1.PullIfNotPresent
+	existingTemplate.Spec.Containers[0].TerminationMessagePath = corev1.TerminationMessagePathDefault
+	existingTemplate.Spec.Containers[0].TerminationMessagePolicy = corev1.TerminationMessageReadFile
+	existingTemplate.Spec.Containers[0].Ports = []corev1.ContainerPort{
+		{Name: "mongodb", ContainerPort: 27017, Protocol: corev1.ProtocolTCP},
+	}
+	existingTemplate.Spec.Containers[0].LivenessProbe = &corev1.Probe{
+		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(27017)}},
+		InitialDelaySeconds: 30,
+		PeriodSeconds:       10,
+		TimeoutSeconds:      1,
+		SuccessThreshold:    1,
+		FailureThreshold:    3,
+	}
+	existingTemplate.Spec.Containers[0].ReadinessProbe = &corev1.Probe{
+		ProbeHandler:        corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"mongosh", "--eval", "db.adminCommand('ping')"}}},
+		InitialDelaySeconds: 10,
+		PeriodSeconds:       10,
+		TimeoutSeconds:      5,
+		SuccessThreshold:    1,
+		FailureThreshold:    3,
+	}
+
+	existing := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "mongos", Namespace: "ns",
+			CreationTimestamp: metav1.Now(),
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr32(3),
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "mongos"}},
+			Template: existingTemplate,
+		},
+	}
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(owner, existing).Build()
+
+	desiredTemplate := podTemplateSpec("mongos")
+	desiredTemplate.Spec.Containers[0].Ports = []corev1.ContainerPort{
+		{Name: "mongodb", ContainerPort: 27017},
+	}
+	desiredTemplate.Spec.Containers[0].LivenessProbe = &corev1.Probe{
+		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(27017)}},
+		InitialDelaySeconds: 30,
+		PeriodSeconds:       10,
+	}
+	desiredTemplate.Spec.Containers[0].ReadinessProbe = &corev1.Probe{
+		ProbeHandler:        corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"mongosh", "--eval", "db.adminCommand('ping')"}}},
+		InitialDelaySeconds: 10,
+		PeriodSeconds:       10,
+		TimeoutSeconds:      5,
+	}
+	desired := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "mongos", Namespace: "ns"},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr32(3),
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "mongos"}},
+			Template: desiredTemplate,
+		},
+	}
+
+	if err := applyDeployment(context.Background(), cl, s, owner, desired, false); err != nil {
+		t.Fatalf("applyDeployment 1: %v", err)
+	}
+	got := &appsv1.Deployment{}
+	if err := cl.Get(context.Background(), client.ObjectKey{Name: "mongos", Namespace: "ns"}, got); err != nil {
+		t.Fatalf("get deploy: %v", err)
+	}
+	if got.Spec.Template.Spec.RestartPolicy != corev1.RestartPolicyAlways {
+		t.Fatalf("RestartPolicy default 보존 실패: %q", got.Spec.Template.Spec.RestartPolicy)
+	}
+	if got.Spec.Template.Spec.Containers[0].ImagePullPolicy != corev1.PullIfNotPresent {
+		t.Fatalf("ImagePullPolicy default 보존 실패: %q", got.Spec.Template.Spec.Containers[0].ImagePullPolicy)
+	}
+	if got.Spec.Template.Spec.Containers[0].Ports[0].Protocol != corev1.ProtocolTCP {
+		t.Fatalf("port protocol default 보존 실패: %q", got.Spec.Template.Spec.Containers[0].Ports[0].Protocol)
+	}
+	if got.Spec.Template.Spec.Containers[0].LivenessProbe.FailureThreshold != 3 {
+		t.Fatalf("liveness FailureThreshold default 보존 실패: %d", got.Spec.Template.Spec.Containers[0].LivenessProbe.FailureThreshold)
+	}
+
+	rv1 := got.ResourceVersion
+	if err := applyDeployment(context.Background(), cl, s, owner, desired, false); err != nil {
+		t.Fatalf("applyDeployment 2: %v", err)
+	}
+	got2 := &appsv1.Deployment{}
+	if err := cl.Get(context.Background(), client.ObjectKey{Name: "mongos", Namespace: "ns"}, got2); err != nil {
+		t.Fatalf("get deploy 2: %v", err)
+	}
+	if got2.ResourceVersion != rv1 {
+		t.Fatalf("기대 PodTemplate server-default 멱등, 1차=%s 2차=%s", rv1, got2.ResourceVersion)
 	}
 }
 

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.8] - 2026-05-07
+
+### Fixed
+
+- **Sharded P0 — mongos Deployment PodTemplate server-default ping-pong** (`internal/controller/resources_apply.go`):
+  `applyDeployment`가 `RevisionHistoryLimit`/`ProgressDeadlineSeconds`만 보존하고
+  PodTemplate 내부 K8s 기본값(`imagePullPolicy`, probe threshold, port protocol,
+  `restartPolicy`, `dnsPolicy`, `schedulerName`, `terminationMessage*`)은 빈 desired 값으로
+  되돌리려 했다. 결과적으로 `argos-mongo-mongos` Deployment generation 이 180k+까지
+  증가하고 `object has been modified` update conflict가 반복되어
+  `MongoDBSharded.status.conditions[ReconcileError=True]`가 남았다. v1.4.8은 기존
+  Deployment의 server-defaulted PodTemplate 값을 보존해 reconcile을 멱등화한다.
+
+### Added
+
+- `TestApplyDeployment_IdempotentWithPodTemplateServerDefaults` 회귀 가드 추가.
+
 ## [1.4.7] - 2026-05-07
 
 ### Added

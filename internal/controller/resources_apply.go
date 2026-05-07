@@ -191,10 +191,11 @@ func applyDeployment(ctx context.Context, c client.Client, scheme *runtime.Schem
 		if target.CreationTimestamp.IsZero() {
 			target.Spec = desired.Spec
 		} else {
+			currentTemplate := target.Spec.Template.DeepCopy()
 			if !preserveReplicas {
 				target.Spec.Replicas = desired.Spec.Replicas
 			}
-			target.Spec.Template = desired.Spec.Template
+			target.Spec.Template = deploymentTemplateWithServerDefaults(desired.Spec.Template, *currentTemplate)
 			target.Spec.Strategy = desired.Spec.Strategy
 			target.Spec.MinReadySeconds = desired.Spec.MinReadySeconds
 			// nil-guard: desired 가 비어 있으면 server-default 보존.
@@ -209,4 +210,91 @@ func applyDeployment(ctx context.Context, c client.Client, scheme *runtime.Schem
 		return controllerutil.SetControllerReference(owner, target, scheme)
 	})
 	return err
+}
+
+func deploymentTemplateWithServerDefaults(desired, current corev1.PodTemplateSpec) corev1.PodTemplateSpec {
+	out := *desired.DeepCopy()
+	preservePodSpecServerDefaults(&out.Spec, current.Spec)
+	return out
+}
+
+func preservePodSpecServerDefaults(desired *corev1.PodSpec, current corev1.PodSpec) {
+	if desired.RestartPolicy == "" {
+		desired.RestartPolicy = current.RestartPolicy
+	}
+	if desired.DNSPolicy == "" {
+		desired.DNSPolicy = current.DNSPolicy
+	}
+	if desired.SchedulerName == "" {
+		desired.SchedulerName = current.SchedulerName
+	}
+	if desired.TerminationGracePeriodSeconds == nil {
+		desired.TerminationGracePeriodSeconds = current.TerminationGracePeriodSeconds
+	}
+	preserveContainerListServerDefaults(desired.Containers, current.Containers)
+	preserveContainerListServerDefaults(desired.InitContainers, current.InitContainers)
+}
+
+func preserveContainerListServerDefaults(desired, current []corev1.Container) {
+	currentByName := map[string]corev1.Container{}
+	for _, container := range current {
+		currentByName[container.Name] = container
+	}
+	for i := range desired {
+		if currentContainer, ok := currentByName[desired[i].Name]; ok {
+			preserveContainerServerDefaults(&desired[i], currentContainer)
+		}
+	}
+}
+
+func preserveContainerServerDefaults(desired *corev1.Container, current corev1.Container) {
+	if desired.ImagePullPolicy == "" {
+		desired.ImagePullPolicy = current.ImagePullPolicy
+	}
+	if desired.TerminationMessagePath == "" {
+		desired.TerminationMessagePath = current.TerminationMessagePath
+	}
+	if desired.TerminationMessagePolicy == "" {
+		desired.TerminationMessagePolicy = current.TerminationMessagePolicy
+	}
+	preserveProbeServerDefaults(desired.LivenessProbe, current.LivenessProbe)
+	preserveProbeServerDefaults(desired.ReadinessProbe, current.ReadinessProbe)
+	preserveProbeServerDefaults(desired.StartupProbe, current.StartupProbe)
+	preserveContainerPortServerDefaults(desired.Ports, current.Ports)
+}
+
+func preserveProbeServerDefaults(desired, current *corev1.Probe) {
+	if desired == nil || current == nil {
+		return
+	}
+	if desired.TimeoutSeconds == 0 {
+		desired.TimeoutSeconds = current.TimeoutSeconds
+	}
+	if desired.PeriodSeconds == 0 {
+		desired.PeriodSeconds = current.PeriodSeconds
+	}
+	if desired.SuccessThreshold == 0 {
+		desired.SuccessThreshold = current.SuccessThreshold
+	}
+	if desired.FailureThreshold == 0 {
+		desired.FailureThreshold = current.FailureThreshold
+	}
+	if desired.TerminationGracePeriodSeconds == nil {
+		desired.TerminationGracePeriodSeconds = current.TerminationGracePeriodSeconds
+	}
+}
+
+func preserveContainerPortServerDefaults(desired, current []corev1.ContainerPort) {
+	currentByName := map[string]corev1.ContainerPort{}
+	for _, port := range current {
+		currentByName[port.Name] = port
+	}
+	for i := range desired {
+		if desired[i].Protocol != "" {
+			continue
+		}
+		if currentPort, ok := currentByName[desired[i].Name]; ok {
+			desired[i].Protocol = currentPort.Protocol
+		}
+	}
 }
