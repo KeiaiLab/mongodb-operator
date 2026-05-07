@@ -104,14 +104,28 @@ release: ## Full release pipeline. VERSION=v1.x.y 필수 (e.g., make release VER
 	@echo "=== Step 5/6- GitHub Release (prerelease if -beta/-rc) ==="
 	@PREFLAG=""; \
 	case "$(VERSION)" in *beta*|*rc*|*alpha*) PREFLAG="--prerelease";; esac; \
+	mkdir -p /tmp/release; \
+	helm package charts/mongodb-operator -d /tmp/release/; \
+	if command -v git-cliff >/dev/null 2>&1; then \
+		git-cliff --strip all --tag "$(VERSION)" --unreleased > "/tmp/release-notes-$(VERSION).md" 2>/dev/null && \
+			NOTES_FLAG="--notes-file /tmp/release-notes-$(VERSION).md"; \
+	else \
+		NOTES_FLAG="--notes \"Release $(VERSION). 변경 내역은 CHANGELOG.md 참조.\""; \
+	fi; \
+	SBOM_ASSET=""; \
+	if command -v syft >/dev/null 2>&1; then \
+		echo "=== syft SBOM 생성 (T0-2 자동화) ==="; \
+		syft scan ghcr.io/keiailab/mongodb-operator:$(VERSION) -o spdx-json -q > "/tmp/mongodb-operator-$(VERSION).spdx.json" 2>/dev/null && \
+			SBOM_ASSET="/tmp/mongodb-operator-$(VERSION).spdx.json"; \
+	fi; \
 	if gh release view $(VERSION) -R keiailab/mongodb-operator >/dev/null 2>&1; then \
 		echo "WARN- GH release $(VERSION) 이미 존재 — skip"; \
 	else \
-		mkdir -p /tmp/release && helm package charts/mongodb-operator -d /tmp/release/; \
-		gh release create $(VERSION) -R keiailab/mongodb-operator $$PREFLAG \
+		eval gh release create $(VERSION) -R keiailab/mongodb-operator $$PREFLAG \
 			--title "$(VERSION)" \
-			--notes "Release $(VERSION). 변경 내역은 CHANGELOG.md 참조." \
-			/tmp/release/mongodb-operator-$$(echo $(VERSION) | sed 's/^v//').tgz; \
+			$$NOTES_FLAG \
+			/tmp/release/mongodb-operator-$$(echo $(VERSION) | sed 's/^v//').tgz \
+			$$SBOM_ASSET; \
 	fi
 	@echo ""
 	@echo "=== Step 6/6- Helm chart publish to gh-pages ==="
