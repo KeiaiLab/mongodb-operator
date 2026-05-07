@@ -716,7 +716,7 @@ func (r *MongoDBReconciler) updateStatusError(ctx context.Context, mdb *mongodbv
 func (r *MongoDBReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Recorder == nil {
 		//lint:ignore SA1019 client-go record.EventRecorder 유지. events.k8s.io 전환은 Recorder field migration 과 함께 별 cycle.
-		r.Recorder = mgr.GetEventRecorderFor("mongodb-controller")
+		r.Recorder = mgr.GetEventRecorderFor("mongodb-controller") //nolint:staticcheck
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mongodbv1alpha1.MongoDB{}).

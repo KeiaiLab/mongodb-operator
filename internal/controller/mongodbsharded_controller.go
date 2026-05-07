@@ -1219,7 +1219,7 @@ func (r *MongoDBShardedReconciler) cleanupShardedNetworkPolicies(ctx context.Con
 func (r *MongoDBShardedReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Recorder == nil {
 		//lint:ignore SA1019 client-go record.EventRecorder 유지. events.k8s.io 전환은 Recorder field migration 과 함께 별 cycle.
-		r.Recorder = mgr.GetEventRecorderFor("mongodbsharded-controller")
+		r.Recorder = mgr.GetEventRecorderFor("mongodbsharded-controller") //nolint:staticcheck
 	}
 	// v1.4.1 P1 fix: HPA를 Owns에 등록한다. 누락 시 controller-runtime 의 default
 	// cached reader가 HPA informer를 lazy 생성 시도 → cache sync wait timeout
