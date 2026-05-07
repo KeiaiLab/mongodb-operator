@@ -6,6 +6,7 @@
 [![Container Image](https://img.shields.io/badge/ghcr.io-keiailab%2Fmongodb--operator-blue?logo=github)](https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator)
 [![Helm Chart](https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/keiailab/mongodb-operator/main/charts/mongodb-operator/Chart.yaml&label=helm%20v)](https://github.com/keiailab/mongodb-operator)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/mongodb-operator)](https://artifacthub.io/packages/search?repo=mongodb-operator)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/keiailab/mongodb-operator/badge)](https://scorecard.dev/viewer/?uri=github.com/keiailab/mongodb-operator)
 
 A Kubernetes Operator for deploying and managing MongoDB ReplicaSets and Sharded Clusters.
 
