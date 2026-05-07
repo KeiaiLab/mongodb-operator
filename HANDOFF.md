@@ -4,6 +4,44 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 44 — ADR-0014 (intentional design 보존)
+
+| Iteration | Repo | Commit | 산출물 |
+|---|---|---|---|
+| **it44** | mongodb-operator | `c8938c4` | ADR-0014 작성 — bootstrap_lease + helpers 의 *수동 Get + Create + IsAlreadyExists guard* 패턴 *보존* 정당화. iteration 41-43 chain (race-tolerant audit + CreateOrUpdate 마이그레이션) 의 *마무리 결정*. |
+
+### ADR-0014 핵심
+
+| 사이트 | 결정 | reasoning |
+|---|---|---|
+| bootstrap_lease.acquireBootstrapLease | **수동 보존** | Lease busy/holder detection logic (ADR-0002 정합). CreateOrUpdate 의 mutate fn 변환 시 holder identity 덮어쓰기 → busy detection 의미 위반. |
+| helpers.ensureSecret | **수동 보존** | random password 1회 generate 보장. CreateOrUpdate 의 매 reconcile mutate fn → password 매번 변경 잠재 bug 위험. |
+
+### 3 operator 추상화 boundary (post it44 final)
+
+| Operator | Site | Pattern | Reason |
+|---|---|---|---|
+| mongodb | mongodbbackup (it42) | CreateOrUpdate | Job spec immutable 안전 |
+| **mongodb** | **bootstrap_lease (it44)** | **수동 보존** | **Lease busy/holder logic (ADR-0002)** |
+| **mongodb** | **helpers (it44)** | **수동 보존** | **random password 1회 generate** |
+| valkey | valkeybackup × 2 (it43) | CreateOrUpdate | Job spec immutable 안전 |
+| postgres | postgrescluster | CreateOrUpdate | 표준 (모범) |
+
+### Trade-off 선택
+
+*추상화 일관성* (CreateOrUpdate everywhere) < *명시적 design 의도 보존*. 추상화
+통일 우선보다 *intentional design 보존* 이 *future contributor 의 random
+password 매번 변경 / Lease holder 덮어쓰기 등 잠재 bug 차단* 가치 ↑.
+
+### 다음 iteration 자연 진입점
+
+- it45+: mongodb webhook server 부트스트랩 (cert-manager) — 큰 작업
+- M4 / V3 / P4 큰 기능
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 43 — valkey CreateOrUpdate 마이그레이션 (mongodb it42 차용)
 
 | Iteration | Repo | Commit | 산출물 |
