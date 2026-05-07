@@ -711,10 +711,23 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 
 	// C37 (ADR-0013 helpers.go SetStatusCondition 활용): operational visibility
 	// 격차 해소 — valkey/postgres 의 풍부한 conditions 패턴 차용.
+	// evaluateShardedConditions pure function 추출로 isolated unit test 가능.
+	for _, c := range evaluateShardedConditions(mdbsh, ready) {
+		meta.SetStatusCondition(&mdbsh.Status.Conditions, c)
+	}
+	return updateStatusWithRetry(ctx, r.Client, mdbsh)
+}
+
+// evaluateShardedConditions — pure function. *side effect 0*. updateStatus 가
+// 이미 mdbsh.Status.{ConfigServer,Shards,Mongos} 갱신한 후 호출. C37 회귀 가드
+// (envtest 미도달 영역, isolated unit test 범위).
+func evaluateShardedConditions(mdbsh *mongodbv1alpha1.MongoDBSharded, ready bool) []metav1.Condition {
 	const (
 		reasonAvailable    = "Available"
 		reasonInitializing = "Initializing"
 	)
+	conds := make([]metav1.Condition, 0, 8)
+
 	readyStatus := metav1.ConditionFalse
 	readyReason := reasonInitializing
 	readyMessage := "MongoDBSharded cluster is initializing components"
@@ -723,7 +736,7 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 		readyReason = reasonAvailable
 		readyMessage = "All components (config server, shards, mongos) ready"
 	}
-	meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+	conds = append(conds, metav1.Condition{
 		Type:               "Ready",
 		Status:             readyStatus,
 		ObservedGeneration: mdbsh.Generation,
@@ -739,7 +752,7 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 		progressingReason = reasonInitializing
 		progressingMessage = "Cluster components transitioning to ready state"
 	}
-	meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+	conds = append(conds, metav1.Condition{
 		Type:               "Progressing",
 		Status:             progressingStatus,
 		ObservedGeneration: mdbsh.Generation,
@@ -747,8 +760,7 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 		Message:            progressingMessage,
 	})
 
-	// C37 2차 — component-level conditions (ConfigServerReady / ShardsReady /
-	// MongosReady). updateStatus 가 이미 ComponentStatus.Ready/Total 갱신.
+	// C37 2차 — component-level conditions.
 	cfgReady := mdbsh.Status.ConfigServer.Ready == mdbsh.Status.ConfigServer.Total && mdbsh.Status.ConfigServer.Total > 0
 	cfgStatus := metav1.ConditionFalse
 	cfgReason := reasonInitializing
@@ -756,7 +768,7 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 		cfgStatus = metav1.ConditionTrue
 		cfgReason = reasonAvailable
 	}
-	meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+	conds = append(conds, metav1.Condition{
 		Type:               "ConfigServerReady",
 		Status:             cfgStatus,
 		ObservedGeneration: mdbsh.Generation,
@@ -778,7 +790,7 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 		shardsStatus = metav1.ConditionTrue
 		shardsReason = reasonAvailable
 	}
-	meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+	conds = append(conds, metav1.Condition{
 		Type:               "ShardsReady",
 		Status:             shardsStatus,
 		ObservedGeneration: mdbsh.Generation,
@@ -793,7 +805,7 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 		mongosStatus = metav1.ConditionTrue
 		mongosReason = reasonAvailable
 	}
-	meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+	conds = append(conds, metav1.Condition{
 		Type:               "MongosReady",
 		Status:             mongosStatus,
 		ObservedGeneration: mdbsh.Generation,
@@ -802,14 +814,9 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 			mdbsh.Status.Mongos.Ready, mdbsh.Status.Mongos.Total),
 	})
 
-	// C37 3차 — 조건부 conditions (TLSReady / BackupReady). spec 활성 시만 보고.
-	// Disabled 영역의 condition 누적 회피 (operational visibility *signal-to-noise
-	// ratio* 보존).
+	// C37 3차 — 조건부 (TLSReady / BackupReady). spec 활성 시만.
 	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
-		// TLS 활성 시 cert-manager Certificate 상태 또는 customCert Secret 존재
-		// 검증은 별 도메인 작업 (controller 의 cert reconcile 영역). 본 condition
-		// 은 *spec 활성 신호* 로 minimum, 후속 cycle 에 cert ready 검증 확장.
-		meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+		conds = append(conds, metav1.Condition{
 			Type:               "TLSReady",
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: mdbsh.Generation,
@@ -818,7 +825,7 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 		})
 	}
 	if mdbsh.Spec.Backup != nil && mdbsh.Spec.Backup.Enabled {
-		meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+		conds = append(conds, metav1.Condition{
 			Type:               "BackupReady",
 			Status:             metav1.ConditionTrue,
 			ObservedGeneration: mdbsh.Generation,
@@ -828,7 +835,7 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 		})
 	}
 
-	return updateStatusWithRetry(ctx, r.Client, mdbsh)
+	return conds
 }
 
 func (r *MongoDBShardedReconciler) getComponentPhase(ready, total int32) string {
