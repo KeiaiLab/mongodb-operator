@@ -91,6 +91,9 @@ platform-data-valkey               Synced   Healthy
 | Pod uptime distribution | 35/54 pods uptime ≥ 4h (65%), 14 pods ≥ 14h. 최근 24h 내 큰 restart 사고 없음 |
 | Leader election leases | 3 operator (mongodb 30h / valkey 7h40m / postgres 7h20m) + cnpg (30h) + argos-postgres-shard-0-primary (7h9m) — pod restart 후 reconcile 정지 창 최소화 |
 | PV provisioning | 43 PVCs 662Gi total (~15Gi 평균), ceph-rbd RWO + Retain reclaim — DR-friendly distribution |
+| CSI driver stability | rook-ceph (cephfs + rbd) 13d age, ATTACHREQUIRED=true. PV provisioning + attach 안정 |
+| StatefulSet READY 일치 | 모든 STS (cfg 3/3, shard-0~4 3/3, postgres 1/1, clickhouse) desired = ready. scaling lag 0 |
+| Finalizer 보유 | mongodb (`mongodbsharded.keiailab.com/finalizer`), valkey (`cache.keiailab.io/valkeycluster-finalizer`) — graceful deletion + DR 보장 |
 
 ## Audit trail — 격차 발견 commit 매핑
 
