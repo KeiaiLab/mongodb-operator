@@ -4,6 +4,83 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 40 — valkey backup end-to-end 검증 + race-tolerant fix
+
+### 진척 (cluster e2e validation chain)
+
+| Iteration | Repo | Commit | 산출물 |
+|---|---|---|---|
+| **it40** | valkey-operator | `ac1421f` + chart 1.0.3 (`66936f6`) + image | controller race-tolerant fix (Job AlreadyExists 시 fall-through), helm upgrade valkey-operator-prod 1.0.2 → 1.0.3, end-to-end backup `phase=Completed` 라이브 검증. |
+
+### 발견 + fix chain
+
+**예상 검증** (it37 + it38 cumulative): PodSecurity + PVC 자동 생성 정상 동작 확인.
+
+**실제 발견** (새 incident):
+- Job `it40-e2e-backup-rdb-copy`: Complete 1/1 (20s) ← it37 fix 정상
+- PVC `it40-e2e-backup-backup`: Bound 1Gi (operator 자동 생성) ← it38 fix 정상
+- ValkeyBackup CR Phase=**Failed**, message=`jobs.batch "it40-e2e-backup-rdb-copy" already exists`
+
+**Root cause** (race condition):
+1. Reconcile #1: Get NotFound → Create 성공
+2. Reconcile #2 (cache stale): Get NotFound (old cache) → Create 시도 → AlreadyExists
+   → markFailed → Phase=Failed (cosmetic bug — 실제 backup 성공)
+
+**Fix** (`internal/controller/valkeybackup_controller.go:370` + `:514`):
+```go
+// 이전:
+if err := r.Create(...); err != nil {
+    return r.markFailed(...)
+}
+
+// 신규 (race-tolerant):
+if err := r.Create(...); err != nil && !errors.IsAlreadyExists(err) {
+    return r.markFailed(...)
+}
+```
+
+AlreadyExists 시 *fall-through* — 다음 reconcile cycle 의 Get success 분기로 자연
+진행 → Phase 정상 폴링 → Completed.
+
+### End-to-end 검증 (race-tolerant fix 후)
+
+```
+$ kubectl apply -f - <<...  # ValkeyBackup it40-verify2-backup, TargetPVC=nil
+$ sleep 60 && kubectl get valkeybackup it40-verify2-backup -n data \
+    -o jsonpath='phase={.status.phase} reason={.status.conditions[*].reason}'
+phase=Completed reason=Completed   ← 완전 정상
+```
+
+**3 fix 누적 검증 통과**:
+1. **it37** (a25b36a) — backup job rdb-copy 의 PodSecurity restricted invariant
+   (commons.RestrictedContainer 위임). admission 통과.
+2. **it38** (46d1732) — TargetPVC=nil 시 operator 자동 PVC 생성. Bound 1Gi.
+3. **it40** (ac1421f) — controller race-tolerant Job create. AlreadyExists fall-through.
+
+### 핵심 학습
+
+1. ***예상 검증* 이 *새 incident 발견*** 으로 이어짐 — *cumulative fix 의 통합 검증
+   가치*. 단일 fix 후에도 *end-to-end test* 시점 의 *전혀 다른 race condition*
+   발견 가능. ralph-loop 의 *작은 ship* 누적 패턴이 *예상치 못한 incident chain*
+   발견에 효과적.
+2. **Cosmetic bug 의 trap**: Job=Complete + PVC=Bound (실제 기능 성공) 이지만 CR
+   Phase=Failed — *user 가 reconcile 결과를 *Phase 만으로* 판단* 시 *false 신호*.
+   controller code 의 *race-tolerance* 가 *user trust* 의 핵심.
+3. **K8s controller-runtime cache stale 패턴**: `Get NotFound` 후 `Create
+   AlreadyExists` 가 *흔한 race* — 모든 controller code 에서 *IsAlreadyExists
+   guard* 가 표준. 본 turn 발견을 *3 operator 모두 audit* 가능 (다음 iteration).
+
+### 다음 iteration 자연 진입점
+
+- it41+: mongodb / postgres controller 의 *동일 race-tolerant audit* (Job Create
+  IsAlreadyExists guard 검증)
+- it42+: mongodb webhook server 부트스트랩 (cert-manager) — 큰 작업
+- M4 / V3 / P4 큰 기능
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 39 — cluster live-verified snapshot (RFC-0004 ssot-gap)
 
 argos cluster *완전 healthy* 상태. 본 snapshot 은 RFC-0004 §3 의 *클러스터
