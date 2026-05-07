@@ -20,14 +20,24 @@
 | **it46 step 8** | mongodb-operator | `eb2525b` | auth.adminCredentialsSecretRef.name non-empty (omitempty trap). I14 80→85%. |
 | **it46 step 9** | mongodb-operator | `e6a238b` | TLS / Backup omitempty trap audit + invariant 4건 (issuerRef.name / customCert.secretName / s3.bucket / s3.credentialsRef.name). I14 85→95%. |
 | **it46 step 10** | valkey-operator | `1d83880` | cross-cut audit fix — TLS CertManager 동일 omitempty trap (hasCertMgr 정의에 IssuerRef.Name 검증 추가). 양쪽 webhook 통일. |
+| **it46 step 11** | mongodb-operator | `7406f69` | ADR-0016 cross-cut audit pattern — 방법론 표준화 (체크리스트 + 자동화 후속 + alternatives 거절 사유). |
+| **it46 step 12** | valkey-operator | `33c7eab` | ADR-0016 첫 적용 — storage.size 1Gi cross-cut (mongodb it46 step 7 와 일치). |
+| **it46 step 13** | valkey-operator | `6b2dbf0` | users[].passwordSecretRef omitempty trap (cross-cut audit). |
+| **it47 step 1** | mongodb-operator | `fcc31e6` | envtest webhook suite + admission round-trip 3 specs. coverage 91.5% → 93.9% (Setup 0%→100%). |
+| **it47 step 2** | mongodb-operator | `98b79ce` | round-trip 시나리오 확장 (storage / TLS trap / backup trap) — 6 ginkgo. |
+| **it47 step 3** | mongodb-operator | `96b7adb` | Sharded round-trip 3건 (shards.count / membersPerShard / valid) — 9 ginkgo. coverage 95.1%. |
+| **it47 step 4** | valkey-operator | `b50fb85` + `5f3f91c` | Valkey/ValkeyCluster round-trip 6 ginkgo total + autoFailover dead-code 발견. |
+| **it47 step 5** | mongodb-operator | `500f279` | ADR-0017 — CRD default vs webhook invariant 충돌 패턴 (envtest 가 unreachable 발견). Type A/B/C 분류. |
 
 ### 검증 누적
 
 - `go test ./... -count=1`: 7/7 패키지 PASS (envtest controller suite 18s 포함).
 - `bin/golangci-lint run --timeout=10m ./...`: 0 issues.
 - `helm lint --set webhook.enabled=true`: PASS.
-- webhook 패키지 unit coverage: 84.8% → **91.5%** (it46 누적).
-- mongodb webhook 패키지 테스트: 22 → **45 PASS**.
+- webhook 패키지 coverage: 84.8% → 91.5% (it46) → **95.1%** (it47, envtest 통합).
+- mongodb webhook 패키지 테스트: 22 unit + **9 ginkgo envtest** PASS.
+- valkey webhook 패키지 테스트: existing unit + **6 ginkgo envtest** PASS.
+- ADR 5건 (0013-0017) — webhook 도입 cycle 의 결정 기록.
 
 ### Cross-cut audit 결과 (it46 step 10)
 
