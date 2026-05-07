@@ -149,6 +149,46 @@ platform-data-valkey               Synced   Healthy
 본 KPI baseline 은 *progress measurement* 의 SSoT. 후속 cycle 마다 본 표
 갱신 (해소 시 ✅ 표시).
 
+## 갱신 정책 (audit 신선도)
+
+본 audit 의 *stale 위험* 차단 — 운영 환경 변화 시 audit 재실행 의무.
+
+### Mandatory trigger (즉시 갱신)
+
+| Trigger | 영역 |
+|---|---|
+| 새 ArgoCD application 추가/삭제 | live verification + workload inventory |
+| ns 설정 변경 (PSS / Quota / LimitRange / labels) | 해당 영역 격차 + clean |
+| 3 operator chart version bump | release readiness 표 + KPI |
+| 격차 해소 commit (예: C24 마이그레이션 완료) | 격차 표 → 완료 격차 + audit trail |
+| 새 invariant 추가 (webhook 영역) | F23 후속 + KPI |
+| ADR 신규 또는 Errata | ADR cross-reference 표 |
+
+### Periodic trigger (정기 갱신)
+
+| Trigger | 영역 | 주기 |
+|---|---|---|
+| live verification 재실행 (`<!-- live-verified: YYYY-MM-DD -->` 마커) | kubectl 4-step + workload inventory | 7일 |
+| KPI 측정 (errors-free 기간 카운터, ArgoCD coverage 비율) | KPI 표 + clean ratio | 7일 |
+| 격차 발견 retroactive sweep (이전 cycle audit 결과 재검증) | 모든 표 | 30일 |
+
+### Skip 가능 (의도된 미갱신)
+
+| 시점 | 사유 |
+|---|---|
+| 코드 영역 commit (operator 내부 변경) | cluster-side state 영향 0 |
+| 다른 ns 변경 (data ns 외) | 본 audit 의 scope 밖 |
+| 상용제품 수준 도달 후 | KPI 충족 이후 *유지* mode (별 정책) |
+
+### 자동화 후속 (ADR-0017 governance-report 메트릭 candidate)
+
+- **stale ratio**: `(today - live-verified date) / 7` — 1.0 초과 시 적색.
+- **clean ratio 변화**: 매 cycle 의 ratio delta 추적.
+- **격차 신규/해소 cycle 분포**: 30일 audit 평균.
+
+본 자동화는 별 cycle 의 `scripts/audit-cluster-state.sh` 작성 영역. 수동
+갱신이 baseline.
+
 ## DR Snapshots (임시 보관)
 
 git 추적 0 인 CR spec 의 disaster recovery snapshot:
