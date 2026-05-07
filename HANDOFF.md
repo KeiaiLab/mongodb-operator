@@ -4,6 +4,89 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 25 — valkey NetworkPolicy → commons v0.3.0 위임
+
+### 진척
+
+| Iteration | Repo | Commit | 산출물 |
+|---|---|---|---|
+| **it25** | valkey-operator | `97162b5` | BuildNetworkPolicy → commons.New + WithLabels + WithSelfIngress + WithIngressFromPeers 위임. portRef orphan 제거. test 4 sub-test semantic equivalence 재작성. |
+
+### 변경 details
+
+**internal/resources/networkpolicy.go** (이전 65줄 → 신규 47줄):
+- 인라인 networkingv1.NetworkPolicy 빌드 → commons functional options 호출
+- 옵션 매핑:
+  * WithLabels(CommonLabels(crName, "valkey"))
+  * WithSelfIngress([PortClient, ...optClusterBus])
+  * WithIngressFromPeers(extraPeers, ports) ← spec.AdditionalIngressFrom
+- portRef helper 제거 (commons 내부에서 처리)
+
+**internal/resources/builders_basic_test.go** TestBuildNetworkPolicy 재작성:
+- 이전: `np.Spec.Ingress[0].From` / `.Ports` 직접 비교 (한 rule 가정)
+- 신규: `allFromPeers(np)` + `allPorts(np)` 합산 helper — 별-rule per source 호환
+- 4 sub-test 모두 PASS — semantic equivalence 검증
+
+**go.mod**: operator-commons v0.2.1 → v0.3.0
+
+### Semantic equivalence 입증
+
+K8s NetworkPolicy 의 ingress rules 는 *OR 결합* — 한 rule 에 모든 from peers
+합치든 별 rules 로 나누든 *허용 트래픽 동등*:
+
+| 패턴 | rules 개수 | 효과 |
+|---|---|---|
+| 이전 (인라인): `[{From: [self, extra1, extra2], Ports: P}]` | 1 | self ∨ extra1 ∨ extra2 → ports P |
+| 신규 (commons): `[{From: [self], Ports: P}, {From: [extra1, extra2], Ports: P}]` | 2 | (self → P) ∨ (extra* → P) === self ∨ extra1 ∨ extra2 → P |
+
+본 동등성을 *unit test 가 영구 가드* (from peers 합산 + port set 비교).
+
+### 검증 인용
+
+```
+$ go test ./internal/resources/ -run TestBuildNetworkPolicy -v
+--- PASS: TestBuildNetworkPolicy (4/4 sub-test)
+    --- PASS: standalone_client_port_only
+    --- PASS: cluster_mode_adds_bus_port
+    --- PASS: self-peer_always_present
+    --- PASS: additional_ingress_merged_(semantic_—_rule_split_tolerated)
+
+$ go test ./... -count=1
+(전 패키지 PASS — controller envtest 17s + webhook 3.5s 포함)
+
+pre-push hooks: full-lint / gitleaks / helm-lint / helm-template / unit-test
+(20.41s) / go-mod-tidy 모두 PASS
+```
+
+### 다음 iteration 자연 진입점
+
+- **iteration 26**: mongodb NetworkPolicy 빌더 위임 (sharded cfg/shard/mongos
+  multi-component — 더 복잡한 구조).
+- **iteration 27 (v0.4.0)**: pkg/webhook 패키지 — mongodb iteration 9 의
+  IsSupported... 패턴 통합. valkey 가 첫 사용자 (이미 webhook validation 보유).
+- **iteration 16/M4 mongodb**: PITR / online shard / LDAP — 큰 기능 구현.
+- **iteration 21/P4 postgres**: G1-G2 자체 SQL — bitnami 능가 영역.
+
+### 누적 진척
+
+```
+operator-commons:           v0.3.0 (5 패키지 100% line coverage)
+3 operator commons 채택:    mongodb (security/version)
+                            valkey (security/version/monitoring/networkpolicy)
+                            postgres (security)
+─────────────────────────────────
+16/12+ iteration (~99%, mongodb 의 monitoring/networkpolicy 위임 잔여 +
+v0.4.0 webhook + M4/V3/P4 큰 기능)
+```
+
+본 turn 핵심 가치 — **valkey 가 commons 5 패키지 중 4 채택**. networkpolicy 위임이
+*semantic equivalence 패턴 입증* — K8s OR 규약 활용. 향후 mongodb / postgres 가
+동일 패턴 차용 시 *struct 비교 함정* 회피.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 24 — operator-commons v0.3.0 (networkpolicy 패키지)
 
 ### 진척
