@@ -39,9 +39,10 @@ else
 fi
 
 section "ArgoCD GitOps coverage (KPI)"
-total_apps=$(kubectl get application -n argocd 2>/dev/null | grep -c "^platform-data-" || true)
-synced_apps=$(kubectl get application -n argocd 2>/dev/null | awk '/^platform-data-/ && $2=="Synced" && $3=="Healthy"' | wc -l | tr -d ' ')
-echo "  platform-data-* apps: $synced_apps/$total_apps Synced+Healthy"
+# argos-platform-data umbrella + platform-data-* sub apps 모두 카운트.
+total_apps=$(kubectl get application -n argocd 2>/dev/null | grep -cE "^(platform-data-|argos-platform-data)" || true)
+synced_apps=$(kubectl get application -n argocd 2>/dev/null | awk '/^(platform-data-|argos-platform-data)/ && $2=="Synced" && $3=="Healthy"' | wc -l | tr -d ' ')
+echo "  data plane apps (umbrella + sub): $synced_apps/$total_apps Synced+Healthy"
 if [[ "$synced_apps" -eq "$total_apps" ]] && [[ "$total_apps" -gt 0 ]]; then
     pass "ArgoCD coverage 100%"
 else

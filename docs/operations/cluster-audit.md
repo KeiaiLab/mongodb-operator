@@ -119,7 +119,7 @@ platform-data-valkey               Synced   Healthy
 
 | KPI | 현재 | 목표 | 격차 ID |
 |---|---|---|---|
-| ArgoCD GitOps coverage | 8/9 apps (89%) | 9/9 (100%) | C24 |
+| ArgoCD GitOps coverage | 9/9 apps (100%, umbrella + 8 sub) | 9/9 (100%) ✅ | C24 (별 격차 — keiailab-valkey-prod helm-direct, ArgoCD app 자체 부재) |
 | Disaster recovery 가능성 | 2/3 operator | 3/3 | C24 (valkey CR git 추적 0) |
 | Backup CronJob 활성 | 0/3 operator | 3/3 (mongodb pitr + postgres + valkey RDB) | C34 |
 | TLS in transit | 0/3 operator | 3/3 | C32 |
