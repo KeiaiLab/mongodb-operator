@@ -13,13 +13,44 @@
 | **it46 step 1** | mongodb-operator | `e81bb13` | CustomValidator entry-point 가드 — type-assertion failure / happy / reject 10 신규 test. coverage 67.4%→84.8%. |
 | **it46 step 2** | mongodb-operator | `7e9e0da` | webhook lint clean — copyloopvar / gofmt / unused 5건 → 0 issues. |
 | **it46 step 3** | mongodb-operator | `fa44f49` | api/v1alpha1 copyloopvar 3건 (기존 위반) — 전체 repo 0 issues. |
+| **it46 step 4** | mongodb-operator | `8ac15ba` | NOTES.txt webhook 활성/비활성 가이드 (helm install/upgrade UX). |
+| **it46 step 5** | mongodb-operator | `f234517` | TASKS.md it46 정합 (I14 60% / F15 100% / I16 MonitoringSpec orphan 발견). |
+| **it46 step 6** | mongodb-operator | `b564fe7` | apiError group string 하드코딩 → GroupVersion.Group 참조 (valkey 패턴 정합). |
+| **it46 step 7** | mongodb-operator | `8b2414f` | storage.size >= 1Gi invariant (3 곳: MongoDB / Sharded.ConfigServer / Sharded.Shards). I14 60→80%. |
+| **it46 step 8** | mongodb-operator | `eb2525b` | auth.adminCredentialsSecretRef.name non-empty (omitempty trap). I14 80→85%. |
+| **it46 step 9** | mongodb-operator | `e6a238b` | TLS / Backup omitempty trap audit + invariant 4건 (issuerRef.name / customCert.secretName / s3.bucket / s3.credentialsRef.name). I14 85→95%. |
+| **it46 step 10** | valkey-operator | `1d83880` | cross-cut audit fix — TLS CertManager 동일 omitempty trap (hasCertMgr 정의에 IssuerRef.Name 검증 추가). 양쪽 webhook 통일. |
 
 ### 검증 누적
 
 - `go test ./... -count=1`: 7/7 패키지 PASS (envtest controller suite 18s 포함).
 - `bin/golangci-lint run --timeout=10m ./...`: 0 issues.
 - `helm lint --set webhook.enabled=true`: PASS.
-- webhook 패키지 unit coverage: 84.8% (잔여 = SetupXxxWithManager — envtest 의존 영역).
+- webhook 패키지 unit coverage: 84.8% → **91.5%** (it46 누적).
+- mongodb webhook 패키지 테스트: 22 → **45 PASS**.
+
+### Cross-cut audit 결과 (it46 step 10)
+
+| operator | TLS omitempty trap | Backup omitempty trap | 비고 |
+|---|---|---|---|
+| mongodb | ✅ 가드 (4 invariant) | ✅ 가드 (2 invariant) | it46 step 9 |
+| valkey | ✅ 가드 (CertManager IssuerRef) | N/A (Backup 별도 CR) | it46 step 10 |
+| postgres | N/A (TLS 미구현) | N/A (Backup 미구현) | alpha 단계, 추후 도입 시 동일 audit |
+
+operator-commons 으로 helper 승격 candidate (별 cycle, v0.5.0 plan).
+
+### Webhook invariant 매트릭스 (mongodb)
+
+1. version.version 화이트리스트 (8.0/8.2/8.3)
+2. members 1 또는 odd >= 3 (split-brain 방지)
+3. shards.count <= 64
+4. shards.membersPerShard 1 또는 odd >= 3
+5. storage.size >= 1Gi (3 곳)
+6. auth.adminCredentialsSecretRef.name non-empty
+7. tls.certManager.issuerRef.name non-empty (활성 시)
+8. tls.customCert.secretName non-empty (활성 시)
+9. backup.storage.s3.bucket non-empty (Enabled+s3 시)
+10. backup.storage.s3.credentialsRef.name non-empty (Enabled+s3 시)
 
 ### 다음 단계 (사용자 명시 승인 필요 — 외부 effect)
 
