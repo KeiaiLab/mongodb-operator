@@ -106,6 +106,10 @@ platform-data-valkey               Synced   Healthy
 | Admission denial events | cluster-wide 1h FailedCreate 0건 — webhook + CRD validation 통과율 100% |
 | Pod failure modes | data ns Pending / CrashLoopBackOff 0건 — 모든 pods Running |
 | PVC claim retention policy (STS) | argos-mongo-cfg / shard STS 의 `whenDeleted=Retain, whenScaled=Retain` — STS 삭제 / scale-down 시 PVC 보존, *데이터 손실 방지* |
+| Image registry diversity | ghcr.io (8) + clickhouse / altinity / natsio / dockerhub mixed — single registry SPOF 부재 |
+| SA permission 직접 검증 | `kubectl auth can-i --as=...mongodb-operator '*' '*'` = no, `delete clusterrole` = no — least privilege 직접 입증 (RBAC wildcards 부재 + 직접 시뮬레이션) |
+| ArgoCD tracking-id | `argocd.argoproj.io/tracking-id` annotation 보유 — GitOps source 명시화 (mongodb-operator deploy) |
+| Deployment revision history | `deployment.kubernetes.io/revision: 7` — 7 revisions 누적, rollout history 추적 가능 |
 
 ## Audit trail — 격차 발견 commit 매핑
 
