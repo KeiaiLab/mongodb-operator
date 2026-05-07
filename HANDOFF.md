@@ -4,6 +4,102 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 26 — mongodb NetworkPolicy → commons v0.3.0 위임
+
+### 진척
+
+| Iteration | Repo | Commit | 산출물 |
+|---|---|---|---|
+| **it26** | mongodb-operator | `ca0ec27` | BuildMongoDBNetworkPolicy + buildShardedComponentNetworkPolicy 모두 commons.New 위임. convertAdditionalPeers helper 추가. go.mod commons v0.1.1 → v0.3.0. |
+
+### 핵심 발견
+
+**mongodb 의 기존 NetworkPolicy 빌더가 *별-rule per source* 패턴** 이었음 — valkey
+와 차이. 이로 인해 commons 위임 후 *기존 struct 비교 test 가 그대로 PASS* — valkey
+위임 (it25) 시 필요했던 *allFromPeers / allPorts 합산 helper* 가 mongodb 에는 불필요.
+
+| 패턴 | mongodb (이전) | valkey (이전) | commons (현재) |
+|---|---|---|---|
+| Self-peer rule | rule 1: [self] | rule 1: [self, ...extras] | rule 1: [self] (WithSelfIngress) |
+| Extra peer | rule N: [extra-N] | (rule 1 에 합침) | rule N: [extras...] (WithIngressFromPeers) |
+
+mongodb 의 기존 패턴 ≈ commons 패턴 → struct 비교 test 자연 호환.
+valkey 의 기존 패턴 ≠ commons 패턴 → test 재작성 필요했음.
+
+이는 *코드베이스 별 기존 패턴 분석의 가치* — 위임 작업의 test 영향 사전 예측.
+
+### 변경 details
+
+**internal/resources/builder.go**:
+- `BuildMongoDBNetworkPolicy` (ReplicaSet, single component): 인라인 → commons.New
+  + WithLabels + WithSelfIngress + WithIngressFromPeers (extra)
+- `buildShardedComponentNetworkPolicy` (sharded cfg/shard/mongos): 인라인 →
+  commons.New + WithLabels + WithIngressFromPeers (cluster-wide peer + extra).
+  *cluster-wide self-peer* (instance + managed-by 만 매칭, component 무관) 패턴은
+  WithIngressFromPeers 의 단일 Peer 로 표현 (WithSelfIngress 가 podSelector 사용
+  하므로 cluster-wide selector 와 부적합).
+- `convertAdditionalPeers` helper 추가 — `mongodbv1alpha1.NetworkPolicyPeer` →
+  `commonsnp.Peer` 변환. PodSelector + NamespaceSelector 둘 다 nil 인 entry 사전
+  skip (기존 동작 보존).
+
+### 검증 인용
+
+```
+$ go test ./internal/resources/ -run "TestBuildMongoDBNetworkPolicy|TestBuildShardedNetworkPolicies" -v
+--- PASS: TestBuildMongoDBNetworkPolicy_NilWhenDisabled
+--- PASS: TestBuildMongoDBNetworkPolicy_DenyByDefaultPlusIntraCluster
+--- PASS: TestBuildMongoDBNetworkPolicy_AdditionalIngressFromAppendsRules
+--- PASS: TestBuildShardedNetworkPolicies_PerComponentPort
+(4/4 sub-test PASS — 기존 struct 비교 test 도 통과)
+
+$ go test ./... -count=1
+ok  github.com/keiailab/mongodb-operator/internal/controller  19.271s
+ok  github.com/keiailab/mongodb-operator/internal/resources    1.701s
+(전 패키지 PASS)
+
+LoC: -78 / +45 — 인라인 builder 제거 효과
+```
+
+### operator-commons 채택 매트릭스 (현재)
+
+| Operator | security | version | labels | monitoring | networkpolicy |
+|---|---|---|---|---|---|
+| mongodb | ✅ (it8) | ✅ (it9) | ⏳ | ⏳ | **✅ (it26)** |
+| valkey | ✅ (it8) | ✅ (it8) | ⏳ | ✅ (it23) | ✅ (it25) |
+| postgres | ✅ (it8) | ⏳ | ⏳ | ⏳ | ⏳ |
+
+**채택률**: valkey 4/5 (80%) → mongodb 3/5 (60%) → postgres 1/5 (20%).
+
+### 다음 iteration 자연 진입점
+
+- **iteration 27 (v0.4.0)**: pkg/webhook 패키지 신규 — mongodb iteration 9 의
+  IsSupportedMongoDBVersion + valkey 의 webhook validation 패턴 통합.
+- **iteration 28**: postgres operator-commons 채택 deepening (version 화이트리스트
+  → commons.MustList 위임).
+- **iteration 16/M4 mongodb**: PITR / online shard rebalance / LDAP — 큰 기능.
+- **iteration 21/P4 postgres**: G1-G2 자체 SQL — bitnami 능가.
+
+### 누적 진척
+
+```
+operator-commons v0.3.0 (5 패키지 100% line coverage)
+3 operator commons 채택률:
+  mongodb 3/5 (60%) — security/version/networkpolicy
+  valkey  4/5 (80%) — security/version/monitoring/networkpolicy
+  postgres 1/5 (20%) — security
+─────────────────────────────────
+17/12+ iteration (~99%, mongodb monitoring 위임 + postgres deepening +
+v0.4.0 webhook + M4/V3/P4 큰 기능 잔여)
+```
+
+본 turn 핵심 가치 — **3 operator 모두 commons networkpolicy 적용 가능 영역
+완료** (postgres 는 NetworkPolicy 빌더 부재). mongodb / valkey 의 NetworkPolicy
+drift 차단 + commons 100% line coverage 단위 test 가 영구 가드.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 25 — valkey NetworkPolicy → commons v0.3.0 위임
 
 ### 진척
