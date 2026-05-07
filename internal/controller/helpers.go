@@ -22,6 +22,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -119,14 +120,15 @@ func applyErrorCondition(
 	}
 
 	obj.SetPhase("Failed")
-	conds := obj.GetConditions()
-	*conds = filterConditionsByType(*conds, conditionTypeReconcileError)
-	*conds = append(*conds, metav1.Condition{
-		Type:               conditionTypeReconcileError,
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "ReconcileFailed",
-		Message:            fmt.Sprintf("Failed to reconcile %s- %v", component, reconcileErr),
+	// iteration 33 (ADR-0013): K8s convention 정합 — upstream meta.SetStatusCondition
+	// 이 LastTransitionTime 을 *Status 변경 시만* 갱신. 이전 인라인 filter+append +
+	// LastTransitionTime=Now 패턴은 *매 reconcile cycle 마다 false transition* 유발 —
+	// Prometheus / Grafana 의 condition_age 메트릭 부정확. upstream 위임으로 정합.
+	meta.SetStatusCondition(obj.GetConditions(), metav1.Condition{
+		Type:    conditionTypeReconcileError,
+		Status:  metav1.ConditionTrue,
+		Reason:  "ReconcileFailed",
+		Message: fmt.Sprintf("Failed to reconcile %s- %v", component, reconcileErr),
 	})
 
 	if statusErr := updateStatusWithRetry(ctx, c, obj); statusErr != nil {
@@ -151,13 +153,15 @@ func clearReconcileErrorCondition(conds []metav1.Condition, generation int64) []
 	if !found {
 		return conds
 	}
-	conds = filterConditionsByType(conds, conditionTypeReconcileError)
-	return append(conds, metav1.Condition{
+	// iteration 33 (ADR-0013): upstream meta.SetStatusCondition 위임. 기존
+	// True → False transition 시 LastTransitionTime 정확 갱신 (K8s convention).
+	// upstream 은 *Status 변경 감지 시만* 갱신하고 미변경 시 보존.
+	meta.SetStatusCondition(&conds, metav1.Condition{
 		Type:               conditionTypeReconcileError,
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: generation,
-		LastTransitionTime: metav1.Now(),
 		Reason:             "ReconcileSucceeded",
 		Message:            "Last reconcile succeeded",
 	})
+	return conds
 }
