@@ -13,6 +13,12 @@ Welcome to the MongoDB Operator documentation. This guide helps you deploy, mana
 
 ### Advanced Topics
 
+- **[Admission Webhook](advanced/webhook.md)** - Validating webhook for spec invariants
+  - Quick start with cert-manager
+  - 13 validation invariants matrix (MongoDB + MongoDBSharded)
+  - failurePolicy=Fail trade-off (ADR-0015)
+  - Troubleshooting + Type A' unreachable patterns
+
 - **[TLS Configuration](advanced/tls.md)** - Enable TLS encryption with cert-manager
   - cert-manager setup and certificate issuer configuration
   - TLS enabling in MongoDB CRD
