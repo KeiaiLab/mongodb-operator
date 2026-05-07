@@ -801,6 +801,32 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 			mdbsh.Status.Mongos.Ready, mdbsh.Status.Mongos.Total),
 	})
 
+	// C37 3차 — 조건부 conditions (TLSReady / BackupReady). spec 활성 시만 보고.
+	// Disabled 영역의 condition 누적 회피 (operational visibility *signal-to-noise
+	// ratio* 보존).
+	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
+		// TLS 활성 시 cert-manager Certificate 상태 또는 customCert Secret 존재
+		// 검증은 별 도메인 작업 (controller 의 cert reconcile 영역). 본 condition
+		// 은 *spec 활성 신호* 로 minimum, 후속 cycle 에 cert ready 검증 확장.
+		meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+			Type:               "TLSReady",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: mdbsh.Generation,
+			Reason:             "TLSEnabled",
+			Message:            "TLS spec enabled (cert validation is operator-internal)",
+		})
+	}
+	if mdbsh.Spec.Backup != nil && mdbsh.Spec.Backup.Enabled {
+		meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+			Type:               "BackupReady",
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: mdbsh.Generation,
+			Reason:             "BackupEnabled",
+			Message: fmt.Sprintf("Backup enabled (schedule: %q, type: %s)",
+				mdbsh.Spec.Backup.Schedule, mdbsh.Spec.Backup.Storage.Type),
+		})
+	}
+
 	return updateStatusWithRetry(ctx, r.Client, mdbsh)
 }
 
