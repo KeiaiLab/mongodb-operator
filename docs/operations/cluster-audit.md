@@ -53,6 +53,8 @@ platform-data-valkey               Synced   Healthy
 | **I28** | MonitoringSpec orphan Phase 2 trigger — C25 + 30일 사용 측정 | 차단 (C25) | I26 후속 결정 | C25 해소 후 trigger | Low (차단) |
 | **F23** | webhook server 도입 (mongodb 11 + valkey 4 + postgres 1 invariant + 18 envtest specs) | **완료 100%** | spec 검증 dual-layer | — (코드 only) | — |
 | **C29** | dead RBAC — `valkey-operator` ClusterRole/Binding (helm chart 0.1.0-alpha.2 잔존) | 발견 | cluster pollution, 보안 risk 0 (SA 부재로 권한 행사 불가) | `kubectl delete clusterrole/clusterrolebinding valkey-operator valkey-operator-metrics-auth` | Low |
+| **C30** | NetworkPolicy 비대칭 — mongodb/valkey 인스턴스에 NP 부재 (operator 코드 보유 but spec opt-in 미설정) | 발견 | zero-trust 미충족, lateral movement 위험 (security defense in depth 영역) | argos-mongo + keiailab-valkey-prod CR 에 `spec.networkPolicy.enabled=true` 설정 (외부 effect, GitOps 통해) | Medium |
+| **C31** | data ns ResourceQuota / LimitRange 0건 — runaway resource consumption 잠재 | 발견 | 단일 워크로드 OOM cluster-wide 영향 가능 | `data` ns 에 ResourceQuota + LimitRange 추가 (argos-platform-data 의 ns manifest, 외부 effect) | Medium |
 
 ## DR Snapshots (임시 보관)
 
