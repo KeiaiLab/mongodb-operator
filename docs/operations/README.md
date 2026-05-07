@@ -26,11 +26,19 @@
 - **[../advanced/webhook.md](../advanced/webhook.md)** — admission webhook
   사용자 가이드 (13 invariants 매트릭스 + failurePolicy + troubleshooting).
 
+## Quick run
+
+```bash
+./scripts/audit-cluster-state.sh
+```
+
+5 KPI 자동 측정 — 운영 시작/종료 시 1회 실행 권장.
+
 ## 빠른 입구
 
 | 사용자 의도 | 시작점 |
 |---|---|
-| "현재 cluster 상태 보고 싶다" | [cluster-audit.md](cluster-audit.md) (live verification + 워크로드 인벤토리) |
+| "현재 cluster 상태 보고 싶다" | `./scripts/audit-cluster-state.sh` (자동) 또는 [cluster-audit.md](cluster-audit.md) (정적 정보) |
 | "상용제품 수준 도달까지 뭐 남았나?" | [cluster-audit.md](cluster-audit.md) 의 격차 표 → [production-grade-sprint.md](production-grade-sprint.md) |
 | "지금 즉시 quick win 1개 진행" | [production-grade-sprint.md#phase-a-quick-wins](production-grade-sprint.md#phase-a--quick-wins-인프라-즉시-활용) (A1 dead RBAC cleanup, 5분) |
 | "DR 시 valkey CR 복원" | [cluster-snapshots/README.md](cluster-snapshots/README.md) |

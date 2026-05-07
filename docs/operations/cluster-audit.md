@@ -1,5 +1,11 @@
 # Cluster Ops Audit — argos data plane (2026-05-07)
 
+> **Quick run**:
+> ```bash
+> ./scripts/audit-cluster-state.sh
+> ```
+> 5 영역 자동 측정 (kube-context / ns / ArgoCD coverage / operator errors / events / chart version / stale ratio). exit 0 = PASS / 1 = FAIL.
+
 본 문서는 argos 클러스터의 data plane (data ns) 운영 상태 + 상용제품 수준
 도달 격차 audit 결과. cluster-ops mode iteration (it45-47 cycle) 누적.
 
