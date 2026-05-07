@@ -4,6 +4,72 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 22 — operator-commons v0.2.0 (labels + monitoring)
+
+### 진척
+
+| Iteration | Repo | Commit / Tag | 산출물 |
+|---|---|---|---|
+| **it22** | operator-commons | `3c265aa` + tag `v0.2.0` | pkg/labels (Set/All/Selector) + pkg/monitoring (ServiceMonitor unstructured builder). 100% line coverage. README 갱신. |
+
+### 핵심 발견
+
+1. **iteration 8 ship-5 잔여 4 패키지** 중 *실 사용처가 가장 가까운* 2 패키지만
+   본 iteration. networkpolicy / webhook 은 v0.3.0+ 으로 분리 — *over-
+   engineering 회피*. §2 Simplicity 정합.
+2. **monitoring 패키지 사용처 검증**: chart template 차원의 ServiceMonitor 는
+   YAML helm template — commons Go runtime builder 직접 위임 불가. 진정한
+   사용처는 *operator runtime 의 reconciler 가 CR 마다 ServiceMonitor 동적
+   생성* 시점. 향후 reconciler refactoring 영역.
+3. **labels.Set 의 Selector() 구분**: k8s 의 *immutable selector field* 회피 —
+   version 은 metadata.labels 에는 포함하되 selector.matchLabels 에는 제외.
+   rolling update 시 selector 변경 차단되는 invariant 보존.
+
+### 검증 인용
+
+```
+$ go test ./...
+ok  github.com/keiailab/operator-commons/pkg/labels      0.469s  100.0%
+ok  github.com/keiailab/operator-commons/pkg/monitoring  0.764s  100.0%
+ok  github.com/keiailab/operator-commons/pkg/security    1.305s  100.0%
+ok  github.com/keiailab/operator-commons/pkg/version     1.770s  100.0%
+total                                                            100.0%
+
+$ git ls-remote https://github.com/keiailab/operator-commons refs/tags/v0.2.0
+3c265aa...  refs/tags/v0.2.0
+```
+
+### 다음 iteration 자연 진입점
+
+- **operator runtime 의 ServiceMonitor 통합**: 3 operator 의 reconciler 가
+  CR.spec.monitoring 옵션 적용 시 commons.NewServiceMonitor 위임. 현재는
+  각자 인라인 구현. iteration 23+ 후보.
+- **iteration 16 (Phase 1 M4)**: mongodb operator-grade — PITR / online shard
+  rebalance / LDAP. *기능 구현 동반* (큰 작업).
+- **iteration 21 (Phase 3 P4)**: postgres G1-G2 자체 SQL — RFC 0001+ 자체
+  분산 SQL layer (bitnami 능가, 매우 큰 작업).
+- **iteration 24+ (V3 valkey)**: ROADMAP 미체크 항목 (Migration runbook /
+  OpenTelemetry trace propagation / Image SBOM).
+
+### 누적 진척
+
+```
+Phase 0 (it 8):              ✅ DONE — operator-commons + 3 cross-cut
+operator-commons v0.2.0:     ✅ DONE — labels + monitoring (it 22)
+Phase 1 mongodb (it 9-15):   ✅ M1+M2+M3 DONE
+Phase 2 valkey (it 17-18):   ✅ V1+V2 DONE
+Phase 3 postgres (it 19-20): ✅ P2+P3 DONE
+─────────────────────────────────
+13/12+ iteration (~90%, M4/V3/P4 + monitoring 적용 잔여 — 모두 우위 강화 영역)
+```
+
+**Bitnami parity 100% 완성 + operator-commons v0.2.0 도달**. 잔여는 모두
+*bitnami 능가 영역* + *commons 적용 deepening*.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 18+20 — multi-version e2e 회귀 가드 (valkey V2 + postgres P3)
 
 ### 진척
