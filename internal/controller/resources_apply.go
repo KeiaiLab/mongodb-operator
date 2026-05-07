@@ -29,6 +29,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+const deploymentRevisionAnnotation = "deployment.kubernetes.io/revision"
+
 // 본 파일은 controller-runtime의 controllerutil.CreateOrUpdate를 도메인 타입별
 // 로 감싸는 helper다. 자체 createOrUpdate(DeepCopy → SetResourceVersion → Update)
 // 헬퍼는 호출자가 전달한 desired 객체의 spec을 그대로 보존하면서 update해야 했지만,
@@ -187,7 +189,7 @@ func applyDeployment(ctx context.Context, c client.Client, scheme *runtime.Schem
 	}
 	_, err := controllerutil.CreateOrUpdate(ctx, c, target, func() error {
 		target.Labels = desired.Labels
-		target.Annotations = desired.Annotations
+		target.Annotations = deploymentAnnotationsWithControllerRevision(desired.Annotations, target.Annotations)
 		if target.CreationTimestamp.IsZero() {
 			target.Spec = desired.Spec
 		} else {
@@ -210,6 +212,22 @@ func applyDeployment(ctx context.Context, c client.Client, scheme *runtime.Schem
 		return controllerutil.SetControllerReference(owner, target, scheme)
 	})
 	return err
+}
+
+func deploymentAnnotationsWithControllerRevision(desired, current map[string]string) map[string]string {
+	if len(desired) == 0 && current[deploymentRevisionAnnotation] == "" {
+		return desired
+	}
+	out := make(map[string]string, len(desired)+1)
+	for key, value := range desired {
+		out[key] = value
+	}
+	if _, ok := out[deploymentRevisionAnnotation]; !ok {
+		if revision := current[deploymentRevisionAnnotation]; revision != "" {
+			out[deploymentRevisionAnnotation] = revision
+		}
+	}
+	return out
 }
 
 func deploymentTemplateWithServerDefaults(desired, current corev1.PodTemplateSpec) corev1.PodTemplateSpec {

@@ -252,6 +252,53 @@ func TestApplyDeployment_IdempotentWithServerDefaults(t *testing.T) {
 	}
 }
 
+// TestApplyDeployment_PreservesDeploymentControllerRevisionAnnotation 은 live 에서
+// 확인한 v1.4.10 미해결 회귀 테스트다. Deployment controller 가 붙이는
+// deployment.kubernetes.io/revision annotation 을 operator 가 지우면 controller 가
+// 즉시 다시 붙이며 metadata.generation 이 계속 증가한다.
+func TestApplyDeployment_PreservesDeploymentControllerRevisionAnnotation(t *testing.T) {
+	s := newApplyScheme(t)
+	owner := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "mongos", Namespace: "ns"},
+	}
+	existing := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "mongos",
+			Namespace:         "ns",
+			CreationTimestamp: metav1.Now(),
+			Annotations: map[string]string{
+				"deployment.kubernetes.io/revision": "1",
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr32(3),
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "mongos"}},
+			Template: podTemplateSpec("mongos"),
+		},
+	}
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(owner, existing).Build()
+
+	desired := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "mongos", Namespace: "ns"},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr32(3),
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "mongos"}},
+			Template: podTemplateSpec("mongos"),
+		},
+	}
+
+	if err := applyDeployment(context.Background(), cl, s, owner, desired, false); err != nil {
+		t.Fatalf("applyDeployment: %v", err)
+	}
+	got := &appsv1.Deployment{}
+	if err := cl.Get(context.Background(), client.ObjectKey{Name: "mongos", Namespace: "ns"}, got); err != nil {
+		t.Fatalf("get deploy: %v", err)
+	}
+	if got.Annotations["deployment.kubernetes.io/revision"] != "1" {
+		t.Fatalf("Deployment revision annotation 보존 실패: %#v", got.Annotations)
+	}
+}
+
 // TestApplyDeployment_IdempotentWithPodTemplateServerDefaults 는 v1.4.8 회귀 테스트다.
 // K8s가 PodTemplate 내부 기본값(imagePullPolicy/probe thresholds/DNS/restart 등)을
 // 채운 운영 중 Deployment에 대해 operator가 빈 desired 값으로 되돌리지 않아야 한다.

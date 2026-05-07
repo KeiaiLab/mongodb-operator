@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.11] - 2026-05-07
+
+### Fixed
+
+- **Sharded P0 — Deployment metadata annotation generation loop** (`internal/controller/resources_apply.go`):
+  `applyDeployment`가 운영 중 Deployment의 `deployment.kubernetes.io/revision` annotation을
+  desired metadata로 덮어 지웠고, Kubernetes Deployment controller가 즉시 다시 붙이며
+  `argos-mongo-mongos` Deployment generation이 계속 증가했다. desired가 해당 annotation을
+  명시하지 않은 경우 기존 live revision annotation을 보존하도록 수정했다.
+
+### Added
+
+- `TestApplyDeployment_PreservesDeploymentControllerRevisionAnnotation` 회귀 가드 추가.
+
 ## [1.4.10] - 2026-05-07
 
 ### Fixed
