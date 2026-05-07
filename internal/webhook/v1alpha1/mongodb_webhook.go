@@ -109,6 +109,62 @@ func validateMongoDBSpec(m *mongodbv1alpha1.MongoDB) field.ErrorList {
 	// controller 가 secret 없이 startup 시도 → 인증 실패 / pod CrashLoop.
 	errs = append(errs, validateAuthSecretRef(p.Child("auth", "adminCredentialsSecretRef", "name"), m.Spec.Auth.AdminCredentialsSecretRef.Name)...)
 
+	// tls.{certManager,customCert} omitempty trap — pointer 활성화 시 내부
+	// required string 이 빈 값 가능.
+	errs = append(errs, validateTLSSpec(p.Child("tls"), m.Spec.TLS)...)
+
+	// backup.storage.s3 omitempty trap — Bucket / CredentialsRef.Name 검증.
+	errs = append(errs, validateBackupSpec(p.Child("backup"), m.Spec.Backup)...)
+
+	return errs
+}
+
+// validateTLSSpec — TLS pointer 활성화 시 nested required string non-empty 강제.
+// CertManager 와 CustomCert 둘 다 nil 이면 controller self-signed 사용 가능
+// (통과). 활성화된 분기만 internal field 검증.
+func validateTLSSpec(path *field.Path, tls *mongodbv1alpha1.TLSSpec) field.ErrorList {
+	if tls == nil {
+		return nil
+	}
+	var errs field.ErrorList
+	if tls.CertManager != nil && tls.CertManager.IssuerRef.Name == "" {
+		errs = append(errs, field.Invalid(
+			path.Child("certManager", "issuerRef", "name"), "",
+			"tls.certManager.issuerRef.name must be non-empty when certManager is set",
+		))
+	}
+	if tls.CustomCert != nil && tls.CustomCert.SecretName == "" {
+		errs = append(errs, field.Invalid(
+			path.Child("customCert", "secretName"), "",
+			"tls.customCert.secretName must be non-empty when customCert is set",
+		))
+	}
+	return errs
+}
+
+// validateBackupSpec — Backup 활성화 시 Storage.Type 분기에 따른 nested
+// required string non-empty 강제. controller 가 backup job 시작 시 이 값들이
+// 누락되면 silent skip 또는 즉시 실패 → webhook 단계 reject.
+func validateBackupSpec(path *field.Path, b *mongodbv1alpha1.BackupSpec) field.ErrorList {
+	if b == nil || !b.Enabled {
+		return nil
+	}
+	var errs field.ErrorList
+	if b.Storage.Type == "s3" && b.Storage.S3 != nil {
+		s3 := b.Storage.S3
+		if s3.Bucket == "" {
+			errs = append(errs, field.Invalid(
+				path.Child("storage", "s3", "bucket"), "",
+				"backup.storage.s3.bucket must be non-empty when type=s3",
+			))
+		}
+		if s3.CredentialsRef.Name == "" {
+			errs = append(errs, field.Invalid(
+				path.Child("storage", "s3", "credentialsRef", "name"), "",
+				"backup.storage.s3.credentialsRef.name must be non-empty when type=s3",
+			))
+		}
+	}
 	return errs
 }
 

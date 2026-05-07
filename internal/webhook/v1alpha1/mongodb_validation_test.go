@@ -86,6 +86,126 @@ func TestValidateMongoDBSpec_QuorumMembers(t *testing.T) {
 	}
 }
 
+func TestValidateTLSSpec_OmitEmptyTrap(t *testing.T) {
+	t.Parallel()
+	t.Run("nil TLS → ok", func(t *testing.T) {
+		t.Parallel()
+		errs := validateTLSSpec(nil, nil)
+		if len(errs) > 0 {
+			t.Errorf("nil TLS should pass, got %v", errs)
+		}
+	})
+	t.Run("certManager 활성 + name 비움 → reject", func(t *testing.T) {
+		t.Parallel()
+		tls := &mongodbv1alpha1.TLSSpec{
+			Enabled: true,
+			CertManager: &mongodbv1alpha1.CertManagerSpec{
+				IssuerRef: mongodbv1alpha1.CertIssuerRef{Name: ""},
+			},
+		}
+		errs := validateTLSSpec(nil, tls)
+		var hasErr bool
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "issuerRef.name") {
+				hasErr = true
+			}
+		}
+		if !hasErr {
+			t.Error("empty issuerRef.name with certManager set should reject")
+		}
+	})
+	t.Run("customCert 활성 + secretName 비움 → reject", func(t *testing.T) {
+		t.Parallel()
+		tls := &mongodbv1alpha1.TLSSpec{
+			Enabled:    true,
+			CustomCert: &mongodbv1alpha1.CustomCertSpec{SecretName: ""},
+		}
+		errs := validateTLSSpec(nil, tls)
+		var hasErr bool
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "secretName") {
+				hasErr = true
+			}
+		}
+		if !hasErr {
+			t.Error("empty customCert.secretName should reject")
+		}
+	})
+	t.Run("TLS Enabled + 둘 다 nil (self-signed) → ok", func(t *testing.T) {
+		t.Parallel()
+		tls := &mongodbv1alpha1.TLSSpec{Enabled: true}
+		errs := validateTLSSpec(nil, tls)
+		if len(errs) > 0 {
+			t.Errorf("self-signed mode (둘 다 nil) should pass, got %v", errs)
+		}
+	})
+}
+
+func TestValidateBackupSpec_OmitEmptyTrap(t *testing.T) {
+	t.Parallel()
+	t.Run("Backup nil → ok", func(t *testing.T) {
+		t.Parallel()
+		errs := validateBackupSpec(nil, nil)
+		if len(errs) > 0 {
+			t.Errorf("nil Backup should pass, got %v", errs)
+		}
+	})
+	t.Run("Backup 비활성 → ok (검증 skip)", func(t *testing.T) {
+		t.Parallel()
+		b := &mongodbv1alpha1.BackupSpec{Enabled: false}
+		errs := validateBackupSpec(nil, b)
+		if len(errs) > 0 {
+			t.Errorf("disabled backup should skip, got %v", errs)
+		}
+	})
+	t.Run("s3 활성 + bucket 비움 → reject", func(t *testing.T) {
+		t.Parallel()
+		b := &mongodbv1alpha1.BackupSpec{
+			Enabled: true,
+			Storage: mongodbv1alpha1.BackupStorageSpec{
+				Type: "s3",
+				S3: &mongodbv1alpha1.S3StorageSpec{
+					Bucket:         "",
+					CredentialsRef: corev1.LocalObjectReference{Name: "creds"},
+				},
+			},
+		}
+		errs := validateBackupSpec(nil, b)
+		var hasErr bool
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "bucket") {
+				hasErr = true
+			}
+		}
+		if !hasErr {
+			t.Error("empty s3.bucket should reject")
+		}
+	})
+	t.Run("s3 활성 + credentialsRef.name 비움 → reject", func(t *testing.T) {
+		t.Parallel()
+		b := &mongodbv1alpha1.BackupSpec{
+			Enabled: true,
+			Storage: mongodbv1alpha1.BackupStorageSpec{
+				Type: "s3",
+				S3: &mongodbv1alpha1.S3StorageSpec{
+					Bucket:         "my-bucket",
+					CredentialsRef: corev1.LocalObjectReference{Name: ""},
+				},
+			},
+		}
+		errs := validateBackupSpec(nil, b)
+		var hasErr bool
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "credentialsRef.name") {
+				hasErr = true
+			}
+		}
+		if !hasErr {
+			t.Error("empty s3.credentialsRef.name should reject")
+		}
+	})
+}
+
 func TestValidateMongoDBSpec_AuthSecretRef_Required(t *testing.T) {
 	t.Parallel()
 	t.Run("empty name → reject", func(t *testing.T) {

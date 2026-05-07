@@ -104,5 +104,9 @@ func validateMongoDBShardedSpec(m *mongodbv1alpha1.MongoDBSharded) field.ErrorLi
 	// auth.adminCredentialsSecretRef.name 비어있지 않음 (mongodb_webhook 와 동일).
 	errs = append(errs, validateAuthSecretRef(p.Child("auth", "adminCredentialsSecretRef", "name"), m.Spec.Auth.AdminCredentialsSecretRef.Name)...)
 
+	// TLS / Backup omitempty trap (mongodb_webhook 와 동일 helper 재사용).
+	errs = append(errs, validateTLSSpec(p.Child("tls"), m.Spec.TLS)...)
+	errs = append(errs, validateBackupSpec(p.Child("backup"), m.Spec.Backup)...)
+
 	return errs
 }
