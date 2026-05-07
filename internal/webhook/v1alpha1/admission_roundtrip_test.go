@@ -129,7 +129,7 @@ var _ = Describe("MongoDB webhook admission round-trip", func() {
 					Storage: mongodbv1alpha1.BackupStorageSpec{
 						Type: "s3",
 						S3: &mongodbv1alpha1.S3StorageSpec{
-							Bucket: "", // 비어있음
+							Bucket:         "", // 비어있음
 							CredentialsRef: corev1.LocalObjectReference{Name: "creds"},
 						},
 					},

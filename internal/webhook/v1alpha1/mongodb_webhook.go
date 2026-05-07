@@ -145,11 +145,21 @@ func validateTLSSpec(path *field.Path, tls *mongodbv1alpha1.TLSSpec) field.Error
 // validateBackupSpec — Backup 활성화 시 Storage.Type 분기에 따른 nested
 // required string non-empty 강제. controller 가 backup job 시작 시 이 값들이
 // 누락되면 silent skip 또는 즉시 실패 → webhook 단계 reject.
+//
+// Schedule 검증: postgres-operator 의 webhook 과 동일 패턴 (cross-cut audit).
 func validateBackupSpec(path *field.Path, b *mongodbv1alpha1.BackupSpec) field.ErrorList {
 	if b == nil || !b.Enabled {
 		return nil
 	}
 	var errs field.ErrorList
+	// schedule 비어있으면 controller 가 자동 backup CronJob 미생성 → silent
+	// failure. Enabled=true 의도 위반.
+	if b.Schedule == "" {
+		errs = append(errs, field.Invalid(
+			path.Child("schedule"), "",
+			"backup.schedule must be non-empty cron expression when backup.enabled=true (e.g. \"0 2 * * *\")",
+		))
+	}
 	if b.Storage.Type == "s3" && b.Storage.S3 != nil {
 		s3 := b.Storage.S3
 		if s3.Bucket == "" {

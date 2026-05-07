@@ -150,6 +150,30 @@ func TestValidateBackupSpec_OmitEmptyTrap(t *testing.T) {
 			t.Errorf("nil Backup should pass, got %v", errs)
 		}
 	})
+	t.Run("Backup enabled + schedule 비움 → reject", func(t *testing.T) {
+		t.Parallel()
+		b := &mongodbv1alpha1.BackupSpec{
+			Enabled:  true,
+			Schedule: "", // 비어있음
+			Storage: mongodbv1alpha1.BackupStorageSpec{
+				Type: "s3",
+				S3: &mongodbv1alpha1.S3StorageSpec{
+					Bucket:         "my-bucket",
+					CredentialsRef: corev1.LocalObjectReference{Name: "creds"},
+				},
+			},
+		}
+		errs := validateBackupSpec(nil, b)
+		var hasSchedule bool
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "schedule") {
+				hasSchedule = true
+			}
+		}
+		if !hasSchedule {
+			t.Error("backup.enabled=true + schedule='' should reject")
+		}
+	})
 	t.Run("Backup 비활성 → ok (검증 skip)", func(t *testing.T) {
 		t.Parallel()
 		b := &mongodbv1alpha1.BackupSpec{Enabled: false}
