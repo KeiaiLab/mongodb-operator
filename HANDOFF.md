@@ -71,6 +71,26 @@ $ kubectl get deploy -n data valkey-operator-prod -o jsonpath='{.metadata.labels
 {"app.kubernetes.io/managed-by":"Helm",...,"helm.sh/chart":"valkey-operator-1.0.3"}
 ```
 
+CR 라벨 audit (deeper) — *operator + 인스턴스 둘 다* 격차:
+
+| CR | managed-by | argos.io/managed | GitOps 추적 |
+|---|---|---|---|
+| mongodbsharded/argos-mongo | Helm | argocd | ✅ |
+| postgrescluster/argos-postgres | Helm | argocd | ✅ |
+| **valkeycluster/keiailab-valkey-prod** | (없음) | (없음) | **❌ manual apply 추정** |
+
+증거 (live):
+```
+$ kubectl get valkeycluster -n data keiailab-valkey-prod -o jsonpath='{.metadata.labels}'
+(라벨 0건 — argos.io/managed / app.kubernetes.io/managed-by 둘 다 부재)
+```
+
+즉 valkey 영역의 GitOps 격차 *2단계*:
+1. operator chart (`valkey-operator-1.0.3`) — helm-direct (ArgoCD 추적 부재).
+2. CR 인스턴스 (`keiailab-valkey-prod`) — helm/argocd 라벨 0건, manual apply 추정.
+
+후속 통합 작업 시 *둘 다* GitOps-managed 로 마이그레이션 필요.
+
 `platform-data-valkey` ArgoCD app 은 *bitnami valkey* (shared-valkey-primary/replicas)
 만 sync. keiailab-valkey-prod 인스턴스 (6 pods, 16384 slots) 는 *helm install*
 직접 배포 → drift 발생 시 ArgoCD self-heal 불가.
