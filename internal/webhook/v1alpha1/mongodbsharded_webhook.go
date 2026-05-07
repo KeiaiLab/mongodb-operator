@@ -101,5 +101,8 @@ func validateMongoDBShardedSpec(m *mongodbv1alpha1.MongoDBSharded) field.ErrorLi
 	errs = append(errs, validateStorageSize(p.Child("configServer", "storage", "size"), m.Spec.ConfigServer.Storage.Size)...)
 	errs = append(errs, validateStorageSize(p.Child("shards", "storage", "size"), m.Spec.Shards.Storage.Size)...)
 
+	// auth.adminCredentialsSecretRef.name 비어있지 않음 (mongodb_webhook 와 동일).
+	errs = append(errs, validateAuthSecretRef(p.Child("auth", "adminCredentialsSecretRef", "name"), m.Spec.Auth.AdminCredentialsSecretRef.Name)...)
+
 	return errs
 }

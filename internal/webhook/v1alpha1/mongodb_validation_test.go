@@ -86,6 +86,59 @@ func TestValidateMongoDBSpec_QuorumMembers(t *testing.T) {
 	}
 }
 
+func TestValidateMongoDBSpec_AuthSecretRef_Required(t *testing.T) {
+	t.Parallel()
+	t.Run("empty name → reject", func(t *testing.T) {
+		t.Parallel()
+		m := &mongodbv1alpha1.MongoDB{}
+		m.Spec.Members = 3
+		m.Spec.Version.Version = "8.3"
+		// AdminCredentialsSecretRef.Name 의도적 비움
+		errs := validateMongoDBSpec(m)
+		var hasErr bool
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "adminCredentialsSecretRef.name") {
+				hasErr = true
+			}
+		}
+		if !hasErr {
+			t.Error("empty secret name should be rejected")
+		}
+	})
+	t.Run("non-empty name → ok", func(t *testing.T) {
+		t.Parallel()
+		m := &mongodbv1alpha1.MongoDB{}
+		m.Spec.Members = 3
+		m.Spec.Version.Version = "8.3"
+		m.Spec.Auth.AdminCredentialsSecretRef.Name = "my-secret"
+		errs := validateMongoDBSpec(m)
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "adminCredentialsSecretRef") {
+				t.Errorf("non-empty secret name should pass, got %v", e)
+			}
+		}
+	})
+}
+
+func TestValidateMongoDBShardedSpec_AuthSecretRef_Required(t *testing.T) {
+	t.Parallel()
+	m := &mongodbv1alpha1.MongoDBSharded{}
+	m.Spec.Version.Version = "8.3"
+	m.Spec.Shards.Count = 3
+	m.Spec.Shards.MembersPerShard = 3
+	// AdminCredentialsSecretRef.Name 비움
+	errs := validateMongoDBShardedSpec(m)
+	var hasErr bool
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "adminCredentialsSecretRef.name") {
+			hasErr = true
+		}
+	}
+	if !hasErr {
+		t.Error("sharded empty secret name should be rejected")
+	}
+}
+
 func TestValidateMongoDBSpec_StorageSize_LowerBound(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -193,6 +246,7 @@ func TestMongoDBCustomValidator_ValidateCreate_HappyPath(t *testing.T) {
 	m := &mongodbv1alpha1.MongoDB{}
 	m.Spec.Members = 3
 	m.Spec.Version.Version = "8.3"
+	m.Spec.Auth.AdminCredentialsSecretRef.Name = "admin-secret"
 	warns, err := v.ValidateCreate(context.Background(), m)
 	if err != nil {
 		t.Errorf("valid CR should pass, got %v", err)
@@ -242,9 +296,11 @@ func TestMongoDBCustomValidator_ValidateUpdate_HappyPath(t *testing.T) {
 	old := &mongodbv1alpha1.MongoDB{}
 	old.Spec.Members = 3
 	old.Spec.Version.Version = "8.2"
+	old.Spec.Auth.AdminCredentialsSecretRef.Name = "admin-secret"
 	new := &mongodbv1alpha1.MongoDB{}
 	new.Spec.Members = 3
 	new.Spec.Version.Version = "8.3"
+	new.Spec.Auth.AdminCredentialsSecretRef.Name = "admin-secret"
 	_, err := v.ValidateUpdate(context.Background(), old, new)
 	if err != nil {
 		t.Errorf("valid update should pass, got %v", err)
@@ -269,6 +325,7 @@ func TestMongoDBShardedCustomValidator_ValidateCreate_HappyPath(t *testing.T) {
 	m.Spec.Version.Version = "8.3"
 	m.Spec.Shards.Count = 3
 	m.Spec.Shards.MembersPerShard = 3
+	m.Spec.Auth.AdminCredentialsSecretRef.Name = "admin-secret"
 	_, err := v.ValidateCreate(context.Background(), m)
 	if err != nil {
 		t.Errorf("valid sharded CR should pass, got %v", err)
@@ -282,10 +339,12 @@ func TestMongoDBShardedCustomValidator_ValidateUpdate_HappyPath(t *testing.T) {
 	old.Spec.Version.Version = "8.2"
 	old.Spec.Shards.Count = 3
 	old.Spec.Shards.MembersPerShard = 3
+	old.Spec.Auth.AdminCredentialsSecretRef.Name = "admin-secret"
 	new := &mongodbv1alpha1.MongoDBSharded{}
 	new.Spec.Version.Version = "8.3"
 	new.Spec.Shards.Count = 3
 	new.Spec.Shards.MembersPerShard = 3
+	new.Spec.Auth.AdminCredentialsSecretRef.Name = "admin-secret"
 	_, err := v.ValidateUpdate(context.Background(), old, new)
 	if err != nil {
 		t.Errorf("valid sharded update should pass, got %v", err)

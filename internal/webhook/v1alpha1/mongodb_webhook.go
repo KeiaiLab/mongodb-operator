@@ -104,7 +104,25 @@ func validateMongoDBSpec(m *mongodbv1alpha1.MongoDB) field.ErrorList {
 	// 1Gi 미만은 production 부적합 → admission 차단.
 	errs = append(errs, validateStorageSize(p.Child("storage", "size"), m.Spec.Storage.Size)...)
 
+	// auth.adminCredentialsSecretRef.name 비어있지 않음. CRD 가 *required* 로
+	// 강제하지만 LocalObjectReference 는 struct value 라 빈 객체 ({}) 가 통과.
+	// controller 가 secret 없이 startup 시도 → 인증 실패 / pod CrashLoop.
+	errs = append(errs, validateAuthSecretRef(p.Child("auth", "adminCredentialsSecretRef", "name"), m.Spec.Auth.AdminCredentialsSecretRef.Name)...)
+
 	return errs
+}
+
+// validateAuthSecretRef — auth.adminCredentialsSecretRef.name 비어있지 않음 강제.
+// CRD 의 required marker 가 LocalObjectReference struct value 의 빈 객체 ({})
+// 를 차단 못 함 — webhook 으로 보강.
+func validateAuthSecretRef(path *field.Path, name string) field.ErrorList {
+	if name == "" {
+		return field.ErrorList{field.Invalid(
+			path, name,
+			"auth.adminCredentialsSecretRef.name must be non-empty — controller requires admin secret for SCRAM/X509 auth setup",
+		)}
+	}
+	return nil
 }
 
 // validateStorageSize — 1Gi 하한 검증. resource.Quantity 의 Cmp 사용. 0 (unset)
