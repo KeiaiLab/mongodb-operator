@@ -55,6 +55,7 @@ platform-data-valkey               Synced   Healthy
 | **C29** | dead RBAC — `valkey-operator` ClusterRole/Binding (helm chart 0.1.0-alpha.2 잔존) | 발견 | cluster pollution, 보안 risk 0 (SA 부재로 권한 행사 불가) | `kubectl delete clusterrole/clusterrolebinding valkey-operator valkey-operator-metrics-auth` | Low |
 | **C30** | NetworkPolicy 비대칭 — mongodb/valkey 인스턴스에 NP 부재 (operator 코드 보유 but spec opt-in 미설정) | 발견 | zero-trust 미충족, lateral movement 위험 (security defense in depth 영역) | argos-mongo + keiailab-valkey-prod CR 에 `spec.networkPolicy.enabled=true` 설정 (외부 effect, GitOps 통해) | Medium |
 | **C31** | data ns ResourceQuota / LimitRange 0건 — runaway resource consumption 잠재 | 발견 | 단일 워크로드 OOM cluster-wide 영향 가능 | `data` ns 에 ResourceQuota + LimitRange 추가 (argos-platform-data 의 ns manifest, 외부 effect) | Medium |
+| **C32** | TLS encryption in transit 부재 — mongodb (27017/27018/27019) + valkey (6379) 평문 | 발견 | data plane 내부 통신 보안 표면 | argos-mongo + keiailab-valkey-prod CR 에 `spec.tls.{enabled,certManager.issuerRef}` 설정. cert-manager 의 letsencrypt-prod 또는 별도 internal CA ClusterIssuer 사용. operator 코드 + webhook invariant 모두 보유 (it46) — chart values 만 활성화. | Medium |
 
 ## DR Snapshots (임시 보관)
 
