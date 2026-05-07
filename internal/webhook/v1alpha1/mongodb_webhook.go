@@ -22,6 +22,7 @@ package v1alpha1
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -98,5 +99,28 @@ func validateMongoDBSpec(m *mongodbv1alpha1.MongoDB) field.ErrorList {
 		))
 	}
 
+	// storage.size 하한 1Gi — PVC 가 너무 작으면 mongodb startup 실패 (data dir
+	// 부족) 또는 oplog truncation 사고. 운영자가 의도해서 작게 설정한 경우라도
+	// 1Gi 미만은 production 부적합 → admission 차단.
+	errs = append(errs, validateStorageSize(p.Child("storage", "size"), m.Spec.Storage.Size)...)
+
 	return errs
+}
+
+// validateStorageSize — 1Gi 하한 검증. resource.Quantity 의 Cmp 사용. 0 (unset)
+// 은 CRD default ("10Gi") 가 채워주므로 본 함수 도달 시점엔 항상 양수.
+func validateStorageSize(path *field.Path, size resource.Quantity) field.ErrorList {
+	if size.IsZero() {
+		// CRD default 가 채워지지 않은 dry-run / omitempty path — 별도 invariant
+		// 아님 (기본값으로 fallback).
+		return nil
+	}
+	min := resource.MustParse("1Gi")
+	if size.Cmp(min) < 0 {
+		return field.ErrorList{field.Invalid(
+			path, size.String(),
+			"storage.size must be >= 1Gi — production mongodb requires minimum data dir + oplog headroom",
+		)}
+	}
+	return nil
 }

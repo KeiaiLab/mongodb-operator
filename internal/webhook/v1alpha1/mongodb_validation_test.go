@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
@@ -82,6 +83,68 @@ func TestValidateMongoDBSpec_QuorumMembers(t *testing.T) {
 				t.Errorf("members=%d should be accepted", tc.members)
 			}
 		})
+	}
+}
+
+func TestValidateMongoDBSpec_StorageSize_LowerBound(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		size    string
+		wantErr bool
+		desc    string
+	}{
+		{"512Mi", true, "below 1Gi — reject"},
+		{"1Gi", false, "exactly 1Gi — boundary OK"},
+		{"10Gi", false, "10Gi default — OK"},
+		{"100Gi", false, "100Gi production — OK"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
+			m := &mongodbv1alpha1.MongoDB{}
+			m.Spec.Members = 3
+			m.Spec.Version.Version = "8.3"
+			m.Spec.Storage.Size = resource.MustParse(tc.size)
+			errs := validateMongoDBSpec(m)
+			var hasErr bool
+			for _, e := range errs {
+				if strings.Contains(e.Error(), "storage.size") {
+					hasErr = true
+				}
+			}
+			if tc.wantErr && !hasErr {
+				t.Errorf("size=%s should be rejected", tc.size)
+			}
+			if !tc.wantErr && hasErr {
+				t.Errorf("size=%s should be accepted", tc.size)
+			}
+		})
+	}
+}
+
+func TestValidateMongoDBShardedSpec_StorageSize_LowerBound(t *testing.T) {
+	t.Parallel()
+	m := &mongodbv1alpha1.MongoDBSharded{}
+	m.Spec.Version.Version = "8.3"
+	m.Spec.Shards.Count = 3
+	m.Spec.Shards.MembersPerShard = 3
+	m.Spec.ConfigServer.Storage.Size = resource.MustParse("256Mi")
+	m.Spec.Shards.Storage.Size = resource.MustParse("512Mi")
+	errs := validateMongoDBShardedSpec(m)
+	var cfgErr, shErr bool
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "configServer.storage.size") {
+			cfgErr = true
+		}
+		if strings.Contains(e.Error(), "shards.storage.size") {
+			shErr = true
+		}
+	}
+	if !cfgErr {
+		t.Error("configServer.storage.size=256Mi should be rejected")
+	}
+	if !shErr {
+		t.Error("shards.storage.size=512Mi should be rejected")
 	}
 }
 

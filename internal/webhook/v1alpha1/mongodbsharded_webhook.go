@@ -96,5 +96,10 @@ func validateMongoDBShardedSpec(m *mongodbv1alpha1.MongoDBSharded) field.ErrorLi
 		))
 	}
 
+	// storage.size 하한 1Gi — configServer + shards 둘 다 검증 (mongodb_webhook
+	// 의 validateStorageSize 재사용).
+	errs = append(errs, validateStorageSize(p.Child("configServer", "storage", "size"), m.Spec.ConfigServer.Storage.Size)...)
+	errs = append(errs, validateStorageSize(p.Child("shards", "storage", "size"), m.Spec.Shards.Storage.Size)...)
+
 	return errs
 }
