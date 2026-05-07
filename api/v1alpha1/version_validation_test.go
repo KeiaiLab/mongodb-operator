@@ -20,7 +20,6 @@ func TestIsSupportedMongoDBVersion_PatchLevelAccepted(t *testing.T) {
 	t.Parallel()
 	cases := []string{"8.0.0", "8.0.5", "8.2.0", "8.2.10", "8.3.0", "8.3.1"}
 	for _, v := range cases {
-		v := v
 		t.Run(v, func(t *testing.T) {
 			t.Parallel()
 			if !IsSupportedMongoDBVersion(v) {
@@ -34,7 +33,6 @@ func TestIsSupportedMongoDBVersion_MajorMinorAccepted(t *testing.T) {
 	t.Parallel()
 	cases := []string{"8.0", "8.2", "8.3"}
 	for _, v := range cases {
-		v := v
 		t.Run(v, func(t *testing.T) {
 			t.Parallel()
 			if !IsSupportedMongoDBVersion(v) {
@@ -62,7 +60,6 @@ func TestIsSupportedMongoDBVersion_Rejected(t *testing.T) {
 		{"abc", "not semver"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.v, func(t *testing.T) {
 			t.Parallel()
 			if IsSupportedMongoDBVersion(tc.v) {
