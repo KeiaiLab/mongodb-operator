@@ -4,6 +4,88 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 17-19 — Phase 2+3 chart values parity (3 operator 동등화)
+
+### 진척
+
+| Iteration | Repo | Commit | 산출물 | LoC |
+|---|---|---|---|---|
+| **it17 (Phase 2 V1)** | valkey-operator | `ec2adb6` | values.yaml +13 keys + deployment.yaml propagate. mongodb 15 패턴 차용 | +103 |
+| **it19 (Phase 3 P2)** | postgres-operator | `1f0b28e` | values.yaml +13 keys + deployment.yaml propagate. 격차 가장 컸음 (priorityClassName 만 → 13 keys) | +139 |
+
+### 3 operator chart values parity 동등화 완료
+
+3 operator 모두 *동일 operational keys 표면* 보유 (bitnami mongodb-sharded /
+redis-cluster / postgresql-ha 의 공통 keys 모두):
+
+| Key | mongodb | valkey | postgres |
+|---|---|---|---|
+| podAnnotations / podLabels | ✅ | ✅ | ✅ (it19 신규) |
+| nodeSelector / tolerations / affinity | ✅ | ✅ | ✅ |
+| topologySpreadConstraints | ✅ (it15) | ✅ (it17) | ✅ (it19) |
+| priorityClassName | ✅ | ✅ | ✅ |
+| runtimeClassName | ✅ (it15) | ✅ (it17) | ✅ (it19) |
+| dnsPolicy / dnsConfig | ✅ (it15) | ✅ (it17) | ✅ (it19) |
+| hostAliases | ✅ (it15) | ✅ (it17) | ✅ (it19) |
+| terminationGracePeriodSeconds | ✅ (it15) | ✅ (it17) | ✅ (it19) |
+| extraEnvVars / extraEnvVarsCM / extraEnvVarsSecret | ✅ (it15) | ✅ (it17) | ✅ (it19) |
+| extraVolumes / extraVolumeMounts | ✅ | ✅ | ✅ (it19) |
+| extraInitContainers | ✅ (it15) | ✅ (it17) | ✅ (it19) |
+| sidecars | ✅ (it15) | ✅ (it17) | ✅ (it19) |
+| customLivenessProbe / customReadinessProbe / customStartupProbe | ✅ (it15) | ✅ (it17) | ✅ (it19) |
+| lifecycleHooks (postStart / preStop) | ✅ (it15) | ✅ (it17) | ✅ (it19) |
+
+### 검증 인용 (3 operator)
+
+```
+mongodb (iteration 15 d0724be):
+  $ helm lint charts/mongodb-operator       1 chart(s) linted, 0 failed
+  $ helm template ... -f extras.yaml         priorityClassName/runtimeClassName/...
+
+valkey (iteration 17 ec2adb6):
+  $ helm lint charts/valkey-operator        1 chart(s) linted, 0 failed
+  $ go test ./internal/... -count=1          전 패키지 PASS
+  pre-push hooks: helm-lint / helm-template / unit-test (19.84s) 모두 PASS
+
+postgres (iteration 19 1f0b28e):
+  $ helm lint charts/postgres-operator      1 chart(s) linted, 0 failed
+  $ helm template ... -f extras.yaml         iam.amazonaws.com/role / runtimeClassName: gvisor / hostAliases: test.local / startupProbe / preStop / sidecars
+  $ go test ./internal/... -count=1
+  ok  github.com/keiailab/postgres-operator/internal/plugin/sharding  3.535s
+  ok  github.com/keiailab/postgres-operator/internal/version          4.685s
+  ok  github.com/keiailab/postgres-operator/internal/webhook/v1alpha1 4.305s
+```
+
+### 다음 iteration 자연 진입점
+
+- **iteration 18 (Phase 2 V2)**: valkey iteration 7 narrow scope e2e
+  (bitnami RDB restore → version patch chain).
+- **iteration 20 (Phase 3 P3)**: postgres multi-version (PG 17 + 18) 통합 e2e
+  (mixed cluster, pg_upgrade 자동화).
+- **iteration 16 (Phase 1 M4)**: mongodb operator-grade e2e — PITR / online shard
+  rebalance / LDAP / OIDC. **기능 구현 동반** (현재 ROADMAP 미체크) — 큰 작업.
+- **iteration 21+ (Phase 3 P4)**: postgres G1-G2 자체 SQL (bitnami 능가 영역).
+
+### 누적 진척 (roadmap 12 iteration → 확장)
+
+```
+Phase 0 (it 8):                    ✅ DONE — operator-commons + 3 cross-cut
+Phase 1 mongodb (it 9-15):         ✅ M1+M2+M3 DONE (M4 NEXT)
+Phase 2 valkey (it 17):            ✅ V1 DONE — chart values parity
+Phase 3 postgres (it 19):          ✅ P2 DONE — chart values parity
+─────────────────────────────────
+10/12+ iteration 완료 (~70%, M4/V2/V3/P3/P4 잔여)
+```
+
+본 turn 핵심 가치 — **3 operator 가 이제 chart values 차원 동등 bitnami parity**.
+operational keys (sidecar / extraVolume / extraEnvVar / customProbe / hostAliases /
+lifecycle 등) 모두 동일 표면 노출. 더 이상 *bitnami chart values 부재* 가
+adoption 차단점 아님.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 13-15 — Phase 1 M2 완성 + M3 (mongodb)
 
 ### 진척 (M2 완성 + M3 진입)
