@@ -94,6 +94,10 @@ platform-data-valkey               Synced   Healthy
 | CSI driver stability | rook-ceph (cephfs + rbd) 13d age, ATTACHREQUIRED=true. PV provisioning + attach 안정 |
 | StatefulSet READY 일치 | 모든 STS (cfg 3/3, shard-0~4 3/3, postgres 1/1, clickhouse) desired = ready. scaling lag 0 |
 | Finalizer 보유 | mongodb (`mongodbsharded.keiailab.com/finalizer`), valkey (`cache.keiailab.io/valkeycluster-finalizer`) — graceful deletion + DR 보장 |
+| CNI Cilium 안정 | cilium DS + envoy 8d-11d age, Running 상태. 단 일부 pod restart 1-5회 (8-9d 전, 안정화) |
+| Node 가용성 | 11 nodes Ready (100%) — single DC onprem-seoul 환경 의도된 spec |
+| CoreDNS health | kube-system/coredns 38h Running (1 restart 19h ago), single replica 운영 |
+| PSS enforcement 작동 검증 | audit-dns 임시 pod 시도 시 PSS restricted (allowPrivilegeEscalation/capabilities/runAsNonRoot/seccompProfile) 모두 거부 — *정책 동작 직접 증거* |
 
 ## Audit trail — 격차 발견 commit 매핑
 
