@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
+	commonslabels "github.com/keiailab/operator-commons/pkg/labels"
 	commonsnp "github.com/keiailab/operator-commons/pkg/networkpolicy"
 	"github.com/keiailab/operator-commons/pkg/security"
 
@@ -61,13 +62,17 @@ func getMongoDBImage(version mongodbv1alpha1.MongoDBVersion) string {
 	return fmt.Sprintf("mongo:%s", version.Version)
 }
 
+// buildLabels — operator-commons/pkg/labels 위임 (iteration 27).
+// 기존 4-key map (no version, no part-of) 동작 보존 — labels.Set.All() 의 optional
+// 필드 omit 동작 활용.
 func buildLabels(name, component string) map[string]string {
-	return map[string]string{
-		"app.kubernetes.io/name":       "mongodb",
-		"app.kubernetes.io/instance":   name,
-		"app.kubernetes.io/component":  component,
-		"app.kubernetes.io/managed-by": "mongodb-operator",
-	}
+	return commonslabels.Set{
+		Name:      "mongodb",
+		Instance:  name,
+		Component: component,
+		ManagedBy: "mongodb-operator",
+		// Version + PartOf 미지정 — All() 에서 자동 omit (기존 동작 보존).
+	}.All()
 }
 
 func buildResourceRequirements(spec mongodbv1alpha1.ResourcesSpec) corev1.ResourceRequirements {
