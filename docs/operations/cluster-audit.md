@@ -89,6 +89,8 @@ platform-data-valkey               Synced   Healthy
 | Pod restart rate | data ns 54 pods 합산 6 restart (avg 0.11/pod) — low restart frequency, stable workload |
 | OOMKilled events | 0건 (cluster-wide) — resource pressure 부재, limit 정의 정합 |
 | Pod uptime distribution | 35/54 pods uptime ≥ 4h (65%), 14 pods ≥ 14h. 최근 24h 내 큰 restart 사고 없음 |
+| Leader election leases | 3 operator (mongodb 30h / valkey 7h40m / postgres 7h20m) + cnpg (30h) + argos-postgres-shard-0-primary (7h9m) — pod restart 후 reconcile 정지 창 최소화 |
+| PV provisioning | 43 PVCs 662Gi total (~15Gi 평균), ceph-rbd RWO + Retain reclaim — DR-friendly distribution |
 
 ## Audit trail — 격차 발견 commit 매핑
 
