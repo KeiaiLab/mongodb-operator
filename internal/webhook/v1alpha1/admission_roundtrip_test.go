@@ -71,6 +71,77 @@ var _ = Describe("MongoDB webhook admission round-trip", func() {
 		Expect(err.Error()).To(ContainSubstring("adminCredentialsSecretRef"))
 	})
 
+	It("rejects MongoDB with storage.size below 1Gi", func() {
+		m := &mongodbv1alpha1.MongoDB{
+			ObjectMeta: metav1.ObjectMeta{Name: "rt-smallstorage", Namespace: "default"},
+			Spec: mongodbv1alpha1.MongoDBSpec{
+				Members: 3,
+				Version: mongodbv1alpha1.MongoDBVersion{Version: "8.3"},
+				Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("512Mi")},
+				Auth: mongodbv1alpha1.AuthSpec{
+					AdminCredentialsSecretRef: corev1.LocalObjectReference{Name: "admin-secret"},
+				},
+			},
+		}
+		err := k8sClient.Create(ctx, m)
+		Expect(err).To(HaveOccurred())
+		Expect(apierrors.IsInvalid(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("storage.size"))
+	})
+
+	It("rejects MongoDB with TLS certManager omitempty trap", func() {
+		m := &mongodbv1alpha1.MongoDB{
+			ObjectMeta: metav1.ObjectMeta{Name: "rt-tlstrap", Namespace: "default"},
+			Spec: mongodbv1alpha1.MongoDBSpec{
+				Members: 3,
+				Version: mongodbv1alpha1.MongoDBVersion{Version: "8.3"},
+				Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("10Gi")},
+				Auth: mongodbv1alpha1.AuthSpec{
+					AdminCredentialsSecretRef: corev1.LocalObjectReference{Name: "admin-secret"},
+				},
+				TLS: &mongodbv1alpha1.TLSSpec{
+					Enabled: true,
+					CertManager: &mongodbv1alpha1.CertManagerSpec{
+						// CRD enum 통과 위해 Kind 명시. Name 만 omitempty trap 검증.
+						IssuerRef: mongodbv1alpha1.CertIssuerRef{Name: "", Kind: "ClusterIssuer"},
+					},
+				},
+			},
+		}
+		err := k8sClient.Create(ctx, m)
+		Expect(err).To(HaveOccurred())
+		Expect(apierrors.IsInvalid(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("issuerRef.name"))
+	})
+
+	It("rejects MongoDB with backup.s3 incomplete", func() {
+		m := &mongodbv1alpha1.MongoDB{
+			ObjectMeta: metav1.ObjectMeta{Name: "rt-backuptrap", Namespace: "default"},
+			Spec: mongodbv1alpha1.MongoDBSpec{
+				Members: 3,
+				Version: mongodbv1alpha1.MongoDBVersion{Version: "8.3"},
+				Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("10Gi")},
+				Auth: mongodbv1alpha1.AuthSpec{
+					AdminCredentialsSecretRef: corev1.LocalObjectReference{Name: "admin-secret"},
+				},
+				Backup: &mongodbv1alpha1.BackupSpec{
+					Enabled: true,
+					Storage: mongodbv1alpha1.BackupStorageSpec{
+						Type: "s3",
+						S3: &mongodbv1alpha1.S3StorageSpec{
+							Bucket: "", // 비어있음
+							CredentialsRef: corev1.LocalObjectReference{Name: "creds"},
+						},
+					},
+				},
+			},
+		}
+		err := k8sClient.Create(ctx, m)
+		Expect(err).To(HaveOccurred())
+		Expect(apierrors.IsInvalid(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("bucket"))
+	})
+
 	It("accepts valid MongoDB CR — admission round-trip 통과", func() {
 		m := &mongodbv1alpha1.MongoDB{
 			ObjectMeta: metav1.ObjectMeta{
