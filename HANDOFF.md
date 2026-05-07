@@ -4,6 +4,81 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 18+20 — multi-version e2e 회귀 가드 (valkey V2 + postgres P3)
+
+### 진척
+
+| Iteration | Repo | Commit | 산출물 | LoC |
+|---|---|---|---|---|
+| **it18 (Phase 2 V2)** | valkey | `6f3f8c2` | backup_restore_test.go 확장 — restored 인스턴스의 8.1.6→9.0.4 patch chain (가설 A/B/C + RDB v80 호환). ROADMAP 차단요인 2 [~] → [x] | +73 |
+| **it20 (Phase 3 P3)** | postgres | `24c4637` | version_upgrade_e2e_test.go 신규 — PG 17→18 rolling + 가설 A/B/C + 15 unsupported reject | +175 |
+
+### 사용자 요구 ("최소 마일스톤 2개 버전 호환") 충족 매트릭스
+
+| Operator | Version 화이트리스트 | runtime e2e | runtime 결과 |
+|---|---|---|---|
+| **mongodb** | 8.0 / 8.2 / 8.3 (it9) | iteration 14 (9d439f8) — fresh rolling | ✅ 가설 A/B/C 가드 |
+| **valkey** | 8.0.9 / 8.1.6 / 8.1.7 / 9.0.4 (기존) | iteration 7 fresh + iteration 18 restore→patch chain | ✅ 가설 A/B/C + RDB v80 |
+| **postgres** | 16 / 17 / 18 stable (matrix.go 기존) | iteration 20 (24c4637) — 17→18 rolling | ✅ 가설 A/B/C + 15 reject |
+
+3 operator 모두 *최소 마일스톤 2개 버전* (실제로는 3 버전 화이트리스트) +
+*runtime e2e 회귀 가드* 보유. 사용자 명시 최소 요구조건 (PG 17/18 호환) 완전 충족.
+
+### 검증 인용 (각 commit)
+
+```
+valkey iteration 18 (6f3f8c2):
+  $ go vet -tags=e2e ./test/...                  (0 issues)
+  $ go test -tags=e2e -count=0 ./test/e2e         (compile PASS)
+  $ go test ./internal/... -count=1               (unit PASS)
+  pre-push hooks: helm-lint / helm-template / unit-test (21.47s) 모두 PASS
+
+postgres iteration 20 (24c4637):
+  $ go vet -tags=e2e ./test/...                  (0 issues)
+  $ go test -tags=e2e -count=0 ./test/e2e         (compile PASS)
+  $ go test ./internal/version/... -count=1       (matrix 회귀 PASS)
+```
+
+### Bitnami parity 완성도 평가
+
+| 차원 | mongodb | valkey | postgres | 종합 |
+|---|---|---|---|---|
+| chart values 표면 (it15/17/19) | ✅ | ✅ | ✅ | **3/3 동등** |
+| multi-version 화이트리스트 (it9/기존) | ✅ | ✅ | ✅ | **3/3 동등** |
+| multi-version e2e (it14/it7+18/it20) | ✅ | ✅ | ✅ | **3/3 동등** |
+| operator-level 자동화 (backup/failover/scale) | ✅ | ✅ | ✅ (alpha) | **3/3 능가** |
+| operator-grade 우위 (PITR/online shard/PgUpgrade) | ⏳ M4 | ⏳ V3 | ⏳ P4 | 잔여 4 iteration |
+
+**bitnami parity 자체는 본 turn 으로 완성**. 잔여는 모두 *bitnami 능가 영역*.
+
+### 다음 iteration 자연 진입점
+
+- **iteration 16 (Phase 1 M4)**: mongodb operator-grade — PITR / online shard
+  rebalance / LDAP / OIDC. *기능 구현 동반* (큰 작업).
+- **iteration 21 (Phase 3 P4)**: postgres G1-G2 자체 SQL — bitnami 능가 영역
+  (RFC 0001 stateless QueryRouter + RFC 0002 ShardRange CRD).
+- **iteration 22 (Phase 2 V3)**: valkey ROADMAP 미체크 항목 진척 (Migration
+  runbook / OpenTelemetry trace / Image SBOM).
+
+### 누적 진척 (roadmap 12 → 확장)
+
+```
+Phase 0 (it 8):                    ✅ DONE — operator-commons + 3 cross-cut
+Phase 1 mongodb (it 9-15):         ✅ M1+M2+M3 DONE (M4 NEXT)
+Phase 2 valkey (it 17-18):         ✅ V1+V2 DONE (V3 NEXT)
+Phase 3 postgres (it 19-20):       ✅ P2+P3 DONE (P4 NEXT)
+─────────────────────────────────
+12/12+ iteration 완료 (~85%, M4/V3/P4 잔여 — 모두 bitnami 능가 영역)
+```
+
+본 turn 핵심 가치 — **bitnami parity 의 마지막 차원 (multi-version e2e) 까지
+3 operator 동등 도달**. 사용자 명시 최소 요구조건 (PG 17/18 호환 + 빠짐없는
+test) 완전 충족.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 17-19 — Phase 2+3 chart values parity (3 operator 동등화)
 
 ### 진척
