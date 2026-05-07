@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.4.8
-appVersion: "1.4.8"
+version: 1.4.9
+appVersion: "1.4.9"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -114,13 +114,15 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:1.4.8
+      image: ghcr.io/keiailab/mongodb-operator:1.4.9
     - name: mongodb
       image: mongo:8.3.1
     - name: mongodb-exporter
       image: percona/mongodb_exporter:0.40
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
+    - kind: fixed
+      description: "ReconcileError=True condition 이 성공 reconcile 후에도 남는 status clear 결함 fix. 성공 상태 업데이트 시 기존 ReconcileError 를 False/ReconcileSucceeded 로 전환."
     - kind: fixed
       description: "Sharded P0 — mongos Deployment PodTemplate server-default ping-pong (imagePullPolicy/probe defaults/DNS/restart/scheduler 등) 으로 generation 180k+ 증가 + update conflict 반복. applyDeployment가 기존 server-defaulted PodTemplate 값을 보존하도록 확장."
     - kind: fixed

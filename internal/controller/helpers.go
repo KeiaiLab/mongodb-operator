@@ -114,15 +114,15 @@ func applyErrorCondition(
 	logger := log.FromContext(ctx)
 	logger.Error(reconcileErr, "Failed to reconcile component", "component", component)
 	if rec != nil {
-		rec.Eventf(obj, corev1.EventTypeWarning, "ReconcileError",
+		rec.Eventf(obj, corev1.EventTypeWarning, conditionTypeReconcileError,
 			"Failed to reconcile %s- %v", component, reconcileErr)
 	}
 
 	obj.SetPhase("Failed")
 	conds := obj.GetConditions()
-	*conds = filterConditionsByType(*conds, "ReconcileError")
+	*conds = filterConditionsByType(*conds, conditionTypeReconcileError)
 	*conds = append(*conds, metav1.Condition{
-		Type:               "ReconcileError",
+		Type:               conditionTypeReconcileError,
 		Status:             metav1.ConditionTrue,
 		LastTransitionTime: metav1.Now(),
 		Reason:             "ReconcileFailed",
@@ -133,4 +133,28 @@ func applyErrorCondition(
 		logger.Error(statusErr, "Failed to update status")
 	}
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, reconcileErr
+}
+
+const conditionTypeReconcileError = "ReconcileError"
+
+func clearReconcileErrorCondition(conds []metav1.Condition, generation int64) []metav1.Condition {
+	found := false
+	for _, cond := range conds {
+		if cond.Type == conditionTypeReconcileError {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return conds
+	}
+	conds = filterConditionsByType(conds, conditionTypeReconcileError)
+	return append(conds, metav1.Condition{
+		Type:               conditionTypeReconcileError,
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: generation,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "ReconcileSucceeded",
+		Message:            "Last reconcile succeeded",
+	})
 }

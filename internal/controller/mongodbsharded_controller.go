@@ -704,6 +704,7 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 		mdbsh.Name, mdbsh.Namespace)
 
 	mdbsh.Status.ObservedGeneration = mdbsh.Generation
+	mdbsh.Status.Conditions = clearReconcileErrorCondition(mdbsh.Status.Conditions, mdbsh.Generation)
 
 	return updateStatusWithRetry(ctx, r.Client, mdbsh)
 }

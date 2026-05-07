@@ -537,6 +537,7 @@ func (r *MongoDBReconciler) updateStatus(ctx context.Context, mdb *mongodbv1alph
 	mdb.Status.ObservedGeneration = mdb.Generation
 
 	// Update conditions
+	mdb.Status.Conditions = clearReconcileErrorCondition(mdb.Status.Conditions, mdb.Generation)
 	mdb.Status.Conditions = r.buildConditions(mdb)
 
 	return updateStatusWithRetry(ctx, r.Client, mdb)
@@ -544,7 +545,7 @@ func (r *MongoDBReconciler) updateStatus(ctx context.Context, mdb *mongodbv1alph
 
 func (r *MongoDBReconciler) buildConditions(mdb *mongodbv1alpha1.MongoDB) []metav1.Condition {
 	// 본 함수는 Ready / ReplicaSetInitialized / AuthenticationReady 3개 type만
-	// 관리한다. 다른 type(PrimaryUnreachable, ReconcileError 등)은 외부에서
+	// 관리한다. 다른 type(PrimaryUnreachable 등)은 외부에서
 	// set한 상태를 그대로 보존해 silent로 사라지지 않게 한다.
 	managedTypes := map[string]bool{
 		"Ready":                 true,

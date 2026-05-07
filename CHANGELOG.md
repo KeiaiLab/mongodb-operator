@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.9] - 2026-05-07
+
+### Fixed
+
+- **Status P0 — `ReconcileError=True` sticky condition** (`internal/controller/helpers.go`,
+  `internal/controller/mongodbsharded_controller.go`):
+  reconcile이 이후 성공해도 기존 `ReconcileError=True` condition이 보존되어
+  `MongoDBSharded.phase=Running`과 `ReconcileError=True`가 동시에 노출됐다. 성공 status
+  update 시 기존 `ReconcileError`를 `False/ReconcileSucceeded`로 전환해 live health가
+  실제 reconcile 결과와 일치하도록 수정.
+
+### Added
+
+- `TestClearReconcileErrorCondition` 회귀 가드 추가.
+
 ## [1.4.8] - 2026-05-07
 
 ### Fixed

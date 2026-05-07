@@ -247,7 +247,7 @@ func TestIsClusterReady_RejectsNilShardsAndZeroSpec(t *testing.T) {
 }
 
 // TestBuildConditions_PreservesExternalConditions은 buildConditions가
-// 외부에서 set한 PrimaryUnreachable/ReconcileError condition을 보존하는지 검증.
+// 외부에서 set한 PrimaryUnreachable condition을 보존하는지 검증.
 // 이전: 매 호출마다 conditions=[]로 초기화 → 외부 condition silent 손실.
 func TestBuildConditions_PreservesExternalConditions(t *testing.T) {
 	s := newTestScheme(t)
@@ -281,6 +281,36 @@ func TestBuildConditions_PreservesExternalConditions(t *testing.T) {
 	}
 	if !hasReady || readyCount != 1 {
 		t.Fatalf("Ready condition 1건 재생성 실패 (hasReady=%v count=%d): %+v", hasReady, readyCount, out)
+	}
+}
+
+func TestClearReconcileErrorCondition(t *testing.T) {
+	conds := []metav1.Condition{
+		{Type: "Ready", Status: metav1.ConditionTrue, LastTransitionTime: metav1.Now()},
+		{Type: conditionTypeReconcileError, Status: metav1.ConditionTrue, Reason: "ReconcileFailed", LastTransitionTime: metav1.Now()},
+	}
+
+	out := clearReconcileErrorCondition(conds, 7)
+	foundFalse := false
+	for _, cond := range out {
+		if cond.Type == conditionTypeReconcileError {
+			if cond.Status != metav1.ConditionFalse {
+				t.Fatalf("기대 ReconcileError=False, got %+v", cond)
+			}
+			if cond.ObservedGeneration != 7 {
+				t.Fatalf("기대 observedGeneration=7, got %d", cond.ObservedGeneration)
+			}
+			foundFalse = true
+		}
+	}
+	if !foundFalse {
+		t.Fatalf("ReconcileError=False condition 미발견: %+v", out)
+	}
+
+	withoutError := []metav1.Condition{{Type: "Ready", Status: metav1.ConditionTrue, LastTransitionTime: metav1.Now()}}
+	unchanged := clearReconcileErrorCondition(withoutError, 7)
+	if len(unchanged) != 1 || unchanged[0].Type != "Ready" {
+		t.Fatalf("ReconcileError 미존재 시 condition 추가 금지: %+v", unchanged)
 	}
 }
 
