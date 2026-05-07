@@ -182,20 +182,45 @@ type MongoDBRole struct {
 }
 
 // MonitoringSpec defines Prometheus monitoring configuration
+// MonitoringSpec defines monitoring configuration.
+//
+// Deprecated: spec 정의되어 있으나 *현 controller 미구현* — 사용자가 본 영역
+// 설정해도 silent ignore (UX 함정). ADR-0018 Phase 1 단계.
+//
+// 단계적 해소:
+//   - Phase 1 (즉시): godoc deprecation marker (본 코드).
+//   - Phase 2 (C25 Prometheus 도입 후): 사용 빈도 측정 후 옵션 결정.
+//   - Phase 3 (조건부): v2alpha1 삭제 또는 valkey 패턴 controller 구현.
+//
+// 임시 우회: chart-level `templates/servicemonitor.yaml` 정적 manifest 가
+// operator pod 의 metrics endpoint scrape 만 cover (CR 인스턴스 metrics 는
+// 별도 외부 ServiceMonitor 작성 필요).
 type MonitoringSpec struct {
 	// Enabled enables Prometheus monitoring
 	// +kubebuilder:default=true
 	Enabled bool `json:"enabled"`
 
 	// ServiceMonitor enables ServiceMonitor creation
+	//
+	// Deprecated: ADR-0018 Phase 1 — controller 미구현. 설정해도 ServiceMonitor
+	// 자동 생성 안 됨. valkey-operator `internal/resources/servicemonitor.go`
+	// 패턴 (commons.monitoring 위임 + fail-soft applyServiceMonitor) 차용은
+	// Phase 2 결정 영역.
 	// +optional
 	ServiceMonitor *ServiceMonitorSpec `json:"serviceMonitor,omitempty"`
 
 	// PrometheusRules enables PrometheusRule creation
+	//
+	// Deprecated: ADR-0018 Phase 1 — controller 미구현. PrometheusRule CRD 도
+	// 클러스터에 미설치 가능 (C25 cluster-ops audit).
 	// +optional
 	PrometheusRules *PrometheusRulesSpec `json:"prometheusRules,omitempty"`
 
 	// Exporter configures the MongoDB exporter sidecar
+	//
+	// Deprecated: ADR-0018 Phase 1 — controller 미구현. argos 운영의 mongodb
+	// exporter 는 chart values `mongodb.exporterImage` + sharded mongos pod 의
+	// sidecar 정적 정의로 cover.
 	// +optional
 	Exporter *ExporterSpec `json:"exporter,omitempty"`
 }
