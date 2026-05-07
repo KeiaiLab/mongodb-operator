@@ -30,6 +30,8 @@ func ptr32(v int32) *int32 { return &v }
 
 func ptr64(v int64) *int64 { return &v }
 
+func ptrBool(v bool) *bool { return &v }
+
 func newApplyScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	s := runtime.NewScheme()
@@ -264,6 +266,7 @@ func TestApplyDeployment_IdempotentWithPodTemplateServerDefaults(t *testing.T) {
 	existingTemplate.Spec.DNSPolicy = corev1.DNSClusterFirst
 	existingTemplate.Spec.SchedulerName = corev1.DefaultSchedulerName
 	existingTemplate.Spec.TerminationGracePeriodSeconds = ptr64(30)
+	existingTemplate.Spec.EnableServiceLinks = ptrBool(true)
 	existingTemplate.Spec.Containers[0].ImagePullPolicy = corev1.PullIfNotPresent
 	existingTemplate.Spec.Containers[0].TerminationMessagePath = corev1.TerminationMessagePathDefault
 	existingTemplate.Spec.Containers[0].TerminationMessagePolicy = corev1.TerminationMessageReadFile
@@ -342,6 +345,9 @@ func TestApplyDeployment_IdempotentWithPodTemplateServerDefaults(t *testing.T) {
 	}
 	if got.Spec.Template.Spec.Containers[0].LivenessProbe.FailureThreshold != 3 {
 		t.Fatalf("liveness FailureThreshold default 보존 실패: %d", got.Spec.Template.Spec.Containers[0].LivenessProbe.FailureThreshold)
+	}
+	if got.Spec.Template.Spec.EnableServiceLinks == nil || !*got.Spec.Template.Spec.EnableServiceLinks {
+		t.Fatalf("EnableServiceLinks default 보존 실패: %v", got.Spec.Template.Spec.EnableServiceLinks)
 	}
 
 	rv1 := got.ResourceVersion

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.10] - 2026-05-07
+
+### Fixed
+
+- **Sharded P0 — 남은 PodTemplate server-default generation loop** (`internal/controller/resources_apply.go`):
+  `imagePullPolicy`/probe 등 알려진 기본값 보존 후에도 `EnableServiceLinks`처럼
+  builder가 명시하지 않는 server-default 필드가 남아 `argos-mongo-mongos` Deployment
+  generation 증가가 계속됐다. 기존 PodTemplate을 기준으로 operator가 실제로 소유하는
+  필드만 overlay하는 방식으로 변경해 미명시 server-default 전체를 보존한다.
+
+### Added
+
+- `EnableServiceLinks` server-default 보존 회귀 가드 추가.
+
 ## [1.4.9] - 2026-05-07
 
 ### Fixed

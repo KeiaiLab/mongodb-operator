@@ -213,7 +213,23 @@ func applyDeployment(ctx context.Context, c client.Client, scheme *runtime.Schem
 }
 
 func deploymentTemplateWithServerDefaults(desired, current corev1.PodTemplateSpec) corev1.PodTemplateSpec {
-	out := *desired.DeepCopy()
+	desiredCopy := desired.DeepCopy()
+	out := *current.DeepCopy()
+	out.ObjectMeta = desiredCopy.ObjectMeta
+	out.Spec.SecurityContext = desiredCopy.Spec.SecurityContext
+	out.Spec.InitContainers = desiredCopy.Spec.InitContainers
+	out.Spec.Containers = desiredCopy.Spec.Containers
+	out.Spec.Volumes = desiredCopy.Spec.Volumes
+	out.Spec.Affinity = desiredCopy.Spec.Affinity
+	out.Spec.NodeSelector = desiredCopy.Spec.NodeSelector
+	out.Spec.Tolerations = desiredCopy.Spec.Tolerations
+	out.Spec.TopologySpreadConstraints = desiredCopy.Spec.TopologySpreadConstraints
+	out.Spec.ImagePullSecrets = desiredCopy.Spec.ImagePullSecrets
+	out.Spec.ServiceAccountName = desiredCopy.Spec.ServiceAccountName
+	out.Spec.PriorityClassName = desiredCopy.Spec.PriorityClassName
+	out.Spec.RuntimeClassName = desiredCopy.Spec.RuntimeClassName
+	out.Spec.DNSConfig = desiredCopy.Spec.DNSConfig
+	out.Spec.HostAliases = desiredCopy.Spec.HostAliases
 	preservePodSpecServerDefaults(&out.Spec, current.Spec)
 	return out
 }
