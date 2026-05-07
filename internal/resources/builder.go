@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
+	commonsnp "github.com/keiailab/operator-commons/pkg/networkpolicy"
 	"github.com/keiailab/operator-commons/pkg/security"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
@@ -1296,54 +1297,45 @@ func BuildMongoDBPDB(mdb *mongodbv1alpha1.MongoDB) *policyv1.PodDisruptionBudget
 //
 // 기본 정책: 같은 RS의 pods간 27017 ingress만 허용. AdditionalIngressFrom으로
 // 운영 namespace, 모니터링 stack(exporter scrape) 등을 추가 ingress로 명시 가능.
+//
+// iteration 26 (2026-05-07): operator-commons/pkg/networkpolicy v0.3.0 위임.
+// 인라인 builder → commons.New + WithSelfIngress + WithIngressFromPeers.
+// valkey iteration 25 (97162b5) 패턴 차용. semantic equivalence 보존.
 func BuildMongoDBNetworkPolicy(mdb *mongodbv1alpha1.MongoDB) *networkingv1.NetworkPolicy {
 	npSpec := mdb.Spec.NetworkPolicy
 	if npSpec == nil || !npSpec.Enabled {
 		return nil
 	}
 	selector := buildLabels(mdb.Name, "replicaset")
-	port := intstr.FromInt(mongoDBPort)
-	tcp := corev1.ProtocolTCP
 
-	np := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      mdb.Name + "-netpol",
-			Namespace: mdb.Namespace,
-			Labels:    selector,
-		},
-		Spec: networkingv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{MatchLabels: selector},
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
-			Ingress: []networkingv1.NetworkPolicyIngressRule{
-				{
-					From: []networkingv1.NetworkPolicyPeer{
-						{PodSelector: &metav1.LabelSelector{MatchLabels: selector}},
-					},
-					Ports: []networkingv1.NetworkPolicyPort{
-						{Port: &port, Protocol: &tcp},
-					},
-				},
-			},
-		},
+	opts := []commonsnp.Option{
+		commonsnp.WithLabels(selector),
+		commonsnp.WithSelfIngress([]int32{int32(mongoDBPort)}),
 	}
+	if extra := convertAdditionalPeers(npSpec.AdditionalIngressFrom); len(extra) > 0 {
+		opts = append(opts, commonsnp.WithIngressFromPeers(extra, []int32{int32(mongoDBPort)}))
+	}
+	return commonsnp.New(mdb.Name+"-netpol", mdb.Namespace, selector, opts...)
+}
 
-	for _, peer := range npSpec.AdditionalIngressFrom {
-		npp := networkingv1.NetworkPolicyPeer{}
-		if peer.PodSelector != nil {
-			npp.PodSelector = &metav1.LabelSelector{MatchLabels: *peer.PodSelector}
-		}
-		if peer.NamespaceSelector != nil {
-			npp.NamespaceSelector = &metav1.LabelSelector{MatchLabels: *peer.NamespaceSelector}
-		}
-		if npp.PodSelector == nil && npp.NamespaceSelector == nil {
+// convertAdditionalPeers — mongodbv1alpha1.NetworkPolicyPeer → commons Peer.
+// PodSelector / NamespaceSelector 둘 다 nil 인 entry 는 skip (기존 동작 보존).
+func convertAdditionalPeers(in []mongodbv1alpha1.NetworkPolicyPeer) []commonsnp.Peer {
+	out := make([]commonsnp.Peer, 0, len(in))
+	for _, peer := range in {
+		if peer.PodSelector == nil && peer.NamespaceSelector == nil {
 			continue
 		}
-		np.Spec.Ingress = append(np.Spec.Ingress, networkingv1.NetworkPolicyIngressRule{
-			From:  []networkingv1.NetworkPolicyPeer{npp},
-			Ports: []networkingv1.NetworkPolicyPort{{Port: &port, Protocol: &tcp}},
-		})
+		p := commonsnp.Peer{}
+		if peer.PodSelector != nil {
+			p.PodSelector = *peer.PodSelector
+		}
+		if peer.NamespaceSelector != nil {
+			p.NamespaceSelector = *peer.NamespaceSelector
+		}
+		out = append(out, p)
 	}
-	return np
+	return out
 }
 
 // pdbBaseSpec은 PodDisruptionBudgetSpec를 받아 기본 minAvailable=replicas-1을
@@ -1419,55 +1411,30 @@ func BuildShardedPDBs(mdbsh *mongodbv1alpha1.MongoDBSharded) []*policyv1.PodDisr
 // buildShardedComponentNetworkPolicy은 cfg/shard/mongos 컴포넌트별 NetworkPolicy
 // 빌더의 공용 helper. selector(컴포넌트 라벨)와 port(cfg=27019/shard=27018/
 // mongos=27017)를 매개변수화한다.
+//
+// iteration 26: commons.New 위임. self-peer 가 *cluster-wide* (instance + managed-by
+// 만 매칭, component 무관) — cfg ↔ shard ↔ mongos 통신 허용 패턴 — WithIngressFromPeers
+// 의 cluster-wide Peer 로 표현.
 func buildShardedComponentNetworkPolicy(mdbsh *mongodbv1alpha1.MongoDBSharded, name string, port int, selector map[string]string) *networkingv1.NetworkPolicy {
 	npSpec := mdbsh.Spec.NetworkPolicy
 	if npSpec == nil || !npSpec.Enabled {
 		return nil
 	}
-	p := intstr.FromInt(port)
-	tcp := corev1.ProtocolTCP
-
-	np := &networkingv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: mdbsh.Namespace,
-			Labels:    selector,
-		},
-		Spec: networkingv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{MatchLabels: selector},
-			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
-			Ingress: []networkingv1.NetworkPolicyIngressRule{
-				{
-					From: []networkingv1.NetworkPolicyPeer{
-						// 같은 sharded cluster의 다른 컴포넌트도 허용 (cfg ↔ shard ↔ mongos).
-						{PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{
-							"app.kubernetes.io/instance":   mdbsh.Name,
-							"app.kubernetes.io/managed-by": "mongodb-operator",
-						}}},
-					},
-					Ports: []networkingv1.NetworkPolicyPort{{Port: &p, Protocol: &tcp}},
-				},
-			},
+	ports := []int32{int32(port)}
+	clusterPeer := commonsnp.Peer{
+		PodSelector: map[string]string{
+			"app.kubernetes.io/instance":   mdbsh.Name,
+			"app.kubernetes.io/managed-by": "mongodb-operator",
 		},
 	}
-
-	for _, peer := range npSpec.AdditionalIngressFrom {
-		npp := networkingv1.NetworkPolicyPeer{}
-		if peer.PodSelector != nil {
-			npp.PodSelector = &metav1.LabelSelector{MatchLabels: *peer.PodSelector}
-		}
-		if peer.NamespaceSelector != nil {
-			npp.NamespaceSelector = &metav1.LabelSelector{MatchLabels: *peer.NamespaceSelector}
-		}
-		if npp.PodSelector == nil && npp.NamespaceSelector == nil {
-			continue
-		}
-		np.Spec.Ingress = append(np.Spec.Ingress, networkingv1.NetworkPolicyIngressRule{
-			From:  []networkingv1.NetworkPolicyPeer{npp},
-			Ports: []networkingv1.NetworkPolicyPort{{Port: &p, Protocol: &tcp}},
-		})
+	opts := []commonsnp.Option{
+		commonsnp.WithLabels(selector),
+		commonsnp.WithIngressFromPeers([]commonsnp.Peer{clusterPeer}, ports),
 	}
-	return np
+	if extra := convertAdditionalPeers(npSpec.AdditionalIngressFrom); len(extra) > 0 {
+		opts = append(opts, commonsnp.WithIngressFromPeers(extra, ports))
+	}
+	return commonsnp.New(name, mdbsh.Namespace, selector, opts...)
 }
 
 // BuildShardedNetworkPolicies는 cfg/shards/mongos 각 컴포넌트에 대한 NetworkPolicy
