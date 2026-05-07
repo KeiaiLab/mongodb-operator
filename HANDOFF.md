@@ -4,6 +4,61 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 47 (cluster ops mode) — 운영 상태 + release readiness
+
+### 라이브 사실 (CLAUDE.md §7 게이트, <!-- live-verified: 2026-05-07 -->)
+
+```
+$ kubectl config current-context
+argos
+$ kubectl get ns data
+NAME   STATUS   AGE
+data   Active   29h
+$ kubectl get application -n argocd platform-data-mongodb -o jsonpath='{.status.sync.status}/{.status.health.status}'
+Synced/Healthy
+$ kubectl get application -n argocd platform-data-valkey -o jsonpath='{.status.sync.status}/{.status.health.status}'
+Synced/Healthy
+$ kubectl get application -n argocd platform-data-postgres-operator -o jsonpath='{.status.sync.status}/{.status.health.status}'
+Synced/Healthy
+```
+
+전 platform-data 9 apps Synced/Healthy.
+
+### Workload 상태 (data ns, 2026-05-07)
+
+| 워크로드 | 상태 | Age | 비고 |
+|---|---|---|---|
+| `mongodbsharded/argos-mongo` | Running, 5 shards × 3 + 3 cfg + 3 mongos | 21h | 13h 전 shard-1/2/4-0 1회 restart 안정화 |
+| `valkeycluster/keiailab-valkey-prod` | Running, 3 shards, 16384 slots ok | 6h42m | — |
+| `postgrescluster/argos-postgres` shard-0-0 | Running | 117m | — |
+| mongodb-operator | Running 1.4.11 | 3h23m | webhook 비활성, 1.4.12 main branch ready |
+| valkey-operator | Running | 87m | webhook 비활성 |
+| postgres-operator | Running | 118m | webhook 비활성 |
+
+3 operator log errors 0 (5min). events 0 (1h).
+
+### Release readiness (1.4.12)
+
+| 영역 | 상태 |
+|---|---|
+| 코드 commit | ✅ main (it45-47 31 commits) |
+| Chart bump | ✅ Chart.yaml 1.4.12 + CHANGELOG (7096bb7) |
+| ADR 6건 | ✅ 0013-0017 + Errata |
+| envtest | ✅ 22 unit + 9 ginkgo PASS, coverage 95.1% |
+| 사용자 docs | ✅ webhook 가이드 양쪽 operator |
+| Image build/push | ⏳ 미빌드 |
+| GH Release v1.4.12 | ⏳ 미생성 |
+| gh-pages 1.4.12 | ⏳ 미발행 |
+| ArgoCD sync 1.4.12 | ⏳ umbrella bump 필요 |
+
+`make release VERSION=v1.4.12` 1단계 실행으로 외부 effect 4건. 사용자 명시 승인 시점.
+
+### Active 디버깅 영역
+
+부재 — 운영 안정 상태. cluster ops mode monitoring 만.
+
+---
+
 ## 2026-05-07 ralph-loop iteration 48 — T22 `make sbom` 타겟 + v1.4.11 SBOM backfill (통합 plan T0-1 mongodb)
 
 | Iteration | Repo | Commit | 산출물 |
