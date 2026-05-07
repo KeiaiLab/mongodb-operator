@@ -140,10 +140,29 @@ platform-observability-grafana   Synced   Healthy
   `shared-valkey-metrics:9121`, `ch-operator-metrics:8888,9999` 등.
 - Grafana 는 *데이터 소스 부재* → 대시보드 / alerting 무력.
 
-valkey-operator 코드에 `commons.monitoring.NewServiceMonitor` 호출이 있지만
-`servicemonitors.monitoring.coreos.com` CRD 부재로 *생성 시 graceful skip*
-또는 *fail 후 reconcile 영구 retry* 가능. controller log 에 errors 0 인
-이유 별도 audit 필요 (skip vs silent fail).
+**fail-soft 동작 확정** (it 내 audit, valkey-operator `internal/controller/
+resources_apply.go:124`):
+```go
+if err != nil && (apierrors.IsNotFound(err) || meta.IsNoMatchError(err)) {
+    return nil
+}
+```
+`meta.IsNoMatchError` 가 *RESTMapper 에 GroupVersionKind 미등록* (CRD 부재)
+시 nil 반환 → 컨트롤러 reconcile 정상 진행, errors 0. design-intent
+graceful skip — Prometheus Operator 설치 후 다음 reconcile 에서 자동
+ServiceMonitor 생성.
+
+3 operator ServiceMonitor 코드 영역 cross-cut audit:
+
+| operator | chart-level (operator pod metrics) | controller-level (CR 인스턴스 metrics) | fail-soft |
+|---|---|---|---|
+| mongodb | ✅ `templates/servicemonitor.yaml` | ❌ (I16 orphan — spec.monitoring.serviceMonitor 정의되었으나 controller 미사용) | N/A |
+| valkey  | ✅ chart 자동 + controller dynamic | ✅ (`commons.monitoring.NewServiceMonitor` + applyServiceMonitor fail-soft) | ✅ NoMatchError 흡수 |
+| postgres| ❌ (0건) | ❌ (0건) | N/A |
+
+상용제품 수준 *비대칭*: valkey 만 controller-level 동적 ServiceMonitor 생성.
+mongodb 의 I16 (MonitoringSpec orphan) 와 postgres 의 ServiceMonitor 부재
+영역이 *동일 결정 영역* — 향후 통합 plan 에서 cross-cut 통일 후보 (별 cycle).
 
 상용제품 도달 영역:
 - platform-observability stack 에 `kube-prometheus-stack` 또는 `Prometheus
