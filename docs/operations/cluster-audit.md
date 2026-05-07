@@ -100,6 +100,9 @@ platform-data-valkey               Synced   Healthy
 | PSS enforcement 작동 검증 | audit-dns 임시 pod 시도 시 PSS restricted (allowPrivilegeEscalation/capabilities/runAsNonRoot/seccompProfile) 모두 거부 — *정책 동작 직접 증거* |
 | ConfigMap usage data ns | 38 ConfigMaps — 워크로드 다양성 정합, leak 없음 (helm release v1-v4 history 4건 + 워크로드별 chart values) |
 | HPA cluster capability | platform-system 의 gitlab-* 영역 HPA 4건 활성 (cpu/memory targeting) — cluster *기술 capability 보유* + data ns *의도된 미활용* (mongodb-operator features.autoscaling=false default) |
+| Services data ns | 38 ClusterIP (cluster-internal only, Ingress 0 정합) |
+| Endpoints binding | 모든 service endpoint binding 정상, empty endpoints 0건 — pod selector 정합 |
+| Cert validity (cert-manager) | platform-system/argos-wildcard-tls + trust-manager + services/mailstory-tls 모두 *2026-08-04~05* (~3 months 후) 만료, cert-manager 자동 갱신 영역 |
 
 ## Audit trail — 격차 발견 commit 매핑
 
