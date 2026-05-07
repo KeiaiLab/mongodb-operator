@@ -4,6 +4,91 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 35 — data 통합 + postgres incident 디버깅 (cluster 운영)
+
+### 사용자 prompt 전환
+
+이전 turn까지 *commons + 코드 영역*. 본 turn: "data 통합, 나머지 모두 진행하면서
+디버깅" — *cluster 운영 + 라이브 디버깅* 영역으로 전환.
+
+### 진척 (cluster operation chain)
+
+| 단계 | 산출물 |
+|---|---|
+| **A. data-staging cleanup** | helm uninstall valkey-operator-staging (redundant — data ns 의 valkey-operator-prod 와 중복, manual install, ArgoCD 미관리). ns scaffolding (NetworkPolicy + ResourceQuota) 보존 (future-use). |
+| **B. ADR-0058 update** (`dfa6a56` argos-infra-bootstrap) | Status: "Accepted (Phase 1 only — Phase 2 deferred, scaffolding 보존)". 재활성화 경로 명시. |
+| **C. postgres incident 진단** | argos-postgres-shard-0-0 4h+ Provisioning stuck. log 분석: `FATAL: lock file "postmaster.pid" is empty` — 이전 graceful shutdown 실패로 *0 byte postmaster.pid* 잔재. |
+| **D. operator-level fix** (`741dc03` postgres) | bootstrap init script 에 *empty postmaster.pid 자동 정리* 로직 추가 (`-s` 테스트로 *비어있는 경우만* 제거 — running postgres 안전). |
+| **E. chart release** (`a08ecf1` postgres) | 0.3.0-alpha.3 → 0.3.0-alpha.4. helm-publish (gh-pages 6b77735). |
+| **F. macOS docker-build platform mismatch** | 첫 build 가 *darwin/arm64 native* → ImagePullError "no match for platform". `docker buildx build --platform linux/amd64 --load` 로 재 build + push (digest sha256:cdc070f1...). |
+| **G. Makefile 영구 fix** (`14c5e2d` postgres) | docker-build 에 `--platform linux/amd64` 명시. mongodb-operator 패턴 차용 (CLAUDE.md §2 정합). |
+| **H. argos-platform-data bump** (`d63b73e` argos-platform-data) | umbrella chart dependency 0.3.0-alpha.3 → 0.3.0-alpha.4. version 0.1.2 → 0.1.3. main + stable promote. |
+| **I. ArgoCD sync + pod restart** | self-heal 복원 (이전 disable). operator pod 강제 재생성 (image pull trigger). postgres pod force restart (5 min backoff 단축) → bootstrap script cleanup 적용 → postgres normal startup. |
+| **J. valkeybackup cleanup** | test-valkey-br-20260507 (test 자원, 167m+ Copying stuck) delete. |
+
+### 최종 cluster 상태 (post-incident)
+
+```
+$ kubectl get postgrescluster,valkeycluster,mongodbsharded -A
+NAMESPACE  NAME                            PHASE     READY  AGE
+data       argos-postgres                  Ready     True   4h27m  ← FIXED
+data       keiailab-valkey-prod            Running   ok     4h45m
+data       argos-mongo                     Running   5/3    19h
+```
+
+3 CR 모두 Ready/Running. data ns 워크로드 (55 pod, 10 app types) 정상.
+
+### 핵심 학습
+
+1. **macOS docker build platform 함정**: CLAUDE.md §2 의 *--platform 생략 시
+   자동 linux/amd64* 가 macOS host 에서 *미작동* — darwin/arm64 native 로 build.
+   해결: `docker buildx build --platform linux/amd64 --load` 명시. mongodb-
+   operator Makefile 이 *모범 답안* — postgres 도 동일 패턴 차용.
+2. **K8s exponential backoff (5 min) 단축**: stuck pod 의 *force delete* 가
+   exponential backoff 대기 우회. cluster incident recovery 시 유용.
+3. **operator-level fix vs hot-fix 결정 매트릭스**: 사용자 명시 *operator-level*
+   선택 — 영구 fix + 코드 history 기록 + 다른 cluster reuse. hot-fix 는 *runtime
+   drift* 위험.
+4. **3-tier image pipeline 의존성 chain**: postgres-operator → gh-pages helm
+   chart → argos-platform-data umbrella → ArgoCD app. *각 단계 누락 시 fix
+   미적용*. 본 turn 의 30분+ post-mortem 의 가장 큰 시간 소비 영역.
+
+### 검증 인용
+
+```
+$ git log --oneline -1 (3 repos)
+postgres-operator     14c5e2d  fix(make): docker-build —platform linux/amd64
+postgres-operator     a08ecf1  chore(release): bump chart 0.3.0-alpha.4
+postgres-operator     741dc03  fix(controller): bootstrap init — empty postmaster.pid
+argos-platform-data   d63b73e  chore(postgres-operator): bump dependency 0.3.0-alpha.4
+argos-infra-bootstrap dfa6a56  docs(adr-0058): Phase 1 only status
+
+$ kubectl get application -n argocd platform-data-postgres-operator \
+    -o jsonpath='{.status.sync.revision}'
+d63b73e  ← argos-platform-data stable revision
+
+$ kubectl logs argos-postgres-shard-0-0 -n data -c bootstrap | tail -1
+"PGDATA already initialized at /var/lib/postgresql/data/pgdata; permissions
+ normalized; skipping bootstrap"  ← 정상 startup, postmaster.pid cleanup 없음
+
+$ kubectl get pods -n data argos-postgres-shard-0-0
+NAME                       READY   STATUS    RESTARTS   AGE
+argos-postgres-shard-0-0   1/1     Running   0          16s
+```
+
+### 다음 iteration 자연 진입점
+
+- **iteration 36**: valkeybackup *job 생성 단계 stuck* root cause 분석 (별도
+  incident — backup 새 시도 시 재현 가능성).
+- **iteration 37+**: cluster live-verified 마커 + governance-report 의 ssot-
+  cluster-gap% 메트릭 갱신 (RFC-0004).
+- **iteration 16/M4 mongodb**: PITR / online shard / LDAP — 큰 기능.
+- **iteration 21/P4 postgres**: G1-G2 자체 SQL — bitnami 능가.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 32 — valkey setCondition → upstream 위임 + boundary 분석
 
 ### 진척
