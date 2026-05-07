@@ -4,6 +4,89 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 32 — valkey setCondition → upstream 위임 + boundary 분석
+
+### 진척
+
+| Iteration | Repo | Commit | 산출물 |
+|---|---|---|---|
+| **it32** | valkey-operator | `cb9b807` | setCondition 17-line 인라인 → k8s.io/apimachinery/pkg/api/meta.SetStatusCondition 3-line wrapper. 9 conditions test sub PASS. |
+
+### 핵심 결정 — boundary 분석 (보류 영역)
+
+본 turn 진입 전 검토했으나 *Surgical Changes 정합상 보류* 한 작업:
+
+1. **postgres webhook → commons.ValidateAllowedVersion 위임** — postgres webhook 이
+   *immediate-return error* 패턴 + `version.IsSupported(v, FeatureGates)` 의 *2-arg
+   시그너처* (FeatureGates 파라미터). valkey 의 *errs accumulate* 패턴과 다름. 변환 시
+   *intentional design 변경 + test 영향* — 본 turn 보류. ADR 추후 결정.
+2. **operator-commons v0.5.0 conditions 패키지** — `apimachinery/pkg/api/meta.
+   SetStatusCondition` 이 *upstream 동등 기능 제공*. commons 신규 패키지 추가는
+   *over-engineering*. 대신 *3 operator 의 자체 reimplementation 을 upstream 위임*
+   방향 채택.
+3. **mongodb conditions 위임** — mongodb 의 conditions 패턴이 *filterConditionsByType
+   + append* (LastTransitionTime 매번 Now). upstream 의 *Status 변경 시만 갱신*
+   과 semantics 차이. *intentional* 인지 *deviation* 인지 *별도 분석 + ADR* 필요 —
+   본 turn 보류.
+
+### upstream 위임 vs commons 추가 결정 패턴
+
+operator-commons 의 *boundary*:
+- 추가 가치 *큰* 영역: SecurityContext / version 화이트리스트 / NetworkPolicy 빌더
+  / labels / monitoring / webhook 검증 — 6 패키지 채택.
+- 추가 가치 *작은* 영역 (upstream 직접 사용 우선): conditions (meta.SetStatusCondition),
+  status patching (controllerutil), event recording (record.EventRecorder).
+
+본 boundary 가 *commons API 비대화 회피* + *upstream 표준 활용* 가치.
+
+### 검증 인용
+
+```
+$ go test ./internal/controller/ -run "TestSetCondition_replace_and_transitionTime|TestBoolToConditionStatus|TestApplyClusterConditions" -count=1
+ok  github.com/keiailab/valkey-operator/internal/controller  0.637s
+(9 conditions test sub PASS)
+
+$ go test ./... -count=1
+(전 패키지 PASS — controller envtest 17.9s + webhook 3.4s 포함)
+
+LoC: -15 / +7 (helpers.go) — upstream 위임으로 8 줄 net 감소
+```
+
+### 다음 iteration 자연 진입점
+
+- **iteration 33**: mongodb conditions 패턴 *intentional vs deviation* 분석 +
+  ADR 작성. *deviation* 시 upstream 위임. *intentional* 시 reasoning 영구 기록.
+- **iteration 34**: postgres webhook *immediate→accumulate 변환 + commons 위임* —
+  ADR 작성 후 큰 refactor.
+- **iteration 35+**: mongodb webhook server 부트스트랩 (cert-manager 통합, 큰 작업).
+- **iteration 16/M4 mongodb**: PITR / online shard / LDAP — 큰 기능.
+- **iteration 21/P4 postgres**: G1-G2 자체 SQL — bitnami 능가.
+
+### 누적 진척
+
+```
+operator-commons v0.4.0 (6 패키지 100% line coverage)
+3 operator commons 채택률:
+  mongodb  4/6 (67%) — security/version/labels/networkpolicy
+  valkey   6/6 (100%) ← 완전 채택
+  postgres 2/6 (33%) — security/labels
+─────────────────────────────────
+23/12+ iteration (~99%) — bitnami parity 100% + commons 6 패키지 + upstream
+위임 boundary 명확화.
+
+Boundary 결정 (3 operator 향후 가이드):
+- commons 추가 = 3 operator 공통 + upstream 부재 영역
+- upstream 직접 = upstream 동등 기능 보유 영역 (conditions, status, event)
+- *intentional design* 보존 = 변경 시 ADR 필수 (postgres webhook 패턴 등)
+```
+
+본 turn 핵심 가치 — **commons / upstream / 자체 보존 의 *3-way boundary 명확화***.
+무한 ralph-loop 의 *evidence-based ship* 결정 가이드 영구 기록.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 30-31 — operator-commons v0.4.0 (webhook) + valkey 6/6 완성
 
 ### 진척
