@@ -4,6 +4,80 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 48 — T22 `make sbom` 타겟 + v1.4.11 SBOM backfill (통합 plan T0-1 mongodb)
+
+| Iteration | Repo | Commit | 산출물 |
+|---|---|---|---|
+| **it48** | mongodb-operator | `e898c30` | `Makefile` 에 `.PHONY: sbom` 타겟 추가 (valkey L465-472 패턴 byte-identical). v1.4.11 GitHub Release 에 retroactive `mongodb-operator-v1.4.11.spdx.json` (836664 bytes, SPDX-2.3, 103 packages) `gh release upload`. `release-smoke-test.sh v1.4.11` 결과 SBOM FAIL 1건 → **12 PASS / 0 FAIL** 회복. |
+
+### 동기
+
+본 iteration 은 *통합 plan SSoT* 의 T0 (즉시 차단 해소) 단위. ~/.claude/plans/wondrous-tumbling-porcupine.md (사용자 승인 30/60/90일 로드맵) 의 T0-1 을 *mongodb 부분만* 처리 (postgres 부분은 다음 cycle).
+
+배경:
+- it45 release-smoke retry 정책 도입 (b01f5cd) 후 v1.4.11 검증 시 1 FAIL 잔존 — SBOM SPDX asset 누락 (`make sbom` 타겟 부재).
+- 사용자 광범위 분석 (3 Explore + 3 Plan agent + 외부 OSS 비교) 결과 4 repo 통합 로드맵 도출. 그 *첫 단계* 가 본 작업.
+
+### 변경 요약
+
+1. `Makefile` L131-136 (`release-notes` 타겟) 직후 `.PHONY: sbom` 8 라인 블록 삽입. valkey L465-472 syft 패턴 byte-identical (chart name 만 mongodb-operator 로 치환).
+2. `make help` 자동 출력에 sbom 타겟 즉시 등록 — Makefile help target 의 awk parse-by-`##` 컨벤션 덕분.
+3. v1.4.11 GitHub Release 에 SBOM asset retroactive upload (gh CLI operation, no code commit).
+
+### 검증 인용
+
+```
+$ syft version
+Application:   syft
+Version:       1.44.0  (Homebrew, 2026-04-29 빌드)
+
+$ make sbom VERSION=v1.4.11
+=== syft scan ghcr.io/keiailab/mongodb-operator:v1.4.11 ===
+✓ SBOM: /tmp/mongodb-operator-v1.4.11.spdx.json (836664 bytes)
+
+$ jq '{spdxVersion, name, packages: (.packages | length)}' /tmp/mongodb-operator-v1.4.11.spdx.json
+{"spdxVersion": "SPDX-2.3", "name": "ghcr.io/keiailab/mongodb-operator", "packages": 103}
+
+$ gh release upload v1.4.11 /tmp/mongodb-operator-v1.4.11.spdx.json -R keiailab/mongodb-operator
+(silent success)
+
+$ gh release view v1.4.11 -R keiailab/mongodb-operator --json assets --jq '.assets[].name'
+mongodb-operator-1.4.11.tgz
+mongodb-operator-v1.4.11.spdx.json
+
+$ ./scripts/release-smoke-test.sh v1.4.11
+✓ release v1.4.11 존재
+✓ chart .tgz asset 첨부
+✓ SBOM (SPDX) asset 첨부 — supply chain 표준
+✓ image ghcr.io/keiailab/mongodb-operator:v1.4.11 (digest: sha256:b20f8bed36a5...)
+✓ Pages status=built
+✓ index.yaml fetch / version: 1.4.11 존재
+✓ helm pull / helm template (default) / helm template (features.cluster/backup/autoscaling=true)
+✓ trivy image: 0 HIGH+CRITICAL (fixed CVE 없음)
+RESULT: 12 PASS / 0 FAIL
+```
+
+### 다음 iteration 자연 진입점
+
+본 plan 의 T0-1 후속:
+- it49: postgres-operator 에 동일 `make sbom` 타겟 추가 (valkey 패턴 이식). v0.3.0-alpha.4 retroactive SBOM upload + release-smoke 재검증.
+- it50+: T0-2 — release tag 시 `make sbom && gh release upload` 자동화 (mongodb + postgres release.sh 또는 Makefile release 타겟 통합).
+- 그 후 P0 단계 — A 거버넌스 (NOTICE / ADOPTERS / CODEOWNERS owner 정합) 가 1인 maintainer 가용 시간 적합.
+
+### 사용자 결정 대기 항목 (통합 plan G 절)
+
+- A-P0-2 GitHub `keiailab/maintainers` team 실재 + `@eightynine01` 멤버 여부
+- A-P0-6 4 repo Discussions enable 토글
+- C-P0-1 멀티아키 강등 (postgres/valkey arm64/s390x/ppc64le → amd64-only) 동의 여부
+- C-P0-2 mongodb go directive 1.26.2 → 1.25.7 다운그레이드 vs 3 repo 1.26.2 업그레이드
+- B-P0-7 mongodb MonitoringSpec 구현 vs 삭제
+
+답변 받으면 후속 iteration 진입 가능. 답변 없이 진행 가능한 항목은 본 plan 의 권고 시작 순서 1~2 단계 (T0-1 postgres + T0-2 자동화 + A-P0-1 NOTICE + A-P0-3 GOVERNANCE 임계 + A-P0-4 ADOPTERS + A-P0-7 Scorecard badge + X-P0-1 templates/governance/).
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 45 (계속) — webhook server 부트스트랩 (M1 Phase 1)
 
 | Iteration | Repo | Commit | 산출물 |
