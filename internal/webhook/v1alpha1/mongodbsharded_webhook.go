@@ -13,7 +13,6 @@ package v1alpha1
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -25,8 +24,7 @@ import (
 
 // SetupMongoDBShardedWebhookWithManager registers the validating webhook.
 func SetupMongoDBShardedWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&mongodbv1alpha1.MongoDBSharded{}).
+	return ctrl.NewWebhookManagedBy(mgr, &mongodbv1alpha1.MongoDBSharded{}).
 		WithValidator(&MongoDBShardedCustomValidator{}).
 		Complete()
 }
@@ -36,29 +34,21 @@ func SetupMongoDBShardedWebhookWithManager(mgr ctrl.Manager) error {
 // MongoDBShardedCustomValidator — sharded cluster admission validation.
 type MongoDBShardedCustomValidator struct{}
 
-func (v *MongoDBShardedCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	m, ok := obj.(*mongodbv1alpha1.MongoDBSharded)
-	if !ok {
-		return nil, apiError("MongoDBSharded", "<unknown>", nil)
-	}
+func (v *MongoDBShardedCustomValidator) ValidateCreate(_ context.Context, m *mongodbv1alpha1.MongoDBSharded) (admission.Warnings, error) {
 	if errs := validateMongoDBShardedSpec(m); len(errs) > 0 {
 		return nil, apiError("MongoDBSharded", m.GetName(), errs)
 	}
 	return nil, nil
 }
 
-func (v *MongoDBShardedCustomValidator) ValidateUpdate(_ context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
-	m, ok := newObj.(*mongodbv1alpha1.MongoDBSharded)
-	if !ok {
-		return nil, apiError("MongoDBSharded", "<unknown>", nil)
-	}
-	if errs := validateMongoDBShardedSpec(m); len(errs) > 0 {
-		return nil, apiError("MongoDBSharded", m.GetName(), errs)
+func (v *MongoDBShardedCustomValidator) ValidateUpdate(_ context.Context, _, newObj *mongodbv1alpha1.MongoDBSharded) (admission.Warnings, error) {
+	if errs := validateMongoDBShardedSpec(newObj); len(errs) > 0 {
+		return nil, apiError("MongoDBSharded", newObj.GetName(), errs)
 	}
 	return nil, nil
 }
 
-func (v *MongoDBShardedCustomValidator) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
+func (v *MongoDBShardedCustomValidator) ValidateDelete(_ context.Context, _ *mongodbv1alpha1.MongoDBSharded) (admission.Warnings, error) {
 	return nil, nil
 }
 

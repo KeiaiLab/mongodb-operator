@@ -412,27 +412,11 @@ func TestMongoDBCustomValidator_ValidateCreate_RejectInvalid(t *testing.T) {
 	}
 }
 
-func TestMongoDBCustomValidator_TypeAssertionFailure(t *testing.T) {
-	t.Parallel()
-	// 잘못된 GVK (corev1.Pod) 가 admission framework bug 로 들어오면 panic 대신
-	// apiError 반환. validation 우회 차단.
-	v := &MongoDBCustomValidator{}
-	pod := &corev1.Pod{}
-	_, err := v.ValidateCreate(context.Background(), pod)
-	if err == nil {
-		t.Error("non-MongoDB obj should be rejected (no panic, safe reject)")
-	}
-}
-
-func TestMongoDBShardedCustomValidator_TypeAssertionFailure(t *testing.T) {
-	t.Parallel()
-	v := &MongoDBShardedCustomValidator{}
-	pod := &corev1.Pod{}
-	_, err := v.ValidateCreate(context.Background(), pod)
-	if err == nil {
-		t.Error("non-MongoDBSharded obj should be rejected (no panic, safe reject)")
-	}
-}
+// TypeAssertionFailure tests 제거 — controller-runtime v0.23+ generic API 가
+// ValidateCreate(*MongoDB) signature 강제하여 *컴파일 단계* 에서 잘못된 GVK
+// 차단. ADR-0017 Type A (CRD/compile-time guarantee 로 unreachable). 즉
+// non-generic API (v0.22.4) 시절의 *runtime panic 가드* 가 *compile-time
+// guarantee* 로 격상되어 test 자체 컴파일 불가.
 
 func TestMongoDBCustomValidator_ValidateUpdate_HappyPath(t *testing.T) {
 	t.Parallel()
@@ -502,17 +486,6 @@ func TestMongoDBShardedCustomValidator_ValidateDelete_AlwaysAllow(t *testing.T) 
 	_, err := v.ValidateDelete(context.Background(), m)
 	if err != nil {
 		t.Errorf("sharded delete should always pass, got %v", err)
-	}
-}
-
-func TestMongoDBShardedCustomValidator_ValidateUpdate_TypeAssertionFailure(t *testing.T) {
-	t.Parallel()
-	v := &MongoDBShardedCustomValidator{}
-	pod := &corev1.Pod{}
-	old := &mongodbv1alpha1.MongoDBSharded{}
-	_, err := v.ValidateUpdate(context.Background(), old, pod)
-	if err == nil {
-		t.Error("non-MongoDBSharded newObj should be rejected (no panic)")
 	}
 }
 

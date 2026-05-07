@@ -23,7 +23,6 @@ import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -35,8 +34,7 @@ import (
 
 // SetupMongoDBWebhookWithManager registers the validating webhook for MongoDB.
 func SetupMongoDBWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&mongodbv1alpha1.MongoDB{}).
+	return ctrl.NewWebhookManagedBy(mgr, &mongodbv1alpha1.MongoDB{}).
 		WithValidator(&MongoDBCustomValidator{}).
 		Complete()
 }
@@ -46,12 +44,9 @@ func SetupMongoDBWebhookWithManager(mgr ctrl.Manager) error {
 // MongoDBCustomValidator — admission validation.
 type MongoDBCustomValidator struct{}
 
-// ValidateCreate — 신규 CR 검증. runtime.Object signature (non-generic API).
-func (v *MongoDBCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	m, ok := obj.(*mongodbv1alpha1.MongoDB)
-	if !ok {
-		return nil, apiError("MongoDB", "<unknown>", nil)
-	}
+// ValidateCreate — 신규 CR 검증. controller-runtime v0.23+ generic API
+// (compiler 가 type 강제 → type assertion 불필요).
+func (v *MongoDBCustomValidator) ValidateCreate(_ context.Context, m *mongodbv1alpha1.MongoDB) (admission.Warnings, error) {
 	if errs := validateMongoDBSpec(m); len(errs) > 0 {
 		return nil, apiError("MongoDB", m.GetName(), errs)
 	}
@@ -59,19 +54,15 @@ func (v *MongoDBCustomValidator) ValidateCreate(_ context.Context, obj runtime.O
 }
 
 // ValidateUpdate — spec 검증 + immutable 가드.
-func (v *MongoDBCustomValidator) ValidateUpdate(_ context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
-	m, ok := newObj.(*mongodbv1alpha1.MongoDB)
-	if !ok {
-		return nil, apiError("MongoDB", "<unknown>", nil)
-	}
-	if errs := validateMongoDBSpec(m); len(errs) > 0 {
-		return nil, apiError("MongoDB", m.GetName(), errs)
+func (v *MongoDBCustomValidator) ValidateUpdate(_ context.Context, _, newObj *mongodbv1alpha1.MongoDB) (admission.Warnings, error) {
+	if errs := validateMongoDBSpec(newObj); len(errs) > 0 {
+		return nil, apiError("MongoDB", newObj.GetName(), errs)
 	}
 	return nil, nil
 }
 
 // ValidateDelete — 항상 허용.
-func (v *MongoDBCustomValidator) ValidateDelete(_ context.Context, _ runtime.Object) (admission.Warnings, error) {
+func (v *MongoDBCustomValidator) ValidateDelete(_ context.Context, _ *mongodbv1alpha1.MongoDB) (admission.Warnings, error) {
 	return nil, nil
 }
 
