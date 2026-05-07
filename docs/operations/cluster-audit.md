@@ -52,6 +52,7 @@ platform-data-valkey               Synced   Healthy
 | **I26** | MonitoringSpec orphan (mongodb) — Phase 1 deprecation marker | **완료 100%** | UX 함정 해소 | — (코드 only) | — |
 | **I28** | MonitoringSpec orphan Phase 2 trigger — C25 + 30일 사용 측정 | 차단 (C25) | I26 후속 결정 | C25 해소 후 trigger | Low (차단) |
 | **F23** | webhook server 도입 (mongodb 11 + valkey 4 + postgres 1 invariant + 18 envtest specs) | **완료 100%** | spec 검증 dual-layer | — (코드 only) | — |
+| **C29** | dead RBAC — `valkey-operator` ClusterRole/Binding (helm chart 0.1.0-alpha.2 잔존) | 발견 | cluster pollution, 보안 risk 0 (SA 부재로 권한 행사 불가) | `kubectl delete clusterrole/clusterrolebinding valkey-operator valkey-operator-metrics-auth` | Low |
 
 ## DR Snapshots (임시 보관)
 
