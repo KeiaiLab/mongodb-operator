@@ -127,6 +127,15 @@ repos:
         always_run: true
         stages: [pre-push]
 
+      - id: platforms-amd64-guard
+        name: Multi-arch 재발 방지 (RFC 0002 §2, C-P0-12)
+        description: PLATFORMS 가 arm64/s390x/ppc64le 포함 시 push 차단.
+        language: system
+        entry: bash -c 'if grep -qE "^PLATFORMS.*linux/(arm64|s390x|ppc64le)" Makefile; then echo "❌ Multi-arch PLATFORMS 잔존 — RFC 0002 §2 위반"; exit 1; fi'
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
   # Commit message hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
