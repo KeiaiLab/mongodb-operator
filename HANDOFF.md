@@ -4,6 +4,124 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 36-37 — 3 operator docker-build 통일 + valkey backup PodSecurity fix
+
+### 진척
+
+| Iteration | Repo | Commit / Tag | 산출물 |
+|---|---|---|---|
+| **it36** | valkey-operator | `e6f761a` | docker-build → linux/amd64 명시 (mongodb 모범 패턴 차용). 3 operator docker-build 일관성 통일. |
+| **it37** | valkey-operator | `a25b36a` + chart 1.0.2 + image 1.0.2 | backup job rdb-copy → commons.RestrictedContainer 위임. PodSecurity restricted invariant 적용. helm upgrade valkey-operator-prod (manual, ArgoCD 미관리). |
+
+### iteration 37 incident chain
+
+**진단 (operator log + job describe)**:
+```
+Warning  FailedCreate  data/job-controller  Error creating: pods
+  "...-rdb-copy-XXXXX" is forbidden: violates PodSecurity "restricted:latest":
+  allowPrivilegeEscalation != false ... capabilities.drop=["ALL"] ...
+  seccompProfile (must set ... RuntimeDefault or Localhost)
+```
+
+**Root cause**: backup copy Job 의 *rdb-copy container* SecurityContext 미설정.
+data ns enforce=restricted admission 거부. job-controller 매 5-15s 재시도로
+ValkeyBackup Phase=Copying stuck.
+
+**iteration 8 cross-cut deepening 누락**: 당시 *image init* 만 commons 위임 —
+*job pod template SecurityContext* 는 *별 영역* 으로 누락. it37 fix 로 해소.
+
+**Fix chain** (postgres iteration 35 패턴 재적용):
+1. operator code: backup_job.go 의 rdb-copy → security.RestrictedContainer (`a25b36a`)
+2. chart 1.0.1 → 1.0.2 + artifacthub annotation drift fix
+3. image rebuild + push (linux/amd64 명시)
+4. gh-pages helm-publish (`bf8e92e`)
+5. helm upgrade valkey-operator-prod (manual, ArgoCD 미관리)
+6. 새 backup 시도 → admission *통과* (Forbidden → Pending)
+
+**검증 결과**:
+- 이전 (1.0.1): pod 매 5-15s `Error: Forbidden` 거부
+- 신규 (1.0.2): pod `Pending` (admission 통과, PVC 부재 별 issue)
+
+PodSecurity fix 검증 완료. PVC 자동 생성 issue 는 별 영역 (it38 follow-up).
+
+### 3 operator docker-build 패턴 통일 (it36)
+
+| Repo | docker-build 명시 platform | 출처 |
+|---|---|---|
+| mongodb-operator | ✅ linux/amd64 | 기존 (모범 답안) |
+| postgres-operator | ✅ linux/amd64 | iteration 35 (`14c5e2d`) |
+| **valkey-operator** | **✅ linux/amd64** | **iteration 36 (`e6f761a`)** |
+
+3 operator 모두 *동일 패턴* — macOS host 에서 build 시 *darwin/arm64 native* 함정
+영구 차단.
+
+### 핵심 학습
+
+1. **Cross-operator pattern audit 가치**: postgres iteration 35 의 단일 incident
+   fix 후 *valkey 도 동일 deviation* 가능성 *적극 검토* — *재발 방지* + *3 operator
+   일관성*. 본 turn 의 it36 도 같은 사상.
+2. **iteration 8 commons cross-cut 의 *깊이 부족* 발견**: 당시 *image init* 만
+   채택. *job pod template / sidecar container / init container* 등 *모든
+   container SecurityContext* 까지 적극 검토 안 됨. 본 turn 의 it37 가
+   deepening 의 사례.
+3. **Manual helm release vs ArgoCD app**: valkey-operator-prod 가 *manual helm*
+   (ArgoCD 미관리) → helm upgrade 직접 가능. argos-platform-data 의 *valkey
+   umbrella* 는 bitnami/valkey dep 만 (자체 valkey-operator 미사용). 즉 *operator
+   = manual + workload = ArgoCD* 분리 패턴. 본 발견을 HANDOFF 영구 기록.
+
+### 검증 인용
+
+```
+$ kubectl get pods -n data -l app.kubernetes.io/instance=valkey-operator-prod
+NAME                                    READY   STATUS    RESTARTS   AGE
+valkey-operator-prod-6df499f8d9-57s82   1/1     Running   0          29s
+
+$ kubectl get deploy valkey-operator-prod -n data -o jsonpath='{.spec.template.spec.containers[0].image}'
+ghcr.io/keiailab/valkey-operator:1.0.2  ← upgraded
+
+$ helm list -n data | grep valkey-operator-prod
+valkey-operator-prod  data  3  ...  deployed  valkey-operator-1.0.2  1.0.2
+```
+
+### 다음 iteration 자연 진입점
+
+- **iteration 38**: valkey backup PVC *자동 생성* 분석 — operator-managed PVC
+  vs 사용자 사전 생성 정책 결정 + ADR.
+- **iteration 39+**: ssot-cluster-gap% 메트릭 (RFC-0004) — governance-report.
+- **M4 / V3 / P4** 큰 기능.
+
+### 누적 진척
+
+```
+operator-commons v0.4.0 (6 패키지 100% line coverage)
+3 operator commons 채택률:
+  mongodb  4/6 (67%)
+  valkey   6/6 (100%)
+  postgres 3/6 (50%)
+
+3 operator docker-build platform 통일:
+  ✅ mongodb / postgres / valkey 모두 linux/amd64 명시
+
+cluster operations history (it35-37):
+  it35: postgres incident (postmaster.pid empty) — code+chart+image+umbrella+ArgoCD
+  it36: valkey docker-build platform 일관성
+  it37: valkey backup PodSecurity (it8 deepening — job pod template)
+
+3 CR cluster status (final):
+  postgrescluster argos-postgres        Ready  ✅
+  valkeycluster keiailab-valkey-prod    Running ✅
+  mongodbsharded argos-mongo            Running ✅
+─────────────────────────────────
+27/12+ iteration (~99%, ssot-gap + valkey PVC autogen + M4/V3/P4 잔여)
+```
+
+본 turn 핵심 가치 — **iteration 35 incident 의 cross-operator audit + iteration 8
+deepening**. 단일 incident → 3 operator 패턴 통일 + 잠재 deviation 사전 차단.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 35 — data 통합 + postgres incident 디버깅 (cluster 운영)
 
 ### 사용자 prompt 전환
