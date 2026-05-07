@@ -189,32 +189,22 @@ func (r *MongoDBBackupReconciler) getClusterConnectionString(ctx context.Context
 	return connectionString, nil
 }
 
+// createOrUpdate — race-tolerant Job/PVC apply (postgres iteration 35 패턴 차용).
+//
+// iteration 42: *raw Get + Create + IsAlreadyExists guard* → *controllerutil.
+// CreateOrUpdate* 마이그레이션. controller-runtime 이 *AlreadyExists 자동 retry*
+// + Update mutate fn 호출 — race-tolerant 기본 보장. mutate fn 은 *no-op*
+// (Job 존재 시 update 안 하는 기존 동작 보존).
+//
+// postgres-operator 의 우월한 추상화 패턴 차용 (HANDOFF iteration 41 §postgres
+// 의 우월한 추상화 발견). it41 (a0a0cff) 의 *수동 IsAlreadyExists guard* 보다
+// robust + 코드 simpler.
 func (r *MongoDBBackupReconciler) createOrUpdate(ctx context.Context, backup *mongodbv1alpha1.MongoDBBackup, obj client.Object) error {
-	// Set owner reference
-	if err := controllerutil.SetControllerReference(backup, obj, r.Scheme); err != nil {
-		return err
-	}
-
-	// Check if object exists
-	existing := obj.DeepCopyObject().(client.Object)
-	err := r.Get(ctx, types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, existing)
-
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// iteration 41 (it40 cross-cut): race-tolerant create. Cache stale 또는
-			// parallel reconcile 로 *Get NotFound + Create AlreadyExists* 가능 (valkey
-			// it40 incident: cosmetic Phase=Failed). IsAlreadyExists 시 *기존 object
-			// reuse* — 다음 reconcile cycle 의 Get success 분기로 fall-through.
-			if createErr := r.Create(ctx, obj); createErr != nil && !errors.IsAlreadyExists(createErr) {
-				return createErr
-			}
-			return nil
-		}
-		return err
-	}
-
-	// Job already exists, don't update
-	return nil
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, obj, func() error {
+		// owner reference 만 설정 (Job/PVC spec 자체는 update 안 함 — 기존 동작 보존).
+		return controllerutil.SetControllerReference(backup, obj, r.Scheme)
+	})
+	return err
 }
 
 func (r *MongoDBBackupReconciler) updateBackupStatus(ctx context.Context, backup *mongodbv1alpha1.MongoDBBackup, jobName string) error {
