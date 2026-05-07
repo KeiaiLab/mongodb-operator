@@ -4,6 +4,87 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-07 ralph-loop iteration 23 — operator-commons v0.2.1 + valkey ServiceMonitor 위임 (실 사용처 첫 적용)
+
+### 진척
+
+| Iteration | Repo | Commit / Tag | 산출물 |
+|---|---|---|---|
+| **it23 prep** | operator-commons | `87ba52d` + tag `v0.2.1` | ServiceMonitorParams 확장 — NamespaceSelector + ScrapeTimeout. valkey 위임 prerequisite. 4/4 패키지 100% line coverage 유지. |
+| **it23 main** | valkey-operator | `1765b54` | servicemonitor.go 의 BuildServiceMonitorForCluster → commons.NewServiceMonitor 위임. unstructured 인라인 빌드 + stringMap helper 제거. go.mod commons v0.1.2 → v0.2.1. |
+
+### 핵심 발견
+
+1. **commons API evolution 패턴**: 실 사용처 (valkey servicemonitor.go) 발견 후
+   *부재한 옵션* (NamespaceSelector / ScrapeTimeout) 식별 → commons v0.2.1 추가
+   → 사용처 마이그레이션. 미리 모든 옵션 추가하지 않은 *Simplicity First* 정합.
+2. **go-mod-tidy lefthook 가드 발견**: `go get @v0.2.1` 후 `go mod tidy` 가 go.sum
+   의 *이전 v0.1.2 entry* 제거 필요. lefthook pre-push 가 drift 차단 — `tidy
+   적용 + commit --amend + push` 패턴으로 대응.
+3. **mongodb / postgres 의 ServiceMonitor 위임 보류**: mongodb 는 *chart template
+   only* (operator runtime ServiceMonitor builder 부재 — CR 마다 동적 생성 안
+   함). postgres 도 동일. 즉 valkey 만 *runtime ServiceMonitor reconciler* 보유.
+   mongodb / postgres 는 *향후 reconciler 추가 시* commons 채택 — over-engineering 회피.
+
+### 검증 인용
+
+```
+operator-commons v0.2.1 (87ba52d):
+  $ go test ./...
+  ok  pkg/labels      100.0%
+  ok  pkg/monitoring  100.0%   (NamespaceSelector / ScrapeTimeout 신규 case 포함)
+  ok  pkg/security    100.0%
+  ok  pkg/version     100.0%
+  total                100.0%
+
+valkey it23 (1765b54):
+  $ go test ./... -count=1
+  ok  github.com/keiailab/valkey-operator/internal/controller         16.671s
+  ok  github.com/keiailab/valkey-operator/internal/resources           1.185s
+  ok  github.com/keiailab/valkey-operator/internal/webhook/v1alpha1    1.829s
+  pre-push hooks: full-lint / gitleaks / helm-lint / helm-template / unit-test (20s+) / go-mod-tidy 모두 PASS
+```
+
+### resulting ServiceMonitor 동등성 (valkey)
+
+| Field | 이전 (인라인) | 신규 (commons 위임) |
+|---|---|---|
+| metadata.name / namespace / labels | unchanged | unchanged |
+| spec.selector.matchLabels | MetricsServiceLabels | unchanged via Selector |
+| spec.namespaceSelector.matchNames | [vc.Namespace] | unchanged via NamespaceSelector |
+| spec.endpoints[0].port | metrics | unchanged |
+| spec.endpoints[0].path | /metrics | unchanged |
+| spec.endpoints[0].interval | sm.Interval / 30s | unchanged |
+| spec.endpoints[0].scheme | http | unchanged |
+| spec.endpoints[0].scrapeTimeout | 10s | unchanged |
+
+### 다음 iteration 자연 진입점
+
+- **iteration 24**: mongodb / postgres reconciler 가 ServiceMonitor 동적 생성
+  추가 (CR.spec.monitoring 옵션 기반) → commons 위임. *기능 추가 동반*.
+- **iteration 16 (Phase 1 M4)**: mongodb operator-grade — PITR / online shard
+  rebalance / LDAP. 큰 작업.
+- **iteration 21 (Phase 3 P4)**: postgres G1-G2 자체 SQL — bitnami 능가.
+
+### 누적 진척
+
+```
+Phase 0+: operator-commons v0.2.1 ✅
+Phase 1 mongodb (it 9-15): ✅ M1+M2+M3
+Phase 2 valkey (it 17-18, 23): ✅ V1+V2 + monitoring 위임
+Phase 3 postgres (it 19-20): ✅ P2+P3
+─────────────────────────────────
+14/12+ iteration (~95%, M4/V3/P4 + mongodb/postgres ServiceMonitor reconciler 잔여)
+```
+
+본 turn 핵심 가치 — **commons monitoring 패키지의 실 사용처 첫 적용**. valkey 의
+인라인 ServiceMonitor 빌드 → commons 위임으로 *3 operator drift 차단 시작*.
+mongodb / postgres 의 reconciler 추가 시 동일 commons 사용.
+
+<!-- live-verified: 2026-05-07 -->
+
+---
+
 ## 2026-05-07 ralph-loop iteration 22 — operator-commons v0.2.0 (labels + monitoring)
 
 ### 진척
