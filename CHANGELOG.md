@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- audit (4-repo cross-cut, 2026-05-09): RFC-0017 채택 — `.lefthook.yml` 신설 (valkey 패턴), `.codecov.yml` target `auto` → 70% (testing.md §5 절대 floor), HANDOFF.md 88% 압축 (token-budget §3, archive 100% 보존), ADR-0020 등재. 코드/CRD 영향 0. 후속 작업: ADR-0020 AI-MO20-1~4.
+
 ## [1.4.16] - 2026-05-08
 
 ### Added
