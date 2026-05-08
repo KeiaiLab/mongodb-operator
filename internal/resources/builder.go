@@ -112,12 +112,21 @@ func buildTLSPEMMount() corev1.VolumeMount {
 //
 // tlsAllowConnectionsWithoutCertificates: client cert 없는 plaintext connection 허용
 // (mTLS 비강제). cycle 19 valkey-operator 의 tls-auth-clients=yes 강제 패턴 회피.
+//
+// tlsAllowInvalidHostnames (v1.4.17 fix, cycle 19 last): mongos 가 cfg replica set 에
+// outbound TLS connect 시 hostname verification 을 우회. mongos --configdb 의 connection
+// string 은 short hostname (argos-mongo-cfg-0:27017) 사용 — cert SAN 의 wildcard FQDN
+// (*.argos-mongo-cfg-headless.<ns>.svc.cluster.local) 와 직접 매치 안 됨 → TLS verify
+// fail → sharding pool init 실패 → 27017 미 listen → kubelet liveness kill cascade.
+// cluster-internal CA chain + preferTLS 환경에서 hostname 검증은 의미 적음 (CA 로 ID
+// 검증 충분), short/long hostname mix 흡수 의무.
 func tlsArgs() []string {
 	return []string{
 		"--tlsMode", "preferTLS",
 		"--tlsCertificateKeyFile", MongoTLSPEMPath + "/server.pem",
 		"--tlsCAFile", MongoTLSMountPath + "/ca.crt",
 		"--tlsAllowConnectionsWithoutCertificates",
+		"--tlsAllowInvalidHostnames",
 	}
 }
 
@@ -1163,6 +1172,21 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 			SecurityContext: buildDefaultContainerSecurityContext(),
 			VolumeMounts:    mongosVolumeMounts,
 			Lifecycle:       mongosLifecycle,
+			// StartupProbe (v1.4.17 fix, cycle 19 last): mongos 가 cfg replica set 에
+			// outbound connect + sharding pool init 시간 (TLS handshake 포함, ~10-60s)
+			// 이 default liveness initialDelay 30s 보다 길어 race condition. Startup
+			// probe 가 success 까지 liveness/readiness 차단 → kubelet kill 회피.
+			// failureThreshold=30 × periodSeconds=10 = 최대 5분 startup window.
+			StartupProbe: &corev1.Probe{
+				ProbeHandler: corev1.ProbeHandler{
+					TCPSocket: &corev1.TCPSocketAction{
+						Port: intstr.FromInt(mongoDBPort),
+					},
+				},
+				InitialDelaySeconds: 5,
+				PeriodSeconds:       10,
+				FailureThreshold:    30,
+			},
 			LivenessProbe: &corev1.Probe{
 				ProbeHandler: corev1.ProbeHandler{
 					TCPSocket: &corev1.TCPSocketAction{
