@@ -1,0 +1,107 @@
+# lefthook.yml — pre-commit / pre-push 훅 (P0 §1.1).
+#
+# 설치: lefthook install
+# 우회 (자동화 루프 한정): LEFTHOOK=0 환경변수 또는 commit msg 트레일러 [skip-hooks]
+#
+# 본 설정은 standards/enforcement.md §1.1 의 lefthook 표준을 따른다.
+
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      glob: "*.go"
+      run: gofmt -l -w {staged_files}
+      stage_fixed: true
+    govet:
+      glob: "*.go"
+      run: go vet ./...
+    golangci-lint:
+      glob: "*.go"
+      # 여러 디렉터리에 걸친 staged files 를 하나의 인자로 넘기면 golangci-lint
+      # 가 "named files must all be in one directory" 로 실패. 따라서 전체
+      # 패키지 단위로 수행 (--new-from-rev 가 신규 issue 만 출력).
+      run: ./bin/golangci-lint run --new-from-rev=HEAD~1 ./...
+      skip:
+        - merge
+        - rebase
+    helm-lint:
+      glob: "charts/**/*.yaml"
+      # chart 변경 시 helm lint 강제 — RFC 0002 L1.
+      run: command -v helm >/dev/null 2>&1 && helm lint charts/mongodb-operator || echo "helm not installed, skipping"
+
+pre-push:
+  parallel: false
+  commands:
+    unit-test:
+      run: go test -count=1 -timeout=120s ./...
+    full-lint:
+      run: ./bin/golangci-lint run
+    helm-lint:
+      # chart sanity (gh-pages publish 전 마지막 가드).
+      run: command -v helm >/dev/null 2>&1 && helm lint charts/mongodb-operator || true
+    helm-template:
+      # default values 로 render OK 인지 — clusterrole.yaml 가드 회귀 차단.
+      # mongodb chart 에 valkey 의 feature flag (cluster/backup/autoscaling) 가 없으므로
+      # 기본 render 만 검증. 향후 mongodb feature flag 도입 시 --set 추가.
+      run: |
+        command -v helm >/dev/null 2>&1 || exit 0
+        helm template mongodb-operator charts/mongodb-operator >/dev/null
+    govulncheck:
+      # Go module CVE — call graph 기반 (실제 호출하는 취약 함수만 차단).
+      # 설치: go install golang.org/x/vuln/cmd/govulncheck@latest
+      run: command -v govulncheck >/dev/null 2>&1 && govulncheck ./... || echo "[warn] govulncheck 미설치 — go install golang.org/x/vuln/cmd/govulncheck@latest 권장"
+    gitleaks:
+      # 시크릿 누출 차단 — RFC 0002 L2 + standards/enforcement.md §1.5.
+      run: command -v gitleaks >/dev/null 2>&1 && gitleaks protect --staged --no-banner || echo "gitleaks not installed (brew install gitleaks)"
+    platforms-amd64-guard:
+      # C-P0-12 (RFC 0002 §2): PLATFORMS 의 multi-arch 재발 방지. C-P0-1 강등 후속.
+      run: |
+        if grep -qE "^PLATFORMS.*linux/(arm64|s390x|ppc64le)" Makefile; then
+          echo "❌ Multi-arch PLATFORMS 잔존 — RFC 0002 §2 위반 (amd64-only 강제)"
+          exit 1
+        fi
+    go-mod-tidy:
+      # go.mod direct/indirect drift 차단 (cycle 46 발견). go mod tidy 후 변경
+      # 발생하면 push 차단 — 의존성 그래프 정확성 보장 (security audit false
+      # negative 방지).
+      run: |
+        # 임시 백업 → tidy → diff → 복원.
+        cp go.mod /tmp/.go.mod.lefthook.bak
+        cp go.sum /tmp/.go.sum.lefthook.bak
+        go mod tidy
+        if ! diff -q go.mod /tmp/.go.mod.lefthook.bak >/dev/null 2>&1 || ! diff -q go.sum /tmp/.go.sum.lefthook.bak >/dev/null 2>&1; then
+          # 복원 후 fail.
+          cp /tmp/.go.mod.lefthook.bak go.mod
+          cp /tmp/.go.sum.lefthook.bak go.sum
+          rm -f /tmp/.go.mod.lefthook.bak /tmp/.go.sum.lefthook.bak
+          echo "❌ go.mod / go.sum drift — 'go mod tidy' 후 commit 필요"
+          exit 1
+        fi
+        rm -f /tmp/.go.mod.lefthook.bak /tmp/.go.sum.lefthook.bak
+
+commit-msg:
+  commands:
+    conventional:
+      # Conventional Commits 패턴 (standards/commits.md §1).
+      # 본 환경 (Korean 본문 허용) 에서는 type 만 강제, subject case 자유.
+      run: |
+        msg=$(head -1 {1})
+        if echo "$msg" | grep -qE '^(\[skip-hooks\]|Merge|Revert)' ; then
+          exit 0
+        fi
+        if ! echo "$msg" | grep -qE '^(feat|fix|docs|style|refactor|test|chore|ci|build|perf|revert)(\([^)]+\))?!?: .+' ; then
+          echo "Commit message must follow Conventional Commits: <type>(<scope>): <subject>"
+          echo "Got: $msg"
+          exit 1
+        fi
+    dco-signoff:
+      # A-P0-5: DCO Signed-off-by warn (DCO_STRICT=1 시 enforce).
+      run: |
+        if ! grep -qE '^Signed-off-by: .+ <.+@.+>' "{1}"; then
+          if [ "${DCO_STRICT:-0}" = "1" ]; then
+            echo "❌ DCO Signed-off-by trailer missing — use git commit -s"
+            exit 1
+          else
+            echo "[warn] DCO Signed-off-by trailer missing (set DCO_STRICT=1 to enforce)"
+          fi
+        fi

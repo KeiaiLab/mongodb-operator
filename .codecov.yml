@@ -1,14 +1,16 @@
+# standards/testing.md §5: 변경된 코드 커버 여부 우선, 라인 70%+ 권장.
+# threshold 1% → 70% 상향 (testing.md 위반 해소). ADR-XXXX 참조.
 coverage:
   status:
     project:
       default:
-        target: auto
+        target: 70%
         threshold: 1%
         informational: false
         base: auto
     patch:
       default:
-        target: auto
+        target: 70%
         threshold: 1%
         informational: false
         base: auto
