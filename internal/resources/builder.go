@@ -46,6 +46,9 @@ const (
 	metricsPort   = 9216
 	defaultImage  = "mongo:8.3.1"
 	exporterImage = "percona/mongodb_exporter:0.40"
+	// keyfileInitImage 는 copy-keyfile init container (4곳: replicaset / cfg / shard / mongos)
+	// 의 단일 진실원. busybox 만 사용 (chmod + cp), CVE 패치 시 본 const 만 갱신.
+	keyfileInitImage = "busybox:1.37"
 )
 
 // Helper functions
@@ -413,7 +416,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 	initContainers := []corev1.Container{
 		{
 			Name:  "copy-keyfile",
-			Image: "busybox:1.36",
+			Image: keyfileInitImage,
 			Command: []string{
 				"sh", "-c",
 				"cp /keyfile-secret/keyfile /keyfile/keyfile && chmod 400 /keyfile/keyfile",
@@ -702,7 +705,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 					InitContainers: []corev1.Container{
 						{
 							Name:  "copy-keyfile",
-							Image: "busybox:1.36",
+							Image: keyfileInitImage,
 							Command: []string{
 								"sh", "-c",
 								"cp /keyfile-secret/keyfile /keyfile/keyfile && chmod 400 /keyfile/keyfile",
@@ -850,7 +853,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 					InitContainers: []corev1.Container{
 						{
 							Name:  "copy-keyfile",
-							Image: "busybox:1.36",
+							Image: keyfileInitImage,
 							Command: []string{
 								"sh", "-c",
 								"cp /keyfile-secret/keyfile /keyfile/keyfile && chmod 400 /keyfile/keyfile",
@@ -1093,7 +1096,7 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 					InitContainers: []corev1.Container{
 						{
 							Name:  "copy-keyfile",
-							Image: "busybox:1.36",
+							Image: keyfileInitImage,
 							Command: []string{
 								"sh", "-c",
 								"cp /keyfile-secret/keyfile /keyfile/keyfile && chmod 400 /keyfile/keyfile",
