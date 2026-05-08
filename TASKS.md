@@ -4,6 +4,7 @@
 > 단계: 설계(10%) / 구현(60%) / 테스트(90%) / 완료(100%).
 
 ## 현재 Phase: **1.4.x stable** (production-ready, argos 운영 중)
+<!-- live-verified: 2026-05-09 -->
 
 목표: production 안정성 유지 + 보안 패치 빠른 release. 새 기능은 신중히 추가.
 

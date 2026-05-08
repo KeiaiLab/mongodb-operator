@@ -20,6 +20,7 @@ mongod이 `--auth+--replSet`으로 떠 있지만 user는 0명이라 익명 접�
    생성했다면 RS는 이미 auth-on 상태로 진입했다(0-user 윈도가 닫힘).
 2. **외부 RS init** — operator가 인수한 기존 RS가 이미 admin user를 가진 채
    auth-on으로 운영 중인 시나리오.
+<!-- live-verified: 2026-05-09 -->
 
 두 경우 모두 익명 `replSetGetStatus`는 `Unauthorized(13)` 또는
 `AuthenticationFailed(18)`로 거부된다. 이전 구현은 이 응답을 generic command
@@ -85,3 +86,5 @@ INC-0001(2026-04-29)는 이 패턴이 실제 클러스터에서 11시간 동안 
 3. **익명 매니저를 제거하고 항상 인증 매니저로 시도**: 0-user 윈도에서 인증
    매니저가 SCRAM 핸드셰이크를 시도하면 안 한 것만 못한 결과. RS init 직후
    자체가 깨진다. 거절.
+
+<!-- live-verified: 2026-05-09 -->

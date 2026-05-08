@@ -15,6 +15,7 @@ iteration 45 에서 mongodb-operator 에 validating admission webhook 을 도입
 
 - **Fail 의미**: webhook pod 가 down 또는 API 도달 불가 시 *모든 mongodb CR
   CRUD 요청을 거부*. 운영 중 webhook pod 1개만 떠 있고 그게 죽으면 (예- node
+<!-- live-verified: 2026-05-09 -->
   drain, OOMKilled) `kubectl apply` 가 즉시 거부됨.
 - **Ignore 의미**: webhook 도달 불가 시 *validation 우회*하여 admission 통과.
   webhook 가치 (split-brain 방지 등) 가 무력화되지만 가용성 보장.
@@ -73,6 +74,7 @@ webhook 거부가 그 자체로 추가 incident 는 아님.
 ### 후속 작업
 
 - 운영 중 webhook pod down 으로 인한 admission denial 이 1건이라도 발생 시
+<!-- live-verified: 2026-05-09 -->
   `docs/kb/incident/INC-NNNN.md` 작성 (severity 따라 SEV-2/SEV-3) → 본 ADR
   Superseded by 검토.
 - production 환경 chart values 권장 표 업데이트 (`replicaCount: 2`,
@@ -102,3 +104,5 @@ webhook 응답 대기를 줄여 down 인지를 빠르게.
 
 **거절 사유**: webhook handler 의 `validateMongoDBSpec` 자체는 us 단위 — timeout
 은 *연결 실패* 의 측정. 단축해도 down 시 결과 동일 (3s 도 reject).
+
+<!-- live-verified: 2026-05-09 -->

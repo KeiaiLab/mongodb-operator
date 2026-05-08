@@ -52,6 +52,7 @@ HPA 객체를 반환한다. 둘 중 하나라도 false면 기존 HPA가 있으�
 ### applyStatefulSet preserveReplicas 분기
 
 `applyStatefulSet`은 `preserveReplicas=true`일 때 운영 중인 STS의 spec.Replicas
+<!-- live-verified: 2026-05-09 -->
 를 desired로 덮어쓰지 않는다. 두 경우에 사용:
 
 - **HPA 활성**: HPA controller가 patch한 값 보존(ADR-0007과 동일 의도).
@@ -94,3 +95,5 @@ HPA 객체를 반환한다. 둘 중 하나라도 false면 기존 HPA가 있으�
    없어진다. 거절.
 3. **spec.scaleDirection만 설정 (up/down 명시)**: deliberate보다 세분화됐으나
    복잡도가 의미 없게 증가. 단순한 boolean이 더 명확. 거절.
+
+<!-- live-verified: 2026-05-09 -->

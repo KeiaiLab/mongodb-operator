@@ -67,6 +67,7 @@ platform-data-valkey               Synced   Healthy
 | **C35** | keiailab-valkey-prod anti-affinity 부재 — 우연 7-node spread, scheduler 의존 | 발견 | node failure 시 *동일 노드 다중 pod* 위험 (현재 e121/e122 각 2 pods) | keiailab-valkey-prod CR 에 affinity 추가 또는 chart values 의 `affinity.podAntiAffinity` 활성. argos-mongo 의 preferredDuringScheduling weight=100 + hostname topologyKey 패턴 차용. | Medium |
 | **C36** | application-level PriorityClass 부재 — data ns 54 pods 모두 priority 0 (default) | 발견 | preemption 시 critical workload (argos-mongo, gitlab-postgres) 와 secondary (gitlab-redis, postgres-default) 동등 우선순위 | argos-platform-data 의 ns manifest 또는 platform-base-namespaces 에 PriorityClass 정의 (`argos-data-critical=10000`, `argos-data-default=1000`) + 워크로드 spec 에 priorityClassName 적용. | Low |
 | **C37** | MongoDBSharded CR status conditions 빈약 (RS 는 정상) | **완료 100%** | operational visibility 격차 해소 — sharded 1 → 8 conditions (활성 시), valkey/postgres 대폭 초과 | 1차 `c12d20e`: Ready / Progressing (3). 2차 `e3d6923`: ConfigServerReady / ShardsReady / MongosReady (6). 3차 `57139f0`: TLSReady / BackupReady 조건부 (max 8). 4차 `0c7b3a5`: envtest 한계 명시. **5차 `b7ae65c`: evaluateShardedConditions pure function 추출 + 4 isolated unit tests (0.88s, envtest 의존성 0)**. test pyramid 확립 (unit / envtest / manual production). | — |
+<!-- live-verified: 2026-05-09 -->
 
 ## Clean 영역 (격차 0, 상용제품 수준 충족)
 

@@ -7,6 +7,7 @@
 ## Context
 
 글로벌 표준 `~/Documents/ai-dev/standards/enforcement.md §1.1` 은 git hook 관리 도구로 **lefthook** (Go 단일 바이너리, 언어 중립) 을 명시한다. 본 repo 는 `.pre-commit-config.yaml` 기반의 **pre-commit** (Python 기반) 을 운영 중이며, 표준과 분기한 상태로 `mongodb-operator` / `postgresql-operator` 두 repo 가 동일 패턴을 사용하고 있다 (3-repo 중 valkey-operator 만 lefthook).
+<!-- live-verified: 2026-05-09 -->
 
 ## Decision
 
@@ -59,3 +60,5 @@
 - 표준: `~/Documents/ai-dev/standards/enforcement.md §1.1`
 - 정합 사례: `valkey-operator/.lefthook.yml`
 - 본 repo 운영: `.pre-commit-config.yaml`
+
+<!-- live-verified: 2026-05-09 -->
