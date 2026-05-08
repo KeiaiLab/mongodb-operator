@@ -140,8 +140,175 @@ entries:
         - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
+    appVersion: 1.4.17
+    created: "2026-05-08T18:06:32.917372+09:00"
+    description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
+      Clusters (v1.0.0 GA Release)
+    digest: aa8e6005ba689472743996fde3eeef91ef3953b50851d338941c2b997a3f3dc5
+    home: https://github.com/keiailab/mongodb-operator
+    icon: https://raw.githubusercontent.com/mongodb/mongo/master/docs/leaf.svg
+    keywords:
+    - mongodb
+    - database
+    - nosql
+    - operator
+    - replicaset
+    - sharded-cluster
+    - backup
+    - kubernetes
+    kubeVersion: '>=1.26.0-0'
+    maintainers:
+    - email: support@keiailab.com
+      name: Keiailab
+      url: https://keiailab.com
+    name: mongodb-operator
+    sources:
+    - https://github.com/keiailab/mongodb-operator
+    type: application
+    urls:
+    - https://keiailab.github.io/mongodb-operator/mongodb-operator-1.4.17.tgz
+    version: 1.4.17
+  - annotations:
+      artifacthub.io/category: database
+      artifacthub.io/changes: |
+        - kind: fixed
+          description: "Sharded P0 — PodTemplate merge 를 current template 기반 overlay 로 전환해 EnableServiceLinks 등 미명시 server-default 전체를 보존. mongos Deployment generation 증가 루프를 차단."
+        - kind: fixed
+          description: "ReconcileError=True condition 이 성공 reconcile 후에도 남는 status clear 결함 fix. 성공 상태 업데이트 시 기존 ReconcileError 를 False/ReconcileSucceeded 로 전환."
+        - kind: fixed
+          description: "Sharded P0 — mongos Deployment PodTemplate server-default ping-pong (imagePullPolicy/probe defaults/DNS/restart/scheduler 등) 으로 generation 180k+ 증가 + update conflict 반복. applyDeployment가 기존 server-defaulted PodTemplate 값을 보존하도록 확장."
+        - kind: fixed
+          description: "Sharded P0 — Helm chart bundled CRD drift (5,272 줄 격차) → status 신규 필드 (adminUserCreated/configServerInitialized/shardsInitialized/shardsAdded) 가 K8s API server 에 의해 silently drop 되어 reconcile flag 영구 empty + addShards index-out-of-range panic. CRD 자동 sync (manifests → sync-crds) + reconcileAddShards length 가드 추가."
+        - kind: fixed
+          description: "Sharded P0 — applyDeployment server-default ping-pong (mongos Deployment generation 116k+ 무한 fight 해소; RevisionHistoryLimit/ProgressDeadlineSeconds nil-guard) [v1.4.2]"
+        - kind: fixed
+          description: "Sharded P1 #3 — HPA informer cache timeout fix (SetupWithManager Owns에 HorizontalPodAutoscaler 추가, RS controller와 동일하게 정렬)"
+        - kind: fixed
+          description: "Sharded P1 #1 — HPA reconcile은 ConfigServer/Shards rs.initiate 완료 후 실행 (HPA가 crashloop pod metric을 sample하던 결함)"
+        - kind: fixed
+          description: "Sharded P1 #2 — Status.Mongos/ConfigServer Total은 HPA active 시 obj.Spec.Replicas, inactive 시 CR.Spec을 source-of-truth로 분기 (24h soak divergence 해소)"
+        - kind: changed
+          description: "features.sharded.enabled 기본값 false → true (베타 carve-out 종료)"
+        - kind: fixed
+          description: Helm repository URL과 GHCR image owner를 keiailab로 정정 (이전 publish 경로 복구)
+        - kind: added
+          description: HorizontalPodAutoscaler 자동화 — RS/cfg/mongos 이중 가드 + drift 방지 + status 노출
+        - kind: added
+          description: PodDisruptionBudget automation for MongoDB ReplicaSet and MongoDBSharded (opt-in)
+        - kind: added
+          description: NetworkPolicy automation with deny-by-default + additional ingress peers (opt-in)
+        - kind: added
+          description: MongoDBSharded Scale-in via removeShard with ShardDraining condition + resource cleanup
+        - kind: added
+          description: envtest-based controller integration regression suite
+        - kind: changed
+          description: Bootstrap admin user is race-free via Kubernetes Lease distributed lock + post-bootstrap usersInfo verify
+        - kind: changed
+          description: Auth error detection migrated to typed mongo.ServerError (HasErrorCode 13/18/11000/51003) with message fallback
+        - kind: changed
+          description: Self-managed createOrUpdate replaced with controllerutil.CreateOrUpdate(mutateFn) — eliminates Spec drift on partial mutations
+        - kind: fixed
+          description: ReconcileError condition no longer accumulates on repeated failures
+        - kind: fixed
+          description: updateStatus no longer silently skips primary probe errors — surfaces PrimaryUnreachable condition
+        - kind: fixed
+          description: isClusterReady rejects partial-status and zero-spec configurations
+      artifacthub.io/containsSecurityUpdates: "true"
+      artifacthub.io/crds: |
+        - kind: MongoDB
+          version: v1alpha1
+          name: mongodbs.mongodb.keiailab.com
+          displayName: MongoDB ReplicaSet
+          description: Deploys and manages a MongoDB ReplicaSet cluster
+        - kind: MongoDBSharded
+          version: v1alpha1
+          name: mongodbshardeds.mongodb.keiailab.com
+          displayName: MongoDB Sharded Cluster
+          description: Deploys and manages a MongoDB Sharded cluster with config servers, shards, and mongos routers
+        - kind: MongoDBBackup
+          version: v1alpha1
+          name: mongodbbackups.mongodb.keiailab.com
+          displayName: MongoDB Backup
+          description: Creates and manages MongoDB backups to S3 or PVC storage
+      artifacthub.io/crdsExamples: |
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDB
+          metadata:
+            name: my-mongodb
+            namespace: database
+          spec:
+            members: 3
+            version:
+              version: "8.3.1"
+            storage:
+              storageClassName: standard
+              size: 10Gi
+            auth:
+              mechanism: SCRAM-SHA-256
+              adminCredentialsSecretRef:
+                name: mongodb-admin
+            monitoring:
+              enabled: true
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDBSharded
+          metadata:
+            name: my-sharded
+            namespace: database
+          spec:
+            version:
+              version: "8.3.1"
+            configServer:
+              members: 3
+              storage:
+                size: 5Gi
+            shards:
+              count: 2
+              membersPerShard: 3
+              storage:
+                size: 20Gi
+            mongos:
+              replicas: 2
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDBBackup
+          metadata:
+            name: my-backup
+            namespace: database
+          spec:
+            clusterRef:
+              name: my-mongodb
+              kind: MongoDB
+            type: full
+            compression: true
+            storage:
+              type: s3
+              s3:
+                bucket: mongodb-backups
+                endpoint: https://s3.amazonaws.com
+                credentialsRef:
+                  name: s3-credentials
+      artifacthub.io/images: |
+        - name: mongodb-operator
+          image: ghcr.io/keiailab/mongodb-operator:1.4.12
+        - name: mongodb
+          image: mongo:8.3.1
+        - name: mongodb-exporter
+          image: percona/mongodb_exporter:0.40
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/keiailab/mongodb-operator/blob/main/README.md
+        - name: Source Code
+          url: https://github.com/keiailab/mongodb-operator
+        - name: MongoDB Documentation
+          url: https://www.mongodb.com/docs/
+      artifacthub.io/operatorCapabilities: Seamless Upgrades
+      artifacthub.io/prerelease: "false"
+      artifacthub.io/recommendations: |
+        - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
+        - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
+    apiVersion: v2
     appVersion: 1.4.16
-    created: "2026-05-08T17:37:21.115868+09:00"
+    created: "2026-05-08T18:06:32.915325+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 18f0a6bbd558e67c00e17ba6938d5bc4760f1d1a302196652f713bfc92f15b9f
@@ -308,7 +475,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.15
-    created: "2026-05-08T17:37:21.113225+09:00"
+    created: "2026-05-08T18:06:32.912996+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 737b2f8aed9764733c26a7a18ebb194d1c3b686fca4d6d7b820d5178fd29a0b0
@@ -475,7 +642,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.14
-    created: "2026-05-08T17:37:21.111217+09:00"
+    created: "2026-05-08T18:06:32.911146+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 275385e86a8c0160e7207df572a619635ec72b916e6aafa0f85192ac1efd05e5
@@ -642,7 +809,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.13
-    created: "2026-05-08T17:37:21.108797+09:00"
+    created: "2026-05-08T18:06:32.908642+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 3bfcbc2f45ad93cacf20eaeb0c8a9ad35c1169db6d75ba7431b421c0c32a654c
@@ -809,7 +976,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.12
-    created: "2026-05-08T17:37:21.106722+09:00"
+    created: "2026-05-08T18:06:32.906693+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: aa7a6b9a9fdcbe83a013562acffd33d8a33faa62e112812735634ce74256ccbf
@@ -976,7 +1143,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.11
-    created: "2026-05-08T17:37:21.104726+09:00"
+    created: "2026-05-08T18:06:32.90488+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 4251bab0e3ff8552b5fafb910972e3f14ef6318fc8bd7838a09bb9469c6500fa
@@ -1143,7 +1310,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.10
-    created: "2026-05-08T17:37:21.102327+09:00"
+    created: "2026-05-08T18:06:32.902674+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 0753b1da6f9f08514240e4c4db6953ef94e85ebde3a725c87d4270224c16a2de
@@ -1308,7 +1475,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.9
-    created: "2026-05-08T17:37:21.132757+09:00"
+    created: "2026-05-08T18:06:32.933004+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 32f53a4d6b907baadd53c1fc90744f4704190166ccccc593f08d984f9cf2d15f
@@ -1471,7 +1638,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.8
-    created: "2026-05-08T17:37:21.130179+09:00"
+    created: "2026-05-08T18:06:32.931224+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: b22590b5af4fc9655265006bab963cf56ee540d506efea2b20537dc54f77b8b5
@@ -1632,7 +1799,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.7
-    created: "2026-05-08T17:37:21.1283+09:00"
+    created: "2026-05-08T18:06:32.928817+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: d47fcf9a7618efd43dd73b80ebeea6c685a91dfa21f121ef1824237d7b5a95c3
@@ -1793,7 +1960,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.6
-    created: "2026-05-08T17:37:21.125815+09:00"
+    created: "2026-05-08T18:06:32.927018+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: a868fd564e71ab8c343fca39045eda5227c3285f751b83f1a2c12f8d3a121742
@@ -1954,7 +2121,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.5
-    created: "2026-05-08T17:37:21.124048+09:00"
+    created: "2026-05-08T18:06:32.924609+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: b09407ad39c6b0b15b69a56cdcbea0468fcc098895bb1185109ed6d45749406e
@@ -2115,7 +2282,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.4
-    created: "2026-05-08T17:37:21.121904+09:00"
+    created: "2026-05-08T18:06:32.922596+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 436f1c7c61af17256c13630d05281887ad79bcb1933031c3a4710d7e78732b40
@@ -2276,7 +2443,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.3
-    created: "2026-05-08T17:37:21.118988+09:00"
+    created: "2026-05-08T18:06:32.92008+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 385eec26d828dd817fc58133996fe87084e107e21f441de812e9d64f2b90e372
@@ -2435,7 +2602,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.2
-    created: "2026-05-08T17:37:21.116889+09:00"
+    created: "2026-05-08T18:06:32.918145+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 9b548c059b1ad47ded5d7b0692916fd46e014f16fec2de1225a9d6f2039a7008
@@ -2592,7 +2759,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.1
-    created: "2026-05-08T17:37:21.10044+09:00"
+    created: "2026-05-08T18:06:32.900651+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: c6b2e4403fd12e1e2659ccb82ee744cca5489513aa33c50b7dfdba63eae97e38
@@ -2741,7 +2908,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.4.0-rc.1
-    created: "2026-05-08T17:37:21.098713+09:00"
+    created: "2026-05-08T18:06:32.898986+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 00f76071951662fd10cb9f70fce07dedf8adae0ab6c281b4205d427241d46712
@@ -2890,7 +3057,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.3.2-beta.6
-    created: "2026-05-08T17:37:21.097701+09:00"
+    created: "2026-05-08T18:06:32.898247+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: bec32dc2b4e803d2ccd2198d40dbaeeee36c2ad8b2eb88c3d9dc15c4aa390225
@@ -3039,7 +3206,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.3.2-beta.5
-    created: "2026-05-08T17:37:21.096716+09:00"
+    created: "2026-05-08T18:06:32.897127+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: eff1c7465df5b567dbbb6a5576b663c93d930919084c5527c8433dacd37bcef7
@@ -3188,7 +3355,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.3.2-beta.4
-    created: "2026-05-08T17:37:21.095775+09:00"
+    created: "2026-05-08T18:06:32.89637+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 4f6a2cab12ec6cb1d492e5088f4e0ed640a5261a21a77c163c664bf539c6afc2
@@ -3337,7 +3504,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.3.2-beta.3
-    created: "2026-05-08T17:37:21.094748+09:00"
+    created: "2026-05-08T18:06:32.895567+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: c853abc2327b3aa02cbcdc4112e22351b51742ef06c7bbd5413a850d7e49a116
@@ -3486,7 +3653,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.3.2-beta.2
-    created: "2026-05-08T17:37:21.093701+09:00"
+    created: "2026-05-08T18:06:32.894513+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: aee4a24a88a3c4250e8cbc7c275501d886c36e9061f0a9d532b329e742704bea
@@ -3635,7 +3802,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.3.2-beta.1
-    created: "2026-05-08T17:37:21.092714+09:00"
+    created: "2026-05-08T18:06:32.893684+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 8aba89307b1ccd23f3c44a589b7357ad132c05fcdf9e6a933a23341992927426
@@ -3784,7 +3951,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.3.1
-    created: "2026-05-08T17:37:21.090901+09:00"
+    created: "2026-05-08T18:06:32.892318+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 3bccae8a34c9fa7be51aae5887d95f6a03b69db34877fbf654a7f95ee13f83f5
@@ -3919,7 +4086,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.0.1
-    created: "2026-05-08T17:37:21.089684+09:00"
+    created: "2026-05-08T18:06:32.891068+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: 1da66dbe3b40b3a1e772217c85094fb8da2170647b8c14a3ba8bde4958bb5feb
@@ -4066,7 +4233,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 1.0.0
-    created: "2026-05-08T17:37:21.088857+09:00"
+    created: "2026-05-08T18:06:32.890252+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters (v1.0.0 GA Release)
     digest: f65e9e57b254c2aaed0b42569cc61616c6048a714a0686180ace19712648f6d2
@@ -4197,7 +4364,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 0.0.7
-    created: "2026-05-08T17:37:21.08803+09:00"
+    created: "2026-05-08T18:06:32.889402+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters
     digest: f4d0fb7cc01ecc4aeb659555596856faabf94de5c8d3be8bc42da6c6f9011aa0
@@ -4326,7 +4493,7 @@ entries:
         - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
     apiVersion: v2
     appVersion: 0.0.6
-    created: "2026-05-08T17:37:21.087179+09:00"
+    created: "2026-05-08T18:06:32.888214+09:00"
     description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
       Clusters
     digest: 0cce9cf49f837b76e909bf9d7156e9ef049370b388d040142a719ea3623bb790
@@ -4353,4 +4520,4 @@ entries:
     urls:
     - https://keiailab.github.io/mongodb-operator/mongodb-operator-0.0.6.tgz
     version: 0.0.6
-generated: "2026-05-08T17:37:21.085883+09:00"
+generated: "2026-05-08T18:06:32.886741+09:00"
