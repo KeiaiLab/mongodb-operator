@@ -124,6 +124,10 @@ func buildCertificate(mdbsh *mongodbv1alpha1.MongoDBSharded) *unstructured.Unstr
 	return cert
 }
 
+// MongoTLSMountPath 는 mongod pod 가 server cert/key 를 읽는 경로.
+// Phase 3 의 mongod args (--tlsCertificateKeyFile) 가 본 경로 + PEM merge file 참조.
+const MongoTLSMountPath = "/etc/ssl/mongo"
+
 // reconcileTLS 는 Pillar P7 의 cert-manager Certificate CR upsert 를 처리한다.
 // TLS 미활성 또는 IssuerRef 미설정 시 no-op (CustomCert 패턴은 사용자가 직접 Secret bootstrap).
 func (r *MongoDBShardedReconciler) reconcileTLS(

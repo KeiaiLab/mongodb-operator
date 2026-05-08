@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.15] - 2026-05-08
+
+### Added
+
+- Pillar P7 Phase 3a — STS volumes/Mounts 의 server cert mount (conditional). spec.tls.enabled=true 시 4 위치 (replicaset / cfg / shard / mongos) 모두 tls-server Volume + /etc/ssl/mongo mountPath 자동 추가. Phase 3b (별 cycle) 에서 init container PEM merge + mongod args (--tlsMode --tlsCertificateKeyFile) 통합.
+
 ## [1.4.14] - 2026-05-08
 
 ### Added
