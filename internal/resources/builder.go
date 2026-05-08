@@ -65,8 +65,61 @@ func getMongoDBImage(version mongodbv1alpha1.MongoDBVersion) string {
 	return fmt.Sprintf("mongo:%s", version.Version)
 }
 
-// MongoTLSMountPath 는 mongod pod 가 server cert/key 를 읽는 경로 (Pillar P7 Phase 3).
+// MongoTLSMountPath 는 cert-manager 발급 Secret 의 raw mount 경로.
 const MongoTLSMountPath = "/etc/ssl/mongo"
+
+// MongoTLSPEMPath 는 init container 가 만든 PEM merge file 의 경로.
+// mongod --tlsCertificateKeyFile 가 단일 PEM (cert + key) 를 요구.
+const MongoTLSPEMPath = "/etc/ssl/mongo-pem"
+
+// BuildPEMMergeInitContainer 는 cert-manager Secret 의 tls.crt + tls.key 를
+// 단일 PEM file 로 합치는 init container 를 반환한다 (mongod 의 --tlsCertificateKeyFile
+// 호환). PSA restricted 정합 (busybox 사용, drop ALL caps).
+// Exported — caller (cfg/shard/mongos reconciler) 가 STS build 후 conditional append.
+func BuildPEMMergeInitContainer() corev1.Container {
+	return corev1.Container{
+		Name:    "tls-pem-merge",
+		Image:   keyfileInitImage, // busybox:1.37 const 단일화 정합
+		Command: []string{"sh", "-c", "cat /tls-input/tls.crt /tls-input/tls.key > /tls-pem/server.pem && chmod 0400 /tls-pem/server.pem"},
+		SecurityContext: buildKeyfileInitContainerSecurityContext(),
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "tls-server", MountPath: "/tls-input", ReadOnly: true},
+			{Name: "tls-server-pem", MountPath: "/tls-pem"},
+		},
+	}
+}
+
+// buildTLSPEMVolume 는 init container 와 mongod 가 공유하는 emptyDir.
+func buildTLSPEMVolume() corev1.Volume {
+	return corev1.Volume{
+		Name:         "tls-server-pem",
+		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+	}
+}
+
+// buildTLSPEMMount 는 mongod container 의 mount.
+func buildTLSPEMMount() corev1.VolumeMount {
+	return corev1.VolumeMount{
+		Name:      "tls-server-pem",
+		MountPath: MongoTLSPEMPath,
+		ReadOnly:  true,
+	}
+}
+
+// tlsArgs 는 mongod TLS 활성 args. preferTLS mode = plaintext + TLS 양쪽 listen
+// → operator client (keyfile + plaintext) 와 외부 TLS client 양쪽 호환. cycle 19
+// Phase 3b 의 *진정 무중단* 정공.
+//
+// tlsAllowConnectionsWithoutCertificates: client cert 없는 plaintext connection 허용
+// (mTLS 비강제). cycle 19 valkey-operator 의 tls-auth-clients=yes 강제 패턴 회피.
+func tlsArgs() []string {
+	return []string{
+		"--tlsMode", "preferTLS",
+		"--tlsCertificateKeyFile", MongoTLSPEMPath + "/server.pem",
+		"--tlsCAFile", MongoTLSMountPath + "/ca.crt",
+		"--tlsAllowConnectionsWithoutCertificates",
+	}
+}
 
 // buildTLSServerVolume 은 cert-manager 가 발급한 server cert Secret (<name>-tls)
 // 을 mount 하는 Volume 을 반환한다. tlsEnabled=false 시 nil.
@@ -441,11 +494,19 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 		volumeMounts = append(volumeMounts, buildAdminCredentialsMount())
 	}
 
-	// Pillar P7 Phase 3a — TLS server cert volume mount (conditional).
-	// Phase 3b (별 cycle) 에서 init container PEM merge + mongod args 통합.
+	// Pillar P7 Phase 3a+3b — TLS server cert mount + PEM merge + mongod args.
+	// preferTLS mode = plaintext + TLS 양쪽 listen → operator client (keyfile +
+	// plaintext) 와 외부 TLS client 양쪽 호환 (rolling 무중단).
 	if mdb.Spec.TLS != nil && mdb.Spec.TLS.Enabled {
-		volumes = append(volumes, buildTLSServerVolume(mdb.Name+"-tls"))
-		volumeMounts = append(volumeMounts, buildTLSServerMount())
+		volumes = append(volumes,
+			buildTLSServerVolume(mdb.Name+"-tls"),
+			buildTLSPEMVolume(),
+		)
+		volumeMounts = append(volumeMounts,
+			buildTLSServerMount(),
+			buildTLSPEMMount(),
+		)
+		args = append(args, tlsArgs()...)
 	}
 
 	// Init container to copy keyfile with correct permissions
@@ -464,6 +525,10 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			},
 			SecurityContext: buildKeyfileInitContainerSecurityContext(),
 		},
+	}
+	// Pillar P7 Phase 3b — PEM merge init container (replicaset).
+	if mdb.Spec.TLS != nil && mdb.Spec.TLS.Enabled {
+		initContainers = append(initContainers, BuildPEMMergeInitContainer())
 	}
 
 	// MongoDB container
@@ -720,10 +785,17 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 		mongodLifecycle = buildAdminBootstrapLifecycle()
 	}
 
-	// Pillar P7 Phase 3a — TLS server cert volume mount (cfg, conditional).
+	// Pillar P7 Phase 3a+3b — TLS volume mount + PEM merge + mongod args (cfg).
 	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
-		volumes = append(volumes, buildTLSServerVolume(mdbsh.Name+"-tls"))
-		mongodVolumeMounts = append(mongodVolumeMounts, buildTLSServerMount())
+		volumes = append(volumes,
+			buildTLSServerVolume(mdbsh.Name+"-tls"),
+			buildTLSPEMVolume(),
+		)
+		mongodVolumeMounts = append(mongodVolumeMounts,
+			buildTLSServerMount(),
+			buildTLSPEMMount(),
+		)
+		args = append(args, tlsArgs()...)
 	}
 
 	return &appsv1.StatefulSet{
@@ -874,10 +946,17 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 		mongodLifecycle = buildAdminBootstrapLifecycle()
 	}
 
-	// Pillar P7 Phase 3a — TLS server cert volume mount (shard, conditional).
+	// Pillar P7 Phase 3a+3b — TLS volume mount + PEM merge + mongod args (shard).
 	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
-		volumes = append(volumes, buildTLSServerVolume(mdbsh.Name+"-tls"))
-		mongodVolumeMounts = append(mongodVolumeMounts, buildTLSServerMount())
+		volumes = append(volumes,
+			buildTLSServerVolume(mdbsh.Name+"-tls"),
+			buildTLSPEMVolume(),
+		)
+		mongodVolumeMounts = append(mongodVolumeMounts,
+			buildTLSServerMount(),
+			buildTLSPEMMount(),
+		)
+		args = append(args, tlsArgs()...)
 	}
 
 	return &appsv1.StatefulSet{
@@ -1038,11 +1117,21 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 		"--bind_ip_all",
 		"--keyFile", "/etc/mongodb-keyfile/keyfile",
 	}
+	// Pillar P7 Phase 3b — TLS args (mongos, preferTLS plaintext fallback).
+	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
+		args = append(args, tlsArgs()...)
+	}
 
 	// mongos container의 volume mounts. admin-credentials와 scripts는
 	// AdminCredentialsSecretRef가 설정된 경우에만 추가.
 	mongosVolumeMounts := []corev1.VolumeMount{
 		{Name: "keyfile", MountPath: "/etc/mongodb-keyfile", ReadOnly: true},
+	}
+	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
+		mongosVolumeMounts = append(mongosVolumeMounts,
+			buildTLSServerMount(),
+			buildTLSPEMMount(),
+		)
 	}
 	var mongosLifecycle *corev1.Lifecycle
 	if mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name != "" {
@@ -1211,9 +1300,9 @@ func buildMongosVolumes(mdbsh *mongodbv1alpha1.MongoDBSharded) []corev1.Volume {
 		)
 	}
 
-	// Pillar P7 Phase 3a — TLS server cert volume mount (mongos, conditional).
+	// Pillar P7 Phase 3a+3b — TLS volume + PEM emptyDir (mongos).
 	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
-		volumes = append(volumes, buildTLSServerVolume(mdbsh.Name+"-tls"))
+		volumes = append(volumes, buildTLSServerVolume(mdbsh.Name+"-tls"), buildTLSPEMVolume())
 	}
 
 	return volumes

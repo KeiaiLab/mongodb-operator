@@ -258,7 +258,11 @@ func (r *MongoDBShardedReconciler) reconcileConfigServer(ctx context.Context, md
 
 	// StatefulSet
 	preserve := resources.IsConfigServerHPAActive(mdbsh) || !resources.IsConfigServerScaleDeliberate(mdbsh)
-	return applyStatefulSet(ctx, r.Client, r.Scheme, mdbsh, resources.BuildConfigServerStatefulSet(mdbsh), preserve)
+	sts := resources.BuildConfigServerStatefulSet(mdbsh)
+	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
+		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, resources.BuildPEMMergeInitContainer())
+	}
+	return applyStatefulSet(ctx, r.Client, r.Scheme, mdbsh, sts, preserve)
 }
 
 // reconcileConfigServerScriptsConfigMap는 cfg StatefulSet이 lifecycle.postStart에서
@@ -293,7 +297,11 @@ func (r *MongoDBShardedReconciler) reconcileShard(ctx context.Context, mdbsh *mo
 
 	// StatefulSet
 	preserve := !resources.IsShardScaleDeliberate(mdbsh)
-	return applyStatefulSet(ctx, r.Client, r.Scheme, mdbsh, resources.BuildShardStatefulSet(mdbsh, shardIndex), preserve)
+	sts := resources.BuildShardStatefulSet(mdbsh, shardIndex)
+	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
+		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, resources.BuildPEMMergeInitContainer())
+	}
+	return applyStatefulSet(ctx, r.Client, r.Scheme, mdbsh, sts, preserve)
 }
 
 // reconcileShardScriptsConfigMap는 shard StatefulSet이 lifecycle.postStart에서 호출
@@ -349,7 +357,11 @@ func (r *MongoDBShardedReconciler) reconcileMongos(ctx context.Context, mdbsh *m
 	}
 
 	// Deployment
-	return applyDeployment(ctx, r.Client, r.Scheme, mdbsh, resources.BuildMongosDeployment(mdbsh), resources.IsMongosHPAActive(mdbsh))
+	dep := resources.BuildMongosDeployment(mdbsh)
+	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
+		dep.Spec.Template.Spec.InitContainers = append(dep.Spec.Template.Spec.InitContainers, resources.BuildPEMMergeInitContainer())
+	}
+	return applyDeployment(ctx, r.Client, r.Scheme, mdbsh, dep, resources.IsMongosHPAActive(mdbsh))
 }
 
 func (r *MongoDBShardedReconciler) isMongosReady(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) bool {

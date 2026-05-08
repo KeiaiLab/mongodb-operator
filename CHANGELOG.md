@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.16] - 2026-05-08
+
+### Added
+
+- Pillar P7 Phase 3b — preferTLS mode (plaintext + TLS 양쪽 listen). 4 위치 (replicaset / cfg / shard / mongos) mongod args 에 conditional 추가: --tlsMode preferTLS + --tlsCertificateKeyFile /etc/ssl/mongo-pem/server.pem + --tlsCAFile /etc/ssl/mongo/ca.crt + --tlsAllowConnectionsWithoutCertificates. 외부 TLS client 와 operator-internal keyfile (plaintext) 양쪽 호환 → rolling 무중단.
+- BuildPEMMergeInitContainer (export): cert-manager Secret 의 tls.crt + tls.key 를 단일 PEM file 로 합치는 init container (busybox sh + chmod 0400). emptyDir tls-server-pem 공유.
+- 4 위치 의 STS InitContainers conditional append (replicaset 변수 추출 + cfg/shard/mongos caller 합류).
+
 ## [1.4.15] - 2026-05-08
 
 ### Added
