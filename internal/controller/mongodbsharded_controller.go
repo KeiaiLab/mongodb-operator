@@ -74,6 +74,7 @@ type MongoDBShardedReconciler struct {
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 
 func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -113,6 +114,13 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// Reconcile resources in order
+
+	// 0.5. (Pillar P7 Phase 2) cert-manager Certificate CR upsert.
+	// TLS.Enabled=true + IssuerRef 명시 시 server cert Secret 자동 발급 위임.
+	// Phase 3 별 cycle 에서 STS volume mount + mongod.conf net.tls.mode=requireSSL 통합.
+	if err := r.reconcileTLS(ctx, mdbsh); err != nil {
+		return r.updateStatusError(ctx, mdbsh, "TLSCertificate", err)
+	}
 
 	// 1. Keyfile Secret
 	if err := r.reconcileKeyfileSecret(ctx, mdbsh); err != nil {

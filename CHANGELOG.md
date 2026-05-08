@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.14] - 2026-05-08
+
+### Added
+
+- Pillar P7 Phase 2 — internal/controller/tls.go 신설. cert-manager Certificate CR 자동 emit (unstructured, cert-manager Go SDK 의존 0). spec.tls.enabled=true + certManager.issuerRef 명시 시 reconciler 가 <cluster>-tls Secret 자동 발급 위임. SAN = cluster name + mongos service + cfg headless + 모든 shard headless service 4 도메인 form. ECDSA P-256 + rotationPolicy=Always. argos cluster 의 argos-mongo (5 shard) 가 첫 라이브 사용자.
+
+### Notes
+
+- Phase 3 별 cycle: STS volume mount + mongod.conf net.tls.mode=requireSSL + net.tls.certificateKeyFile + net.tls.CAFile + bootstrap container 의 keyfile 이 cert chain 으로 통합 가능성 검토.
+
 ## [1.4.12] - 2026-05-07
 
 ### Added
