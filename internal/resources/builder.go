@@ -78,9 +78,9 @@ const MongoTLSPEMPath = "/etc/ssl/mongo-pem"
 // Exported — caller (cfg/shard/mongos reconciler) 가 STS build 후 conditional append.
 func BuildPEMMergeInitContainer() corev1.Container {
 	return corev1.Container{
-		Name:    "tls-pem-merge",
-		Image:   keyfileInitImage, // busybox:1.37 const 단일화 정합
-		Command: []string{"sh", "-c", "cat /tls-input/tls.crt /tls-input/tls.key > /tls-pem/server.pem && chmod 0400 /tls-pem/server.pem"},
+		Name:            "tls-pem-merge",
+		Image:           keyfileInitImage, // busybox:1.37 const 단일화 정합
+		Command:         []string{"sh", "-c", "cat /tls-input/tls.crt /tls-input/tls.key > /tls-pem/server.pem && chmod 0400 /tls-pem/server.pem"},
 		SecurityContext: buildKeyfileInitContainerSecurityContext(),
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "tls-server", MountPath: "/tls-input", ReadOnly: true},
