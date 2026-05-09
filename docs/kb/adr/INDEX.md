@@ -28,6 +28,7 @@
 | [ADR-0019](0019-operator-commons-v0.5-promotion.md) | operator-commons v0.5.0 helper 승격 — validateStorageSize + apiError 3-of-3 입증 후 통일 | Proposed | 2026-05-07 |
 | [ADR-0020](0020-rfc-0017-tooling-unification-adoption.md) | RFC-0017 operator tooling unification 채택 (lefthook + 18-linter + HEALTHCHECK) | Proposed | 2026-05-09 |
 | [ADR-0021](0021-rfc-0018-pkg-finalizer-migration.md) | RFC-0018 채택 — pkg/finalizer migration (controllerutil → commons, 4 controller, PR-A5 first cut, status 별도) | Accepted | 2026-05-09 |
+| [ADR-0022](0022-meta-set-status-condition-adoption.md) | meta.SetStatusCondition 전면 채택 — 6 site 마이그레이션 + ShardDraining 백오프 regression fix | Accepted | 2026-05-10 |
 
 ## 작성 가이드
 
