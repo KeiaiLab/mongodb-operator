@@ -1,0 +1,369 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Seamless Upgrades
+    categories: Database, Storage
+    containerImage: ghcr.io/keiailab/mongodb-operator:v1.4.19
+    createdAt: "2026-05-09T23:45:13Z"
+    description: |
+      Kubernetes operator for MongoDB — manages MongoDB (ReplicaSet) and
+      MongoDBSharded (config server + shards + mongos) CRDs with K8s Lease
+      distributed lock for race-free admin bootstrap, mongos HPA, and shard
+      drain backoff.
+    operators.operatorframework.io/builder: operator-sdk-v1.42.2
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
+    repository: https://github.com/keiailab/mongodb-operator
+    support: https://github.com/keiailab/mongodb-operator/issues
+  name: mongodb-operator.v1.4.19
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: MongoDBBackup 은 mongodump 기반 backup Job 추상이다 (PVC 또는 외부 storage
+        target).
+      displayName: MongoDB Backup
+      kind: MongoDBBackup
+      name: mongodbbackups.mongodb.keiailab.com
+      version: v1alpha1
+    - description: MongoDB 는 ReplicaSet 토폴로지의 단일 클러스터를 선언적으로 관리하는 CRD 다 (primary +
+        secondaries + optional arbiter).
+      displayName: MongoDB
+      kind: MongoDB
+      name: mongodbs.mongodb.keiailab.com
+      version: v1alpha1
+    - description: MongoDBSharded 는 sharded cluster 를 선언적으로 관리하는 CRD 다 (config server
+        replica set + N shards × replica set + mongos router).
+      displayName: MongoDB Sharded
+      kind: MongoDBSharded
+      name: mongodbshardeds.mongodb.keiailab.com
+      version: v1alpha1
+  description: |
+    # MongoDB Operator
+
+    Kubernetes operator for [MongoDB](https://www.mongodb.com/) — manages
+    `MongoDB` (ReplicaSet) and `MongoDBSharded` (config server + shards +
+    mongos) Custom Resources with declarative reconciliation.
+
+    ## Features
+
+    - **MongoDB CRD** — ReplicaSet topology with primary + secondaries +
+      optional arbiter / hidden / delayed members.
+    - **MongoDBSharded CRD** — config server RS + N shards × RS + mongos
+      router. Declarative scale-in / scale-out with backoff drain.
+    - **K8s Lease distributed lock** — race-free admin user bootstrap
+      (ADR-0002 bootstrap_lease pattern).
+    - **HPA support** — mongos HorizontalPodAutoscaler with deliberate guard
+      to prevent unintended RS member changes.
+    - **MongoDBBackup CRD** — mongodump-based backup Job, PVC or external
+      storage target (S3 ADR-0016).
+    - **Supply chain** — Cosign signed container images + SBOM (SPDX-2.3) on
+      every release.
+    - **Security baseline** — Pod Security Standards, RBAC least-privilege,
+      NetworkPolicy isolation, non-root runAsUser.
+
+    ## Documentation
+
+    - GitHub: https://github.com/keiailab/mongodb-operator
+    - Helm Chart: https://artifacthub.io/packages/helm/mongodb-operator/mongodb-operator
+    - Discussions: https://github.com/keiailab/mongodb-operator/discussions
+
+    ## Prerequisites
+
+    - Kubernetes 1.26+
+    - Storage class for PVCs (recommended: ceph-rbd or comparable RWO)
+    - (Optional) cert-manager for automatic TLS certificate management
+    - (Optional) Prometheus Operator for `ServiceMonitor` scraping
+  displayName: MongoDB Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          - secrets
+          - services
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          - statefulsets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - autoscaling
+          resources:
+          - horizontalpodautoscalers
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - batch
+          resources:
+          - jobs
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - cert-manager.io
+          resources:
+          - certificates
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - mongodb.keiailab.com
+          resources:
+          - mongodbbackups
+          - mongodbs
+          - mongodbshardeds
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - mongodb.keiailab.com
+          resources:
+          - mongodbbackups/finalizers
+          - mongodbs/finalizers
+          - mongodbshardeds/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - mongodb.keiailab.com
+          resources:
+          - mongodbbackups/status
+          - mongodbs/status
+          - mongodbshardeds/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - networking.k8s.io
+          resources:
+          - networkpolicies
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - policy
+          resources:
+          - poddisruptionbudgets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        serviceAccountName: mongodb-operator-controller-manager
+      deployments:
+      - label:
+          app.kubernetes.io/component: controller-manager
+          app.kubernetes.io/name: mongodb-operator
+        name: mongodb-operator-controller-manager
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/component: controller-manager
+              app.kubernetes.io/name: mongodb-operator
+          strategy: {}
+          template:
+            metadata:
+              annotations:
+                kubectl.kubernetes.io/default-container: manager
+              labels:
+                app.kubernetes.io/component: controller-manager
+                app.kubernetes.io/name: mongodb-operator
+            spec:
+              containers:
+              - args:
+                - --leader-elect
+                - --health-probe-bind-address=:8081
+                - --metrics-bind-address=:8443
+                - --metrics-secure=true
+                image: ghcr.io/keiailab/mongodb-operator:latest
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: manager
+                ports:
+                - containerPort: 8443
+                  name: https
+                  protocol: TCP
+                - containerPort: 8081
+                  name: health
+                  protocol: TCP
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8081
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                    - ALL
+                  readOnlyRootFilesystem: true
+                  runAsNonRoot: true
+              securityContext:
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+              serviceAccountName: mongodb-operator-controller-manager
+              terminationGracePeriodSeconds: 10
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        serviceAccountName: mongodb-operator-controller-manager
+    strategy: deployment
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - mongodb
+  - database
+  - replicaset
+  - sharded
+  - cluster
+  - backup
+  links:
+  - name: GitHub
+    url: https://github.com/keiailab/mongodb-operator
+  - name: Documentation
+    url: https://github.com/keiailab/mongodb-operator/blob/main/README.md
+  - name: Helm Chart (ArtifactHub)
+    url: https://artifacthub.io/packages/helm/mongodb-operator/mongodb-operator
+  - name: Discussions
+    url: https://github.com/keiailab/mongodb-operator/discussions
+  maintainers:
+  - email: help@masblue.studio
+    name: Keiailab
+  maturity: alpha
+  minKubeVersion: 1.26.0
+  provider:
+    name: Keiailab
+    url: https://github.com/keiailab
+  version: 1.4.19

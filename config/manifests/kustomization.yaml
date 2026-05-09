@@ -1,0 +1,10 @@
+# OperatorHub bundle source — operator-sdk generate bundle 의 입력.
+# CSV base + CRDs + RBAC + manager + samples. webhook 은 OLM 자동 처리.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- bases/mongodb-operator.clusterserviceversion.yaml
+- ../crd
+- ../rbac
+- ../manager
