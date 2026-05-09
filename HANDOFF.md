@@ -4,6 +4,43 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-09 Sprint A 진입 (PR-A5) — Helm 차트 비교 plan
+
+> Plan: `~/.claude/plans/1-https-artifacthub-io-packages-helm-clo-synthetic-gem.md`
+>
+> mongodb-operator 측 Sprint A 진입점은 PR-A5 단일. commons v0.6.0
+> (PR-A1 commit 완료) tag 머지 후 진입.
+
+### PR-A5: pkg/finalizer + pkg/status migration (T3)
+
+- **의존**: operator-commons v0.6.0 (RFC-0018 §3.1 +§3.2 적용) tag 머지.
+- **변경 범위**:
+  - 3 controller (mongodb / mongodbsharded / mongodbbackup) 의
+    `controllerutil.AddFinalizer/RemoveFinalizer` → `finalizer.Add/Remove`
+    (commons `pkg/finalizer` import).
+  - `setCondition` 호출 → `status.SetReady/SetReadyFalse/SetAvailable` 위임.
+  - 도메인 ConditionType (`PrimaryUnreachable`, `ScalePolicyDeliberateFalse`)
+    + 도메인 Reason 보존 — generic 4종 + 6 Reason 만 commons 사용.
+- **ADR**: 신규 (현재 mongodb-operator INDEX 최신 ADR 번호 +1 부여).
+  파일명: `docs/kb/adr/NNNN-rfc-0018-pkg-status-finalizer-adoption.md`.
+- **호환성**: `controllerutil.AddFinalizer` 와 `finalizer.Add` 동시 사용 단계 무영향 (apimeta dedup).
+- **회귀 검증**:
+  - `make test` (envtest 포함) + e2e (kind cluster).
+  - alert rule 사용자에게 reason 변경 (`ReconcileFailed` → `ReconcileError`) release note 의무.
+
+### 차단점
+
+- commons v0.6.0 tag 머지 의존. PR-A1 의 lint 통과 (사용자 환경
+  golangci-lint 설치 필요) + commit + tag 후 진입.
+
+### 근거 링크
+
+- Plan §2 D10/D11.
+- RFC-0018: `operator-commons/docs/kb/rfc/0018-status-finalizer-standard.md`.
+- ADR-0003 (commons): `operator-commons/docs/kb/adr/0003-rfc-0018-pkg-status-finalizer-adoption.md`.
+
+---
+
 ## 2026-05-07 ralph-loop iteration 47 (cluster ops mode) — 운영 상태 + release readiness
 
 ### 라이브 사실 (CLAUDE.md §7 게이트, <!-- live-verified: 2026-05-07 -->)
