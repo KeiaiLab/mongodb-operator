@@ -40,6 +40,7 @@ import (
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"github.com/keiailab/mongodb-operator/internal/mongodb"
 	"github.com/keiailab/mongodb-operator/internal/resources"
+	commonsfinalizer "github.com/keiailab/operator-commons/pkg/finalizer"
 )
 
 const (
@@ -96,8 +97,8 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	// Add finalizer if needed
-	if !controllerutil.ContainsFinalizer(mdb, mongodbFinalizer) {
-		controllerutil.AddFinalizer(mdb, mongodbFinalizer)
+	if !commonsfinalizer.Has(mdb, mongodbFinalizer) {
+		commonsfinalizer.Add(mdb, mongodbFinalizer)
 		if err := r.Update(ctx, mdb); err != nil {
 			return ctrl.Result{}, err
 		}

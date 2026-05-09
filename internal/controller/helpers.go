@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
+	commonsfinalizer "github.com/keiailab/operator-commons/pkg/finalizer"
 )
 
 // reconcileSecretIfNotExists는 Secret이 존재하지 않으면 build()로 생성한다.
@@ -77,7 +78,7 @@ func handleFinalizerCleanup(
 	finalizer string,
 	cleanup func(context.Context) error,
 ) (ctrl.Result, error) {
-	if !controllerutil.ContainsFinalizer(obj, finalizer) {
+	if !commonsfinalizer.Has(obj, finalizer) {
 		return ctrl.Result{}, nil
 	}
 
@@ -87,7 +88,7 @@ func handleFinalizerCleanup(
 		}
 	}
 
-	controllerutil.RemoveFinalizer(obj, finalizer)
+	commonsfinalizer.Remove(obj, finalizer)
 	if err := c.Update(ctx, obj); err != nil {
 		return ctrl.Result{}, err
 	}
