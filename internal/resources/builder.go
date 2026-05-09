@@ -853,7 +853,30 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 							SecurityContext: buildDefaultContainerSecurityContext(),
 							VolumeMounts:    mongodVolumeMounts,
 							Lifecycle:       mongodLifecycle,
-							Env:             buildBootstrapEnv(mdbsh.Name+"-cfg", mdbsh.Name+"-cfg-headless", mdbsh.Namespace, mdbsh.Name+"-cfg", mdbsh.Spec.ConfigServer.Members, 27019, true),
+							// Layer 5 modern HA: hang detection. mongosh ping 단순 path
+							// (script 의존 0). ConfigServer port 27019.
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"mongosh", "--quiet", "--port", "27019", "--eval", "db.adminCommand('ping')"},
+									},
+								},
+								InitialDelaySeconds: 30,
+								PeriodSeconds:       10,
+								TimeoutSeconds:      5,
+								FailureThreshold:    6,
+							},
+							ReadinessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"mongosh", "--quiet", "--port", "27019", "--eval", "db.adminCommand('ping')"},
+									},
+								},
+								InitialDelaySeconds: 10,
+								PeriodSeconds:       10,
+								TimeoutSeconds:      5,
+							},
+							Env: buildBootstrapEnv(mdbsh.Name+"-cfg", mdbsh.Name+"-cfg-headless", mdbsh.Namespace, mdbsh.Name+"-cfg", mdbsh.Spec.ConfigServer.Members, 27019, true),
 						},
 					},
 					Volumes:  volumes,
@@ -1014,7 +1037,30 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 							SecurityContext: buildDefaultContainerSecurityContext(),
 							VolumeMounts:    mongodVolumeMounts,
 							Lifecycle:       mongodLifecycle,
-							Env:             buildBootstrapEnv(name, name+"-headless", mdbsh.Namespace, name, mdbsh.Spec.Shards.MembersPerShard, 27018, false),
+							// Layer 5 modern HA: hang detection. mongosh ping 단순 path
+							// (script 의존 0). argos cycle 21 stop hook 21차 동기.
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"mongosh", "--quiet", "--port", "27018", "--eval", "db.adminCommand('ping')"},
+									},
+								},
+								InitialDelaySeconds: 30,
+								PeriodSeconds:       10,
+								TimeoutSeconds:      5,
+								FailureThreshold:    6,
+							},
+							ReadinessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"mongosh", "--quiet", "--port", "27018", "--eval", "db.adminCommand('ping')"},
+									},
+								},
+								InitialDelaySeconds: 10,
+								PeriodSeconds:       10,
+								TimeoutSeconds:      5,
+							},
+							Env: buildBootstrapEnv(name, name+"-headless", mdbsh.Namespace, name, mdbsh.Spec.Shards.MembersPerShard, 27018, false),
 						},
 					},
 					Volumes:  volumes,
