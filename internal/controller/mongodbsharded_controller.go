@@ -938,7 +938,7 @@ func (r *MongoDBShardedReconciler) reconcileScaleIn(ctx context.Context, mdbsh *
 	statusShardCount := int32(shardLen) //nolint:gosec // bounds checked above
 	if mdbsh.Spec.Shards.Count >= statusShardCount {
 		// scale-out 또는 stable. ShardDraining condition은 cleanup.
-		mdbsh.Status.Conditions = filterConditionsByType(mdbsh.Status.Conditions, "ShardDraining")
+		meta.RemoveStatusCondition(&mdbsh.Status.Conditions, "ShardDraining")
 		return ctrl.Result{}, nil
 	}
 
@@ -965,7 +965,7 @@ func (r *MongoDBShardedReconciler) reconcileScaleIn(ctx context.Context, mdbsh *
 			return ctrl.Result{}, fmt.Errorf("cleanup shard %s: %w", shardName, err)
 		}
 	}
-	mdbsh.Status.Conditions = filterConditionsByType(mdbsh.Status.Conditions, "ShardDraining")
+	meta.RemoveStatusCondition(&mdbsh.Status.Conditions, "ShardDraining")
 	return ctrl.Result{}, nil
 }
 
@@ -994,14 +994,15 @@ func scaleInPollInterval(mdbsh *mongodbv1alpha1.MongoDBSharded, shardName string
 // 으로 status에 기록한다. 운영자가 kubectl describe로 진행 정도(remaining chunks,
 // dbs)를 추적 가능.
 func (r *MongoDBShardedReconciler) recordShardDrainingCondition(mdbsh *mongodbv1alpha1.MongoDBSharded, shardName string, result *mongodb.RemoveShardResult) {
-	mdbsh.Status.Conditions = filterConditionsByType(mdbsh.Status.Conditions, "ShardDraining")
-	mdbsh.Status.Conditions = append(mdbsh.Status.Conditions, metav1.Condition{
+	// ADR-0013 정합: meta.SetStatusCondition 위임 — drain 시작 시 1회만
+	// LastTransitionTime 설정. scaleInPollInterval 의 elapsed 백오프 (5min/30min
+	// 분기) 가 정상 동작하려면 매 reconcile 갱신을 회피해야 한다 (regression fix).
+	meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
 		Type:               "ShardDraining",
 		Status:             metav1.ConditionTrue,
 		Reason:             result.State,
 		Message:            fmt.Sprintf("shard %s state=%s, remaining chunks=%d, dbs=%d", shardName, result.State, result.Remaining.Chunks, result.Remaining.Databases),
 		ObservedGeneration: mdbsh.Generation,
-		LastTransitionTime: metav1.Now(),
 	})
 }
 

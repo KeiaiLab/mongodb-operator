@@ -28,6 +28,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -628,13 +629,13 @@ func (r *MongoDBReconciler) buildConditions(mdb *mongodbv1alpha1.MongoDB) []meta
 func (r *MongoDBReconciler) setPrimaryUnreachableCondition(ctx context.Context, mdb *mongodbv1alpha1.MongoDB, err error) {
 	logger := log.FromContext(ctx)
 	msg := firstLine(err.Error())
-	// 동일 type의 기존 condition은 제거하고 최신만 유지.
-	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, conditionTypePrimaryUnreachable)
-	mdb.Status.Conditions = append(mdb.Status.Conditions, metav1.Condition{
+	// ADR-0013 정합: meta.SetStatusCondition 위임 — Status 전이 시에만
+	// LastTransitionTime 갱신 (K8s convention). 매 reconcile Now() 갱신은 backoff
+	// 로직 (scaleInPollInterval) 의 elapsed 측정을 무력화하므로 회피.
+	meta.SetStatusCondition(&mdb.Status.Conditions, metav1.Condition{
 		Type:               conditionTypePrimaryUnreachable,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: mdb.Generation,
-		LastTransitionTime: metav1.Now(),
 		Reason:             mongodbv1alpha1.ReasonConnectError,
 		Message:            fmt.Sprintf("hasPrimary check failed: %s", msg),
 	})
@@ -658,12 +659,10 @@ func (r *MongoDBReconciler) clearPrimaryUnreachableCondition(ctx context.Context
 	if !hasIt {
 		return
 	}
-	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, conditionTypePrimaryUnreachable)
-	mdb.Status.Conditions = append(mdb.Status.Conditions, metav1.Condition{
+	meta.SetStatusCondition(&mdb.Status.Conditions, metav1.Condition{
 		Type:               conditionTypePrimaryUnreachable,
 		Status:             metav1.ConditionFalse,
 		ObservedGeneration: mdb.Generation,
-		LastTransitionTime: metav1.Now(),
 		Reason:             mongodbv1alpha1.ReasonReachable,
 		Message:            "Primary check succeeded",
 	})
@@ -677,12 +676,10 @@ func (r *MongoDBReconciler) clearPrimaryUnreachableCondition(ctx context.Context
 // 자가 buildConditions 후 updateStatusWithRetry로 영속화). reason은 호출자가
 // 단계(ManagerCreateFailed / PrimaryLookupFailed)를 명시.
 func (r *MongoDBReconciler) recordPrimaryUnreachable(mdb *mongodbv1alpha1.MongoDB, reason string, err error) {
-	mdb.Status.Conditions = filterConditionsByType(mdb.Status.Conditions, conditionTypePrimaryUnreachable)
-	mdb.Status.Conditions = append(mdb.Status.Conditions, metav1.Condition{
+	meta.SetStatusCondition(&mdb.Status.Conditions, metav1.Condition{
 		Type:               conditionTypePrimaryUnreachable,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: mdb.Generation,
-		LastTransitionTime: metav1.Now(),
 		Reason:             reason,
 		Message:            firstLine(err.Error()),
 	})
@@ -696,17 +693,6 @@ func firstLine(s string) string {
 		}
 	}
 	return s
-}
-
-// filterConditionsByType은 주어진 type의 condition을 슬라이스에서 제거한다.
-func filterConditionsByType(conds []metav1.Condition, t string) []metav1.Condition {
-	out := conds[:0]
-	for _, c := range conds {
-		if c.Type != t {
-			out = append(out, c)
-		}
-	}
-	return out
 }
 
 func (r *MongoDBReconciler) updateStatusError(ctx context.Context, mdb *mongodbv1alpha1.MongoDB, component string, err error) (ctrl.Result, error) {
