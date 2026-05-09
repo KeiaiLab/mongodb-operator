@@ -2,6 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go)](https://golang.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-7.0%2B-47A248?logo=mongodb)](https://www.mongodb.com/)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes)](https://kubernetes.io/)
 [![Container Image](https://img.shields.io/badge/ghcr.io-keiailab%2Fmongodb--operator-blue?logo=github)](https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator)
 [![Helm Chart](https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/keiailab/mongodb-operator/main/charts/mongodb-operator/Chart.yaml&label=helm%20v)](https://github.com/keiailab/mongodb-operator)
