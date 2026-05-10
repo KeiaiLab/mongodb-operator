@@ -141,6 +141,12 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return r.updateStatusError(ctx, mdb, "StatefulSet", err)
 	}
 
+	// 5.1. PVC online expansion — Spec.Storage.Size 증가 시 자동 expansion.
+	// valkey-operator PR #39 + postgres-operator PR #33 cross-operator 패턴.
+	if err := expandDataPVCs(ctx, r.Client, mdb.Namespace, []string{mdb.Name}, mdb.Spec.Storage.Size); err != nil {
+		log.FromContext(ctx).Error(err, "PVC resize failed (best-effort)")
+	}
+
 	// 5.5. PodDisruptionBudget (opt-in, spec.podDisruptionBudget이 enabled일 때만 생성)
 	if err := r.reconcilePDB(ctx, mdb); err != nil {
 		return r.updateStatusError(ctx, mdb, "PodDisruptionBudget", err)
