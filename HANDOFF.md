@@ -4,6 +4,59 @@
 > SSOT 는 본 파일 (컨텍스트·결정) + 마지막 commit log (사실).
 > 글로벌 `standards/token-budget.md §5` + `standards/workflow.md §2`.
 
+## 2026-05-10 v1.4.20 release + ShardDraining 백오프 regression fix 운영 배포
+
+본 세션 (Ralph loop, 2026-05-10) 의 결정적 산출:
+
+| 영역 | PR | 결과 |
+|---|---|---|
+| PR-A5 first cut (pkg/finalizer migration) | #119 | merged |
+| **PR-A5.2 meta.SetStatusCondition + ShardDraining 백오프 regression fix (ADR-0022)** | #120 | merged |
+| OSS hygiene (CITATION.cff) | #121 | merged |
+| README MongoDB version badge | #122 | merged |
+| OperatorHub bundle scaffold (PR-B9, ADR-0023) | #123 | merged |
+| **INC-0001 cross-cut audit (ADR-0024, valkey ADR-0039 패턴 정합)** | #124 | merged |
+| release v1.4.20 prep (Chart bump) | #125 | merged |
+| CSV icon 빈 블록 제거 (community-operators 정합) | #126 | merged |
+
+### v1.4.20 production 배포
+
+- GHCR image: `ghcr.io/keiailab/mongodb-operator:v1.4.20`
+- Git tag v1.4.20 / GH Release / Helm gh-pages publish (7b6fcef)
+- argos-platform-data PR #9 (umbrella 0.1.14 → 0.1.15) merged
+- ArgoCD sync 후 운영 `platform-data-mongodb-mongodb-operator` 가 v1.4.20 image active
+
+### PR-A5.2 — ShardDraining 백오프 regression fix (ADR-0022)
+
+`recordShardDrainingCondition` 이 매 reconcile `LastTransitionTime: metav1.Now()` 갱신
+→ `scaleInPollInterval` 의 elapsed 측정 무력화 → 백오프 분기 *항상 30s* 만 반환 →
+장시간 drain 시 mongos 부하 증대. **잠재 production regression**.
+
+Fix: 6 site (3 PrimaryUnreachable + 3 ShardDraining) `filterConditionsByType + append`
+패턴 → `meta.SetStatusCondition` / `meta.RemoveStatusCondition` 위임. ADR-0013
+정합 단일화 + LastTransitionTime 보존 (Status 전이 시에만 갱신) → elapsed 백오프
+정상 동작.
+
+### ADR-0024 INC-0001 cross-cut audit
+
+valkey-operator INC-0001 (19h cluster fail) 의 root cause `ClusterInitialized=true`
+once-shot pattern 의 cross-cut audit. mongodb 도 비슷한 `!ReplicaSetInitialized`
+분기 (mongodb_controller.go:165) 보유 — 단 line 191 의 hasPrimary check 가 *부분
+mitigation* (PrimaryUnreachable condition + 운영자 알람). valkey 같은 침묵 stuck
+안 됨. Phase 1 audit 기록, Phase 2 auto RS reconfig 별 RFC 후속.
+
+### OperatorHub.io 등록 신청 (외부)
+
+community-operators PR [#8092](https://github.com/k8s-operatorhub/community-operators/pull/8092) (`keiailab-mongodb-operator` 1.4.19, Opstree 의 기존 `mongodb-operator` namespace 충돌 회피 위해 `keiailab-` prefix). CSV icon 빈 블록 lint fail 후 force push fix. CI 재실행 진행 중.
+
+### 후속 (다음 ralph-loop iteration)
+
+1. community-operators PR #8092 CI 재검증 + reviewer 응답.
+2. logo (svg → base64 PNG) 추가 후속 PR.
+3. ADR-0024 Phase 2 — auto RS reconfig RFC.
+
+---
+
 ## 2026-05-09 Sprint A 진입 (PR-A5) — Helm 차트 비교 plan
 
 > Plan: `~/.claude/plans/1-https-artifacthub-io-packages-helm-clo-synthetic-gem.md`
