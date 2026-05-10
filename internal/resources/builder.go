@@ -670,11 +670,12 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 					},
 				},
 				Spec: corev1.PodSpec{
-					SecurityContext: securityContext,
-					InitContainers:  initContainers,
-					Containers:      containers,
-					Volumes:         volumes,
-					Affinity:        buildDefaultAffinity(mdb.Name),
+					SecurityContext:           securityContext,
+					InitContainers:            initContainers,
+					Containers:                containers,
+					Volumes:                   volumes,
+					Affinity:                  buildDefaultAffinity(mdb.Name),
+					TopologySpreadConstraints: defaultedTopologySpread(nil, mdb.Spec.Members, labels),
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
