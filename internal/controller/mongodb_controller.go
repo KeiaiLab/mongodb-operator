@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -77,14 +78,26 @@ type MongoDBReconciler struct {
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 
-func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rresult ctrl.Result, rerr error) {
 	logger := log.FromContext(ctx)
 	logger.Info("Reconciling MongoDB", "namespace", req.Namespace, "name", req.Name)
+
+	// SLO observability — reconcile latency Histogram (valkey PR #47 이식).
+	MetricReconcileTotal.WithLabelValues(req.Namespace, req.Name).Inc()
+	timer := prometheus.NewTimer(prometheus.ObserverFunc(func(v float64) {
+		result := "success"
+		if rerr != nil {
+			result = "error"
+		}
+		MetricReconcileLatency.WithLabelValues(req.Namespace, req.Name, result).Observe(v)
+	}))
+	defer timer.ObserveDuration()
 
 	// Fetch MongoDB instance
 	mdb := &mongodbv1alpha1.MongoDB{}
 	if err := r.Get(ctx, req.NamespacedName, mdb); err != nil {
 		if apierrors.IsNotFound(err) {
+			DeleteMetricsFor(req.Namespace, req.Name)
 			logger.Info("MongoDB resource not found, ignoring")
 			return ctrl.Result{}, nil
 		}
