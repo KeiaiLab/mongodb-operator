@@ -3854,6 +3854,61 @@ spec:
               shards:
                 description: Shards defines shard configuration
                 properties:
+                  arbiter:
+                    description: |-
+                      Arbiter는 각 shard replica set 에 배치할 arbiter 구성.
+
+                      Why: sharded cluster 의 각 shard 는 독립된 replica set 이다. 비용 효율을
+                      위해 일부 환경에서 data-bearing member 대신 arbiter (vote 만 갖는 lightweight
+                      member) 를 추가해 PSA (Primary-Secondary-Arbiter) 토폴로지를 구성한다. 본
+                      필드는 ROADMAP 4.2 Sharded Arbiter / Hidden member (P0) 의 일부.
+
+                      주의: MongoDB 컨벤션상 RS 당 arbiter 는 최대 1개. Replicas 는 0 또는 1.
+                      본 webhook 검증에서 강제.
+                    properties:
+                      enabled:
+                        default: false
+                        description: Enabled enables arbiter on each shard's replica
+                          set.
+                        type: boolean
+                      replicas:
+                        default: 1
+                        description: |-
+                          Replicas is the number of arbiter members per shard RS.
+
+                          MongoDB 권장사항: arbiter 는 RS 당 1개를 초과하지 않는다. 0 또는 1.
+                          Enabled=false 일 때는 무시.
+                        format: int32
+                        maximum: 1
+                        minimum: 0
+                        type: integer
+                      resources:
+                        description: |-
+                          Resources defines per-arbiter resource requirements. Arbiter 는 데이터
+                          를 보유하지 않으므로 data member 대비 매우 낮은 자원으로 운영 가능.
+                        properties:
+                          limits:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: Limits describes maximum resources allowed
+                            type: object
+                          requests:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: Requests describes minimum resources required
+                            type: object
+                        type: object
+                    required:
+                    - enabled
+                    type: object
                   autoScaling:
                     description: |-
                       AutoScaling defines shard *count* auto-scaling configuration.

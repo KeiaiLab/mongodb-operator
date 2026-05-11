@@ -381,6 +381,99 @@ func TestValidateMongoDBShardedSpec_MembersPerShardEven(t *testing.T) {
 	}
 }
 
+// TestValidateShardArbiter — ROADMAP 4.2-a Sharded Arbiter 필드 검증.
+//
+// Arbiter helper 단위 + validateMongoDBShardedSpec 통합 2-layer 테스트.
+func TestValidateShardArbiter(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		arb     *mongodbv1alpha1.ShardArbiterSpec
+		members int32
+		wantErr bool
+		errSub  string
+	}{
+		{"nil arbiter → ok", nil, 3, false, ""},
+		{
+			"disabled → ok (replicas ignored)",
+			&mongodbv1alpha1.ShardArbiterSpec{Enabled: false, Replicas: 0},
+			3, false, "",
+		},
+		{
+			"enabled + replicas=0 → reject (모순)",
+			&mongodbv1alpha1.ShardArbiterSpec{Enabled: true, Replicas: 0},
+			2, true, "replicas must be >= 1",
+		},
+		{
+			"enabled + replicas=2 → reject (MongoDB max 1)",
+			&mongodbv1alpha1.ShardArbiterSpec{Enabled: true, Replicas: 2},
+			2, true, "at most 1 arbiter",
+		},
+		{
+			"enabled + replicas=1 + members=2 → ok (PSA, total vote 3)",
+			&mongodbv1alpha1.ShardArbiterSpec{Enabled: true, Replicas: 1},
+			2, false, "",
+		},
+		{
+			"enabled + replicas=1 + members=3 → reject (total vote 4, 짝수)",
+			&mongodbv1alpha1.ShardArbiterSpec{Enabled: true, Replicas: 1},
+			3, true, "odd quorum",
+		},
+		{
+			"enabled + replicas=1 + members=4 → ok (total vote 5)",
+			&mongodbv1alpha1.ShardArbiterSpec{Enabled: true, Replicas: 1},
+			4, false, "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			errs := validateShardArbiter(nil, tc.arb, tc.members)
+			if tc.wantErr && len(errs) == 0 {
+				t.Fatalf("expected error containing %q, got nil", tc.errSub)
+			}
+			if !tc.wantErr && len(errs) > 0 {
+				t.Fatalf("expected no error, got %v", errs)
+			}
+			if tc.wantErr {
+				var found bool
+				for _, e := range errs {
+					if strings.Contains(e.Error(), tc.errSub) {
+						found = true
+					}
+				}
+				if !found {
+					t.Errorf("expected %q in errors, got %v", tc.errSub, errs)
+				}
+			}
+		})
+	}
+}
+
+// TestValidateMongoDBShardedSpec_ArbiterIntegration — CR 단위 통합 — 모순된
+// arbiter 설정이 validateMongoDBShardedSpec 까지 전파되는지 확인.
+func TestValidateMongoDBShardedSpec_ArbiterIntegration(t *testing.T) {
+	t.Parallel()
+	m := &mongodbv1alpha1.MongoDBSharded{}
+	m.Spec.Version.Version = "8.3"
+	m.Spec.Shards.Count = 3
+	m.Spec.Shards.MembersPerShard = 3
+	m.Spec.Shards.Arbiter = &mongodbv1alpha1.ShardArbiterSpec{
+		Enabled:  true,
+		Replicas: 1, // total vote = 4 (짝수) → reject
+	}
+	errs := validateMongoDBShardedSpec(m)
+	var found bool
+	for _, e := range errs {
+		if strings.Contains(e.Error(), "odd quorum") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected odd-quorum error, got %v", errs)
+	}
+}
+
 // CustomValidator 진입점은 admission framework 가 호출. 정상 path / 잘못된 GVK /
 // nil obj 의 3 시나리오 가드 — panic 방지 + 안전 reject.
 
