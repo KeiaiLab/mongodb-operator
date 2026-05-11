@@ -185,7 +185,7 @@
 
 ### 4.2 Sharded Arbiter / Hidden member (P0)
 - [x] ReplicaSet 의 `ArbiterSpec` — `api/v1alpha1/mongodb_types.go`
-- [ ] `MongoDBSharded.spec.shards.arbiter.{enabled,replicas,resources}` 필드 추가
+- [x] `MongoDBSharded.spec.shards.arbiter.{enabled,replicas,resources}` 필드 추가 — `api/v1alpha1/mongodbsharded_types.go` `ShardArbiterSpec` + webhook `validateShardArbiter` (Enabled/Replicas 0~1/홀수 vote 검증, PR #138)
 - [ ] `MongoDBSharded.spec.shards.hiddenMembers.{count,priority,votes,tags}`
 - [ ] `ShardManager` 분기 — `rs.add({arbiterOnly: true})` / `rs.add({hidden: true, priority: 0})`
 - [ ] e2e (`test/e2e/sharded_arbiter_test.go` 신규)
