@@ -34,7 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -60,7 +60,7 @@ type MongoDBShardedReconciler struct {
 	EnableAutoscaling bool
 	// Recorder는 K8s Events 발행용. SetupWithManager에서 자동 주입.
 	// nil-safe (helpers.go::applyErrorCondition에서 nil 체크).
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbshardeds,verbs=get;list;watch;create;update;patch;delete
@@ -1240,8 +1240,8 @@ func (r *MongoDBShardedReconciler) cleanupShardedNetworkPolicies(ctx context.Con
 // SetupWithManager sets up the controller with the Manager.
 func (r *MongoDBShardedReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.Recorder == nil {
-		//lint:ignore SA1019 client-go record.EventRecorder 유지. events.k8s.io 전환은 Recorder field migration 과 함께 별 cycle.
-		r.Recorder = mgr.GetEventRecorderFor("mongodbsharded-controller") //nolint:staticcheck
+		// events API 마이그레이션 완료 (RFC-0023 Phase 2, 2026-05-11).
+		r.Recorder = mgr.GetEventRecorder("mongodbsharded-controller")
 	}
 	// v1.4.1 P1 fix: HPA를 Owns에 등록한다. 누락 시 controller-runtime 의 default
 	// cached reader가 HPA informer를 lazy 생성 시도 → cache sync wait timeout
