@@ -130,7 +130,7 @@ kubectl get crd | grep mongodb
 
 ## What's Next
 
-See [Roadmap](../ROADMAP.md) for planned features in future releases:
+See [Roadmap](../../ROADMAP.md) for planned features in future releases:
 - Point-in-Time Recovery (PITR)
 - LDAP/OIDC authentication
 - Multi-region support
