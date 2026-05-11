@@ -694,6 +694,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 					},
 				},
 			},
+			PersistentVolumeClaimRetentionPolicy: mdb.Spec.Storage.PersistentVolumeClaimRetentionPolicy,
 		},
 	}
 }
@@ -896,6 +897,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 					},
 				},
 			},
+			PersistentVolumeClaimRetentionPolicy: mdbsh.Spec.ConfigServer.Storage.PersistentVolumeClaimRetentionPolicy,
 		},
 	}
 }
@@ -1080,6 +1082,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 					},
 				},
 			},
+			PersistentVolumeClaimRetentionPolicy: mdbsh.Spec.Shards.Storage.PersistentVolumeClaimRetentionPolicy,
 		},
 	}
 }

@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -950,5 +951,68 @@ func TestPodSecurityRestrictedCompliance(t *testing.T) {
 		for _, c := range sts.Spec.Template.Spec.Containers {
 			assertRestricted(t, "container/"+c.Name, c.SecurityContext)
 		}
+	})
+}
+
+// TestPVCRetentionPolicyPropagation은 StorageSpec.PersistentVolumeClaimRetentionPolicy
+// 가 세 STS 빌더(RS / ConfigServer / Shard) 모두에 매핑되는지 회귀 가드한다.
+// 기본값(unset)이면 nil 유지, Retain/Delete 명시 시 그대로 전달.
+func TestPVCRetentionPolicyPropagation(t *testing.T) {
+	policy := &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+		WhenDeleted: appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+		WhenScaled:  appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+	}
+
+	t.Run("ReplicaSet — 미설정시 nil", func(t *testing.T) {
+		mdb := &mongodbv1alpha1.MongoDB{
+			ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "default"},
+			Spec: mongodbv1alpha1.MongoDBSpec{
+				Members: 3, ReplicaSetName: "rs0",
+				Version: mongodbv1alpha1.MongoDBVersion{Version: "7.0"},
+				Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("10Gi")},
+			},
+		}
+		sts := BuildReplicaSetStatefulSet(mdb)
+		assert.Nil(t, sts.Spec.PersistentVolumeClaimRetentionPolicy)
+	})
+
+	t.Run("ReplicaSet — 정책 전달", func(t *testing.T) {
+		mdb := &mongodbv1alpha1.MongoDB{
+			ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "default"},
+			Spec: mongodbv1alpha1.MongoDBSpec{
+				Members: 3, ReplicaSetName: "rs0",
+				Version: mongodbv1alpha1.MongoDBVersion{Version: "7.0"},
+				Storage: mongodbv1alpha1.StorageSpec{
+					Size:                                 resource.MustParse("10Gi"),
+					PersistentVolumeClaimRetentionPolicy: policy,
+				},
+			},
+		}
+		sts := BuildReplicaSetStatefulSet(mdb)
+		require.NotNil(t, sts.Spec.PersistentVolumeClaimRetentionPolicy)
+		assert.Equal(t, appsv1.DeletePersistentVolumeClaimRetentionPolicyType, sts.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted)
+		assert.Equal(t, appsv1.RetainPersistentVolumeClaimRetentionPolicyType, sts.Spec.PersistentVolumeClaimRetentionPolicy.WhenScaled)
+	})
+
+	t.Run("ConfigServer — 정책 전달", func(t *testing.T) {
+		sh := shardedWithAuth()
+		sh.Spec.ConfigServer.Storage.PersistentVolumeClaimRetentionPolicy = policy
+		sts := BuildConfigServerStatefulSet(sh)
+		require.NotNil(t, sts.Spec.PersistentVolumeClaimRetentionPolicy)
+		assert.Equal(t, appsv1.DeletePersistentVolumeClaimRetentionPolicyType, sts.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted)
+	})
+
+	t.Run("Shard — 정책 전달", func(t *testing.T) {
+		sh := shardedWithAuth()
+		sh.Spec.Shards.Storage.PersistentVolumeClaimRetentionPolicy = policy
+		sts := BuildShardStatefulSet(sh, 0)
+		require.NotNil(t, sts.Spec.PersistentVolumeClaimRetentionPolicy)
+		assert.Equal(t, appsv1.RetainPersistentVolumeClaimRetentionPolicyType, sts.Spec.PersistentVolumeClaimRetentionPolicy.WhenScaled)
+	})
+
+	t.Run("Shard — 미설정시 nil", func(t *testing.T) {
+		sh := shardedWithAuth()
+		sts := BuildShardStatefulSet(sh, 0)
+		assert.Nil(t, sts.Spec.PersistentVolumeClaimRetentionPolicy)
 	})
 }

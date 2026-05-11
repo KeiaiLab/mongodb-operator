@@ -198,9 +198,10 @@
 - [ ] 시나리오 e2e (audit/fluentbit/oplog tailer 등 운영 표준)
 
 ### 4.4 PVC retention policy 노출 (P1)
-- [~] `RetentionSpec` 필드 존재 — `api/v1alpha1/common_types.go`
-- [ ] StatefulSet `persistentVolumeClaimRetentionPolicy` 매핑 — `internal/controller/resources_apply.go`
-- [ ] e2e — scale-down 시 PVC 보존/삭제 분기 검증
+- [x] `StorageSpec.PersistentVolumeClaimRetentionPolicy` 필드 — `api/v1alpha1/common_types.go` (Retain/Delete × WhenDeleted/WhenScaled)
+- [x] StatefulSet `persistentVolumeClaimRetentionPolicy` 매핑 — `internal/resources/builder.go` (RS/ConfigServer/Shard 3 빌더)
+- [x] 단위 테스트 — `internal/resources/builder_test.go::TestPVCRetentionPolicyPropagation` (5 서브테스트: 미설정 nil, 정책 전달)
+- [ ] e2e — scale-down 시 PVC 보존/삭제 분기 검증 (후속 PR)
 
 ### 4.5 volumePermissions init container (P1)
 - [ ] CRD `pod.volumePermissions.{enabled, image, resources}`
