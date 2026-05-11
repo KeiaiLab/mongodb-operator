@@ -492,6 +492,22 @@ type PodSpec struct {
 	// TopologySpreadConstraints describes how pods are spread across topology
 	// +optional
 	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
+
+	// DiagnosticMode 는 진단용 일시 모드. Enabled=true 시 mongod 컨테이너의
+	// command 를 `["sleep","infinity"]` 로 덮어쓰고 LivenessProbe / ReadinessProbe /
+	// Lifecycle(admin bootstrap) 을 비활성화하여, mongod 가 기동 실패해도 pod 는
+	// Running 상태로 유지된다. 운영자는 `kubectl exec` 로 진입해 데이터 디렉터리·
+	// 설정·로그를 조사할 수 있다. **운영 데이터셋에서 사용 시 mongod 가 클라이언트
+	// 요청을 처리하지 않으므로** 단발 진단 후 즉시 false 로 되돌릴 것.
+	// +optional
+	DiagnosticMode *DiagnosticModeSpec `json:"diagnosticMode,omitempty"`
+}
+
+// DiagnosticModeSpec 은 진단용 컨테이너 override 설정.
+type DiagnosticModeSpec struct {
+	// Enabled 가 true 면 mongod 컨테이너를 sleep infinity 로 교체한다.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
 }
 
 // NetworkPolicySpec defines NetworkPolicy configuration for the workload pods.
