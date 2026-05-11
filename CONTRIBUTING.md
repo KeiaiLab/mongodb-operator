@@ -91,40 +91,52 @@ git commit -s -m "feat(controller): ..."
 
 ### Pre-commit Hooks
 
-We use pre-commit to automatically check code quality before each commit. Hooks run automatically when you commit changes.
+We use [lefthook](https://github.com/evilmartians/lefthook) (Go 단일 바이너리) to automatically check code quality before each commit / push. 설정은 `.lefthook.yml` 에 있음.
 
-#### Pre-commit Hooks
+#### Hook 목록
 
-- **trailing-whitespace**: Removes trailing whitespace from modified files
-- **go fmt**: Auto-formats Go code to gofmt standards
-- **go vet**: Runs go vet to find potential issues
-- **golangci-lint**: Runs comprehensive Go linter with sensible defaults
-- **go test**: Runs unit tests (`go test ./...`) to catch regressions
-- **commit-msg-trim**: Removes trailing whitespace from commit messages
+**pre-commit** (commit 단계):
+- **gofmt**: `*.go` 자동 포맷팅
+- **govet**: `go vet ./...`
+- **golangci-lint**: 신규 issue 만 차단 (`--new-from-rev=HEAD~1`)
+- **helm-lint**: `charts/**/*.yaml` 변경 시 `helm lint`
+
+**pre-push** (push 단계):
+- **unit-test**: `go test -count=1 -timeout=120s ./...`
+- **full-lint**: 전체 golangci-lint
+- **helm-lint** + **helm-template**: chart sanity
+- **govulncheck**: Go module CVE (call-graph 기반)
+- **gitleaks**: 시크릿 누출 차단
+- **platforms-amd64-guard**: RFC-0002 §2 multi-arch 재발 방지
+- **go-mod-tidy**: go.mod/go.sum drift 차단
+
+**commit-msg**:
+- **conventional**: Conventional Commits 패턴 강제 (`standards/commits.md §1`)
+- **dco-signoff**: DCO `Signed-off-by:` trailer (DCO_STRICT=1 시 enforce, 기본 warn)
 
 #### Installation
 
 ```bash
-# Install pre-commit
-curl https://pre-commit.com/install.sh | sh
+# lefthook 설치
+brew install lefthook   # 또는 go install github.com/evilmartians/lefthook@latest
 
-# Enable pre-commit hooks
-pre-commit install
+# git hook 활성화
+lefthook install        # .git/hooks/{pre-commit,pre-push,commit-msg} 생성
 ```
 
 #### Usage
 
-Hooks run automatically before each commit. You can also run them manually:
+Hooks run automatically before each commit / push. 수동 실행:
 
 ```bash
-# Check all files
-pre-commit run --all-files
+# pre-commit hook 을 모든 파일에 실행
+lefthook run pre-commit --all-files
 
-# Check only staged files
-pre-commit run
+# pre-push hook 을 직접 실행
+lefthook run pre-push
 
-# Update hooks to latest versions
-pre-commit autoupdate
+# 자동화 루프 한정 우회 (사고 방지: 정상 commit 에 사용 금지)
+LEFTHOOK=0 git commit -m "..."   # 또는 commit msg 트레일러 [skip-hooks]
 ```
 
 If a hook fails:
