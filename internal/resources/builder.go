@@ -589,6 +589,12 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 		},
 	}
 
+	// 4.8 Diagnostic mode — mongod 컨테이너를 sleep infinity 로 교체. Probe /
+	// Lifecycle 비활성화로 pod 가 기동 실패 없이 Running 유지 → exec 진단 가능.
+	if mdb.Spec.Pod != nil && mdb.Spec.Pod.DiagnosticMode != nil && mdb.Spec.Pod.DiagnosticMode.Enabled {
+		applyDiagnosticMode(&containers[0])
+	}
+
 	// Add exporter sidecar if monitoring enabled
 	if mdb.Spec.Monitoring != nil && mdb.Spec.Monitoring.Enabled {
 		exporterImg := exporterImage
@@ -697,6 +703,18 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			PersistentVolumeClaimRetentionPolicy: mdb.Spec.Storage.PersistentVolumeClaimRetentionPolicy,
 		},
 	}
+}
+
+// applyDiagnosticMode 는 mongod 컨테이너를 진단용 sleep infinity 로 교체한다.
+// command/args 가 sleep 으로 바뀌면 mongod 가 기동하지 않으므로 probe / lifecycle
+// 도 동시 비활성화해야 한다 (그대로 두면 probe 실패로 컨테이너 무한 재시작).
+func applyDiagnosticMode(c *corev1.Container) {
+	c.Command = []string{"sleep", "infinity"}
+	c.Args = nil
+	c.LivenessProbe = nil
+	c.ReadinessProbe = nil
+	c.StartupProbe = nil
+	c.Lifecycle = nil
 }
 
 func buildDefaultAffinity(instanceName string) *corev1.Affinity {

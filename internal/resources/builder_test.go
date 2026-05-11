@@ -297,6 +297,66 @@ func TestBuildReplicaSetStatefulSetWithoutStorageClass(t *testing.T) {
 	assert.Nil(t, sts.Spec.VolumeClaimTemplates[0].Spec.StorageClassName)
 }
 
+// ROADMAP 4.8 — DiagnosticMode 활성 시 mongod 컨테이너의 command 는 sleep infinity 로
+// 덮어쓰이고 모든 probe + Lifecycle 이 nil 이어야 한다. 그렇지 않으면 probe 실패로
+// 컨테이너가 무한 재시작되어 진단이 불가능하다.
+func TestBuildReplicaSetStatefulSet_DiagnosticMode_Enabled(t *testing.T) {
+	mdb := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-mongodb", Namespace: "default"},
+		Spec: mongodbv1alpha1.MongoDBSpec{
+			Members:        3,
+			ReplicaSetName: "rs0",
+			Version:        mongodbv1alpha1.MongoDBVersion{Version: "7.0"},
+			Storage:        mongodbv1alpha1.StorageSpec{Size: resource.MustParse("10Gi"), DataDirPath: "/data/db"},
+			Pod: &mongodbv1alpha1.PodSpec{
+				DiagnosticMode: &mongodbv1alpha1.DiagnosticModeSpec{Enabled: true},
+			},
+		},
+	}
+
+	sts := BuildReplicaSetStatefulSet(mdb)
+
+	require.Len(t, sts.Spec.Template.Spec.Containers, 1)
+	c := sts.Spec.Template.Spec.Containers[0]
+	assert.Equal(t, []string{"sleep", "infinity"}, c.Command, "diagnosticMode 활성 시 command 는 sleep infinity")
+	assert.Nil(t, c.Args, "diagnosticMode 활성 시 mongod args 는 비워져야 함 (sleep 에 인자 전달 방지)")
+	assert.Nil(t, c.LivenessProbe, "diagnosticMode 활성 시 LivenessProbe 비활성화")
+	assert.Nil(t, c.ReadinessProbe, "diagnosticMode 활성 시 ReadinessProbe 비활성화")
+	assert.Nil(t, c.StartupProbe, "diagnosticMode 활성 시 StartupProbe 비활성화")
+	assert.Nil(t, c.Lifecycle, "diagnosticMode 활성 시 Lifecycle(admin bootstrap) 비활성화")
+}
+
+// DiagnosticMode 미설정 또는 Enabled=false 일 때는 기존 동작 (mongod 실제 기동) 을
+// 그대로 유지해야 한다 — 회귀 가드.
+func TestBuildReplicaSetStatefulSet_DiagnosticMode_Disabled(t *testing.T) {
+	tests := []struct {
+		name string
+		pod  *mongodbv1alpha1.PodSpec
+	}{
+		{name: "PodSpec nil", pod: nil},
+		{name: "DiagnosticMode nil", pod: &mongodbv1alpha1.PodSpec{}},
+		{name: "Enabled false", pod: &mongodbv1alpha1.PodSpec{DiagnosticMode: &mongodbv1alpha1.DiagnosticModeSpec{Enabled: false}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mdb := &mongodbv1alpha1.MongoDB{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-mongodb", Namespace: "default"},
+				Spec: mongodbv1alpha1.MongoDBSpec{
+					Members: 3, ReplicaSetName: "rs0",
+					Version: mongodbv1alpha1.MongoDBVersion{Version: "7.0"},
+					Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("10Gi"), DataDirPath: "/data/db"},
+					Pod:     tc.pod,
+				},
+			}
+			c := BuildReplicaSetStatefulSet(mdb).Spec.Template.Spec.Containers[0]
+			assert.Nil(t, c.Command, "기본 경로는 mongod 이미지 entrypoint 사용 (Command override 없음)")
+			assert.NotNil(t, c.LivenessProbe, "기본 경로는 LivenessProbe 활성")
+			assert.NotNil(t, c.ReadinessProbe, "기본 경로는 ReadinessProbe 활성")
+			assert.NotNil(t, c.Lifecycle, "기본 경로는 Lifecycle(admin bootstrap) 활성")
+		})
+	}
+}
+
 func TestBuildReplicaSetStatefulSetWithMonitoring(t *testing.T) {
 	mdb := &mongodbv1alpha1.MongoDB{
 		ObjectMeta: metav1.ObjectMeta{
