@@ -151,6 +151,45 @@ type ShardSpec struct {
 	// deliberate=true 없이는 spec.MembersPerShard 변경이 즉시 적용되지 않는다.
 	// +optional
 	ScalePolicy *ScalePolicy `json:"scalePolicy,omitempty"`
+
+	// Arbiter는 각 shard replica set 에 배치할 arbiter 구성.
+	//
+	// Why: sharded cluster 의 각 shard 는 독립된 replica set 이다. 비용 효율을
+	// 위해 일부 환경에서 data-bearing member 대신 arbiter (vote 만 갖는 lightweight
+	// member) 를 추가해 PSA (Primary-Secondary-Arbiter) 토폴로지를 구성한다. 본
+	// 필드는 ROADMAP 4.2 Sharded Arbiter / Hidden member (P0) 의 일부.
+	//
+	// 주의: MongoDB 컨벤션상 RS 당 arbiter 는 최대 1개. Replicas 는 0 또는 1.
+	// 본 webhook 검증에서 강제.
+	// +optional
+	Arbiter *ShardArbiterSpec `json:"arbiter,omitempty"`
+}
+
+// ShardArbiterSpec defines per-shard arbiter configuration.
+//
+// 단일 RS 의 ArbiterSpec 과 별도 타입인 이유: sharded 토폴로지는 shard 별로
+// arbiter 정책을 일관 적용해야 하고, 향후 hiddenMembers 와 같은 sharded 한정
+// 옵션이 추가될 여지가 있다. 또한 Replicas 필드 (0/1 선택) 가 single-RS 의
+// ArbiterSpec 에는 의미가 없다 (단일 RS 는 Enabled bool 만으로 충분).
+type ShardArbiterSpec struct {
+	// Enabled enables arbiter on each shard's replica set.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// Replicas is the number of arbiter members per shard RS.
+	//
+	// MongoDB 권장사항: arbiter 는 RS 당 1개를 초과하지 않는다. 0 또는 1.
+	// Enabled=false 일 때는 무시.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1
+	// +kubebuilder:default=1
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// Resources defines per-arbiter resource requirements. Arbiter 는 데이터
+	// 를 보유하지 않으므로 data member 대비 매우 낮은 자원으로 운영 가능.
+	// +optional
+	Resources ResourcesSpec `json:"resources,omitempty"`
 }
 
 // ShardAutoScalingSpec defines shard auto-scaling

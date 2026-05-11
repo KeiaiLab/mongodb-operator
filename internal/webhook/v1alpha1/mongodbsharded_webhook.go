@@ -98,5 +98,49 @@ func validateMongoDBShardedSpec(m *mongodbv1alpha1.MongoDBSharded) field.ErrorLi
 	errs = append(errs, validateTLSSpec(p.Child("tls"), m.Spec.TLS)...)
 	errs = append(errs, validateBackupSpec(p.Child("backup"), m.Spec.Backup)...)
 
+	// Shards.Arbiter 일관성 (ROADMAP 4.2-a).
+	errs = append(errs, validateShardArbiter(p.Child("shards", "arbiter"), m.Spec.Shards.Arbiter, m.Spec.Shards.MembersPerShard)...)
+
+	return errs
+}
+
+// validateShardArbiter — sharded cluster 의 shard 별 arbiter 설정 검증.
+//
+// MongoDB invariant:
+//   - RS 당 arbiter 는 최대 1개. CRD marker 가 Maximum=1 강제하므로 본 함수는
+//     *조합 모순* 만 검증.
+//   - Enabled=true 인데 Replicas=0 이면 모순 — Replicas>=1 강제.
+//   - Enabled=true + MembersPerShard 가 짝수 RS 멤버 + arbiter (홀수) →
+//     vote 총합 짝수 → split-brain 위험. PSA 전형 권장: data 2 + arbiter 1
+//     = 멤버 3 (홀수). 따라서 MembersPerShard 가 짝수일 때 arbiter 1 추가는
+//     OK (홀수 됨). MembersPerShard 홀수 + arbiter 1 = 짝수 → reject.
+func validateShardArbiter(path *field.Path, arb *mongodbv1alpha1.ShardArbiterSpec, membersPerShard int32) field.ErrorList {
+	if arb == nil || !arb.Enabled {
+		return nil
+	}
+	var errs field.ErrorList
+	if arb.Replicas == 0 {
+		errs = append(errs, field.Invalid(
+			path.Child("replicas"), arb.Replicas,
+			"arbiter.replicas must be >= 1 when enabled=true (0 contradicts enabled)",
+		))
+	}
+	if arb.Replicas > 1 {
+		errs = append(errs, field.Invalid(
+			path.Child("replicas"), arb.Replicas,
+			"arbiter.replicas must be 0 or 1 — MongoDB allows at most 1 arbiter per replica set",
+		))
+	}
+	// 짝수 vote 방지. MembersPerShard 가 0 (미설정) 이면 CRD default=3 로 채워짐 →
+	// 본 분기는 명시값만 검사.
+	if membersPerShard > 0 && arb.Replicas > 0 {
+		totalVotes := membersPerShard + arb.Replicas
+		if totalVotes%2 == 0 {
+			errs = append(errs, field.Invalid(
+				path.Child("replicas"), arb.Replicas,
+				"shard total vote count would be even (membersPerShard + arbiter.replicas) — odd quorum required to avoid split-brain",
+			))
+		}
+	}
 	return errs
 }
