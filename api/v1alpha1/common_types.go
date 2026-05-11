@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"strings"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -83,6 +84,13 @@ type StorageSpec struct {
 	// DataDirPath is the path for MongoDB data
 	// +kubebuilder:default="/data/db"
 	DataDirPath string `json:"dataDirPath,omitempty"`
+
+	// PersistentVolumeClaimRetentionPolicy describes the lifecycle of PVCs
+	// created from the StatefulSet's VolumeClaimTemplates. WhenDeleted/WhenScaled
+	// 모두 Retain(기본) 또는 Delete를 허용. 기본은 Retain — 운영자가 명시적으로
+	// 데이터 폐기를 선택하기 전까지 PVC를 보존하기 위함.
+	// +optional
+	PersistentVolumeClaimRetentionPolicy *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy `json:"persistentVolumeClaimRetentionPolicy,omitempty"`
 }
 
 // ResourcesSpec defines resource requirements
