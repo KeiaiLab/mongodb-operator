@@ -30,6 +30,9 @@ import (
 	commonswebhook "github.com/keiailab/operator-commons/pkg/webhook"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
+	auditpkg "github.com/keiailab/mongodb-operator/internal/controller/audit"
+	authpkg "github.com/keiailab/mongodb-operator/internal/controller/auth"
+	encryptionpkg "github.com/keiailab/mongodb-operator/internal/controller/encryption"
 )
 
 // SetupMongoDBWebhookWithManager registers the validating webhook for MongoDB.
@@ -96,6 +99,28 @@ func validateMongoDBSpec(m *mongodbv1alpha1.MongoDB) field.ErrorList {
 		mongodbv1alpha1.SupportedMongoDBVersions,
 	); err != nil {
 		errs = append(errs, err)
+	}
+
+	// cycle 18 — LDAP/OIDC/Encryption/Audit 검증 호출 (webhook integration).
+	if m.Spec.Auth.LDAP != nil {
+		if err := authpkg.ValidateLDAPSpec(m.Spec.Auth.LDAP); err != nil {
+			errs = append(errs, field.Invalid(p.Child("auth", "ldap"), m.Spec.Auth.LDAP, err.Error()))
+		}
+	}
+	if m.Spec.Auth.OIDC != nil {
+		if err := authpkg.ValidateOIDCSpec(m.Spec.Auth.OIDC); err != nil {
+			errs = append(errs, field.Invalid(p.Child("auth", "oidc"), m.Spec.Auth.OIDC, err.Error()))
+		}
+	}
+	if m.Spec.Storage.Encryption != nil {
+		if err := encryptionpkg.ValidateEncryptionSpec(m.Spec.Storage.Encryption); err != nil {
+			errs = append(errs, field.Invalid(p.Child("storage", "encryption"), m.Spec.Storage.Encryption, err.Error()))
+		}
+	}
+	if m.Spec.AuditLog != nil {
+		if err := auditpkg.ValidateAuditLogSpec(m.Spec.AuditLog); err != nil {
+			errs = append(errs, field.Invalid(p.Child("auditLog"), m.Spec.AuditLog, err.Error()))
+		}
 	}
 
 	// ReplicaSet quorum: members odd >= 3 권장. 1 (single-instance) 도 허용 (dev).

@@ -264,6 +264,14 @@ type MongosSpec struct {
 	// +kubebuilder:default=2
 	Replicas int32 `json:"replicas"`
 
+	// UseStatefulSet — G-12 Bitnami parity. true 시 mongos 를 StatefulSet 으로
+	// 배포 (각 mongos pod 가 stable network identity 보유). 외부 client 가
+	// 특정 mongos 를 직접 지정해야 하는 시나리오 (e.g. service-per-replica).
+	// 기본 false: Deployment (rolling update + horizontal scale 우수).
+	// +kubebuilder:default=false
+	// +optional
+	UseStatefulSet bool `json:"useStatefulSet,omitempty"`
+
 	// Resources defines resource requirements
 	// +optional
 	Resources ResourcesSpec `json:"resources,omitempty"`

@@ -1508,6 +1508,27 @@ func BuildMongosService(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.Service {
 }
 
 // BuildMongosDeployment creates a Deployment for Mongos
+// BuildMongosStatefulSet creates a StatefulSet for Mongos when
+// Mongos.UseStatefulSet=true (cycle 18, G-12 Bitnami parity).
+// mongos 가 stable network identity 필요한 시나리오 (외부 client 직접 routing).
+func BuildMongosStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.StatefulSet {
+	dep := BuildMongosDeployment(mdbsh)
+	// Convert Deployment spec → StatefulSet spec (선택 fields 만 copy).
+	return &appsv1.StatefulSet{
+		ObjectMeta: dep.ObjectMeta,
+		Spec: appsv1.StatefulSetSpec{
+			ServiceName: mdbsh.Name + "-mongos-headless",
+			Replicas:    dep.Spec.Replicas,
+			Selector:    dep.Spec.Selector,
+			Template:    dep.Spec.Template,
+			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
+				Type: appsv1.RollingUpdateStatefulSetStrategyType,
+			},
+			PodManagementPolicy: appsv1.ParallelPodManagement,
+		},
+	}
+}
+
 func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deployment {
 	labels := buildLabels(mdbsh.Name, "mongos")
 
