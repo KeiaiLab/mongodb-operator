@@ -27,6 +27,14 @@ jobs:
         # only mounts GITHUB_WORKSPACE) can read the file.
         run: helm template test charts/mongodb-operator --debug > render.yaml
       - name: kubeconform validate
-        uses: docker://ghcr.io/yannh/kubeconform:latest
-        with:
-          args: -strict -ignore-missing-schemas -schema-location default -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' render.yaml
+        # invoked via `run` rather than `uses: docker://…` because the action's
+        # `args:` input mishandles single-quoted URL templates — the quotes get
+        # baked into the path string ("first path segment cannot contain colon").
+        # bash quoting via `run:` resolves the escaping cleanly.
+        run: |
+          docker run --rm -v "$PWD":/workdir -w /workdir \
+            ghcr.io/yannh/kubeconform:latest \
+            -strict -ignore-missing-schemas \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            render.yaml
