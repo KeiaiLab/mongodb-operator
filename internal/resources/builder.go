@@ -975,6 +975,22 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 		args = append(args, tlsArgs()...)
 	}
 
+	// cycle 14 sharded ConfigServer integration: auth / encryption / audit args.
+	if mdbsh.Spec.Auth.LDAP != nil {
+		args = append(args, authpkg.LDAPMongodArgs(mdbsh.Spec.Auth.LDAP)...)
+	}
+	if mdbsh.Spec.Auth.OIDC != nil {
+		if oidcParam, err := authpkg.OIDCMongodSetParameter(mdbsh.Spec.Auth.OIDC); err == nil && oidcParam != "" {
+			args = append(args, "--setParameter", "oidcIdentityProviders="+oidcParam)
+		}
+	}
+	if mdbsh.Spec.ConfigServer.Storage.Encryption != nil {
+		args = append(args, encryptionpkg.MongodArgs(mdbsh.Spec.ConfigServer.Storage.Encryption)...)
+	}
+	if mdbsh.Spec.AuditLog != nil {
+		args = append(args, auditpkg.MongodArgs(mdbsh.Spec.AuditLog)...)
+	}
+
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      mdbsh.Name + "-cfg",
@@ -1073,6 +1089,25 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 	if mdbsh.Spec.ConfigServer.Pod != nil && mdbsh.Spec.ConfigServer.Pod.DiagnosticMode != nil && mdbsh.Spec.ConfigServer.Pod.DiagnosticMode.Enabled {
 		applyDiagnosticMode(&sts.Spec.Template.Spec.Containers[0])
 	}
+	// cycle 14: PodSpec extension merge (ExtraVolumeMounts/ExtraEnvVars/LifecycleHooks).
+	if mdbsh.Spec.ConfigServer.Pod != nil {
+		applyPodSpecExtensions(&sts.Spec.Template.Spec.Containers[0], mdbsh.Spec.ConfigServer.Pod)
+	}
+	// cycle 14: ResourcesPreset (Resources 비어있을 때만).
+	if mdbsh.Spec.ConfigServer.Pod != nil && mdbsh.Spec.ConfigServer.Pod.ResourcesPreset != "" && isResourcesEmpty(mdbsh.Spec.ConfigServer.Resources) {
+		sts.Spec.Template.Spec.Containers[0].Resources = ResourcePreset(mdbsh.Spec.ConfigServer.Pod.ResourcesPreset)
+	}
+	// cycle 14: pod-level Sidecars + ExtraVolumes + InitScripts volume.
+	sts.Spec.Template.Spec.Containers, sts.Spec.Template.Spec.Volumes =
+		appendPodSpecPodLevel(sts.Spec.Template.Spec.Containers, sts.Spec.Template.Spec.Volumes, mdbsh.Spec.ConfigServer.Pod)
+	// cycle 14: VolumePermissions init container (PSA restricted).
+	if mdbsh.Spec.ConfigServer.Pod != nil && mdbsh.Spec.ConfigServer.Pod.VolumePermissions != nil && mdbsh.Spec.ConfigServer.Pod.VolumePermissions.Enabled {
+		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, buildVolumePermissionsInit(mdbsh.Spec.ConfigServer.Pod.VolumePermissions))
+	}
+	// cycle 14: user-provided InitContainers chain.
+	if mdbsh.Spec.ConfigServer.Pod != nil && len(mdbsh.Spec.ConfigServer.Pod.InitContainers) > 0 {
+		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, mdbsh.Spec.ConfigServer.Pod.InitContainers...)
+	}
 	return sts
 }
 
@@ -1166,6 +1201,22 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 			buildTLSPEMMount(),
 		)
 		args = append(args, tlsArgs()...)
+	}
+
+	// cycle 14 sharded Shard integration.
+	if mdbsh.Spec.Auth.LDAP != nil {
+		args = append(args, authpkg.LDAPMongodArgs(mdbsh.Spec.Auth.LDAP)...)
+	}
+	if mdbsh.Spec.Auth.OIDC != nil {
+		if oidcParam, err := authpkg.OIDCMongodSetParameter(mdbsh.Spec.Auth.OIDC); err == nil && oidcParam != "" {
+			args = append(args, "--setParameter", "oidcIdentityProviders="+oidcParam)
+		}
+	}
+	if mdbsh.Spec.Shards.Storage.Encryption != nil {
+		args = append(args, encryptionpkg.MongodArgs(mdbsh.Spec.Shards.Storage.Encryption)...)
+	}
+	if mdbsh.Spec.AuditLog != nil {
+		args = append(args, auditpkg.MongodArgs(mdbsh.Spec.AuditLog)...)
 	}
 
 	sts := &appsv1.StatefulSet{
@@ -1265,6 +1316,21 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 	if mdbsh.Spec.Shards.Pod != nil && mdbsh.Spec.Shards.Pod.DiagnosticMode != nil && mdbsh.Spec.Shards.Pod.DiagnosticMode.Enabled {
 		applyDiagnosticMode(&sts.Spec.Template.Spec.Containers[0])
 	}
+	// cycle 14: Shard PodSpec extension + preset + pod-level append.
+	if mdbsh.Spec.Shards.Pod != nil {
+		applyPodSpecExtensions(&sts.Spec.Template.Spec.Containers[0], mdbsh.Spec.Shards.Pod)
+	}
+	if mdbsh.Spec.Shards.Pod != nil && mdbsh.Spec.Shards.Pod.ResourcesPreset != "" && isResourcesEmpty(mdbsh.Spec.Shards.Resources) {
+		sts.Spec.Template.Spec.Containers[0].Resources = ResourcePreset(mdbsh.Spec.Shards.Pod.ResourcesPreset)
+	}
+	sts.Spec.Template.Spec.Containers, sts.Spec.Template.Spec.Volumes =
+		appendPodSpecPodLevel(sts.Spec.Template.Spec.Containers, sts.Spec.Template.Spec.Volumes, mdbsh.Spec.Shards.Pod)
+	if mdbsh.Spec.Shards.Pod != nil && mdbsh.Spec.Shards.Pod.VolumePermissions != nil && mdbsh.Spec.Shards.Pod.VolumePermissions.Enabled {
+		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, buildVolumePermissionsInit(mdbsh.Spec.Shards.Pod.VolumePermissions))
+	}
+	if mdbsh.Spec.Shards.Pod != nil && len(mdbsh.Spec.Shards.Pod.InitContainers) > 0 {
+		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, mdbsh.Spec.Shards.Pod.InitContainers...)
+	}
 	return sts
 }
 
@@ -1360,6 +1426,20 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 	// Pillar P7 Phase 3b — TLS args (mongos, preferTLS plaintext fallback).
 	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
 		args = append(args, tlsArgs()...)
+	}
+
+	// cycle 14 mongos integration: auth + audit args. mongos 는 데이터 저장 안 하므로
+	// encryption-at-rest 불필요. LDAP/OIDC bind 는 mongos 에도 의미 있음.
+	if mdbsh.Spec.Auth.LDAP != nil {
+		args = append(args, authpkg.LDAPMongodArgs(mdbsh.Spec.Auth.LDAP)...)
+	}
+	if mdbsh.Spec.Auth.OIDC != nil {
+		if oidcParam, err := authpkg.OIDCMongodSetParameter(mdbsh.Spec.Auth.OIDC); err == nil && oidcParam != "" {
+			args = append(args, "--setParameter", "oidcIdentityProviders="+oidcParam)
+		}
+	}
+	if mdbsh.Spec.AuditLog != nil {
+		args = append(args, auditpkg.MongodArgs(mdbsh.Spec.AuditLog)...)
 	}
 
 	// mongos container의 volume mounts. admin-credentials와 scripts는
@@ -1467,6 +1547,15 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 	if mdbsh.Spec.Mongos.Pod != nil && mdbsh.Spec.Mongos.Pod.DiagnosticMode != nil && mdbsh.Spec.Mongos.Pod.DiagnosticMode.Enabled {
 		applyDiagnosticMode(&containers[0])
 	}
+	// cycle 14: Mongos PodSpec extension + preset + sidecars/extraVolumes.
+	if mdbsh.Spec.Mongos.Pod != nil {
+		applyPodSpecExtensions(&containers[0], mdbsh.Spec.Mongos.Pod)
+	}
+	if mdbsh.Spec.Mongos.Pod != nil && mdbsh.Spec.Mongos.Pod.ResourcesPreset != "" && isResourcesEmpty(mdbsh.Spec.Mongos.Resources) {
+		containers[0].Resources = ResourcePreset(mdbsh.Spec.Mongos.Pod.ResourcesPreset)
+	}
+	mongosVolumes := buildMongosVolumes(mdbsh)
+	containers, mongosVolumes = appendPodSpecPodLevel(containers, mongosVolumes, mdbsh.Spec.Mongos.Pod)
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1508,7 +1597,7 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 						},
 					},
 					Containers: containers,
-					Volumes:    buildMongosVolumes(mdbsh),
+					Volumes:    mongosVolumes,
 					Affinity:   buildDefaultAffinity(mdbsh.Name),
 				},
 			},
