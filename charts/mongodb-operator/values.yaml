@@ -218,7 +218,7 @@ mongodb:
   # -- Default storage class
   storageClassName: ""
   # -- Default exporter image for monitoring
-  exporterImage: percona/mongodb_exporter:0.40
+  exporterImage: percona/mongodb_exporter:0.51.0
 
 # Logging configuration
 logging:

@@ -47,4 +47,4 @@ spec:
   monitoring:
     enabled: true
     exporter:
-      image: percona/mongodb_exporter:0.40
+      image: percona/mongodb_exporter:0.51.0
