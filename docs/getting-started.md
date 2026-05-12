@@ -24,18 +24,6 @@ helm install mongodb-operator mongodb-operator/mongodb-operator \
   --create-namespace
 ```
 
-### Using kubectl Manifests
-
-```bash
-# Apply CRDs first
-kubectl apply -f https://raw.githubusercontent.com/eightynine01/mongodb-operator/main/config/crd/bases/mongodb.keiailab.com_mongodbs.yaml
-kubectl apply -f https://raw.githubusercontent.com/eightynine01/mongodb-operator/main/config/crd/bases/mongodb.keiailab.com_mongodbshardeds.yaml
-kubectl apply -f https://raw.githubusercontent.com/eightynine01/mongodb-operator/main/config/crd/bases/mongodb.keiailab.com_mongodbbackups.yaml
-
-# Deploy the operator
-kubectl apply -f https://raw.githubusercontent.com/eightynine01/mongodb-operator/main/deploy/operator.yaml
-```
-
 ## Quick Start Example
 
 ### 1. Create Namespace and Credentials

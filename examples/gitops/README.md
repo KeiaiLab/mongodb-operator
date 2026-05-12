@@ -1,11 +1,15 @@
-# deploy/ — GitOps 배포 디렉터리
+# examples/gitops/ — ArgoCD/GitOps 예시
 
-본 디렉터리는 ArgoCD (또는 동등 GitOps tool) 가 git → cluster 단방향 동기를 수행하기 위한 매니페스트 진입점이다. **`config/` 와 별개 경로** — `make deploy` 등 단발성 푸시는 `config/default` 를 사용한다.
+> **Status: experimental / 예시 (operator 운영자가 직접 적용하기 위한 *예비* 경로)**
+>
+> 실 운영(keiailab 내부)은 `keiailab/argos-platform-data` umbrella helm chart 를 사용하며, 이 디렉터리는 그 chart 와 동일 cluster state 를 산출하는지 *parity 미검증* 상태다. 동일 환경에 helm release 와 이 매니페스트를 동시에 적용하면 충돌한다.
+
+본 디렉터리는 ArgoCD (또는 동등 GitOps tool) 가 git → cluster 단방향 동기를 수행하기 위한 **예시 진입점**이다. kubebuilder 표준 매니페스트 source 는 `config/` 이며, `make deploy` 단발성 푸시 또한 `config/default` 를 사용한다.
 
 ## 구조
 
 ```
-deploy/
+examples/gitops/
 ├── overlays/prod/                 # ArgoCD application path: operator 자체 (envName=prod, ns=data)
 │   ├── kustomization.yaml         # config/{crd,rbac,manager} → namespace=data
 │   └── delete-namespace.yaml      # 자동 생성 Namespace 제거 (data ns 외부 사전생성)
@@ -31,17 +35,17 @@ deploy/
 
 ```fish
 # 1) 렌더 검증
-kustomize build deploy/overlays/prod | head
-kustomize build deploy/overlays/prod | grep -c "kind: Namespace"   # 0
+kustomize build examples/gitops/overlays/prod | head
+kustomize build examples/gitops/overlays/prod | grep -c "kind: Namespace"   # 0
 
 # 2) operator 적용 (ArgoCD 없이 수동)
-kustomize build deploy/overlays/prod | kubectl apply -f -
+kustomize build examples/gitops/overlays/prod | kubectl apply -f -
 
 # 3) operator readiness
 kubectl -n data rollout status deploy/mongodb-operator-controller-manager
 
 # 4) workload 적용
-kubectl apply -f deploy/mongodb-sharded.yaml
+kubectl apply -f examples/gitops/mongodb-sharded.yaml
 
 # 5) workload readiness
 kubectl -n data get mongodbsharded mongodb-sharded -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
@@ -53,14 +57,14 @@ ArgoCD: 이전 commit 으로 application sync. 또는:
 
 ```fish
 # 워크로드만 롤백
-kubectl delete -f deploy/mongodb-sharded.yaml   # CR 만 제거; PV 는 reclaimPolicy 에 따름
+kubectl delete -f examples/gitops/mongodb-sharded.yaml   # CR 만 제거; PV 는 reclaimPolicy 에 따름
 
 # operator 자체 롤백
-kustomize build deploy/overlays/prod | kubectl delete -f -
+kustomize build examples/gitops/overlays/prod | kubectl delete -f -
 ```
 
 operator 제거 시 CRD 도 함께 제거되어 *모든* MongoDBSharded CR 의 finalizer 가 의존하므로 workload 를 *먼저* 비워야 한다.
 
 ## 변경 절차
 
-본 디렉터리 변경은 ADR 작성 후 진행 (`docs/kb/adr/`). 매번 `kustomize build deploy/overlays/prod` 로 렌더 검증한다.
+본 디렉터리 변경은 ADR 작성 후 진행 (`docs/kb/adr/`). 매번 `kustomize build examples/gitops/overlays/prod` 로 렌더 검증한다.
