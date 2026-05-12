@@ -107,7 +107,21 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				return ctrl.Result{}, err
 			}
 		}
-		logger.Info("Restore path identified — full mongorestore implementation deferred to cycle 6+",
+
+		// cycle 15: actual mongorestore Job creation.
+		// SourceBackupName references a Completed MongoDBBackup CR's PVC; the
+		// restore Job mounts that PVC and runs `mongorestore --uri ... [--oplogReplay --oplogLimit <pit>]`.
+		connectionString, err := r.getClusterConnectionString(ctx, backup)
+		if err != nil {
+			logger.V(1).Info("connection string unavailable yet; will retry", "err", err)
+			return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
+		}
+		restoreJob := resources.BuildRestoreJob(backup, connectionString)
+		if err := r.createOrUpdate(ctx, backup, restoreJob); err != nil {
+			return r.updateStatusError(ctx, backup, err)
+		}
+		logger.Info("Restore Job created/updated",
+			"job", restoreJob.Name,
 			"sourceBackup", backup.Spec.Restore.SourceBackupName,
 			"pointInTime", backup.Spec.Restore.PointInTime)
 		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil

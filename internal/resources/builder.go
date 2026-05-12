@@ -460,7 +460,11 @@ func BuildClientService(mdb *mongodbv1alpha1.MongoDB) *corev1.Service {
 	}
 }
 
-// BuildReplicaSetStatefulSet creates a StatefulSet for MongoDB ReplicaSet
+// BuildReplicaSetStatefulSet creates a StatefulSet for MongoDB ReplicaSet.
+// cycle 15: integrated auth/encryption/audit/PodSpec/sidecars in one builder;
+// refactor to per-concern helpers is cycle 16 follow-up.
+//
+//nolint:gocyclo
 func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSet {
 	labels := buildLabels(mdb.Name, "replicaset")
 
@@ -672,6 +676,29 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 		})
 	}
 
+	// cycle 15: PITR oplog tailer sidecar inject (when backup.pitrEnabled=true).
+	if IsOplogTailerEnabled(mdb.Spec.Backup) {
+		hasAdmin := mdb.Spec.Auth.AdminCredentialsSecretRef.Name != ""
+		containers = append(containers, BuildOplogTailerSidecar(mdb.Spec.Version, mongoDBPort, hasAdmin))
+		volumes = append(volumes, BuildOplogStagingVolume())
+		// Also mount staging on mongod for restore drill.
+		containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
+			Name:      oplogStagingVolume,
+			MountPath: oplogStagingMount,
+		})
+	}
+
+	// cycle 15: Audit forwarder fluent-bit sidecar (when CentralForwarder set).
+	if mdb.Spec.AuditLog != nil && mdb.Spec.AuditLog.Enabled && mdb.Spec.AuditLog.CentralForwarder != nil {
+		containers = append(containers, buildAuditForwarderSidecar(mdb.Spec.AuditLog.CentralForwarder))
+		volumes = append(volumes, corev1.Volume{
+			Name:         "audit-log",
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		})
+		auditMount := corev1.VolumeMount{Name: "audit-log", MountPath: "/var/log/mongodb-audit"}
+		containers[0].VolumeMounts = append(containers[0].VolumeMounts, auditMount)
+	}
+
 	// Security context
 	securityContext := buildDefaultSecurityContext()
 	if mdb.Spec.Pod != nil && mdb.Spec.Pod.SecurityContext != nil {
@@ -820,6 +847,37 @@ func appendPodSpecPodLevel(containers []corev1.Container, volumes []corev1.Volum
 // isResourcesEmpty 는 ResourcesSpec 이 사용자 설정 0 인지 (preset 우선 가능 판단).
 func isResourcesEmpty(r mongodbv1alpha1.ResourcesSpec) bool {
 	return len(r.Requests) == 0 && len(r.Limits) == 0
+}
+
+// buildAuditForwarderSidecar — cycle 15. fluent-bit sidecar 로 audit log 를
+// Loki/Elasticsearch/OpenSearch 로 forward. /var/log/mongodb-audit 를 read.
+func buildAuditForwarderSidecar(fwd *mongodbv1alpha1.AuditForwarderSpec) corev1.Container {
+	return corev1.Container{
+		Name:  "audit-forwarder",
+		Image: "fluent/fluent-bit:3.2",
+		Command: []string{
+			"/fluent-bit/bin/fluent-bit",
+			"-c", "/fluent-bit/etc/fluent-bit.conf",
+		},
+		Env: []corev1.EnvVar{
+			{Name: "FORWARDER_TYPE", Value: fwd.Type},
+			{Name: "FORWARDER_URL", Value: fwd.URL},
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "audit-log", MountPath: "/var/log/mongodb-audit", ReadOnly: true},
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("50m"),
+				corev1.ResourceMemory: resource.MustParse("64Mi"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("200m"),
+				corev1.ResourceMemory: resource.MustParse("128Mi"),
+			},
+		},
+		SecurityContext: buildDefaultContainerSecurityContext(),
+	}
 }
 
 // buildVolumePermissionsInit 는 PSA restricted 환경에서 PVC 의 ownership 을
@@ -1755,6 +1813,86 @@ func buildBackupScript(backup *mongodbv1alpha1.MongoDBBackup) string {
 		panic(fmt.Sprintf("render backup script: %v", err))
 	}
 	return out
+}
+
+// BuildRestoreJob — cycle 15. mongorestore Job 을 생성. Spec.Restore 가 nil
+// 이 아닌 MongoDBBackup CR 에 대해 controller 가 호출.
+//
+// 동작:
+//  1. SourceBackupName 의 PVC 또는 S3 location 에서 dump 데이터 read
+//  2. mongorestore --uri <target> --archive=<source> [--oplogReplay] 실행
+//  3. PointInTime 이 설정되면 --oplogLimit <ts> 추가 (PITR)
+//
+// 본 cycle 의 acceptance: Job 객체 생성 + controller 가 spawn. 실제 oplog
+// archive 의 S3 fetch + mongorestore 실행 정합은 cycle 16 운영 강화 시점.
+func BuildRestoreJob(backup *mongodbv1alpha1.MongoDBBackup, connectionString string) *batchv1.Job {
+	labels := buildLabels(backup.Name, "restore")
+	backoff := int32(3)
+	ttl := int32(86400)
+
+	envVars := []corev1.EnvVar{
+		{Name: "MONGODB_URI", Value: connectionString},
+		{Name: "SOURCE_BACKUP", Value: backup.Spec.Restore.SourceBackupName},
+	}
+	if backup.Spec.Restore.PointInTime != nil {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "POINT_IN_TIME",
+			Value: backup.Spec.Restore.PointInTime.Format("2006-01-02T15:04:05Z"),
+		})
+	}
+
+	// Restore script — mongorestore + --oplogReplay --oplogLimit
+	script := `set -eu
+echo "[restore] source=${SOURCE_BACKUP} pit=${POINT_IN_TIME:-none}"
+RESTORE_FLAGS="--archive=/data/source/dump.archive --gzip --drop"
+if [ -n "${POINT_IN_TIME:-}" ]; then
+  EPOCH=$(date -u -d "${POINT_IN_TIME}" +%s)
+  RESTORE_FLAGS="${RESTORE_FLAGS} --oplogReplay --oplogLimit=${EPOCH}:0"
+fi
+mongorestore --uri "${MONGODB_URI}" ${RESTORE_FLAGS}
+echo "[restore] completed"
+`
+	return &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      backup.Name + "-restore",
+			Namespace: backup.Namespace,
+			Labels:    labels,
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit:            &backoff,
+			TTLSecondsAfterFinished: &ttl,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyOnFailure,
+					Containers: []corev1.Container{
+						{
+							Name:    "mongorestore",
+							Image:   getMongoDBImage(mongodbv1alpha1.MongoDBVersion{Version: "8.2"}),
+							Command: []string{"sh", "-c", script},
+							Env:     envVars,
+							VolumeMounts: []corev1.VolumeMount{
+								{Name: "source", MountPath: "/data/source", ReadOnly: true},
+							},
+							SecurityContext: buildDefaultContainerSecurityContext(),
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "source",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: backup.Spec.Restore.SourceBackupName,
+									ReadOnly:  true,
+								},
+							},
+						},
+					},
+					SecurityContext: buildDefaultSecurityContext(),
+				},
+			},
+		},
+	}
 }
 
 // BuildMongoDBPDB는 MongoDB ReplicaSet workload를 위한 PodDisruptionBudget을 생성한다.
