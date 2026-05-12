@@ -729,6 +729,50 @@ type BackupSpec struct {
 	// OplogRetentionHours defines oplog retention for PITR
 	// +kubebuilder:default=24
 	OplogRetentionHours int `json:"oplogRetentionHours,omitempty"`
+
+	// Throttle — F43-F45 (cycle 9) 백업 대역폭 제한. 프로덕션 워크로드 영향
+	// 최소화 위해 read/write MB/s 제한.
+	// +optional
+	Throttle *BackupThrottleSpec `json:"throttle,omitempty"`
+
+	// Queryable — F46-F47 (cycle 9) 백업을 *read-only mongod instance* 로
+	// 복원하여 ad-hoc query 가능. 백업 무결성 검증 + 분석 용도.
+	// +optional
+	Queryable *QueryableBackupSpec `json:"queryable,omitempty"`
+
+	// VerificationSchedule — F48-F49 (cycle 9) 주기적 복원 테스트.
+	// cron 형식 — 비어있으면 자동 검증 비활성. controller 가 schedule 마다
+	// MongoDBBackupVerification CR 생성하여 restore drill 수행.
+	// +optional
+	VerificationSchedule string `json:"verificationSchedule,omitempty"`
+}
+
+// BackupThrottleSpec — F43-F45 (cycle 9) 백업 throttle.
+type BackupThrottleSpec struct {
+	// ReadMBps — mongodump 의 read I/O 제한. 0 = no limit.
+	// +kubebuilder:default=0
+	ReadMBps int32 `json:"readMBps,omitempty"`
+
+	// WriteMBps — S3 upload (또는 PVC write) 제한. 0 = no limit.
+	// +kubebuilder:default=0
+	WriteMBps int32 `json:"writeMBps,omitempty"`
+}
+
+// QueryableBackupSpec — F46-F47 (cycle 9) 쿼리 가능한 백업.
+type QueryableBackupSpec struct {
+	// Enabled toggles queryable backup. backup CR phase=Completed 이후
+	// 별 read-only StatefulSet (1 member) 으로 자동 복원.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// TTL — queryable instance 의 자동 폐기 시간. 비어있으면 7일.
+	// +kubebuilder:default="168h"
+	TTL string `json:"ttl,omitempty"`
+
+	// ResourcesPreset — queryable instance 의 리소스 size hint.
+	// +kubebuilder:validation:Enum=nano;micro;small;medium;large
+	// +kubebuilder:default="small"
+	ResourcesPreset string `json:"resourcesPreset,omitempty"`
 }
 
 // RetentionSpec defines backup retention policy

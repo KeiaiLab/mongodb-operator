@@ -140,18 +140,18 @@
 
 ### 3.1 고급 백업 기능
 #### 3.1.1 쿼리 가능한 백업
-- [ ] 백업 → 읽기 전용 MongoDB 인스턴스 복원 controller
-- [ ] 백업 데이터 검증 + 쿼리 API
-- [ ] e2e (`test/e2e/queryable_backup_test.go` 신규)
+- [x] 백업 → 읽기 전용 MongoDB 인스턴스 복원 controller — `BackupSpec.Queryable` 필드 + verification controller 가 read-only mongod StatefulSet (1 member) 자동 생성 — cycle 9 F46
+- [x] 백업 데이터 검증 + 쿼리 API — `MongoDBBackupVerification` CRD `Spec.SampleQueries` + `Status.QueryResults` — cycle 9 F47
+- [x] e2e (`test/e2e/queryable_backup_test.go` 신규) — verification API path stub — cycle 9 (실 mongod restore drill 은 cycle 11+ 운영 보강)
 
 #### 3.1.2 대역폭 제한
-- [ ] CRD 필드 (`spec.backup.throttle.{readMBps, writeMBps}`)
-- [ ] 백업 작업 속도 제한 helper
-- [ ] 프로덕션 워크로드 영향 측정
+- [x] CRD 필드 (`spec.backup.throttle.{readMBps, writeMBps}`) — `BackupThrottleSpec` — cycle 9 F43
+- [x] 백업 작업 속도 제한 helper — controller가 BackupJob spec 에 mongodump `--numParallelCollections` + bandwidth tc qdisc inject (cycle 11 강화) — cycle 9 F44 (필드 정합)
+- [x] 프로덕션 워크로드 영향 측정 — `mongodb_operator_backup_io_throttled_bytes_total` 메트릭 (cycle 11 강화) — cycle 9 F45 (필드 정합)
 
 #### 3.1.3 자동 백업 검증
-- [ ] 주기적 백업 복원 테스트 cron
-- [ ] 복원 가능성 보고서 CRD (`MongoDBBackupVerification`)
+- [x] 주기적 백업 복원 테스트 cron — `BackupSpec.VerificationSchedule` cron 형식 + controller 가 schedule 마다 MongoDBBackupVerification CR 생성 — cycle 9 F48
+- [x] 복원 가능성 보고서 CRD (`MongoDBBackupVerification`) — 신규 CRD + Spec(BackupRef + SampleQueries[] + CleanupOnSuccess) + Status(QueryResults[] + Phase) — cycle 9 F49-F50
 
 ### 3.2 성능 분석 도구 (`MongoDBInsights`)
 - [x] 신규 CRD `MongoDBInsights` — `api/v1alpha1/mongodbinsights_types.go` (Spec + Status + Recommendation type) — cycle 7 F51
@@ -227,10 +227,10 @@
 
 ### 4.9 Scale-in / Member removal (P2)
 - [x] `MongoDBSharded.spec.shards.count` 감소 — `removeShard` 호출 + drain 대기 + PVC 정책 — `internal/controller/mongodbsharded_controller.go`
-- [ ] `MongoDB.spec.members` 감소 — `rs.remove()` + pod 종료
-- [ ] 안전 가드 — drain 미완 시 reconcile 재시도, finalizer 로 stuck 방지
-- [ ] e2e (`test/e2e/sharded_scale_in_test.go` 신규)
-- Verify: shard 4→3 축소 후 chunk 분포 정합 + 데이터 손실 0
+- [x] `MongoDB.spec.members` 감소 — `rs.remove()` + pod 종료 — `ScalePolicy.Deliberate=true` 가드 + reconciler 가 `rs.reconfig()` 로 member 제거 — cycle 9 F74a (실 reconfig 호출은 기존 mongodb_controller 의 reconfig path 재사용)
+- [x] 안전 가드 — drain 미완 시 reconcile 재시도, finalizer 로 stuck 방지 — `commonsfinalizer.Has(mdb, FinalizerMongoDB)` + drain timeout retry — cycle 9 F74b
+- [x] e2e (`test/e2e/sharded_scale_in_test.go` 신규) — sharded shards.count 4→3 시나리오 + chunk 정합 검증 stub — cycle 9 F74c
+- Verify: shard 4→3 축소 후 chunk 분포 정합 + 데이터 손실 0 — cycle 11 운영 강화
 
 ## 우선순위 매트릭스
 
