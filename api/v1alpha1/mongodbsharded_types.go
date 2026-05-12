@@ -70,6 +70,10 @@ type MongoDBShardedSpec struct {
 	// +optional
 	UpgradeStrategy *UpgradeStrategySpec `json:"upgradeStrategy,omitempty"`
 
+	// AuditLog defines MongoDB Enterprise audit log policy (cycle 8).
+	// +optional
+	AuditLog *AuditLogSpec `json:"auditLog,omitempty"`
+
 	// AdditionalConfig allows passing additional MongoDB configuration
 	// +optional
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`

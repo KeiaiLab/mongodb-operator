@@ -62,6 +62,7 @@ func main() {
 	var enableWebhooks bool
 	var enableFederationController bool
 	var enableInsightsController bool
+	var enableClusterGroupController bool
 	var tlsOpts []func(*tls.Config)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -92,6 +93,8 @@ func main() {
 		"Enable MongoDBFederation reconciler (cycle 5, skeleton). Default false — cross-cluster bind cycle 8+ 강화 후 활성화.")
 	flag.BoolVar(&enableInsightsController, "enable-insights-controller", false,
 		"Enable MongoDBInsights advisory reconciler (cycle 7, skeleton). Default false — analysis engine cycle 9 강화 후.")
+	flag.BoolVar(&enableClusterGroupController, "enable-clustergroup-controller", false,
+		"Enable MongoDBClusterGroup reconciler (cycle 8, skeleton). Default false — cross-cluster propagation cycle 9+ 강화 후.")
 
 	opts := zap.Options{
 		Development: true,
@@ -222,6 +225,19 @@ func main() {
 		}
 	} else {
 		setupLog.Info("MongoDBInsights controller disabled by feature gate (--enable-insights-controller=false)")
+	}
+
+	// F56-F60 (cycle 8): MongoDBClusterGroup reconciler.
+	if enableClusterGroupController {
+		if err = (&controller.MongoDBClusterGroupReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MongoDBClusterGroup")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("MongoDBClusterGroup controller disabled by feature gate (--enable-clustergroup-controller=false)")
 	}
 
 	// Autoscaling 게이트는 reconciler 내부에서 enableAutoscaling 검사 — 현재 cmd 단에서는

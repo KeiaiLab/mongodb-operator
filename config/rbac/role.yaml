@@ -98,6 +98,7 @@ rules:
   - mongodb.keiailab.com
   resources:
   - mongodbbackups
+  - mongodbclustergroups
   - mongodbfederations
   - mongodbinsights
   - mongodbs
@@ -123,6 +124,7 @@ rules:
   - mongodb.keiailab.com
   resources:
   - mongodbbackups/status
+  - mongodbclustergroups/status
   - mongodbfederations/status
   - mongodbinsights/status
   - mongodbs/status

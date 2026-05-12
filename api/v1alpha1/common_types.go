@@ -498,6 +498,71 @@ type ExporterSpec struct {
 	Resources ResourcesSpec `json:"resources,omitempty"`
 }
 
+// AuditLogSpec — F61-F65 (cycle 8) MongoDB Enterprise audit log 정합.
+type AuditLogSpec struct {
+	// Enabled toggles mongod auditLog 모듈.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// Destination = file | syslog | console
+	// +kubebuilder:validation:Enum=file;syslog;console
+	// +kubebuilder:default="file"
+	Destination string `json:"destination,omitempty"`
+
+	// Format = JSON | BSON
+	// +kubebuilder:validation:Enum=JSON;BSON
+	// +kubebuilder:default="JSON"
+	Format string `json:"format,omitempty"`
+
+	// FilterJSON — MongoDB audit filter expression. 미설정 시 모든 이벤트.
+	// e.g. `{ "atype": { "$in": ["authenticate", "createUser", "dropUser"] } }`
+	// +optional
+	FilterJSON string `json:"filterJSON,omitempty"`
+
+	// CentralForwarder — Loki / Elasticsearch / OpenSearch 통합 destination.
+	// 설정 시 mongod 옆에 fluent-bit forwarder sidecar 가 추가.
+	// +optional
+	CentralForwarder *AuditForwarderSpec `json:"centralForwarder,omitempty"`
+
+	// AlertRules — audit event 기반 PrometheusRule.
+	// +optional
+	AlertRules []AuditAlertRule `json:"alertRules,omitempty"`
+}
+
+// AuditForwarderSpec — fluent-bit forwarder sidecar 설정.
+type AuditForwarderSpec struct {
+	// Type = loki | elasticsearch | opensearch
+	// +kubebuilder:validation:Enum=loki;elasticsearch;opensearch
+	Type string `json:"type"`
+
+	// URL forwarder endpoint.
+	// +kubebuilder:validation:MinLength=1
+	URL string `json:"url"`
+
+	// CredentialsSecretRef optional (Loki/Elasticsearch 인증 필요 시).
+	// +optional
+	CredentialsSecretRef string `json:"credentialsSecretRef,omitempty"`
+}
+
+// AuditAlertRule — audit event 기반 알람.
+type AuditAlertRule struct {
+	// Name PrometheusRule 의 alert name.
+	Name string `json:"name"`
+
+	// EventType = authenticate | createUser | dropUser | replSetReconfig | shutdown | ...
+	// +kubebuilder:validation:MinLength=1
+	EventType string `json:"eventType"`
+
+	// Threshold — 5-minute window 안에서 발생 횟수 임계.
+	// +kubebuilder:default=10
+	Threshold int32 `json:"threshold,omitempty"`
+
+	// Severity = info | warning | critical
+	// +kubebuilder:validation:Enum=info;warning;critical
+	// +kubebuilder:default="warning"
+	Severity string `json:"severity,omitempty"`
+}
+
 // UpgradeStrategySpec — F12-F15 (cycle 7) 자동 버전 업그레이드 정책.
 type UpgradeStrategySpec struct {
 	// Type = RollingUpdate (기본) | Manual.

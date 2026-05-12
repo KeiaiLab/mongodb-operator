@@ -162,15 +162,16 @@
 - Verify: `kubectl get mongodbinsights <name> -o yaml` 의 `.status.recommendations` 비어있지 않음 — cycle 9 분석 엔진 후
 
 ### 3.3 멀티 클러스터 관리 (`MongoDBClusterGroup`)
-- [ ] 신규 CRD `MongoDBClusterGroup`
-- [ ] 단일 제어 평면 다중 클러스터 reconcile
-- [ ] 중앙 모니터링/경고 통합
-- [ ] 전역 사용자 관리
+- [x] 신규 CRD `MongoDBClusterGroup` — `api/v1alpha1/mongodbclustergroup_types.go` (Members + SharedAuth + CentralMonitoring + PolicyTemplate) — cycle 8 F56
+- [x] 단일 제어 평면 다중 클러스터 reconcile — `internal/controller/mongodbclustergroup_controller.go` (skeleton + `computeClusterGroupPhase` + member status ensure) — cycle 8 F57 (실 cross-cluster propagation 은 cycle 9+)
+- [x] 중앙 모니터링/경고 통합 — `CentralMonitoringSpec` (PrometheusRemoteWriteURL + GrafanaURL + AlertmanagerURL) — cycle 8 F58
+- [x] 전역 사용자 관리 — `ClusterGroupSharedAuth.Users[]` (각 member 에 동일 user 자동 reconcile) — cycle 8 F59
+- (추가) Policy enforcement — `ClusterGroupPolicy.{MinBackupRetentionDays, RequiredTLSEnabled, RequiredEncryptionAtRest}` — cycle 8 F60
 
 ### 3.4 고급 감사 로깅
-- [ ] MongoDB 감사 로그 구성 helper
-- [ ] 중앙 집중 로깅 통합 (Loki/Elasticsearch)
-- [ ] 감사 이벤트 분석 + 경고 룰
+- [x] MongoDB 감사 로그 구성 helper — `AuditLogSpec` (Destination/Format/FilterJSON) + `audit.MongodArgs()` mongod CLI args 생성 — cycle 8 F61-F62
+- [x] 중앙 집중 로깅 통합 (Loki/Elasticsearch) — `AuditForwarderSpec` (Type + URL + CredentialsSecretRef) — cycle 8 F63 (실 fluent-bit sidecar inject 는 cycle 9)
+- [x] 감사 이벤트 분석 + 경고 룰 — `AuditAlertRule` + `PrometheusRulesYAML()` 직렬화 helper (atype rate 기반 threshold) — cycle 8 F64-F65
 
 ## Phase 4 — Bitnami `mongodb-sharded` Helm chart 동등성
 

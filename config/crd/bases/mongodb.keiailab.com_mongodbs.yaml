@@ -93,6 +93,92 @@ spec:
                 required:
                 - enabled
                 type: object
+              auditLog:
+                description: AuditLog defines MongoDB Enterprise audit log policy
+                  (cycle 8).
+                properties:
+                  alertRules:
+                    description: AlertRules — audit event 기반 PrometheusRule.
+                    items:
+                      description: AuditAlertRule — audit event 기반 알람.
+                      properties:
+                        eventType:
+                          description: EventType = authenticate | createUser | dropUser
+                            | replSetReconfig | shutdown | ...
+                          minLength: 1
+                          type: string
+                        name:
+                          description: Name PrometheusRule 의 alert name.
+                          type: string
+                        severity:
+                          default: warning
+                          description: Severity = info | warning | critical
+                          enum:
+                          - info
+                          - warning
+                          - critical
+                          type: string
+                        threshold:
+                          default: 10
+                          description: Threshold — 5-minute window 안에서 발생 횟수 임계.
+                          format: int32
+                          type: integer
+                      required:
+                      - eventType
+                      - name
+                      type: object
+                    type: array
+                  centralForwarder:
+                    description: |-
+                      CentralForwarder — Loki / Elasticsearch / OpenSearch 통합 destination.
+                      설정 시 mongod 옆에 fluent-bit forwarder sidecar 가 추가.
+                    properties:
+                      credentialsSecretRef:
+                        description: CredentialsSecretRef optional (Loki/Elasticsearch
+                          인증 필요 시).
+                        type: string
+                      type:
+                        description: Type = loki | elasticsearch | opensearch
+                        enum:
+                        - loki
+                        - elasticsearch
+                        - opensearch
+                        type: string
+                      url:
+                        description: URL forwarder endpoint.
+                        minLength: 1
+                        type: string
+                    required:
+                    - type
+                    - url
+                    type: object
+                  destination:
+                    default: file
+                    description: Destination = file | syslog | console
+                    enum:
+                    - file
+                    - syslog
+                    - console
+                    type: string
+                  enabled:
+                    default: false
+                    description: Enabled toggles mongod auditLog 모듈.
+                    type: boolean
+                  filterJSON:
+                    description: |-
+                      FilterJSON — MongoDB audit filter expression. 미설정 시 모든 이벤트.
+                      e.g. `{ "atype": { "$in": ["authenticate", "createUser", "dropUser"] } }`
+                    type: string
+                  format:
+                    default: JSON
+                    description: Format = JSON | BSON
+                    enum:
+                    - JSON
+                    - BSON
+                    type: string
+                required:
+                - enabled
+                type: object
               auth:
                 description: Auth defines authentication configuration
                 properties:
