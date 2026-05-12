@@ -2069,6 +2069,259 @@ spec:
                         default: /data/db
                         description: DataDirPath is the path for MongoDB data
                         type: string
+                      encryption:
+                        description: |-
+                          Encryption defines optional encryption-at-rest configuration (F-IMP-02 / F38 cycle 6).
+                          MongoDB Enterprise WiredTiger 의 encryption-at-rest 정합 — 본 cycle 의
+                          acceptance 는 *키 provider config 정합 + Secret/Vault/Cloud KMS 매핑*
+                          까지. 실 키 회전 자동화는 cycle 9+ 운영 강화 시점.
+                        properties:
+                          cipherMode:
+                            default: AES256-GCM
+                            description: CipherMode = AES256-CBC | AES256-GCM (MongoDB
+                              6.0+ GCM).
+                            enum:
+                            - AES256-CBC
+                            - AES256-GCM
+                            type: string
+                          enabled:
+                            default: false
+                            description: Enabled toggles WiredTiger encryption-at-rest.
+                            type: boolean
+                          keyProvider:
+                            default: secret
+                            description: KeyProvider = secret | vault | aws-kms |
+                              gcp-kms | azure-kv
+                            enum:
+                            - secret
+                            - vault
+                            - aws-kms
+                            - gcp-kms
+                            - azure-kv
+                            type: string
+                          keyRotationDays:
+                            default: 0
+                            description: |-
+                              KeyRotationDays — 0 = no automatic rotation. >0 = controller가 N 일마다
+                              새 키 발급 + 기존 키 archive.
+                            format: int32
+                            type: integer
+                          kmsConfig:
+                            description: |-
+                              KMSConfig holds provider-specific configuration. 각 provider 가 자체
+                              sub-spec 을 채움 (mutually exclusive — provider 별 1건만).
+                            properties:
+                              awsKMS:
+                                description: 'AWSKMS (KeyProvider=aws-kms): AWS KMS
+                                  CMK ARN.'
+                                properties:
+                                  authSecretRef:
+                                    description: |-
+                                      AuthSecretRef IRSA-aware. Secret keys: access_key_id / secret_access_key.
+                                      IRSA 사용 시 빈 secret + ServiceAccount annotations 로 인증.
+                                    properties:
+                                      name:
+                                        default: ""
+                                        description: |-
+                                          Name of the referent.
+                                          This field is effectively required, but due to backwards compatibility is
+                                          allowed to be empty. Instances of this type with an empty value here are
+                                          almost certainly wrong.
+                                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        type: string
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  keyARN:
+                                    description: KeyARN e.g. "arn:aws:kms:us-east-1:123:key/abc-..."
+                                    pattern: ^arn:aws:kms:.+:.+:key/.+$
+                                    type: string
+                                  region:
+                                    description: Region e.g. "us-east-1"
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - keyARN
+                                - region
+                                type: object
+                              azureKV:
+                                description: 'AzureKV (KeyProvider=azure-kv): Azure
+                                  Key Vault key URL.'
+                                properties:
+                                  authSecretRef:
+                                    description: AuthSecretRef SP credentials (client_secret)
+                                      — workload identity 사용 시 nil.
+                                    properties:
+                                      name:
+                                        default: ""
+                                        description: |-
+                                          Name of the referent.
+                                          This field is effectively required, but due to backwards compatibility is
+                                          allowed to be empty. Instances of this type with an empty value here are
+                                          almost certainly wrong.
+                                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        type: string
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  clientID:
+                                    type: string
+                                  keyName:
+                                    description: KeyName + KeyVersion (optional, latest
+                                      if empty).
+                                    minLength: 1
+                                    type: string
+                                  keyVersion:
+                                    type: string
+                                  tenantID:
+                                    description: TenantID + ClientID — workload identity
+                                      시 ServiceAccount 로 매핑.
+                                    type: string
+                                  vaultURL:
+                                    description: VaultURL e.g. "https://my-kv.vault.azure.net"
+                                    pattern: ^https://.+\.vault\.azure\.net/?$
+                                    type: string
+                                required:
+                                - keyName
+                                - vaultURL
+                                type: object
+                              gcpKMS:
+                                description: 'GCPKMS (KeyProvider=gcp-kms): GCP KMS
+                                  keyring + key.'
+                                properties:
+                                  authSecretRef:
+                                    description: AuthSecretRef Workload Identity 시
+                                      빈 secret. 그 외에 SA JSON Secret.
+                                    properties:
+                                      name:
+                                        default: ""
+                                        description: |-
+                                          Name of the referent.
+                                          This field is effectively required, but due to backwards compatibility is
+                                          allowed to be empty. Instances of this type with an empty value here are
+                                          almost certainly wrong.
+                                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        type: string
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  key:
+                                    minLength: 1
+                                    type: string
+                                  keyring:
+                                    description: Keyring + Key 식별자.
+                                    minLength: 1
+                                    type: string
+                                  location:
+                                    description: Location e.g. "us-central1" or "global".
+                                    minLength: 1
+                                    type: string
+                                  projectID:
+                                    description: ProjectID GCP project containing
+                                      the keyring.
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - key
+                                - keyring
+                                - location
+                                - projectID
+                                type: object
+                              secret:
+                                description: 'Secret (KeyProvider=secret): keyfile
+                                  Secret 직접 참조. 단일 마스터키.'
+                                properties:
+                                  secretRef:
+                                    description: SecretRef.Name + Key = base64 32-byte
+                                      raw key.
+                                    properties:
+                                      key:
+                                        description: The key of the secret to select
+                                          from.  Must be a valid secret key.
+                                        type: string
+                                      name:
+                                        default: ""
+                                        description: |-
+                                          Name of the referent.
+                                          This field is effectively required, but due to backwards compatibility is
+                                          allowed to be empty. Instances of this type with an empty value here are
+                                          almost certainly wrong.
+                                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        type: string
+                                      optional:
+                                        description: Specify whether the Secret or
+                                          its key must be defined
+                                        type: boolean
+                                    required:
+                                    - key
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                required:
+                                - secretRef
+                                type: object
+                              vault:
+                                description: 'Vault (KeyProvider=vault): HashiCorp
+                                  Vault Transit engine.'
+                                properties:
+                                  address:
+                                    description: Address e.g. "https://vault.example.com:8200"
+                                    minLength: 1
+                                    type: string
+                                  authMethod:
+                                    default: kubernetes
+                                    description: AuthMethod = token | kubernetes |
+                                      approle
+                                    enum:
+                                    - token
+                                    - kubernetes
+                                    - approle
+                                    type: string
+                                  authSecretRef:
+                                    description: |-
+                                      AuthSecretRef references K8s Secret with auth credentials
+                                      (token / role + jwt / role-id + secret-id).
+                                    properties:
+                                      name:
+                                        default: ""
+                                        description: |-
+                                          Name of the referent.
+                                          This field is effectively required, but due to backwards compatibility is
+                                          allowed to be empty. Instances of this type with an empty value here are
+                                          almost certainly wrong.
+                                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        type: string
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  caSecretRef:
+                                    description: CASecretRef optional TLS CA for Vault
+                                      server verification.
+                                    properties:
+                                      name:
+                                        default: ""
+                                        description: |-
+                                          Name of the referent.
+                                          This field is effectively required, but due to backwards compatibility is
+                                          allowed to be empty. Instances of this type with an empty value here are
+                                          almost certainly wrong.
+                                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        type: string
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  keyName:
+                                    description: KeyName Vault key identifier (Transit
+                                      engine 의 named key).
+                                    minLength: 1
+                                    type: string
+                                  transitPath:
+                                    default: transit
+                                    description: TransitPath default `transit`.
+                                    type: string
+                                required:
+                                - address
+                                - authSecretRef
+                                - keyName
+                                type: object
+                            type: object
+                        required:
+                        - enabled
+                        type: object
                       persistentVolumeClaimRetentionPolicy:
                         description: |-
                           PersistentVolumeClaimRetentionPolicy describes the lifecycle of PVCs
@@ -5734,6 +5987,259 @@ spec:
                         default: /data/db
                         description: DataDirPath is the path for MongoDB data
                         type: string
+                      encryption:
+                        description: |-
+                          Encryption defines optional encryption-at-rest configuration (F-IMP-02 / F38 cycle 6).
+                          MongoDB Enterprise WiredTiger 의 encryption-at-rest 정합 — 본 cycle 의
+                          acceptance 는 *키 provider config 정합 + Secret/Vault/Cloud KMS 매핑*
+                          까지. 실 키 회전 자동화는 cycle 9+ 운영 강화 시점.
+                        properties:
+                          cipherMode:
+                            default: AES256-GCM
+                            description: CipherMode = AES256-CBC | AES256-GCM (MongoDB
+                              6.0+ GCM).
+                            enum:
+                            - AES256-CBC
+                            - AES256-GCM
+                            type: string
+                          enabled:
+                            default: false
+                            description: Enabled toggles WiredTiger encryption-at-rest.
+                            type: boolean
+                          keyProvider:
+                            default: secret
+                            description: KeyProvider = secret | vault | aws-kms |
+                              gcp-kms | azure-kv
+                            enum:
+                            - secret
+                            - vault
+                            - aws-kms
+                            - gcp-kms
+                            - azure-kv
+                            type: string
+                          keyRotationDays:
+                            default: 0
+                            description: |-
+                              KeyRotationDays — 0 = no automatic rotation. >0 = controller가 N 일마다
+                              새 키 발급 + 기존 키 archive.
+                            format: int32
+                            type: integer
+                          kmsConfig:
+                            description: |-
+                              KMSConfig holds provider-specific configuration. 각 provider 가 자체
+                              sub-spec 을 채움 (mutually exclusive — provider 별 1건만).
+                            properties:
+                              awsKMS:
+                                description: 'AWSKMS (KeyProvider=aws-kms): AWS KMS
+                                  CMK ARN.'
+                                properties:
+                                  authSecretRef:
+                                    description: |-
+                                      AuthSecretRef IRSA-aware. Secret keys: access_key_id / secret_access_key.
+                                      IRSA 사용 시 빈 secret + ServiceAccount annotations 로 인증.
+                                    properties:
+                                      name:
+                                        default: ""
+                                        description: |-
+                                          Name of the referent.
+                                          This field is effectively required, but due to backwards compatibility is
+                                          allowed to be empty. Instances of this type with an empty value here are
+                                          almost certainly wrong.
+                                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        type: string
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  keyARN:
+                                    description: KeyARN e.g. "arn:aws:kms:us-east-1:123:key/abc-..."
+                                    pattern: ^arn:aws:kms:.+:.+:key/.+$
+                                    type: string
+                                  region:
+                                    description: Region e.g. "us-east-1"
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - keyARN
+                                - region
+                                type: object
+                              azureKV:
+                                description: 'AzureKV (KeyProvider=azure-kv): Azure
+                                  Key Vault key URL.'
+                                properties:
+                                  authSecretRef:
+                                    description: AuthSecretRef SP credentials (client_secret)
+                                      — workload identity 사용 시 nil.
+                                    properties:
+                                      name:
+                                        default: ""
+                                        description: |-
+                                          Name of the referent.
+                                          This field is effectively required, but due to backwards compatibility is
+                                          allowed to be empty. Instances of this type with an empty value here are
+                                          almost certainly wrong.
+                                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        type: string
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  clientID:
+                                    type: string
+                                  keyName:
+                                    description: KeyName + KeyVersion (optional, latest
+                                      if empty).
+                                    minLength: 1
+                                    type: string
+                                  keyVersion:
+                                    type: string
+                                  tenantID:
+                                    description: TenantID + ClientID — workload identity
+                                      시 ServiceAccount 로 매핑.
+                                    type: string
+                                  vaultURL:
+                                    description: VaultURL e.g. "https://my-kv.vault.azure.net"
+                                    pattern: ^https://.+\.vault\.azure\.net/?$
+                                    type: string
+                                required:
+                                - keyName
+                                - vaultURL
+                                type: object
+                              gcpKMS:
+                                description: 'GCPKMS (KeyProvider=gcp-kms): GCP KMS
+                                  keyring + key.'
+                                properties:
+                                  authSecretRef:
+                                    description: AuthSecretRef Workload Identity 시
+                                      빈 secret. 그 외에 SA JSON Secret.
+                                    properties:
+                                      name:
+                                        default: ""
+                                        description: |-
+                                          Name of the referent.
+                                          This field is effectively required, but due to backwards compatibility is
+                                          allowed to be empty. Instances of this type with an empty value here are
+                                          almost certainly wrong.
+                                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        type: string
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  key:
+                                    minLength: 1
+                                    type: string
+                                  keyring:
+                                    description: Keyring + Key 식별자.
+                                    minLength: 1
+                                    type: string
+                                  location:
+                                    description: Location e.g. "us-central1" or "global".
+                                    minLength: 1
+                                    type: string
+                                  projectID:
+                                    description: ProjectID GCP project containing
+                                      the keyring.
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - key
+                                - keyring
+                                - location
+                                - projectID
+                                type: object
+                              secret:
+                                description: 'Secret (KeyProvider=secret): keyfile
+                                  Secret 직접 참조. 단일 마스터키.'
+                                properties:
+                                  secretRef:
+                                    description: SecretRef.Name + Key = base64 32-byte
+                                      raw key.
+                                    properties:
+                                      key:
+                                        description: The key of the secret to select
+                                          from.  Must be a valid secret key.
+                                        type: string
+                                      name:
+                                        default: ""
+                                        description: |-
+                                          Name of the referent.
+                                          This field is effectively required, but due to backwards compatibility is
+                                          allowed to be empty. Instances of this type with an empty value here are
+                                          almost certainly wrong.
+                                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        type: string
+                                      optional:
+                                        description: Specify whether the Secret or
+                                          its key must be defined
+                                        type: boolean
+                                    required:
+                                    - key
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                required:
+                                - secretRef
+                                type: object
+                              vault:
+                                description: 'Vault (KeyProvider=vault): HashiCorp
+                                  Vault Transit engine.'
+                                properties:
+                                  address:
+                                    description: Address e.g. "https://vault.example.com:8200"
+                                    minLength: 1
+                                    type: string
+                                  authMethod:
+                                    default: kubernetes
+                                    description: AuthMethod = token | kubernetes |
+                                      approle
+                                    enum:
+                                    - token
+                                    - kubernetes
+                                    - approle
+                                    type: string
+                                  authSecretRef:
+                                    description: |-
+                                      AuthSecretRef references K8s Secret with auth credentials
+                                      (token / role + jwt / role-id + secret-id).
+                                    properties:
+                                      name:
+                                        default: ""
+                                        description: |-
+                                          Name of the referent.
+                                          This field is effectively required, but due to backwards compatibility is
+                                          allowed to be empty. Instances of this type with an empty value here are
+                                          almost certainly wrong.
+                                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        type: string
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  caSecretRef:
+                                    description: CASecretRef optional TLS CA for Vault
+                                      server verification.
+                                    properties:
+                                      name:
+                                        default: ""
+                                        description: |-
+                                          Name of the referent.
+                                          This field is effectively required, but due to backwards compatibility is
+                                          allowed to be empty. Instances of this type with an empty value here are
+                                          almost certainly wrong.
+                                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                        type: string
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  keyName:
+                                    description: KeyName Vault key identifier (Transit
+                                      engine 의 named key).
+                                    minLength: 1
+                                    type: string
+                                  transitPath:
+                                    default: transit
+                                    description: TransitPath default `transit`.
+                                    type: string
+                                required:
+                                - address
+                                - authSecretRef
+                                - keyName
+                                type: object
+                            type: object
+                        required:
+                        - enabled
+                        type: object
                       persistentVolumeClaimRetentionPolicy:
                         description: |-
                           PersistentVolumeClaimRetentionPolicy describes the lifecycle of PVCs

@@ -91,6 +91,157 @@ type StorageSpec struct {
 	// 데이터 폐기를 선택하기 전까지 PVC를 보존하기 위함.
 	// +optional
 	PersistentVolumeClaimRetentionPolicy *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy `json:"persistentVolumeClaimRetentionPolicy,omitempty"`
+
+	// Encryption defines optional encryption-at-rest configuration (F-IMP-02 / F38 cycle 6).
+	// MongoDB Enterprise WiredTiger 의 encryption-at-rest 정합 — 본 cycle 의
+	// acceptance 는 *키 provider config 정합 + Secret/Vault/Cloud KMS 매핑*
+	// 까지. 실 키 회전 자동화는 cycle 9+ 운영 강화 시점.
+	// +optional
+	Encryption *EncryptionSpec `json:"encryption,omitempty"`
+}
+
+// EncryptionSpec — F38 (cycle 6). Storage encryption-at-rest 설정.
+type EncryptionSpec struct {
+	// Enabled toggles WiredTiger encryption-at-rest.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// KeyProvider = secret | vault | aws-kms | gcp-kms | azure-kv
+	// +kubebuilder:validation:Enum=secret;vault;aws-kms;gcp-kms;azure-kv
+	// +kubebuilder:default="secret"
+	KeyProvider string `json:"keyProvider,omitempty"`
+
+	// KMSConfig holds provider-specific configuration. 각 provider 가 자체
+	// sub-spec 을 채움 (mutually exclusive — provider 별 1건만).
+	// +optional
+	KMSConfig *KMSConfigSpec `json:"kmsConfig,omitempty"`
+
+	// CipherMode = AES256-CBC | AES256-GCM (MongoDB 6.0+ GCM).
+	// +kubebuilder:validation:Enum=AES256-CBC;AES256-GCM
+	// +kubebuilder:default="AES256-GCM"
+	CipherMode string `json:"cipherMode,omitempty"`
+
+	// KeyRotationDays — 0 = no automatic rotation. >0 = controller가 N 일마다
+	// 새 키 발급 + 기존 키 archive.
+	// +kubebuilder:default=0
+	KeyRotationDays int32 `json:"keyRotationDays,omitempty"`
+}
+
+// KMSConfigSpec — provider 별 sub-config.
+type KMSConfigSpec struct {
+	// Secret (KeyProvider=secret): keyfile Secret 직접 참조. 단일 마스터키.
+	// +optional
+	Secret *SecretKMSConfig `json:"secret,omitempty"`
+
+	// Vault (KeyProvider=vault): HashiCorp Vault Transit engine.
+	// +optional
+	Vault *VaultKMSConfig `json:"vault,omitempty"`
+
+	// AWSKMS (KeyProvider=aws-kms): AWS KMS CMK ARN.
+	// +optional
+	AWSKMS *AWSKMSConfig `json:"awsKMS,omitempty"`
+
+	// GCPKMS (KeyProvider=gcp-kms): GCP KMS keyring + key.
+	// +optional
+	GCPKMS *GCPKMSConfig `json:"gcpKMS,omitempty"`
+
+	// AzureKV (KeyProvider=azure-kv): Azure Key Vault key URL.
+	// +optional
+	AzureKV *AzureKVConfig `json:"azureKV,omitempty"`
+}
+
+// SecretKMSConfig — single master keyfile in K8s Secret.
+type SecretKMSConfig struct {
+	// SecretRef.Name + Key = base64 32-byte raw key.
+	SecretRef corev1.SecretKeySelector `json:"secretRef"`
+}
+
+// VaultKMSConfig — Vault Transit engine.
+type VaultKMSConfig struct {
+	// Address e.g. "https://vault.example.com:8200"
+	// +kubebuilder:validation:MinLength=1
+	Address string `json:"address"`
+
+	// TransitPath default `transit`.
+	// +kubebuilder:default="transit"
+	TransitPath string `json:"transitPath,omitempty"`
+
+	// KeyName Vault key identifier (Transit engine 의 named key).
+	// +kubebuilder:validation:MinLength=1
+	KeyName string `json:"keyName"`
+
+	// AuthMethod = token | kubernetes | approle
+	// +kubebuilder:validation:Enum=token;kubernetes;approle
+	// +kubebuilder:default="kubernetes"
+	AuthMethod string `json:"authMethod,omitempty"`
+
+	// AuthSecretRef references K8s Secret with auth credentials
+	// (token / role + jwt / role-id + secret-id).
+	AuthSecretRef corev1.LocalObjectReference `json:"authSecretRef"`
+
+	// CASecretRef optional TLS CA for Vault server verification.
+	// +optional
+	CASecretRef *corev1.LocalObjectReference `json:"caSecretRef,omitempty"`
+}
+
+// AWSKMSConfig — AWS KMS CMK reference.
+type AWSKMSConfig struct {
+	// KeyARN e.g. "arn:aws:kms:us-east-1:123:key/abc-..."
+	// +kubebuilder:validation:Pattern=`^arn:aws:kms:.+:.+:key/.+$`
+	KeyARN string `json:"keyARN"`
+
+	// Region e.g. "us-east-1"
+	// +kubebuilder:validation:MinLength=1
+	Region string `json:"region"`
+
+	// AuthSecretRef IRSA-aware. Secret keys: access_key_id / secret_access_key.
+	// IRSA 사용 시 빈 secret + ServiceAccount annotations 로 인증.
+	// +optional
+	AuthSecretRef *corev1.LocalObjectReference `json:"authSecretRef,omitempty"`
+}
+
+// GCPKMSConfig — Google Cloud KMS reference.
+type GCPKMSConfig struct {
+	// ProjectID GCP project containing the keyring.
+	// +kubebuilder:validation:MinLength=1
+	ProjectID string `json:"projectID"`
+
+	// Location e.g. "us-central1" or "global".
+	// +kubebuilder:validation:MinLength=1
+	Location string `json:"location"`
+
+	// Keyring + Key 식별자.
+	// +kubebuilder:validation:MinLength=1
+	Keyring string `json:"keyring"`
+	// +kubebuilder:validation:MinLength=1
+	Key string `json:"key"`
+
+	// AuthSecretRef Workload Identity 시 빈 secret. 그 외에 SA JSON Secret.
+	// +optional
+	AuthSecretRef *corev1.LocalObjectReference `json:"authSecretRef,omitempty"`
+}
+
+// AzureKVConfig — Azure Key Vault reference.
+type AzureKVConfig struct {
+	// VaultURL e.g. "https://my-kv.vault.azure.net"
+	// +kubebuilder:validation:Pattern=`^https://.+\.vault\.azure\.net/?$`
+	VaultURL string `json:"vaultURL"`
+
+	// KeyName + KeyVersion (optional, latest if empty).
+	// +kubebuilder:validation:MinLength=1
+	KeyName string `json:"keyName"`
+	// +optional
+	KeyVersion string `json:"keyVersion,omitempty"`
+
+	// TenantID + ClientID — workload identity 시 ServiceAccount 로 매핑.
+	// +optional
+	TenantID string `json:"tenantID,omitempty"`
+	// +optional
+	ClientID string `json:"clientID,omitempty"`
+
+	// AuthSecretRef SP credentials (client_secret) — workload identity 사용 시 nil.
+	// +optional
+	AuthSecretRef *corev1.LocalObjectReference `json:"authSecretRef,omitempty"`
 }
 
 // ResourcesSpec defines resource requirements

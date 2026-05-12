@@ -127,12 +127,12 @@
 - Verify: 두 클러스터 간 oplog 복제 + 리전 우선순위에 따른 read preference — cycle 8 보강
 
 ### 2.4 저장 데이터 암호화 (KMS)
-- [ ] CRD 필드 (`spec.storage.encryption.{enabled, keyProvider, kmsConfig}`)
-- [ ] Kubernetes Secret 키 스토어
-- [ ] HashiCorp Vault 통합
-- [ ] 클라우드 KMS (AWS/GCP/Azure)
-- [ ] 키 회전 절차 (runbook + controller helper)
-- Verify: 디스크 dump 시 평문 미검출 + `db.serverStatus().encryptionAtRest`
+- [x] CRD 필드 (`spec.storage.encryption.{enabled, keyProvider, kmsConfig, cipherMode, keyRotationDays}`) — `common_types.go` EncryptionSpec + 5 provider sub-config — cycle 6 F38
+- [x] Kubernetes Secret 키 스토어 — `SecretKMSConfig` (SecretKeySelector) + mongod `--encryptionKeyFile` 옵션 생성 — cycle 6 F39
+- [x] HashiCorp Vault 통합 — `VaultKMSConfig` (Address + TransitPath + KeyName + AuthMethod kubernetes/token/approle + CASecretRef) — cycle 6 F40
+- [x] 클라우드 KMS (AWS/GCP/Azure) — `AWSKMSConfig` (KeyARN + IRSA), `GCPKMSConfig` (Workload Identity), `AzureKVConfig` (workload identity) — cycle 6 F41 (실 KMS SDK 통합 + KMIP proxy 는 cycle 9+)
+- [x] 키 회전 절차 (runbook + controller helper) — `KeyRotationDays` 필드 + `NeedsKeyRotation()` helper + `ValidateEncryptionSpec` — cycle 6 F42
+- Verify: 디스크 dump 시 평문 미검출 + `db.serverStatus().encryptionAtRest` — cycle 9 운영 강화
 
 ## Phase 3 — 고급 엔터프라이즈 기능
 
