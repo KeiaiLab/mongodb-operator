@@ -2,7 +2,9 @@
 
 ## 개요
 
-본 문서는 [Bitnami `mongodb-sharded` Helm chart 9.4.12](https://artifacthub.io/packages/helm/bitnami/mongodb-sharded)와 본 프로젝트(`mongodb-operator` v1.0.1)가 **동일한 오픈소스 기능을 제공하는지** 평가한다. 두 프로젝트는 같은 도메인(MongoDB Sharded Cluster on Kubernetes)을 다루지만 추상화 계층이 다르다.
+본 문서는 [Bitnami `mongodb-sharded` Helm chart 9.4.12](https://artifacthub.io/packages/helm/bitnami/mongodb-sharded)와 본 프로젝트(`mongodb-operator` v1.4.23)가 **동일한 오픈소스 기능을 제공하는지** 평가한다. 두 프로젝트는 같은 도메인(MongoDB Sharded Cluster on Kubernetes)을 다루지만 추상화 계층이 다르다.
+
+> cycle 0 (2026-05-12) 갱신: operator version reference 만 v1.0.1 → v1.4.23. 본문 기능 갭 9건 + 우위 6건 의 본질은 그대로 유효 — ROADMAP `[~]`/`[ ]` 항목으로 cycle 1+ 인계. 추가 reference: [`cloudpirates-mongodb.md`](./cloudpirates-mongodb.md), [`three-way-summary.md`](./three-way-summary.md).
 
 | 구분 | Bitnami `mongodb-sharded` | 본 프로젝트 `mongodb-operator` |
 |---|---|---|
@@ -35,7 +37,7 @@
 
 범례: ✅ 동등 또는 우위 · ⚠️ 부분 지원 · ❌ 미지원 · ⚪ 양쪽 모두 미지원(동급)
 
-| # | 기능 축 | Bitnami `mongodb-sharded` 9.4.12 | `mongodb-operator` 1.0.1 | 동등성 | 비고 |
+| # | 기능 축 | Bitnami `mongodb-sharded` 9.4.12 | `mongodb-operator` 1.4.23 | 동등성 | 비고 |
 |---|---|---|---|---|---|
 | 1 | Sharded 토폴로지 | shards(=2 default), configsvr, mongos, **arbiter**, **hidden node** | `MongoDBSharded` CRD: shards.count, configServer, mongos. **arbiter는 ReplicaSet CRD에만**, hidden node 없음 | ⚠️ 부분 | sharded용 arbiter/hidden member 미구현 |
 | 2 | ReplicaSet 단독 토폴로지 | shardsvr를 ReplicaSet으로 취급 (sharded 1차 시나리오) | `MongoDB` CRD가 ReplicaSet 1급 객체 (arbiter 지원) | ✅ 우위 | Operator가 더 명확한 모델 |
