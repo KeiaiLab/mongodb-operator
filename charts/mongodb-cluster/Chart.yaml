@@ -1,0 +1,33 @@
+apiVersion: v2
+name: mongodb-cluster
+description: |
+  MongoDB cluster wrapper chart — replicaset 또는 sharded 토폴로지의
+  MongoDB / MongoDBSharded CR 을 단일 helm install 로 배포한다.
+  Bitnami mongodb-sharded + CloudPirates mongodb 의 chart-native 경험
+  parity (3-way summary G-03). mongodb-operator 가 *반드시* 먼저
+  배포되어 CRD 가 cluster 에 존재해야 한다.
+type: application
+version: 0.1.0
+appVersion: "1.4.23"
+kubeVersion: ">=1.26.0-0"
+
+keywords:
+  - mongodb
+  - mongodb-operator
+  - replicaset
+  - sharded
+  - pitr
+
+home: https://github.com/keiailab/mongodb-operator
+sources:
+  - https://github.com/keiailab/mongodb-operator
+maintainers:
+  - name: keiailab
+    url: https://github.com/keiailab
+icon: https://www.mongodb.com/assets/images/global/leaf.svg
+
+annotations:
+  category: Database
+  licenses: Apache-2.0
+  mongodb-operator.keiailab.com/cycle: "3"
+  mongodb-operator.keiailab.com/parity: "bitnami,cloudpirates"

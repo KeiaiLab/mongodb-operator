@@ -1,0 +1,119 @@
+# mongodb-cluster — MongoDB CR wrapper chart values.
+
+# -- Architecture: "replicaset" 또는 "sharded".
+# replicaset → MongoDB CR / sharded → MongoDBSharded CR.
+architecture: replicaset
+
+# -- Cluster name override. 기본은 chart release 이름.
+nameOverride: ""
+fullnameOverride: ""
+
+# -- MongoDB version (operator IsSupportedMongoDBVersion 검증 통과 필요)
+version: "8.2"
+
+# -- 공통 메타데이터 라벨
+labels: {}
+annotations: {}
+
+# -- ReplicaSet 토폴로지 (architecture=replicaset 일 때 적용)
+replicaset:
+  # -- replica set members 수 (홀수 권장, 1 = standalone-like)
+  members: 3
+
+# -- Sharded 토폴로지 (architecture=sharded 일 때 적용)
+sharded:
+  configServer:
+    # -- config server replica set members (1 또는 3)
+    members: 3
+    storage:
+      size: 10Gi
+      storageClassName: ""
+  shards:
+    # -- shard count
+    count: 2
+    # -- members per shard
+    membersPerShard: 3
+    storage:
+      size: 50Gi
+      storageClassName: ""
+  mongos:
+    # -- mongos router replicas
+    replicas: 2
+    service:
+      type: ClusterIP
+
+# -- Storage (replicaset only)
+storage:
+  size: 20Gi
+  storageClassName: ""
+
+# -- Auth
+auth:
+  # -- Authentication mechanism: SCRAM-SHA-256 | SCRAM-SHA-1 | X509
+  mechanism: SCRAM-SHA-256
+  # -- Admin credentials Secret (must have `username` + `password` keys)
+  adminCredentialsSecretRef:
+    name: ""
+
+# -- TLS
+tls:
+  enabled: false
+  certManager:
+    issuerRef:
+      name: ""
+      kind: ClusterIssuer
+  # -- Override with manual cert (mutually exclusive with certManager)
+  customCert:
+    secretName: ""
+
+# -- Monitoring
+monitoring:
+  enabled: false
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}
+  prometheusRule:
+    enabled: false
+
+# -- Backup
+backup:
+  enabled: false
+  schedule: "0 2 * * *"
+  retention:
+    days: 7
+  storage:
+    type: pvc
+    pvcName: ""
+    # If type=s3:
+    s3:
+      endpoint: ""
+      bucket: ""
+      region: ""
+      accessKeySecretRef:
+        name: ""
+  # PITR (cycle 1 PITR API surface)
+  pitrEnabled: false
+  oplogRetentionHours: 24
+
+# -- NetworkPolicy
+network:
+  policy:
+    enabled: false
+    allowExternal: false
+
+# -- PodDisruptionBudget
+pdb:
+  enabled: false
+  minAvailable: 1
+
+# -- HPA / autoscaling (replicaset 와 mongos 별)
+autoScaling:
+  enabled: false
+  minReplicas: 3
+  maxReplicas: 7
+
+# -- Pod 수준 — diagnosticMode, securityContext 등
+pod:
+  diagnosticMode:
+    enabled: false

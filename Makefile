@@ -248,6 +248,9 @@ audit: ## govulncheck + trivy + gosec — RFC 0002 L3 security 게이트.
 validate: manifests generate ## Validate K8s manifests + helm chart + CRD (RFC 0002 L3 validate 게이트).
 	helm lint charts/mongodb-operator
 	helm template gate charts/mongodb-operator >/dev/null && echo "helm template OK"
+	helm lint charts/mongodb-cluster
+	helm template gate-cluster charts/mongodb-cluster >/dev/null && echo "mongodb-cluster template OK"
+	helm template gate-cluster charts/mongodb-cluster --set architecture=sharded >/dev/null && echo "mongodb-cluster sharded template OK"
 
 .PHONY: gate
 gate: lint test-unit audit validate ## RFC 0002 로컬 4계층 게이트 — pre-push 동등.
