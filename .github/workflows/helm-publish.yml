@@ -38,7 +38,7 @@ jobs:
           fi
           echo "✓ chart version aligned with tag ($VERSION)"
 
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@v5
         with:
           version: latest
 
