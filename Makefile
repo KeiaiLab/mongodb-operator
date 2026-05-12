@@ -88,7 +88,7 @@ release: ## Full release pipeline. VERSION=v1.x.y 필수 (e.g., make release VER
 	@echo "✓ Chart.yaml version=$$(echo $(VERSION) | sed 's/^v//')"
 	@echo ""
 	@echo "=== Step 3/6- Docker image build + push (linux/amd64, default builder) ==="
-	docker --context=default buildx build --platform linux/amd64 \
+	docker --context=default buildx build --platform $(PLATFORMS) \
 		-t ghcr.io/keiailab/mongodb-operator:$(VERSION) \
 		-t ghcr.io/keiailab/mongodb-operator:$$(echo $(VERSION) | sed 's/^v//') \
 		--push .
@@ -142,6 +142,10 @@ HELM_SIGN     ?= 0
 HELM_GPG_KEY  ?= 89A409476828CB992338C378651E51AF520BCB78
 HELM_KEYRING  ?= $(HOME)/.gnupg/secring.gpg
 
+# Multi-arch build platforms (AGENTS.md unified policy: amd64+arm64).
+# Override per-invocation for hotfix builds: `make release PLATFORMS=linux/amd64`.
+PLATFORMS     ?= linux/amd64,linux/arm64
+
 .PHONY: release-notes
 release-notes: ## git-cliff 로 release notes 자동 생성 — /tmp/release-notes-VERSION.md.
 	@command -v git-cliff >/dev/null 2>&1 || { echo "[error] git-cliff not installed: brew install git-cliff"; exit 1; }
@@ -170,7 +174,7 @@ bundle: ## OperatorHub.io bundle 생성 — operator-sdk + kustomize. VERSION �
 .PHONY: bundle-build
 bundle-build: bundle ## bundle image 빌드 — registry push 는 community-operators PR 시점에 별.
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
-	docker buildx build --platform linux/amd64 -f bundle.Dockerfile -t ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) .
+	docker buildx build --platform $(PLATFORMS) -f bundle.Dockerfile -t ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) .
 	@echo "✓ bundle image: ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION)"
 
 .PHONY: sbom
@@ -292,14 +296,14 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go
 
 .PHONY: docker-build
-docker-build: ## Build docker image with the manager (linux/amd64, default builder).
+docker-build: ## Build docker image with the manager ($(PLATFORMS), default builder).
 	# 글로벌 §2: docker buildx의 기본 빌더(default)만 사용. 커스텀 빌더 인스턴스 금지.
-	docker buildx build --platform linux/amd64 --load -t ${IMG} .
+	docker buildx build --platform $(PLATFORMS) --load -t ${IMG} .
 
 .PHONY: docker-push
-docker-push: ## Build and push docker image (linux/amd64, default builder).
+docker-push: ## Build and push docker image ($(PLATFORMS), default builder).
 	# --platform 명시로 host 아키텍처와 무관하게 amd64 단일 빌드. 멀티아키 금지.
-	docker buildx build --platform linux/amd64 --push -t ${IMG} .
+	docker buildx build --platform $(PLATFORMS) --push -t ${IMG} .
 
 ##@ Deployment
 
