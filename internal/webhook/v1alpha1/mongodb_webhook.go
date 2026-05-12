@@ -53,11 +53,28 @@ func (v *MongoDBCustomValidator) ValidateCreate(_ context.Context, m *mongodbv1a
 	return nil, nil
 }
 
-// ValidateUpdate — spec 검증 + immutable 가드.
-func (v *MongoDBCustomValidator) ValidateUpdate(_ context.Context, _, newObj *mongodbv1alpha1.MongoDB) (admission.Warnings, error) {
+// ValidateUpdate — spec 검증 + immutable 가드 + F11 (cycle 7) upgrade path 검증.
+func (v *MongoDBCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *mongodbv1alpha1.MongoDB) (admission.Warnings, error) {
 	if errs := validateMongoDBSpec(newObj); len(errs) > 0 {
 		return nil, apiError("MongoDB", newObj.GetName(), errs)
 	}
+
+	// F11 cycle 7: version upgrade path 가드. old 와 new 의 version 이
+	// 다르면 IsValidUpgradePath 호출. 사용자가 8.0 → 8.3 같이 minor skip
+	// 또는 downgrade 시도 시 webhook 단계에서 reject.
+	if oldObj != nil && oldObj.Spec.Version.Version != "" {
+		oldV := oldObj.Spec.Version.Version
+		newV := newObj.Spec.Version.Version
+		if oldV != newV {
+			if err := mongodbv1alpha1.IsValidUpgradePath(oldV, newV); err != nil {
+				errs := field.ErrorList{
+					field.Invalid(field.NewPath("spec", "version", "version"), newV, err.Error()),
+				}
+				return nil, apiError("MongoDB", newObj.GetName(), errs)
+			}
+		}
+	}
+
 	return nil, nil
 }
 

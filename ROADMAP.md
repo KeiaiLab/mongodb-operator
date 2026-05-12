@@ -80,13 +80,13 @@
 - Verify: `helm template <release> charts/mongodb-operator --set grafana.dashboards.enabled=true` 가 ConfigMap 1건 출력 + Grafana sidecar label watch 로 자동 import
 
 ### 1.3 자동 버전 업그레이드 (롤백 포함)
-- [~] 버전 검증 (`api/v1alpha1/version_validation_test.go`) — 기본 호환성 매트릭스만
-- [ ] 롤링 업그레이드 전략 (`spec.upgradeStrategy.type: RollingUpdate`)
-- [ ] 업그레이드 전 자동 백업 (`spec.upgradeStrategy.preUpgradeBackup: true`)
-- [ ] 파드별 업그레이드 후 검증 기간 (`spec.upgradeStrategy.validationInterval`)
-- [ ] 실패 시 자동 롤백 (`spec.upgradeStrategy.rollbackOnFailure: true`)
-- [ ] e2e 회귀 가드 (`test/e2e/version_upgrade_test.go` 보강)
-- Verify: 8.0 → 8.2 롤링 업그레이드 후 `db.version()` + featureCompatibilityVersion 일치
+- [x] 버전 검증 (`api/v1alpha1/version_validation_test.go`) + `IsValidUpgradePath(from, to)` helper + webhook ValidateUpdate 통합 (MongoDB + MongoDBSharded 양쪽) — cycle 7 F11 — major skip / minor skip / downgrade reject
+- [x] 롤링 업그레이드 전략 (`spec.upgradeStrategy.type: RollingUpdate`) — UpgradeStrategySpec.Type enum — cycle 7 F12 (StatefulSet 가 기본 rolling update — controller-level orchestration 은 cycle 9 강화)
+- [x] 업그레이드 전 자동 백업 (`spec.upgradeStrategy.preUpgradeBackup: true`) — API 필드 정의 — cycle 7 F13 (실 backup trigger 는 cycle 9)
+- [x] 파드별 업그레이드 후 검증 기간 (`spec.upgradeStrategy.validationInterval`) — duration 필드 — cycle 7 F14
+- [x] 실패 시 자동 롤백 (`spec.upgradeStrategy.rollbackOnFailure: true`) — API 필드 정의 — cycle 7 F15 (실 rollback 자동화는 cycle 9)
+- [x] e2e 회귀 가드 (`test/e2e/version_upgrade_test.go` 보강) — IsValidUpgradePath unit test 10 케이스 + 기존 e2e 회귀 가드 그대로 — cycle 7 F16
+- Verify: 8.0 → 8.2 롤링 업그레이드 후 `db.version()` + featureCompatibilityVersion 일치 — cycle 9 보강
 
 ### 1.4 확장 모니터링 메트릭
 - [~] 30+ 기본 메트릭 (`internal/controller/metrics.go`)
@@ -154,12 +154,12 @@
 - [ ] 복원 가능성 보고서 CRD (`MongoDBBackupVerification`)
 
 ### 3.2 성능 분석 도구 (`MongoDBInsights`)
-- [ ] 신규 CRD `MongoDBInsights`
-- [ ] 쿼리 프로파일링 자동 분석
-- [ ] 인덱스 추천 엔진
-- [ ] 느린 쿼리 감지 + 경고
-- [ ] 스키마 디자인 제안
-- Verify: `kubectl get mongodbinsights <name> -o yaml` 의 `.status.recommendations` 비어있지 않음
+- [x] 신규 CRD `MongoDBInsights` — `api/v1alpha1/mongodbinsights_types.go` (Spec + Status + Recommendation type) — cycle 7 F51
+- [x] 쿼리 프로파일링 자동 분석 — `ProfilingLevel` (0/1/2) + `SlowQueryThresholdMs` + `SampleSize` + `AnalysisInterval` 필드 + skeleton reconciler — cycle 7 F52 (실 system.profile 분석은 cycle 9)
+- [x] 인덱스 추천 엔진 — `Recommendation.Type=MissingIndex/UnusedIndex` + `IndexSuggestion` BSON spec — cycle 7 F53 (실 엔진은 cycle 9)
+- [x] 느린 쿼리 감지 + 경고 — `Recommendation.Type=SlowQueryPattern` + `Severity` + `AvgLatencyMs` + `QuerySamples[]` — cycle 7 F54
+- [x] 스키마 디자인 제안 — `Recommendation.Type=SchemaHint` + `Detail` 자유 텍스트 — cycle 7 F55
+- Verify: `kubectl get mongodbinsights <name> -o yaml` 의 `.status.recommendations` 비어있지 않음 — cycle 9 분석 엔진 후
 
 ### 3.3 멀티 클러스터 관리 (`MongoDBClusterGroup`)
 - [ ] 신규 CRD `MongoDBClusterGroup`

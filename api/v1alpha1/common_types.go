@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"fmt"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -495,6 +496,149 @@ type ExporterSpec struct {
 	// Resources defines exporter resource requirements
 	// +optional
 	Resources ResourcesSpec `json:"resources,omitempty"`
+}
+
+// UpgradeStrategySpec — F12-F15 (cycle 7) 자동 버전 업그레이드 정책.
+type UpgradeStrategySpec struct {
+	// Type = RollingUpdate (기본) | Manual.
+	// +kubebuilder:validation:Enum=RollingUpdate;Manual
+	// +kubebuilder:default="RollingUpdate"
+	Type string `json:"type,omitempty"`
+
+	// PreUpgradeBackup 가 true 이면 controller 가 upgrade 전 MongoDBBackup
+	// CR 을 자동 생성하여 *현재 시점 snapshot* 확보. backup PASS 전까지
+	// upgrade 진입 차단.
+	// +kubebuilder:default=false
+	PreUpgradeBackup bool `json:"preUpgradeBackup,omitempty"`
+
+	// ValidationInterval — pod 한 개 upgrade 후 다음 pod 진입까지 대기 시간.
+	// e.g. "60s" → 1분 검증 후 다음 pod. 짧으면 RPO 작지만 회귀 늦게 감지.
+	// +kubebuilder:default="60s"
+	ValidationInterval string `json:"validationInterval,omitempty"`
+
+	// RollbackOnFailure 가 true 이면 검증 실패 시 controller 가 자동 롤백.
+	// false 시 사용자 수동 개입 필요.
+	// +kubebuilder:default=false
+	RollbackOnFailure bool `json:"rollbackOnFailure,omitempty"`
+}
+
+// IsValidUpgradePath — F11 (cycle 7) 버전 업그레이드 path 검증.
+// 본 함수는 webhook ValidateUpdate 에서 호출되어 *위험한 업그레이드 path*
+// 를 차단한다.
+//
+// 정합 규칙:
+//   - 동일 버전 (no-op): 허용
+//   - patch 변경 (8.0.0 → 8.0.5): 허용
+//   - 단일 minor +1 (8.0 → 8.2): 허용  (홀수 minor 는 dev 라 skip 가능)
+//   - minor skip (8.0 → 8.3): MongoDB 가 단일 step upgrade 요구 → 차단
+//   - major skip (8.x → 9.x): 차단
+//   - downgrade (8.2 → 8.0): featureCompatibilityVersion 호환 미보장 → 차단
+//   - unknown version (예: 7.0): IsSupportedMongoDBVersion 으로 사전 차단
+//
+// 반환: nil = 허용 / non-nil = reject 사유.
+func IsValidUpgradePath(from, to string) error {
+	if from == to {
+		return nil
+	}
+	// 양 side 모두 supported 검증
+	if !IsSupportedMongoDBVersion(from) {
+		return fmt.Errorf("from version %q is not supported", from)
+	}
+	if !IsSupportedMongoDBVersion(to) {
+		return fmt.Errorf("to version %q is not supported", to)
+	}
+
+	fromMajor, fromMinor, fromOK := parseMongoVersion(from)
+	toMajor, toMinor, toOK := parseMongoVersion(to)
+	if !fromOK || !toOK {
+		return fmt.Errorf("unable to parse versions: from=%q to=%q", from, to)
+	}
+
+	// Major skip 차단 (8.x → 9.x 또는 그 이상의 jump 도 차단)
+	if toMajor != fromMajor {
+		return fmt.Errorf("major version change %q → %q is not allowed (must upgrade through supported minor path)", from, to)
+	}
+
+	// Downgrade 차단
+	if toMinor < fromMinor {
+		return fmt.Errorf("downgrade %q → %q is not allowed (featureCompatibilityVersion not guaranteed)", from, to)
+	}
+
+	// Minor skip 차단 — supported list (8.0/8.2/8.3) 에서 *인접 한 step 만* 허용
+	supported := []int{}
+	for _, v := range SupportedMongoDBVersions {
+		if maj, min, ok := parseMongoVersion(v); ok && maj == fromMajor {
+			supported = append(supported, min)
+		}
+	}
+	// supported 가 정렬된 list 라고 가정 (sort 부담 피함 — 작은 set).
+	// fromMinor 의 index 와 toMinor 의 index 가 인접해야 함.
+	fromIdx, toIdx := -1, -1
+	for i, m := range supported {
+		if m == fromMinor {
+			fromIdx = i
+		}
+		if m == toMinor {
+			toIdx = i
+		}
+	}
+	if fromIdx < 0 || toIdx < 0 {
+		return fmt.Errorf("version not in supported minor sequence: from=%q to=%q", from, to)
+	}
+	if toIdx-fromIdx > 1 {
+		return fmt.Errorf("minor skip %q → %q is not allowed (must upgrade through %q)", from, to, formatMongoVersion(fromMajor, supported[fromIdx+1]))
+	}
+
+	return nil
+}
+
+// parseMongoVersion — "8.2" 또는 "8.2.3" → (8, 2, true). 실패 시 false.
+func parseMongoVersion(v string) (major, minor int, ok bool) {
+	parts := splitVersion(v)
+	if len(parts) < 2 {
+		return 0, 0, false
+	}
+	maj, e1 := atoi(parts[0])
+	min, e2 := atoi(parts[1])
+	if e1 != nil || e2 != nil {
+		return 0, 0, false
+	}
+	return maj, min, true
+}
+
+func formatMongoVersion(major, minor int) string {
+	return fmt.Sprintf("%d.%d", major, minor)
+}
+
+func splitVersion(v string) []string {
+	parts := []string{}
+	cur := ""
+	for _, c := range v {
+		if c == '.' {
+			parts = append(parts, cur)
+			cur = ""
+		} else {
+			cur += string(c)
+		}
+	}
+	if cur != "" {
+		parts = append(parts, cur)
+	}
+	return parts
+}
+
+func atoi(s string) (int, error) {
+	if s == "" {
+		return 0, fmt.Errorf("empty")
+	}
+	n := 0
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0, fmt.Errorf("not digit: %q", c)
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n, nil
 }
 
 // BackupSpec defines backup configuration

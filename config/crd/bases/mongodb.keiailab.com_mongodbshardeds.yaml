@@ -6332,6 +6332,37 @@ spec:
                 required:
                 - enabled
                 type: object
+              upgradeStrategy:
+                description: UpgradeStrategy defines version upgrade automation policy
+                  (cycle 7).
+                properties:
+                  preUpgradeBackup:
+                    default: false
+                    description: |-
+                      PreUpgradeBackup 가 true 이면 controller 가 upgrade 전 MongoDBBackup
+                      CR 을 자동 생성하여 *현재 시점 snapshot* 확보. backup PASS 전까지
+                      upgrade 진입 차단.
+                    type: boolean
+                  rollbackOnFailure:
+                    default: false
+                    description: |-
+                      RollbackOnFailure 가 true 이면 검증 실패 시 controller 가 자동 롤백.
+                      false 시 사용자 수동 개입 필요.
+                    type: boolean
+                  type:
+                    default: RollingUpdate
+                    description: Type = RollingUpdate (기본) | Manual.
+                    enum:
+                    - RollingUpdate
+                    - Manual
+                    type: string
+                  validationInterval:
+                    default: 60s
+                    description: |-
+                      ValidationInterval — pod 한 개 upgrade 후 다음 pod 진입까지 대기 시간.
+                      e.g. "60s" → 1분 검증 후 다음 pod. 짧으면 RPO 작지만 회귀 늦게 감지.
+                    type: string
+                type: object
               version:
                 description: Version defines MongoDB version configuration
                 properties:

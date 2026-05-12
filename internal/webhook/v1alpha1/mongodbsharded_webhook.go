@@ -41,9 +41,21 @@ func (v *MongoDBShardedCustomValidator) ValidateCreate(_ context.Context, m *mon
 	return nil, nil
 }
 
-func (v *MongoDBShardedCustomValidator) ValidateUpdate(_ context.Context, _, newObj *mongodbv1alpha1.MongoDBSharded) (admission.Warnings, error) {
+func (v *MongoDBShardedCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj *mongodbv1alpha1.MongoDBSharded) (admission.Warnings, error) {
 	if errs := validateMongoDBShardedSpec(newObj); len(errs) > 0 {
 		return nil, apiError("MongoDBSharded", newObj.GetName(), errs)
+	}
+	// F11 cycle 7: upgrade path 가드 (sharded 동일).
+	if oldObj != nil && oldObj.Spec.Version.Version != "" {
+		oldV, newV := oldObj.Spec.Version.Version, newObj.Spec.Version.Version
+		if oldV != newV {
+			if err := mongodbv1alpha1.IsValidUpgradePath(oldV, newV); err != nil {
+				errs := field.ErrorList{
+					field.Invalid(field.NewPath("spec", "version", "version"), newV, err.Error()),
+				}
+				return nil, apiError("MongoDBSharded", newObj.GetName(), errs)
+			}
+		}
 	}
 	return nil, nil
 }

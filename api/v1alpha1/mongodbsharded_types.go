@@ -66,6 +66,10 @@ type MongoDBShardedSpec struct {
 	// +optional
 	Backup *BackupSpec `json:"backup,omitempty"`
 
+	// UpgradeStrategy defines version upgrade automation policy (cycle 7).
+	// +optional
+	UpgradeStrategy *UpgradeStrategySpec `json:"upgradeStrategy,omitempty"`
+
 	// AdditionalConfig allows passing additional MongoDB configuration
 	// +optional
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`

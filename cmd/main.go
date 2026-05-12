@@ -61,6 +61,7 @@ func main() {
 	var enableAutoscaling bool
 	var enableWebhooks bool
 	var enableFederationController bool
+	var enableInsightsController bool
 	var tlsOpts []func(*tls.Config)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -89,6 +90,8 @@ func main() {
 		"Enable validating admission webhooks for MongoDB / MongoDBSharded. Default false — cert-manager 의존성으로 helm chart 게이트로 활성화.")
 	flag.BoolVar(&enableFederationController, "enable-federation-controller", false,
 		"Enable MongoDBFederation reconciler (cycle 5, skeleton). Default false — cross-cluster bind cycle 8+ 강화 후 활성화.")
+	flag.BoolVar(&enableInsightsController, "enable-insights-controller", false,
+		"Enable MongoDBInsights advisory reconciler (cycle 7, skeleton). Default false — analysis engine cycle 9 강화 후.")
 
 	opts := zap.Options{
 		Development: true,
@@ -206,6 +209,19 @@ func main() {
 		}
 	} else {
 		setupLog.Info("MongoDBFederation controller disabled by feature gate (--enable-federation-controller=false)")
+	}
+
+	// F51-F55 (cycle 7): MongoDBInsights advisory reconciler.
+	if enableInsightsController {
+		if err = (&controller.MongoDBInsightsReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MongoDBInsights")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("MongoDBInsights controller disabled by feature gate (--enable-insights-controller=false)")
 	}
 
 	// Autoscaling 게이트는 reconciler 내부에서 enableAutoscaling 검사 — 현재 cmd 단에서는

@@ -99,6 +99,7 @@ rules:
   resources:
   - mongodbbackups
   - mongodbfederations
+  - mongodbinsights
   - mongodbs
   - mongodbshardeds
   verbs:
@@ -123,6 +124,7 @@ rules:
   resources:
   - mongodbbackups/status
   - mongodbfederations/status
+  - mongodbinsights/status
   - mongodbs/status
   - mongodbshardeds/status
   verbs:

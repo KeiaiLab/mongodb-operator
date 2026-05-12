@@ -71,6 +71,10 @@ type MongoDBSpec struct {
 	// +optional
 	Backup *BackupSpec `json:"backup,omitempty"`
 
+	// UpgradeStrategy defines version upgrade automation policy (cycle 7).
+	// +optional
+	UpgradeStrategy *UpgradeStrategySpec `json:"upgradeStrategy,omitempty"`
+
 	// AutoScaling defines auto-scaling configuration. 멤버 수 자동 조정 — RS
 	// reconfig + initial sync 부작용 때문에 ScalePolicy.Deliberate=true 가드와
 	// 함께 opt-in 해야 HPA가 reconcile된다(ADR-0008).
