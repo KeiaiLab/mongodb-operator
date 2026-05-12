@@ -15,7 +15,7 @@
 
 # 빌드/배포
 /charts/                    @keiailab/maintainers
-/deploy/                    @keiailab/maintainers
+/examples/gitops/                    @keiailab/maintainers
 /config/                    @keiailab/maintainers
 /.github/                   @keiailab/maintainers
 /Dockerfile                 @keiailab/maintainers

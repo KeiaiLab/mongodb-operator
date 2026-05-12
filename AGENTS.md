@@ -15,7 +15,7 @@ config/crd/bases/*               Generated CRDs (DO NOT EDIT)
 config/rbac/role.yaml            Generated RBAC (DO NOT EDIT)
 config/samples/*                 Example CRs (edit these)
 charts/mongodb-operator/         Helm chart (publish 대상)
-deploy/                          GitOps overlay (kustomize)
+examples/gitops/                  GitOps overlay example (kustomize, experimental)
 docs/kb/adr/                     Architecture Decision Records
 PROJECT                          Kubebuilder metadata (DO NOT EDIT)
 Makefile                         Build / test / deploy / docker / helm-publish
