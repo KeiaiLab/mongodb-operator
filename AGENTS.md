@@ -83,9 +83,9 @@ make test                      # go test ./internal/... + envtest
 
 ## 회피해야 할 함정
 
-- **Multi-architecture 빌드** — 저장소 종류에 따라 분기:
-  - public (GitHub, 본 저장소): `linux/amd64,linux/arm64` 멀티아키 — 외부 사용자 환경 다양성 수용.
-  - 사내 (GitLab): `linux/amd64` 단일 — 사내 표준 (글로벌 §2).
+- **Multi-architecture 빌드** — 저장소 종류 무관 `linux/amd64,linux/arm64` 멀티아키 통일.
+  사내 / 외부 사용자 환경(Apple Silicon, Graviton, kind on arm64 Mac 등) 다양성을
+  일관되게 수용. 글로벌 §2 의 amd64 단일 조항은 본 정책으로 대체.
 - **GitHub Actions** — 저장소 종류에 따라 분기:
   - public (GitHub, 본 저장소): CI/release/security-scan workflow 사용 가능.
   - 사내 (GitLab): RFC 0002 영구 금지. 모든 게이트 lefthook 로컬 4 계층 (pre-commit + pre-push) — 외부 의존 회피.
