@@ -2,7 +2,7 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.4.20
+version: 1.4.21
 appVersion: "1.4.20"
 kubeVersion: ">=1.26.0-0"
 
