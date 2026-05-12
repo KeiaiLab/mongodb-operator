@@ -31,7 +31,8 @@
 | [ADR-0022](0022-meta-set-status-condition-adoption.md) | meta.SetStatusCondition 전면 채택 — 6 site 마이그레이션 + ShardDraining 백오프 regression fix | Accepted | 2026-05-10 |
 | [ADR-0023](0023-operatorhub-bundle-scaffold.md) | OperatorHub.io bundle scaffold cross-cut — operator-sdk 1.42, 3 CRD owned, alm-examples 3 sample (PR-B9, valkey ADR-0037 + postgres ADR-0013 패턴 이식) | Accepted | 2026-05-10 |
 | [ADR-0024](0024-inc-0001-cross-cut-audit.md) | INC-0001 cross-cut audit — mongodb 의 ReplicaSetInitialized once-shot 패턴, milder anti-pattern (hasPrimary mitigation), Phase 2 auto reconfig 별 RFC | Accepted | 2026-05-10 |
-| [ADR-0025](0025-cycle-0-baseline-and-cross-verification.md) | Cycle 0 — baseline 검증 + Bitnami/CloudPirates 3-way cross-verification matrix + 12-cycle program 분해 + F-IMP-04 diagnosticMode sharded 확장 | Accepted | 2026-05-12 |
+| [ADR-0025](0025-cycle-0-baseline-and-cross-verification.md) | Cycle 0 — baseline 검증 + Bitnami/CloudPirates 3-way cross-verification matrix + 12-cycle program 분해 + F-IMP-04 diagnosticMode sharded 확장 | Implemented | 2026-05-12 |
+| [ADR-0026](0026-cycle-0-through-12-program-retrospective.md) | Cycle 0~12 retrospective — ROADMAP 100% 도달 (105 [x]) + 4 신규 CRD + 5 e2e + 5 Grafana dashboard + 33 metric + 15 alert rule. Action items 5건 (실 시스템 통합) deferred | Implemented | 2026-05-12 |
 
 ## 작성 가이드
 
