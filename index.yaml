@@ -121,6 +121,173 @@ entries:
                   name: s3-credentials
       artifacthub.io/images: |
         - name: mongodb-operator
+          image: ghcr.io/keiailab/mongodb-operator:1.4.22
+        - name: mongodb
+          image: mongo:8.3.1
+        - name: mongodb-exporter
+          image: percona/mongodb_exporter:0.51.0
+      artifacthub.io/license: Apache-2.0
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/keiailab/mongodb-operator/blob/main/README.md
+        - name: Source Code
+          url: https://github.com/keiailab/mongodb-operator
+        - name: MongoDB Documentation
+          url: https://www.mongodb.com/docs/
+      artifacthub.io/operatorCapabilities: Seamless Upgrades
+      artifacthub.io/prerelease: "false"
+      artifacthub.io/recommendations: |
+        - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
+        - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
+    apiVersion: v2
+    appVersion: 1.4.22
+    created: "2026-05-12T05:36:06.940982835Z"
+    description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
+      Clusters (v1.0.0 GA Release)
+    digest: 5d344484e74d87b11d2305ac77bf631553ff0009a15013b80f73a9be6ab91f70
+    home: https://github.com/keiailab/mongodb-operator
+    icon: https://raw.githubusercontent.com/mongodb/mongo/master/docs/leaf.svg
+    keywords:
+    - mongodb
+    - database
+    - nosql
+    - operator
+    - replicaset
+    - sharded-cluster
+    - backup
+    - kubernetes
+    kubeVersion: '>=1.26.0-0'
+    maintainers:
+    - email: support@keiailab.com
+      name: Keiailab
+      url: https://keiailab.com
+    name: mongodb-operator
+    sources:
+    - https://github.com/keiailab/mongodb-operator
+    type: application
+    urls:
+    - https://github.com/keiailab/mongodb-operator/releases/download/mongodb-operator-1.4.22/mongodb-operator-1.4.22.tgz
+    version: 1.4.22
+  - annotations:
+      artifacthub.io/category: database
+      artifacthub.io/changes: |
+        - kind: fixed
+          description: "Sharded P0 — PodTemplate merge 를 current template 기반 overlay 로 전환해 EnableServiceLinks 등 미명시 server-default 전체를 보존. mongos Deployment generation 증가 루프를 차단."
+        - kind: fixed
+          description: "ReconcileError=True condition 이 성공 reconcile 후에도 남는 status clear 결함 fix. 성공 상태 업데이트 시 기존 ReconcileError 를 False/ReconcileSucceeded 로 전환."
+        - kind: fixed
+          description: "Sharded P0 — mongos Deployment PodTemplate server-default ping-pong (imagePullPolicy/probe defaults/DNS/restart/scheduler 등) 으로 generation 180k+ 증가 + update conflict 반복. applyDeployment가 기존 server-defaulted PodTemplate 값을 보존하도록 확장."
+        - kind: fixed
+          description: "Sharded P0 — Helm chart bundled CRD drift (5,272 줄 격차) → status 신규 필드 (adminUserCreated/configServerInitialized/shardsInitialized/shardsAdded) 가 K8s API server 에 의해 silently drop 되어 reconcile flag 영구 empty + addShards index-out-of-range panic. CRD 자동 sync (manifests → sync-crds) + reconcileAddShards length 가드 추가."
+        - kind: fixed
+          description: "Sharded P0 — applyDeployment server-default ping-pong (mongos Deployment generation 116k+ 무한 fight 해소; RevisionHistoryLimit/ProgressDeadlineSeconds nil-guard) [v1.4.2]"
+        - kind: fixed
+          description: "Sharded P1 #3 — HPA informer cache timeout fix (SetupWithManager Owns에 HorizontalPodAutoscaler 추가, RS controller와 동일하게 정렬)"
+        - kind: fixed
+          description: "Sharded P1 #1 — HPA reconcile은 ConfigServer/Shards rs.initiate 완료 후 실행 (HPA가 crashloop pod metric을 sample하던 결함)"
+        - kind: fixed
+          description: "Sharded P1 #2 — Status.Mongos/ConfigServer Total은 HPA active 시 obj.Spec.Replicas, inactive 시 CR.Spec을 source-of-truth로 분기 (24h soak divergence 해소)"
+        - kind: changed
+          description: "features.sharded.enabled 기본값 false → true (베타 carve-out 종료)"
+        - kind: fixed
+          description: Helm repository URL과 GHCR image owner를 keiailab로 정정 (이전 publish 경로 복구)
+        - kind: added
+          description: HorizontalPodAutoscaler 자동화 — RS/cfg/mongos 이중 가드 + drift 방지 + status 노출
+        - kind: added
+          description: PodDisruptionBudget automation for MongoDB ReplicaSet and MongoDBSharded (opt-in)
+        - kind: added
+          description: NetworkPolicy automation with deny-by-default + additional ingress peers (opt-in)
+        - kind: added
+          description: MongoDBSharded Scale-in via removeShard with ShardDraining condition + resource cleanup
+        - kind: added
+          description: envtest-based controller integration regression suite
+        - kind: changed
+          description: Bootstrap admin user is race-free via Kubernetes Lease distributed lock + post-bootstrap usersInfo verify
+        - kind: changed
+          description: Auth error detection migrated to typed mongo.ServerError (HasErrorCode 13/18/11000/51003) with message fallback
+        - kind: changed
+          description: Self-managed createOrUpdate replaced with controllerutil.CreateOrUpdate(mutateFn) — eliminates Spec drift on partial mutations
+        - kind: fixed
+          description: ReconcileError condition no longer accumulates on repeated failures
+        - kind: fixed
+          description: updateStatus no longer silently skips primary probe errors — surfaces PrimaryUnreachable condition
+        - kind: fixed
+          description: isClusterReady rejects partial-status and zero-spec configurations
+      artifacthub.io/containsSecurityUpdates: "true"
+      artifacthub.io/crds: |
+        - kind: MongoDB
+          version: v1alpha1
+          name: mongodbs.mongodb.keiailab.com
+          displayName: MongoDB ReplicaSet
+          description: Deploys and manages a MongoDB ReplicaSet cluster
+        - kind: MongoDBSharded
+          version: v1alpha1
+          name: mongodbshardeds.mongodb.keiailab.com
+          displayName: MongoDB Sharded Cluster
+          description: Deploys and manages a MongoDB Sharded cluster with config servers, shards, and mongos routers
+        - kind: MongoDBBackup
+          version: v1alpha1
+          name: mongodbbackups.mongodb.keiailab.com
+          displayName: MongoDB Backup
+          description: Creates and manages MongoDB backups to S3 or PVC storage
+      artifacthub.io/crdsExamples: |
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDB
+          metadata:
+            name: my-mongodb
+            namespace: database
+          spec:
+            members: 3
+            version:
+              version: "8.3.1"
+            storage:
+              storageClassName: standard
+              size: 10Gi
+            auth:
+              mechanism: SCRAM-SHA-256
+              adminCredentialsSecretRef:
+                name: mongodb-admin
+            monitoring:
+              enabled: true
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDBSharded
+          metadata:
+            name: my-sharded
+            namespace: database
+          spec:
+            version:
+              version: "8.3.1"
+            configServer:
+              members: 3
+              storage:
+                size: 5Gi
+            shards:
+              count: 2
+              membersPerShard: 3
+              storage:
+                size: 20Gi
+            mongos:
+              replicas: 2
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDBBackup
+          metadata:
+            name: my-backup
+            namespace: database
+          spec:
+            clusterRef:
+              name: my-mongodb
+              kind: MongoDB
+            type: full
+            compression: true
+            storage:
+              type: s3
+              s3:
+                bucket: mongodb-backups
+                endpoint: https://s3.amazonaws.com
+                credentialsRef:
+                  name: s3-credentials
+      artifacthub.io/images: |
+        - name: mongodb-operator
           image: ghcr.io/keiailab/mongodb-operator:1.4.20
         - name: mongodb
           image: mongo:8.3.1
@@ -5021,4 +5188,4 @@ entries:
     urls:
     - https://keiailab.github.io/mongodb-operator/mongodb-operator-0.0.6.tgz
     version: 0.0.6
-generated: "2026-05-12T05:18:30.516270012Z"
+generated: "2026-05-12T05:36:06.941364899Z"
