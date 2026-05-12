@@ -7,56 +7,138 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "repository": { "type": "string", "minLength": 1 },
-        "tag": { "type": "string" },
-        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] },
-        "pullSecrets": { "type": "array" }
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string"
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        },
+        "pullSecrets": {
+          "type": "array"
+        }
       }
     },
-    "nameOverride": { "type": "string" },
-    "fullnameOverride": { "type": "string" },
-    "replicas": { "type": "integer", "minimum": 1 },
-    "podSecurityContext": { "type": "object" },
-    "containerSecurityContext": { "type": "object" },
-    "resources": { "type": "object" },
-    "nodeSelector": { "type": "object" },
-    "tolerations": { "type": "array" },
-    "affinity": { "type": "object" },
-    "priorityClassName": { "type": "string" },
+    "nameOverride": {
+      "type": "string"
+    },
+    "fullnameOverride": {
+      "type": "string"
+    },
+    "replicas": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "podSecurityContext": {
+      "type": "object"
+    },
+    "containerSecurityContext": {
+      "type": "object"
+    },
+    "resources": {
+      "type": "object"
+    },
+    "nodeSelector": {
+      "type": "object"
+    },
+    "tolerations": {
+      "type": "array"
+    },
+    "affinity": {
+      "type": "object"
+    },
+    "priorityClassName": {
+      "type": "string"
+    },
     "serviceAccount": {
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "create": { "type": "boolean" },
-        "name": { "type": "string" },
-        "annotations": { "type": "object" }
+        "create": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "annotations": {
+          "type": "object"
+        }
       }
     },
     "rbac": {
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "create": { "type": "boolean" }
+        "create": {
+          "type": "boolean"
+        }
       }
     },
     "networkPolicies": {
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "enabled": { "type": "boolean" }
+        "enabled": {
+          "type": "boolean"
+        }
       }
     },
     "metrics": {
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "enabled": { "type": "boolean" },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
         "serviceMonitor": {
           "type": "object",
           "additionalProperties": true,
           "properties": {
-            "enabled": { "type": "boolean" }
+            "enabled": {
+              "type": "boolean"
+            },
+            "interval": {
+              "type": "string"
+            },
+            "labels": {
+              "type": "object"
+            },
+            "metricRelabelings": {
+              "type": "array"
+            },
+            "relabelings": {
+              "type": "array"
+            },
+            "scheme": {
+              "type": "string",
+              "enum": [
+                "",
+                "http",
+                "https"
+              ]
+            },
+            "bearerTokenFile": {
+              "type": "string"
+            },
+            "authorization": {
+              "type": "object"
+            },
+            "tlsConfig": {
+              "type": "object"
+            }
           }
         }
       }
@@ -65,8 +147,16 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "encoder": { "type": "string", "enum": ["json", "console"] },
-        "level": { "type": "string" }
+        "encoder": {
+          "type": "string",
+          "enum": [
+            "json",
+            "console"
+          ]
+        },
+        "level": {
+          "type": "string"
+        }
       }
     }
   }
