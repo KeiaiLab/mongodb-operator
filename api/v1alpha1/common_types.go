@@ -152,8 +152,9 @@ type CustomCertSpec struct {
 
 // AuthSpec defines authentication configuration
 type AuthSpec struct {
-	// Mechanism defines the auth mechanism
-	// +kubebuilder:validation:Enum=SCRAM-SHA-256;SCRAM-SHA-1;X509
+	// Mechanism defines the auth mechanism. PLAIN 은 LDAP-backed
+	// (sasl-passthrough), MONGODB-OIDC 는 OIDC IdP bind.
+	// +kubebuilder:validation:Enum=SCRAM-SHA-256;SCRAM-SHA-1;X509;PLAIN;MONGODB-OIDC
 	// +kubebuilder:default="SCRAM-SHA-256"
 	Mechanism string `json:"mechanism,omitempty"`
 
@@ -163,6 +164,82 @@ type AuthSpec struct {
 	// Users defines additional users to create
 	// +optional
 	Users []MongoDBUser `json:"users,omitempty"`
+
+	// LDAP defines optional LDAP-backed enterprise authentication.
+	// Mechanism 이 PLAIN 또는 SCRAM-SHA-256 일 때 sasl-passthrough 적용.
+	// +optional
+	LDAP *LDAPSpec `json:"ldap,omitempty"`
+
+	// OIDC defines optional OIDC / OAuth2 authentication.
+	// Mechanism 이 MONGODB-OIDC 일 때 활성. Keycloak / Okta / Auth0
+	// 호환 — issuerURL + clientID 매핑.
+	// +optional
+	OIDC *OIDCSpec `json:"oidc,omitempty"`
+}
+
+// LDAPSpec — F23 (cycle 4). MongoDB Enterprise 의 LDAP authentication +
+// authorization 정합. 본 spec 는 *OSS 호환 sasl-passthrough* 모델.
+type LDAPSpec struct {
+	// Servers is a comma-separated list of LDAP server hostnames
+	// (host:port). MongoDB 가 client 로 접속할 LDAP server.
+	// +kubebuilder:validation:MinLength=1
+	Servers string `json:"servers"`
+
+	// BindMethod = simple | sasl. simple 은 bind DN + password, sasl 은
+	// SASL mechanism (e.g. PLAIN).
+	// +kubebuilder:validation:Enum=simple;sasl
+	// +kubebuilder:default="simple"
+	BindMethod string `json:"bindMethod,omitempty"`
+
+	// BindCredentialsSecretRef references LDAP service account credentials
+	// (keys: bindDN / password) for user lookup.
+	// +optional
+	BindCredentialsSecretRef *corev1.LocalObjectReference `json:"bindCredentialsSecretRef,omitempty"`
+
+	// UserToDNMapping is a MongoDB-format JSON array string for LDAP user
+	// to DN transformation. e.g. `[{match:"(.+)",ldapQuery:"OU=Users,DC=ex,DC=com??sub?(uid={0})"}]`
+	// +optional
+	UserToDNMapping string `json:"userToDNMapping,omitempty"`
+
+	// TLS enables LDAP over TLS (ldaps://). 별도 CA secret 필요 시
+	// CASecretRef 사용.
+	// +kubebuilder:default=true
+	TLS bool `json:"tls,omitempty"`
+
+	// CASecretRef references the LDAP CA bundle (key: ca.crt).
+	// +optional
+	CASecretRef *corev1.LocalObjectReference `json:"caSecretRef,omitempty"`
+
+	// AuthorizationQueryTemplate is the LDAP query template for role
+	// mapping. e.g. `{USER}?memberOf?base`.
+	// +optional
+	AuthorizationQueryTemplate string `json:"authorizationQueryTemplate,omitempty"`
+}
+
+// OIDCSpec — F28 (cycle 4). MongoDB 7.0+ OIDC authentication.
+// Keycloak / Okta / Auth0 / Google IdP 호환.
+type OIDCSpec struct {
+	// IssuerURL is the OIDC provider issuer (must match `iss` claim).
+	// +kubebuilder:validation:MinLength=1
+	IssuerURL string `json:"issuerURL"`
+
+	// ClientID is the OIDC client identifier registered with the IdP.
+	// +kubebuilder:validation:MinLength=1
+	ClientID string `json:"clientID"`
+
+	// UserClaim is the JWT claim used as MongoDB username. Default `sub`.
+	// +kubebuilder:default="sub"
+	UserClaim string `json:"userClaim,omitempty"`
+
+	// RolesClaim is the JWT claim that carries role memberships.
+	// Default `groups`.
+	// +kubebuilder:default="groups"
+	RolesClaim string `json:"rolesClaim,omitempty"`
+
+	// SupportedIdentityProviders 정합 hint — IdP 호환 검증용.
+	// +kubebuilder:validation:Enum=keycloak;okta;auth0;google;generic
+	// +kubebuilder:default="generic"
+	IdentityProvider string `json:"identityProvider,omitempty"`
 }
 
 // MongoDBUser defines a MongoDB user

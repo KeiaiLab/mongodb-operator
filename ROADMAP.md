@@ -102,20 +102,20 @@
 **목표**: 엔터프라이즈 보안 표면 + 다중 리전.
 
 ### 2.1 LDAP 인증 지원
-- [ ] CRD 필드 (`spec.auth.ldap.{servers, bindMethod, userToDNMapping}`) — `common_types.go` 확장
-- [ ] LDAP 서버 연결 helper — `internal/controller/auth/ldap.go` 신규
-- [ ] LDAP over TLS 검증
-- [ ] 권한 부여 쿼리 매핑
-- [ ] e2e (`test/e2e/auth_ldap_test.go` 신규)
-- Verify: `mongosh --authenticationMechanism PLAIN -u <ldap-user>` 로그인 + role 매핑 확인
+- [x] CRD 필드 (`spec.auth.ldap.{servers, bindMethod, userToDNMapping, tls, authorizationQueryTemplate, caSecretRef, bindCredentialsSecretRef}`) — `common_types.go` 확장 — cycle 4 F23
+- [x] LDAP 서버 연결 helper — `internal/controller/auth/ldap.go` (`LDAPMongodArgs` mongod CLI 옵션 생성) — cycle 4 F24
+- [x] LDAP over TLS 검증 — `tls=true` 시 `--ldapTransportSecurity=tls`, cleartext bind reject (`ValidateLDAPSpec`) — cycle 4 F25
+- [x] 권한 부여 쿼리 매핑 — `AuthorizationQueryTemplate` → `--ldapAuthzQueryTemplate` — cycle 4 F26
+- [x] e2e (`test/e2e/auth_ldap_test.go` 신규) — API path 검증 stub — cycle 4 F27 (실제 LDAP bind round-trip 은 cycle 8+)
+- Verify: `mongosh --authenticationMechanism PLAIN -u <ldap-user>` 로그인 + role 매핑 확인 — cycle 8 보강
 
 ### 2.2 OIDC/OAuth2 인증
-- [ ] CRD 필드 (`spec.auth.oidc.{issuerURL, clientID, userClaim, rolesClaim}`)
-- [ ] OIDC 토큰 검증
-- [ ] 클레임 기반 역할 매핑
-- [ ] 외부 IdP 호환 검증 (Keycloak/Okta)
-- [ ] e2e (`test/e2e/auth_oidc_test.go` 신규)
-- Verify: OIDC 토큰으로 mongosh 인증 + role 매핑
+- [x] CRD 필드 (`spec.auth.oidc.{issuerURL, clientID, userClaim, rolesClaim, identityProvider}`) — cycle 4 F28
+- [x] OIDC 토큰 검증 — `OIDCMongodSetParameter` JSON 생성 + `ValidateOIDCSpec` (https-only, issuer+clientID 필수) — cycle 4 F29
+- [x] 클레임 기반 역할 매핑 — `principalName` / `authorizationClaim` — cycle 4 F30
+- [x] 외부 IdP 호환 검증 (Keycloak/Okta/Auth0/Google/Generic) — enum 분류 — cycle 4 F31 (실 호환 round-trip 은 cycle 8+)
+- [x] e2e (`test/e2e/auth_oidc_test.go` 신규) — Keycloak issuer API path 검증 stub — cycle 4 F32
+- Verify: OIDC 토큰으로 mongosh 인증 + role 매핑 — cycle 8 보강
 
 ### 2.3 다중 리전 지원 (`MongoDBFederation`)
 - [ ] 신규 CRD `MongoDBFederation` — `api/v1alpha1/mongodbfederation_types.go`
