@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -160,6 +161,14 @@ type ShardSpec struct {
 	// +optional
 	ScalePolicy *ScalePolicy `json:"scalePolicy,omitempty"`
 
+	// HiddenMembers — F67/F75 (cycle 10) sharded hidden replica.
+	//
+	// 각 shard 의 RS 에 hidden=true / priority=0 / votes=0 인 멤버 추가.
+	// analytics / backup 격리 시나리오. data-bearing 이지만 client read
+	// preference 에 직접 노출되지 않음. CloudPirates parity #19.
+	// +optional
+	HiddenMembers *ShardHiddenMembersSpec `json:"hiddenMembers,omitempty"`
+
 	// Arbiter는 각 shard replica set 에 배치할 arbiter 구성.
 	//
 	// Why: sharded cluster 의 각 shard 는 독립된 replica set 이다. 비용 효율을
@@ -171,6 +180,38 @@ type ShardSpec struct {
 	// 본 webhook 검증에서 강제.
 	// +optional
 	Arbiter *ShardArbiterSpec `json:"arbiter,omitempty"`
+}
+
+// ShardHiddenMembersSpec — F67/F75 (cycle 10).
+type ShardHiddenMembersSpec struct {
+	// Count = hidden member 수 per shard. 0 = 비활성.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=3
+	// +kubebuilder:default=0
+	Count int32 `json:"count"`
+
+	// Priority — MongoDB priority. 기본 0 (선출 불가).
+	// +kubebuilder:default="0.0"
+	Priority string `json:"priority,omitempty"`
+
+	// Votes — MongoDB votes. 기본 0 (투표권 없음, RS quorum 영향 0).
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=1
+	// +kubebuilder:default=0
+	Votes int32 `json:"votes,omitempty"`
+
+	// SlaveDelaySeconds — F76 (cycle 10) CloudPirates parity #20.
+	// 0 이상이면 delayed replica (DR 시나리오, 빠른 데이터 복구).
+	// +kubebuilder:default=0
+	SlaveDelaySeconds int32 `json:"slaveDelaySeconds,omitempty"`
+
+	// Tags — read preference 라우팅용 tag 셋. e.g. {"role": "analytics"}
+	// +optional
+	Tags map[string]string `json:"tags,omitempty"`
+
+	// Resources — hidden member 별 리소스 (data-bearing 이지만 별도 hardware 권장).
+	// +optional
+	Resources ResourcesSpec `json:"resources,omitempty"`
 }
 
 // ShardArbiterSpec defines per-shard arbiter configuration.
@@ -258,6 +299,29 @@ type MongosServiceSpec struct {
 	// LoadBalancerIP is the load balancer IP (for LoadBalancer type)
 	// +optional
 	LoadBalancerIP string `json:"loadBalancerIP,omitempty"`
+
+	// SessionAffinity — F72 (cycle 10) Bitnami parity.
+	// +kubebuilder:validation:Enum=None;ClientIP
+	// +kubebuilder:default="None"
+	// +optional
+	SessionAffinity string `json:"sessionAffinity,omitempty"`
+
+	// SessionAffinityConfig — ClientIP affinity 시 timeoutSeconds.
+	// +optional
+	SessionAffinityConfig *corev1.SessionAffinityConfig `json:"sessionAffinityConfig,omitempty"`
+
+	// ExternalIPs — F72 (cycle 10). spec.externalIPs 그대로 매핑.
+	// +optional
+	ExternalIPs []string `json:"externalIPs,omitempty"`
+
+	// NodePort — F72 (cycle 10). Type=NodePort 또는 LoadBalancer 시 명시 포트.
+	// +optional
+	NodePort int32 `json:"nodePort,omitempty"`
+
+	// Headless — F72 (cycle 10). ClusterIP=None 헤드리스 서비스.
+	// +kubebuilder:default=false
+	// +optional
+	Headless bool `json:"headless,omitempty"`
 }
 
 // MongoDBShardedStatus defines the observed state of MongoDBSharded

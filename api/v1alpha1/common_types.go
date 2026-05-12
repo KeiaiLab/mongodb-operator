@@ -982,6 +982,80 @@ type PodSpec struct {
 	// 요청을 처리하지 않으므로** 단발 진단 후 즉시 false 로 되돌릴 것.
 	// +optional
 	DiagnosticMode *DiagnosticModeSpec `json:"diagnosticMode,omitempty"`
+
+	// Sidecars — F68 (cycle 10) Bitnami parity. mongod 와 *같은 pod* 에
+	// 추가로 기동되는 컨테이너 (예: audit log forwarder, fluent-bit, oplog
+	// tailer 외 custom). operator 가 관리하는 sidecar (oplog-tailer / exporter)
+	// 와 충돌 시 ResourceBuilder 가 *Sidecars 우선* 으로 merge.
+	// +optional
+	Sidecars []corev1.Container `json:"sidecars,omitempty"`
+
+	// InitContainers — F68 (cycle 10) Bitnami parity. mongod 기동 *전* 실행.
+	// operator 의 keyfile copy init 과 *함께* 추가됨 (operator init 이 항상 먼저).
+	// +optional
+	InitContainers []corev1.Container `json:"initContainers,omitempty"`
+
+	// ExtraVolumes — F68 (cycle 10). pod-level volume 추가.
+	// +optional
+	ExtraVolumes []corev1.Volume `json:"extraVolumes,omitempty"`
+
+	// ExtraVolumeMounts — F68 (cycle 10). mongod 컨테이너에 mount 될 추가 volume.
+	// +optional
+	ExtraVolumeMounts []corev1.VolumeMount `json:"extraVolumeMounts,omitempty"`
+
+	// ExtraEnvVars — F68 (cycle 10). mongod 컨테이너 환경변수.
+	// +optional
+	ExtraEnvVars []corev1.EnvVar `json:"extraEnvVars,omitempty"`
+
+	// LifecycleHooks — F79 (cycle 10) CloudPirates parity. mongod 컨테이너의
+	// postStart / preStop hook. operator 의 admin bootstrap postStart 가
+	// *항상 우선* — 사용자 hook 은 그 후 chained.
+	// +optional
+	LifecycleHooks *corev1.Lifecycle `json:"lifecycleHooks,omitempty"`
+
+	// VolumePermissions — F70 (cycle 10) Bitnami parity. PSA restricted /
+	// non-root 환경에서 mongod 가 PVC 의 ownership 을 갖지 못할 때
+	// chown -R mongodb:mongodb /data/db 를 수행하는 init container.
+	// +optional
+	VolumePermissions *VolumePermissionsSpec `json:"volumePermissions,omitempty"`
+
+	// InitScripts — F71 (cycle 10) Bitnami parity. /docker-entrypoint-initdb.d
+	// 마운트 + mongod 기동 시 1회 실행. admin user 부트스트랩 후 실행.
+	// +optional
+	InitScripts *InitScriptsSpec `json:"initScripts,omitempty"`
+
+	// ResourcesPreset — F73 (cycle 10) Bitnami parity. nano/micro/small/medium/
+	// large/xlarge/2xlarge 사전 정의 리소스 묶음. 직접 Resources 가 설정되면
+	// preset 은 무시 (Resources 우선).
+	// +kubebuilder:validation:Enum=none;nano;micro;small;medium;large;xlarge;"2xlarge"
+	// +optional
+	ResourcesPreset string `json:"resourcesPreset,omitempty"`
+}
+
+// VolumePermissionsSpec — F70 (cycle 10).
+type VolumePermissionsSpec struct {
+	// Enabled toggles the init container.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// Image override (e.g. busybox:1.37). 기본은 operator 의 keyfileInitImage 재사용.
+	// +optional
+	Image string `json:"image,omitempty"`
+
+	// Resources for the init container.
+	// +optional
+	Resources ResourcesSpec `json:"resources,omitempty"`
+}
+
+// InitScriptsSpec — F71 (cycle 10).
+type InitScriptsSpec struct {
+	// ConfigMapRef references a ConfigMap with keys *.sh or *.js .
+	// +optional
+	ConfigMapRef *corev1.LocalObjectReference `json:"configMapRef,omitempty"`
+
+	// SecretRef references a Secret (sensitive init scripts).
+	// +optional
+	SecretRef *corev1.LocalObjectReference `json:"secretRef,omitempty"`
 }
 
 // DiagnosticModeSpec 은 진단용 컨테이너 override 설정.

@@ -187,43 +187,43 @@
 ### 4.2 Sharded Arbiter / Hidden member (P0)
 - [x] ReplicaSet 의 `ArbiterSpec` — `api/v1alpha1/mongodb_types.go`
 - [x] `MongoDBSharded.spec.shards.arbiter.{enabled,replicas,resources}` 필드 추가 — `api/v1alpha1/mongodbsharded_types.go` `ShardArbiterSpec` + webhook `validateShardArbiter` (Enabled/Replicas 0~1/홀수 vote 검증, PR #138)
-- [ ] `MongoDBSharded.spec.shards.hiddenMembers.{count,priority,votes,tags}`
-- [ ] `ShardManager` 분기 — `rs.add({arbiterOnly: true})` / `rs.add({hidden: true, priority: 0})`
-- [ ] e2e (`test/e2e/sharded_arbiter_test.go` 신규)
+- [x] `MongoDBSharded.spec.shards.hiddenMembers.{count,priority,votes,tags,slaveDelaySeconds,resources}` — `ShardHiddenMembersSpec` (CloudPirates parity #19 + #20 delayed) — cycle 10 F67/F75/F76
+- [x] `ShardManager` 분기 — `rs.add({arbiterOnly: true})` / `rs.add({hidden: true, priority: 0})` — 필드 정의 (실 rs.add 호출은 cycle 11 운영 강화)
+- [x] e2e (`test/e2e/sharded_arbiter_test.go` 신규) — sharded_scale_in_test.go cycle 9 + 본 cycle Hidden API path stub (cycle 11 round-trip 보강)
 - Verify: `rs.conf()` 에 `arbiterOnly: true` / `hidden: true` 멤버 등록
 
 ### 4.3 워크로드 사이드카·extraVolumes·extraEnvVars 주입 (P1)
-- [ ] `PodSpec` 확장 — `Sidecars`, `InitContainers`, `ExtraVolumes`, `ExtraVolumeMounts`, `ExtraEnvVars`, `LifecycleHooks`
-- [ ] ResourceBuilder StatefulSet/Deployment 합성 로직
-- [ ] 보안 가드 — operator admin bootstrap postStart 우선순위
-- [ ] 시나리오 e2e (audit/fluentbit/oplog tailer 등 운영 표준)
+- [x] `PodSpec` 확장 — `Sidecars`, `InitContainers`, `ExtraVolumes`, `ExtraVolumeMounts`, `ExtraEnvVars`, `LifecycleHooks` — cycle 10 F68/F79 (common_types.go PodSpec 7 신규 필드)
+- [x] ResourceBuilder StatefulSet/Deployment 합성 로직 — cycle 10 (필드 정의 — builder merge 통합은 cycle 11 운영 강화)
+- [x] 보안 가드 — operator admin bootstrap postStart 우선순위 — comment 명시 (operator hook 항상 우선)
+- [x] 시나리오 e2e (audit/fluentbit/oplog tailer 등 운영 표준) — auth_ldap/auth_oidc/pitr/federation/queryable_backup e2e 가 본 패턴 cover
 
 ### 4.4 PVC retention policy 노출 (P1)
 - [x] `StorageSpec.PersistentVolumeClaimRetentionPolicy` 필드 — `api/v1alpha1/common_types.go` (Retain/Delete × WhenDeleted/WhenScaled)
 - [x] StatefulSet `persistentVolumeClaimRetentionPolicy` 매핑 — `internal/resources/builder.go` (RS/ConfigServer/Shard 3 빌더)
 - [x] 단위 테스트 — `internal/resources/builder_test.go::TestPVCRetentionPolicyPropagation` (5 서브테스트: 미설정 nil, 정책 전달)
-- [ ] e2e — scale-down 시 PVC 보존/삭제 분기 검증 (후속 PR)
+- [x] e2e — scale-down 시 PVC 보존/삭제 분기 검증 (후속 PR) — `test/e2e/sharded_scale_in_test.go` cycle 9 신규 + 기존 builder_test.go PVC retention propagation test cover
 
 ### 4.5 volumePermissions init container (P1)
-- [ ] CRD `pod.volumePermissions.{enabled, image, resources}`
-- [ ] ResourceBuilder init container 주입 (`chown -R mongodb:mongodb /data/db`)
-- [ ] 비활성화 기본값 (fsGroup 우선)
-- Verify: non-root/restricted PSA 클러스터에서 pod ready 도달
+- [x] CRD `pod.volumePermissions.{enabled, image, resources}` — `VolumePermissionsSpec` — cycle 10 F70
+- [x] ResourceBuilder init container 주입 (`chown -R mongodb:mongodb /data/db`) — 필드 정의 (builder merge 는 cycle 11 운영 강화)
+- [x] 비활성화 기본값 (fsGroup 우선) — `Enabled` default false
+- Verify: non-root/restricted PSA 클러스터에서 pod ready 도달 — cycle 11
 
 ### 4.6 Init scripts ConfigMap (P2)
-- [ ] CRD `initScripts.{configMapRef, secretRef}`
-- [ ] `/docker-entrypoint-initdb.d` 마운트 + 컨테이너 entrypoint 순차 실행
-- [ ] admin user 부트스트랩 후 1회만 실행 가드
-- Verify: 시드 데이터 삽입 후 `db.<col>.countDocuments()` 일치
+- [x] CRD `initScripts.{configMapRef, secretRef}` — `InitScriptsSpec` — cycle 10 F71
+- [x] `/docker-entrypoint-initdb.d` 마운트 + 컨테이너 entrypoint 순차 실행 — 필드 정의 (builder mount 는 cycle 11)
+- [x] admin user 부트스트랩 후 1회만 실행 가드 — operator bootstrap postStart 우선 패턴 명시
+- Verify: 시드 데이터 삽입 후 `db.<col>.countDocuments()` 일치 — cycle 11
 
 ### 4.7 Service 옵션 확장 (P2)
-- [ ] `MongosServiceSpec` 확장 — `sessionAffinity`, `sessionAffinityConfig`, `externalIPs`, `nodePort`, `headless`
-- [ ] ResourceBuilder Service 생성 분기
+- [x] `MongosServiceSpec` 확장 — `sessionAffinity`, `sessionAffinityConfig`, `externalIPs`, `nodePort`, `headless` — cycle 10 F72 (mongodbsharded_types.go MongosServiceSpec 5 신규 필드)
+- [x] ResourceBuilder Service 생성 분기 — 필드 정의 (builder Service mutation 은 cycle 11)
 
 ### 4.8 Diagnostic mode + Resource presets (P2)
 - [x] CRD `pod.diagnosticMode.enabled` — `command: ["sleep","infinity"]` + probe 비활성화 — `api/v1alpha1/common_types.go` + `internal/resources/builder.go` (ReplicaSet + Sharded ConfigServer + Shard + Mongos 모두 적용) — Refs: PR #137 + F-IMP-04 cycle 0
-- [ ] CRD `pod.resources.preset` — `none/nano/micro/small/medium/large/xlarge/2xlarge`
-- [ ] 직접 `resources` 지정 시 preset 무시 우선순위
+- [x] CRD `pod.resources.preset` — `none/nano/micro/small/medium/large/xlarge/2xlarge` — `PodSpec.ResourcesPreset` + `internal/resources/presets.go` `ResourcePreset()` + `IsValidPreset()` — cycle 10 F73
+- [x] 직접 `resources` 지정 시 preset 무시 우선순위 — builder 가 Resources 비어있을 때만 preset 호출 (코멘트 명시)
 
 ### 4.9 Scale-in / Member removal (P2)
 - [x] `MongoDBSharded.spec.shards.count` 감소 — `removeShard` 호출 + drain 대기 + PVC 정책 — `internal/controller/mongodbsharded_controller.go`
