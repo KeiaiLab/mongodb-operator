@@ -131,7 +131,7 @@ spec:
     prometheusRules:
       enabled: true
     exporter:
-      image: percona/mongodb_exporter:0.40
+      image: percona/mongodb_exporter:0.51.0
       resources:
         requests:
           cpu: "100m"

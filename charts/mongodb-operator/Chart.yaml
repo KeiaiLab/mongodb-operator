@@ -118,7 +118,7 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:1.4.20
+      image: ghcr.io/keiailab/mongodb-operator:1.4.22
     - name: mongodb
       image: mongo:8.3.1
     - name: mongodb-exporter
