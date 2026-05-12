@@ -49,3 +49,5 @@ charts/*/Chart.lock
 HANDOFF.md
 TASKS.md
 .sisyphus/
+.claude/scheduled_tasks.lock
+.claude/
