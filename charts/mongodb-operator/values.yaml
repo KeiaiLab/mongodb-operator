@@ -230,17 +230,6 @@ probes:
     # -- Period seconds for readiness probe
     periodSeconds: 10
 
-# -- Extra environment variables for the operator
-extraEnvVars: []
-# - name: MY_VAR
-#   value: "my-value"
-
-# -- Extra volume mounts for the operator
-extraVolumeMounts: []
-
-# -- Extra volumes for the operator
-extraVolumes: []
-
 # ----------------------------------------------------------------------------
 # Carve-out feature gates (v1.3.2-beta.1)
 # 베타 출시 범위: ReplicaSet 한정. 다음 기능은 검증 미완료로 기본 비활성화.
@@ -276,9 +265,3 @@ podDisruptionBudget:
   minAvailable: 1
   # -- Maximum unavailable pods
   maxUnavailable: ""
-
-# Priority class configuration
-priorityClassName: ""
-
-# Topology spread constraints
-topologySpreadConstraints: []
