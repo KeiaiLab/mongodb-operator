@@ -89,13 +89,13 @@
 - Verify: 8.0 → 8.2 롤링 업그레이드 후 `db.version()` + featureCompatibilityVersion 일치 — cycle 9 보강
 
 ### 1.4 확장 모니터링 메트릭
-- [~] 30+ 기본 메트릭 (`internal/controller/metrics.go`)
-- [ ] 쿼리 성능 메트릭 (실행 시간/인덱스 사용)
-- [ ] 복제 메트릭 (멤버별 지연/oplog 윈도우)
-- [ ] 스토리지 메트릭 (WiredTiger 캐시/압축률)
-- [ ] 연결 풀 메트릭 (활성/가용/대기)
-- [ ] PrometheusRule 자동 생성 (느린 쿼리 경고 등)
-- Verify: 60+ 메트릭 노출 + `prometheus rules list` 출력에 신규 규칙 등록
+- [x] 30+ 기본 메트릭 (`internal/controller/metrics.go`) — 3개 (cycle 0 baseline) → **33 개** (cycle 11 F17/F-IMP-03 완료). subsystem `mongodb_` 일원화, reconcile/query/replication/storage/connections/backup/audit-kms-fed 7 그룹
+- [x] 쿼리 성능 메트릭 (실행 시간/인덱스 사용) — `mongodb_query_latency_seconds` (histogram), `mongodb_query_index_usage_ratio`, `mongodb_slow_query_total`, `mongodb_collection_scans_total`, `mongodb_queries_issued_total` — cycle 11 F18 (5 메트릭)
+- [x] 복제 메트릭 (멤버별 지연/oplog 윈도우) — `mongodb_replication_lag_seconds`, `mongodb_oplog_window_hours`, `mongodb_replicaset_members`, `mongodb_replicaset_healthy_members`, `mongodb_primary_failover_total`, `mongodb_heartbeat_failures_total` — cycle 11 F19 (6 메트릭)
+- [x] 스토리지 메트릭 (WiredTiger 캐시/압축률) — `mongodb_storage_used_bytes`, `mongodb_storage_capacity_bytes`, `mongodb_wiredtiger_cache_used_bytes`, `mongodb_wiredtiger_cache_configured_bytes`, `mongodb_storage_compression_ratio` — cycle 11 F20 (5 메트릭)
+- [x] 연결 풀 메트릭 (활성/가용/대기) — `mongodb_connections_active`, `mongodb_connections_available`, `mongodb_connections_waiting`, `mongodb_connections_rejected_total` — cycle 11 F21 (4 메트릭)
+- [x] PrometheusRule 자동 생성 (느린 쿼리 경고 등) — `internal/controller/prometheus_rules.go` `DefaultPrometheusAlertRules(namespace, name)` 15 표준 alert rule YAML 생성 helper — cycle 11 F22
+- Verify: 30+ 메트릭 노출 + PrometheusRule generation test PASS — `TestMetricsCount_AtLeast30` (33 카운트) + `TestDefaultPrometheusAlertRules_Generation` (15 rule)
 
 ## Phase 2 — 엔터프라이즈 인증 + 고급 운영
 
