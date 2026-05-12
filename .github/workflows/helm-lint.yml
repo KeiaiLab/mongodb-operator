@@ -23,8 +23,10 @@ jobs:
       - name: Run ct lint
         run: ct lint --target-branch=main --charts charts/mongodb-operator
       - name: Helm template smoke
-        run: helm template test charts/mongodb-operator --debug > /tmp/render.yaml
+        # render INSIDE GITHUB_WORKSPACE so the kubeconform docker action (which
+        # only mounts GITHUB_WORKSPACE) can read the file.
+        run: helm template test charts/mongodb-operator --debug > render.yaml
       - name: kubeconform validate
         uses: docker://ghcr.io/yannh/kubeconform:latest
         with:
-          args: -strict -ignore-missing-schemas -schema-location default -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' /tmp/render.yaml
+          args: -strict -ignore-missing-schemas -schema-location default -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' render.yaml

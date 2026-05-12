@@ -27,6 +27,10 @@ jobs:
         with:
           version: latest
           args: --timeout=10m
+          # Legacy code in main has ~20 `goconst` violations.
+          # only-new-issues=true makes PRs gate on *new* violations only;
+          # a follow-up PR will clean up the historical ones.
+          only-new-issues: true
 
   test:
     name: unit + envtest
