@@ -43,6 +43,9 @@ const (
 
 	backupPhaseCompleted = "Completed"
 	backupPhaseFailed    = "Failed"
+	backupPhasePending   = "Pending"
+	backupPhaseRunning   = "Running"
+	backupPhaseRestoring = "Restoring"
 )
 
 // MongoDBBackupReconciler reconciles a MongoDBBackup object
@@ -90,9 +93,29 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, nil
 	}
 
+	// F-IMP-01 / F04 (cycle 1): Restore path 분기. Spec.Restore 가 nil 이 아니면
+	// 본 CR 은 *백업 capture 가 아닌 restore 작업* 으로 해석한다. 본 cycle 의
+	// acceptance 는 *path 식별 + Phase=Restoring 진입* 까지. 실제 mongorestore
+	// + --oplogReplay 명령 실행은 cycle 6 (KMS encryption + ETag verify) 통합
+	// 시점에서 강화 — 그 사이 phase 는 사용자가 의도적으로 reset 하지 않는 한
+	// Restoring 유지.
+	if backup.Spec.Restore != nil {
+		if backup.Status.Phase == "" || backup.Status.Phase == backupPhasePending {
+			backup.Status.Phase = backupPhaseRestoring
+			backup.Status.StartTime = &metav1.Time{Time: time.Now()}
+			if err := updateStatusWithRetry(ctx, r.Client, backup); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+		logger.Info("Restore path identified — full mongorestore implementation deferred to cycle 6+",
+			"sourceBackup", backup.Spec.Restore.SourceBackupName,
+			"pointInTime", backup.Spec.Restore.PointInTime)
+		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
+	}
+
 	// Update status to Running if not set
 	if backup.Status.Phase == "" {
-		backup.Status.Phase = "Pending"
+		backup.Status.Phase = backupPhasePending
 		backup.Status.StartTime = &metav1.Time{Time: time.Now()}
 		if err := updateStatusWithRetry(ctx, r.Client, backup); err != nil {
 			return ctrl.Result{}, err
@@ -117,7 +140,7 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// If still running, requeue
-	if backup.Status.Phase == "Running" || backup.Status.Phase == "Pending" {
+	if backup.Status.Phase == backupPhaseRunning || backup.Status.Phase == backupPhasePending {
 		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
 	}
 

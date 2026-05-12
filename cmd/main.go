@@ -178,6 +178,16 @@ func main() {
 			setupLog.Error(err, "unable to create controller", "controller", "MongoDBBackup")
 			os.Exit(1)
 		}
+
+		// F03 (cycle 1): PITR oplog uploader controller. backup controller 와
+		// 같은 feature gate 로 활성. MongoDB / MongoDBSharded 의 PITREnabled
+		// 변화에 reaction.
+		if err = (&controller.OplogUploaderReconciler{
+			Client: mgr.GetClient(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "OplogUploader")
+			os.Exit(1)
+		}
 	} else {
 		setupLog.Info("MongoDBBackup controller disabled by feature gate (--enable-backup-controller=false)")
 	}
