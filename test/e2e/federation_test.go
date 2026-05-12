@@ -75,12 +75,17 @@ spec:
 		Expect(err).NotTo(HaveOccurred(), "apply: %s", out)
 	})
 
-	It("Status.Phase becomes Bootstrapping then progresses", func() {
+	It("Status.Phase progresses (cycle 17 real cross-cluster reconcile)", func() {
+		// cycle 17 부터 reconciler 가 *실 cross-cluster API* GET 호출.
+		// test manifest 는 non-existent kubeconfig (us-west-kubeconfig) 사용 →
+		// region propagation 이 *정상적으로 실패* + Phase = Degraded 또는 Failed.
+		// 이전: skeleton 이라 Pending/Bootstrapping/Synced 만 기대.
+		// 본 e2e 의 acceptance: Phase 가 정의된 enum 중 하나로 설정 (reconciler 동작 증거).
 		Eventually(func() string {
 			cmd := exec.Command("kubectl", "-n", fedNamespace, "get", "mongodbfederation", fedCRName,
 				"-o", "jsonpath={.status.phase}")
 			out, _ := utils.Run(cmd)
 			return strings.TrimSpace(out)
-		}, "2m", "5s").Should(BeElementOf("Bootstrapping", "Pending", "Synced"))
+		}, "2m", "5s").Should(BeElementOf("Bootstrapping", "Pending", "Synced", "Degraded", "Failed"))
 	})
 })
