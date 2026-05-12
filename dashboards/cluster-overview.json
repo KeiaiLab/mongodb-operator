@@ -1,0 +1,50 @@
+{
+  "annotations": {"list": [{"builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"}, "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts", "type": "dashboard"}]},
+  "description": "MongoDB Operator — Cluster Overview. mongodb-operator v1.4.23 + percona/mongodb_exporter:0.40. Variables: cluster (label_values(mongodb_up, cluster)).",
+  "editable": true,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1, "title": "Cluster Up", "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "sum(mongodb_up{cluster=~\"$cluster\"})", "refId": "A"}],
+      "fieldConfig": {"defaults": {"thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}}
+    },
+    {
+      "id": 2, "title": "Connections (active / available)", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"x": 6, "y": 0, "w": 18, "h": 8},
+      "targets": [
+        {"expr": "mongodb_connections{state=\"current\",cluster=~\"$cluster\"}", "legendFormat": "{{instance}} current", "refId": "A"},
+        {"expr": "mongodb_connections{state=\"available\",cluster=~\"$cluster\"}", "legendFormat": "{{instance}} available", "refId": "B"}
+      ]
+    },
+    {
+      "id": 3, "title": "Operations/sec (insert/query/update/delete)", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [{"expr": "rate(mongodb_op_counters_total{cluster=~\"$cluster\"}[5m])", "legendFormat": "{{type}} {{instance}}", "refId": "A"}]
+    },
+    {
+      "id": 4, "title": "Memory Resident (MiB)", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [{"expr": "mongodb_memory{type=\"resident\",cluster=~\"$cluster\"}", "legendFormat": "{{instance}}", "refId": "A"}]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["mongodb-operator", "cluster", "overview"],
+  "templating": {
+    "list": [
+      {"name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus"},
+      {"name": "cluster", "type": "query", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "query": "label_values(mongodb_up, cluster)", "refresh": 1, "includeAll": true, "multi": true}
+    ]
+  },
+  "time": {"from": "now-1h", "to": "now"},
+  "title": "MongoDB Operator — Cluster Overview",
+  "uid": "mongodb-operator-cluster-overview",
+  "version": 1
+}

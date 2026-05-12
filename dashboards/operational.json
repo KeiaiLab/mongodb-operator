@@ -1,0 +1,52 @@
+{
+  "annotations": {"list": [{"builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"}, "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts", "type": "dashboard"}]},
+  "description": "MongoDB Operator — Operational Metrics. 느린 쿼리 / 잠금 / 캐시 / WiredTiger.",
+  "editable": true,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1, "title": "Slow Operations (>100ms, ops/sec)", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [{"expr": "rate(mongodb_op_latencies_latency_total{cluster=~\"$cluster\"}[5m])", "legendFormat": "{{type}} {{instance}}", "refId": "A"}]
+    },
+    {
+      "id": 2, "title": "WiredTiger Cache Pages In/Out", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "rate(mongodb_mongod_wiredtiger_cache_pages_read_into_cache_total{cluster=~\"$cluster\"}[5m])", "legendFormat": "in {{instance}}", "refId": "A"},
+        {"expr": "rate(mongodb_mongod_wiredtiger_cache_pages_written_from_cache_total{cluster=~\"$cluster\"}[5m])", "legendFormat": "out {{instance}}", "refId": "B"}
+      ]
+    },
+    {
+      "id": 3, "title": "Global Lock Queue (readers/writers)", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [{"expr": "mongodb_mongod_global_lock_current_queue{cluster=~\"$cluster\"}", "legendFormat": "{{type}} {{instance}}", "refId": "A"}]
+    },
+    {
+      "id": 4, "title": "WiredTiger Cache Bytes (used / config max)", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "mongodb_mongod_wiredtiger_cache_bytes{cluster=~\"$cluster\"}", "legendFormat": "{{type}} {{instance}}", "refId": "A"}
+      ],
+      "fieldConfig": {"defaults": {"unit": "bytes"}}
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["mongodb-operator", "operational"],
+  "templating": {
+    "list": [
+      {"name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus"},
+      {"name": "cluster", "type": "query", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "query": "label_values(mongodb_up, cluster)", "refresh": 1, "includeAll": true, "multi": true}
+    ]
+  },
+  "time": {"from": "now-1h", "to": "now"},
+  "title": "MongoDB Operator — Operational Metrics",
+  "uid": "mongodb-operator-operational",
+  "version": 1
+}

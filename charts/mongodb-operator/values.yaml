@@ -282,3 +282,16 @@ podDisruptionBudget:
   minAvailable: 1
   # -- Maximum unavailable pods
   maxUnavailable: ""
+
+# F10 (cycle 2): Grafana dashboards — operator + cluster + replicaset +
+# sharded + operational + backup 5종. ConfigMap 으로 노출, Grafana
+# Operator sidecar 가 label watch 로 자동 import.
+grafana:
+  dashboards:
+    # -- Provision 5 mongodb-operator dashboards as a ConfigMap
+    enabled: false
+    # -- Labels picked up by Grafana sidecar (default kube-prometheus-stack)
+    labels:
+      grafana_dashboard: "1"
+    # -- Override namespace (default: Release namespace)
+    namespace: ""

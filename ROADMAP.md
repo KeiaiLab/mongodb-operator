@@ -72,12 +72,12 @@
 - Verify: `test/e2e/pitr_test.go` PASS + restore 후 `db.collection.find({_ts: <T>})` 동등성 — cycle 6 후속
 
 ### 1.2 Grafana 대시보드 템플릿
-- [ ] 클러스터 개요 대시보드 (연결/작업/상태) — `dashboards/cluster-overview.json`
-- [ ] ReplicaSet 상태 대시보드 (멤버/복제 지연/oplog) — `dashboards/replicaset.json`
-- [ ] Sharded Cluster 대시보드 (샤드 분산/밸런서/청크) — `dashboards/sharded.json`
-- [ ] 운영 메트릭 대시보드 (느린 쿼리/잠금/캐시) — `dashboards/operational.json`
-- [ ] Helm chart 통합 (`charts/mongodb-operator/templates/dashboards-cm.yaml`)
-- Verify: `kubectl apply -f dashboards-cm.yaml` 후 Grafana sidecar 로딩 + 패널 렌더링
+- [x] 클러스터 개요 대시보드 (연결/작업/상태) — `dashboards/cluster-overview.json` + `charts/mongodb-operator/dashboards/cluster-overview.json` — cycle 2 F06
+- [x] ReplicaSet 상태 대시보드 (멤버/복제 지연/oplog) — `dashboards/replicaset.json` — cycle 2 F07
+- [x] Sharded Cluster 대시보드 (샤드 분산/밸런서/청크) — `dashboards/sharded.json` — cycle 2 F08
+- [x] 운영 메트릭 대시보드 (느린 쿼리/잠금/캐시) — `dashboards/operational.json` — cycle 2 F09 (추가: `dashboards/backup.json` PITR + backup)
+- [x] Helm chart 통합 (`charts/mongodb-operator/templates/dashboards-cm.yaml`) + `grafana.dashboards.enabled` toggle — cycle 2 F10
+- Verify: `helm template <release> charts/mongodb-operator --set grafana.dashboards.enabled=true` 가 ConfigMap 1건 출력 + Grafana sidecar label watch 로 자동 import
 
 ### 1.3 자동 버전 업그레이드 (롤백 포함)
 - [~] 버전 검증 (`api/v1alpha1/version_validation_test.go`) — 기본 호환성 매트릭스만

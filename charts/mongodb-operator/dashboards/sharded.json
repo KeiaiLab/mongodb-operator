@@ -1,0 +1,49 @@
+{
+  "annotations": {"list": [{"builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"}, "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255, 1)", "name": "Annotations & Alerts", "type": "dashboard"}]},
+  "description": "MongoDB Operator — Sharded Cluster. shard 분산 / balancer / chunk 분포. mongos + configsvr 메트릭.",
+  "editable": true,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1, "title": "Balancer Active (1=running)", "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "mongodb_mongos_sharding_balancer_enabled{cluster=~\"$cluster\"}", "refId": "A"}]
+    },
+    {
+      "id": 2, "title": "Mongos Connections", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"x": 6, "y": 0, "w": 18, "h": 8},
+      "targets": [{"expr": "mongodb_mongos_connections{cluster=~\"$cluster\"}", "legendFormat": "{{instance}} {{state}}", "refId": "A"}]
+    },
+    {
+      "id": 3, "title": "Chunks per Shard", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [{"expr": "mongodb_mongos_sharding_chunks_total{cluster=~\"$cluster\"}", "legendFormat": "{{shard}}", "refId": "A"}]
+    },
+    {
+      "id": 4, "title": "Sharding Migrations (succeeded/failed/sec)", "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {"expr": "rate(mongodb_mongos_sharding_migration_succeeded_total{cluster=~\"$cluster\"}[5m])", "legendFormat": "succeeded", "refId": "A"},
+        {"expr": "rate(mongodb_mongos_sharding_migration_failed_total{cluster=~\"$cluster\"}[5m])", "legendFormat": "failed", "refId": "B"}
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["mongodb-operator", "sharded"],
+  "templating": {
+    "list": [
+      {"name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus"},
+      {"name": "cluster", "type": "query", "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}, "query": "label_values(mongodb_up, cluster)", "refresh": 1, "includeAll": true, "multi": true}
+    ]
+  },
+  "time": {"from": "now-1h", "to": "now"},
+  "title": "MongoDB Operator — Sharded Cluster",
+  "uid": "mongodb-operator-sharded",
+  "version": 1
+}

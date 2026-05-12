@@ -1,0 +1,42 @@
+{{- /*
+F10 (cycle 2): Grafana dashboards ConfigMap.
+
+`grafana.dashboards.enabled` 가 true 일 때 `dashboards/*.json` 5 파일을
+ConfigMap 으로 mount. Grafana Operator + grafana-operator sidecar 가
+`grafana_dashboard` label 을 watch 하여 자동 import — 별도 Grafana
+API 호출 불필요.
+
+values.yaml:
+  grafana:
+    dashboards:
+      enabled: false           # default off (Grafana 미배포 cluster 에서 noop)
+      labels:                   # Grafana sidecar 가 watch 하는 라벨
+        grafana_dashboard: "1"
+      namespace: ""             # 미설정 시 Release.Namespace 사용
+*/}}
+{{- if .Values.grafana.dashboards.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mongodb-operator.fullname" . }}-dashboards
+  namespace: {{ default .Release.Namespace .Values.grafana.dashboards.namespace }}
+  labels:
+    {{- include "mongodb-operator.labels" . | nindent 4 }}
+    {{- with .Values.grafana.dashboards.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    mongodb-operator.keiailab.com/dashboard-set: "cycle-2-pitr-overview-replicaset-sharded-operational-backup"
+data:
+{{- range $name, $path := dict
+    "cluster-overview" "dashboards/cluster-overview.json"
+    "replicaset"       "dashboards/replicaset.json"
+    "sharded"          "dashboards/sharded.json"
+    "operational"      "dashboards/operational.json"
+    "backup"           "dashboards/backup.json"
+}}
+{{- /* $.Files.Get 는 chart 내부 파일만 접근 가능 (charts/<chart>/dashboards/) */}}
+  {{ $name }}.json: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
+{{- end }}
