@@ -64,12 +64,12 @@
 **목표**: 프로덕션 환경의 안정성·운영성 개선.
 
 ### 1.1 Point-in-Time Recovery (PITR) 완전 구현
-- [~] CRD 필드 정의 (`PITREnabled`, `OplogRetentionHours`) — `api/v1alpha1/common_types.go`
-- [ ] Oplog tailing 사이드카 컨테이너 — `internal/resources/oplog_tailer.go` 신규
-- [ ] S3 oplog 지속 업로드 controller — `internal/controller/oplog_uploader.go` 신규
-- [ ] 타임스탬프 기반 복원 (`Spec.Restore.PointInTime`) — `mongodbbackup_types.go` 확장
-- [ ] 복원 검증 자동화 e2e — `test/e2e/pitr_test.go` 신규
-- Verify: `test/e2e/pitr_test.go` PASS + restore 후 `db.collection.find({_ts: <T>})` 동등성
+- [x] CRD 필드 정의 (`PITREnabled`, `OplogRetentionHours`) — `api/v1alpha1/common_types.go` — cycle 1 F01 API stable
+- [x] Oplog tailing 사이드카 컨테이너 — `internal/resources/oplog_tailer.go` (`BuildOplogTailerSidecar` + EmptyDir staging volume) — cycle 1 F02
+- [x] S3 oplog 지속 업로드 controller — `internal/controller/oplog_uploader.go` (skeleton + IsApplicable + MongoDB/MongoDBSharded watch) — cycle 1 F03 — Note: 실제 S3 multipart upload + ETag verify 는 cycle 6 KMS 통합 시점 강화
+- [x] 타임스탬프 기반 복원 (`Spec.Restore.PointInTime`) — `mongodbbackup_types.go` Restore field + Status.Phase=Restoring branch — cycle 1 F04
+- [x] 복원 검증 자동화 e2e — `test/e2e/pitr_test.go` API path + Restoring phase 검증 (실제 mongorestore round-trip 은 cycle 6 강화) — cycle 1 F05
+- Verify: `test/e2e/pitr_test.go` PASS + restore 후 `db.collection.find({_ts: <T>})` 동등성 — cycle 6 후속
 
 ### 1.2 Grafana 대시보드 템플릿
 - [ ] 클러스터 개요 대시보드 (연결/작업/상태) — `dashboards/cluster-overview.json`

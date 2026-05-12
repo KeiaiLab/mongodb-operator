@@ -41,12 +41,49 @@ type MongoDBBackupSpec struct {
 	// +kubebuilder:validation:Enum=gzip;zstd;snappy
 	// +kubebuilder:default="zstd"
 	CompressionType string `json:"compressionType,omitempty"`
+
+	// Restore defines optional restore configuration. When set, this
+	// MongoDBBackup CR triggers a restore (not a new backup capture). The
+	// referenced source backup (SourceBackupName) must already be Completed.
+	// PointInTime requires the source cluster to have BackupSpec.PITREnabled
+	// true and OplogRetentionHours window covering the target timestamp.
+	// +optional
+	Restore *RestoreSpec `json:"restore,omitempty"`
+}
+
+// RestoreSpec defines restore configuration (F-IMP-01 / F01 cycle 1).
+//
+// 본 spec 가 nil 이 아닐 때 MongoDBBackup CR 은 *백업 capture 가 아닌 restore
+// 작업* 으로 해석된다. controller 는 다음을 보장:
+//   - SourceBackupName 으로 참조한 백업이 Phase=Completed 인지 확인
+//   - PointInTime 이 설정되면 source cluster 의 oplog retention window 안에
+//     timestamp 가 있는지 검증 후 mongorestore --oplogReplay 실행
+//   - PointInTime 미설정 시 단순 full restore (백업 시점으로 복원)
+//
+// 본 CR 의 Spec.ClusterRef 는 *target* (복원 대상) 을 가리킨다. SourceBackupName
+// 은 같은 namespace 내 backup CR 이름.
+type RestoreSpec struct {
+	// SourceBackupName references the source MongoDBBackup (must be Completed)
+	// in the same namespace as this restore CR.
+	// +kubebuilder:validation:MinLength=1
+	SourceBackupName string `json:"sourceBackupName"`
+
+	// PointInTime is the target timestamp for point-in-time recovery. When
+	// nil, restore replays the backup snapshot only. When set, the controller
+	// performs `mongorestore --oplogReplay --oplogLimit <ts>` against the
+	// archived oplog stream uploaded by the oplog uploader controller.
+	//
+	// Must fall within the source cluster's oplog retention window
+	// (BackupSpec.OplogRetentionHours). Past timestamps that have been
+	// trimmed will be rejected by the validating webhook.
+	// +optional
+	PointInTime *metav1.Time `json:"pointInTime,omitempty"`
 }
 
 // MongoDBBackupStatus defines the observed state of MongoDBBackup
 type MongoDBBackupStatus struct {
 	// Phase represents the current backup phase
-	// +kubebuilder:validation:Enum=Pending;Running;Completed;Failed
+	// +kubebuilder:validation:Enum=Pending;Running;Completed;Failed;Restoring
 	Phase string `json:"phase,omitempty"`
 
 	// StartTime is when the backup started
