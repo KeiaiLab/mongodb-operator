@@ -302,7 +302,6 @@ docker-build: ## Build docker image with the manager ($(PLATFORMS), default buil
 
 .PHONY: docker-push
 docker-push: ## Build and push docker image ($(PLATFORMS), default builder).
-	# --platform 명시로 host 아키텍처와 무관하게 amd64 단일 빌드. 멀티아키 금지.
 	docker buildx build --platform $(PLATFORMS) --push -t ${IMG} .
 
 ##@ Deployment
