@@ -39,6 +39,9 @@ import (
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"github.com/keiailab/mongodb-operator/internal/assets"
+	auditpkg "github.com/keiailab/mongodb-operator/internal/controller/audit"
+	authpkg "github.com/keiailab/mongodb-operator/internal/controller/auth"
+	encryptionpkg "github.com/keiailab/mongodb-operator/internal/controller/encryption"
 )
 
 const (
@@ -518,6 +521,23 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 		args = append(args, tlsArgs()...)
 	}
 
+	// cycle 13 (실 통합): auth (LDAP/OIDC) + encryption (KMS) + audit args 를
+	// mongod CLI 에 주입. nil spec 은 빈 slice 반환 → noop.
+	if mdb.Spec.Auth.LDAP != nil {
+		args = append(args, authpkg.LDAPMongodArgs(mdb.Spec.Auth.LDAP)...)
+	}
+	if mdb.Spec.Auth.OIDC != nil {
+		if oidcParam, err := authpkg.OIDCMongodSetParameter(mdb.Spec.Auth.OIDC); err == nil && oidcParam != "" {
+			args = append(args, "--setParameter", "oidcIdentityProviders="+oidcParam)
+		}
+	}
+	if mdb.Spec.Storage.Encryption != nil {
+		args = append(args, encryptionpkg.MongodArgs(mdb.Spec.Storage.Encryption)...)
+	}
+	if mdb.Spec.AuditLog != nil {
+		args = append(args, auditpkg.MongodArgs(mdb.Spec.AuditLog)...)
+	}
+
 	// Init container to copy keyfile with correct permissions
 	// Runs as mongodb user (999) and uses FSGroup for proper file ownership
 	initContainers := []corev1.Container{
@@ -538,6 +558,16 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 	// Pillar P7 Phase 3b — PEM merge init container (replicaset).
 	if mdb.Spec.TLS != nil && mdb.Spec.TLS.Enabled {
 		initContainers = append(initContainers, BuildPEMMergeInitContainer())
+	}
+
+	// cycle 13: VolumePermissions init container (PSA restricted PVC ownership).
+	if mdb.Spec.Pod != nil && mdb.Spec.Pod.VolumePermissions != nil && mdb.Spec.Pod.VolumePermissions.Enabled {
+		initContainers = append(initContainers, buildVolumePermissionsInit(mdb.Spec.Pod.VolumePermissions))
+	}
+
+	// cycle 13: PodSpec.InitContainers (user-provided) chain — operator init 다음.
+	if mdb.Spec.Pod != nil && len(mdb.Spec.Pod.InitContainers) > 0 {
+		initContainers = append(initContainers, mdb.Spec.Pod.InitContainers...)
 	}
 
 	// MongoDB container
@@ -593,6 +623,15 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 	// Lifecycle 비활성화로 pod 가 기동 실패 없이 Running 유지 → exec 진단 가능.
 	if mdb.Spec.Pod != nil && mdb.Spec.Pod.DiagnosticMode != nil && mdb.Spec.Pod.DiagnosticMode.Enabled {
 		applyDiagnosticMode(&containers[0])
+	}
+
+	// cycle 13: PodSpec extension 의 mongod 컨테이너 merge.
+	if mdb.Spec.Pod != nil {
+		applyPodSpecExtensions(&containers[0], mdb.Spec.Pod)
+	}
+	// cycle 13: ResourcesPreset (Resources 가 비어있을 때만 적용).
+	if mdb.Spec.Pod != nil && mdb.Spec.Pod.ResourcesPreset != "" && isResourcesEmpty(mdb.Spec.Resources) {
+		containers[0].Resources = ResourcePreset(mdb.Spec.Pod.ResourcesPreset)
 	}
 
 	// Add exporter sidecar if monitoring enabled
@@ -651,6 +690,9 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 		storageSize = resource.MustParse("10Gi")
 	}
 
+	// cycle 13: PodSpec Sidecars / ExtraVolumes / InitScripts volume append.
+	containers, volumes = appendPodSpecPodLevel(containers, volumes, mdb.Spec.Pod)
+
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      mdb.Name,
@@ -701,6 +743,112 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 				},
 			},
 			PersistentVolumeClaimRetentionPolicy: mdb.Spec.Storage.PersistentVolumeClaimRetentionPolicy,
+		},
+	}
+}
+
+// applyPodSpecExtensions 는 PodSpec 의 ExtraVolumeMounts, ExtraEnvVars,
+// LifecycleHooks 를 mongod 컨테이너에 merge. Sidecars / ExtraVolumes 는
+// 호출자가 pod-level 에 append (별 함수). cycle 13 — F68/F79 builder 통합.
+func applyPodSpecExtensions(c *corev1.Container, pod *mongodbv1alpha1.PodSpec) {
+	if pod == nil {
+		return
+	}
+	if len(pod.ExtraVolumeMounts) > 0 {
+		c.VolumeMounts = append(c.VolumeMounts, pod.ExtraVolumeMounts...)
+	}
+	if len(pod.ExtraEnvVars) > 0 {
+		c.Env = append(c.Env, pod.ExtraEnvVars...)
+	}
+	// LifecycleHooks merge — operator 의 admin bootstrap postStart 가 항상 우선.
+	// user 의 postStart 가 있어도 operator postStart 가 덮음. user preStop 만 cherry-pick.
+	if pod.LifecycleHooks != nil && pod.LifecycleHooks.PreStop != nil {
+		if c.Lifecycle == nil {
+			c.Lifecycle = &corev1.Lifecycle{}
+		}
+		c.Lifecycle.PreStop = pod.LifecycleHooks.PreStop
+	}
+	// InitScripts mount (/docker-entrypoint-initdb.d) — cycle 13 F71.
+	if pod.InitScripts != nil {
+		c.VolumeMounts = append(c.VolumeMounts, corev1.VolumeMount{
+			Name:      "init-scripts",
+			MountPath: "/docker-entrypoint-initdb.d",
+			ReadOnly:  true,
+		})
+	}
+}
+
+// appendPodSpecPodLevel 는 pod-level Sidecars / ExtraVolumes / InitScripts
+// volume 을 pod.Spec 에 append. caller 가 PodTemplateSpec 구성 후 호출.
+func appendPodSpecPodLevel(containers []corev1.Container, volumes []corev1.Volume, pod *mongodbv1alpha1.PodSpec) ([]corev1.Container, []corev1.Volume) {
+	if pod == nil {
+		return containers, volumes
+	}
+	if len(pod.Sidecars) > 0 {
+		containers = append(containers, pod.Sidecars...)
+	}
+	if len(pod.ExtraVolumes) > 0 {
+		volumes = append(volumes, pod.ExtraVolumes...)
+	}
+	// InitScripts → ConfigMap/Secret projected volume.
+	if pod.InitScripts != nil {
+		if pod.InitScripts.ConfigMapRef != nil {
+			volumes = append(volumes, corev1.Volume{
+				Name: "init-scripts",
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: *pod.InitScripts.ConfigMapRef,
+						DefaultMode:          ptr.To[int32](0o555),
+					},
+				},
+			})
+		} else if pod.InitScripts.SecretRef != nil {
+			volumes = append(volumes, corev1.Volume{
+				Name: "init-scripts",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName:  pod.InitScripts.SecretRef.Name,
+						DefaultMode: ptr.To[int32](0o555),
+					},
+				},
+			})
+		}
+	}
+	return containers, volumes
+}
+
+// isResourcesEmpty 는 ResourcesSpec 이 사용자 설정 0 인지 (preset 우선 가능 판단).
+func isResourcesEmpty(r mongodbv1alpha1.ResourcesSpec) bool {
+	return len(r.Requests) == 0 && len(r.Limits) == 0
+}
+
+// buildVolumePermissionsInit 는 PSA restricted 환경에서 PVC 의 ownership 을
+// mongodb user (uid 999, gid 999) 로 정합시키는 init container 를 생성한다.
+// cycle 13 — F70 builder 통합.
+func buildVolumePermissionsInit(spec *mongodbv1alpha1.VolumePermissionsSpec) corev1.Container {
+	img := spec.Image
+	if img == "" {
+		img = keyfileInitImage
+	}
+	return corev1.Container{
+		Name:  "volume-permissions",
+		Image: img,
+		Command: []string{
+			"sh", "-c",
+			"chown -R 999:999 /data/db && chmod -R 0755 /data/db",
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "data", MountPath: "/data/db"},
+		},
+		Resources: buildResourceRequirements(spec.Resources),
+		SecurityContext: &corev1.SecurityContext{
+			RunAsUser:                ptr.To[int64](0),
+			RunAsNonRoot:             ptr.To(false),
+			AllowPrivilegeEscalation: ptr.To(false),
+			Capabilities: &corev1.Capabilities{
+				Add:  []corev1.Capability{"CHOWN"},
+				Drop: []corev1.Capability{"ALL"},
+			},
 		},
 	}
 }
