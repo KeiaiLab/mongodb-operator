@@ -25,6 +25,10 @@ const (
 	EncryptionKeyFileName = "keyfile"
 
 	providerSecret = "secret"
+	providerVault  = "vault"
+	providerAWSKMS = "aws-kms"
+	providerGCPKMS = "gcp-kms"
+	providerAzure  = "azure-kv"
 )
 
 // MongodArgs 는 EncryptionSpec 으로부터 mongod CLI args 를 생성한다.
@@ -50,7 +54,7 @@ func MongodArgs(spec *mongodbv1alpha1.EncryptionSpec) []string {
 	switch spec.KeyProvider {
 	case "", providerSecret:
 		args = append(args, fmt.Sprintf("--encryptionKeyFile=%s/%s", EncryptionKeyMountPath, EncryptionKeyFileName))
-	case "vault", "aws-kms", "gcp-kms", "azure-kv":
+	case providerVault, providerAWSKMS, providerGCPKMS, providerAzure:
 		// KMIP proxy 통합 — cycle 9+ 에 sidecar 가 KMIP 서버를 노출.
 		args = append(args, "--kmipServerName=localhost", "--kmipPort=5696")
 	}
@@ -72,7 +76,7 @@ func ValidateEncryptionSpec(spec *mongodbv1alpha1.EncryptionSpec) error {
 		if cfg == nil || cfg.Secret == nil || cfg.Secret.SecretRef.Name == "" {
 			return fmt.Errorf("encryption.kmsConfig.secret.secretRef is required when keyProvider=secret")
 		}
-	case "vault":
+	case providerVault:
 		if cfg == nil || cfg.Vault == nil {
 			return fmt.Errorf("encryption.kmsConfig.vault is required when keyProvider=vault")
 		}
@@ -85,21 +89,21 @@ func ValidateEncryptionSpec(spec *mongodbv1alpha1.EncryptionSpec) error {
 		if cfg.Vault.AuthSecretRef.Name == "" {
 			return fmt.Errorf("encryption.kmsConfig.vault.authSecretRef is required")
 		}
-	case "aws-kms":
+	case providerAWSKMS:
 		if cfg == nil || cfg.AWSKMS == nil {
 			return fmt.Errorf("encryption.kmsConfig.awsKMS is required when keyProvider=aws-kms")
 		}
 		if !strings.HasPrefix(cfg.AWSKMS.KeyARN, "arn:aws:kms:") {
 			return fmt.Errorf("encryption.kmsConfig.awsKMS.keyARN must be a KMS CMK ARN")
 		}
-	case "gcp-kms":
+	case providerGCPKMS:
 		if cfg == nil || cfg.GCPKMS == nil {
 			return fmt.Errorf("encryption.kmsConfig.gcpKMS is required when keyProvider=gcp-kms")
 		}
 		if cfg.GCPKMS.ProjectID == "" || cfg.GCPKMS.Keyring == "" || cfg.GCPKMS.Key == "" {
 			return fmt.Errorf("encryption.kmsConfig.gcpKMS requires projectID, keyring, and key")
 		}
-	case "azure-kv":
+	case providerAzure:
 		if cfg == nil || cfg.AzureKV == nil {
 			return fmt.Errorf("encryption.kmsConfig.azureKV is required when keyProvider=azure-kv")
 		}

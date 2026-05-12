@@ -26,6 +26,7 @@ const (
 	federationPhaseBootstrapping = "Bootstrapping"
 	federationPhaseSynced        = "Synced"
 	federationPhaseDegraded      = "Degraded"
+	federationPhaseFailed        = "Failed"
 )
 
 // MongoDBFederationReconciler reconciles a MongoDBFederation object.
@@ -53,34 +54,57 @@ func (r *MongoDBFederationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		fed.Status.RegionStatuses = make([]mongodbv1alpha1.FederationRegionStatus, 0, len(fed.Spec.Regions))
 	}
 
-	// 신규 region 은 Pending 상태로 status 에 ensure.
-	for _, region := range fed.Spec.Regions {
-		if !hasRegionStatus(fed.Status.RegionStatuses, region.Name) {
+	// 신규 region 은 Pending 상태로 status 에 ensure + cycle 17 cross-cluster
+	// propagation 실행. propagateRegionMongoDB 가 *remote K8s API 에 실제* GET 호출.
+	for i, region := range fed.Spec.Regions {
+		_ = i
+		idx := indexOfRegion(fed.Status.RegionStatuses, region.Name)
+		if idx < 0 {
 			fed.Status.RegionStatuses = append(fed.Status.RegionStatuses, mongodbv1alpha1.FederationRegionStatus{
 				Name:         region.Name,
 				Phase:        federationPhasePending,
 				LastSyncTime: &metav1.Time{Time: metav1.Now().Time},
 			})
+			idx = len(fed.Status.RegionStatuses) - 1
+		}
+		synced, server, err := r.propagateRegionMongoDB(ctx, fed, region)
+		now := metav1.Time{Time: metav1.Now().Time}
+		fed.Status.RegionStatuses[idx].LastSyncTime = &now
+		if synced {
+			fed.Status.RegionStatuses[idx].Phase = federationPhaseSynced
+			fed.Status.RegionStatuses[idx].Error = ""
+			logger.V(1).Info("region synced", "region", region.Name, "server", server)
+		} else if err != nil {
+			fed.Status.RegionStatuses[idx].Phase = federationPhaseFailed
+			fed.Status.RegionStatuses[idx].Error = err.Error()
 		}
 	}
+
+	// Phase 재산출 (region status 갱신 후).
+	fed.Status.Phase = computeFederationPhase(fed)
 
 	if err := r.Status().Update(ctx, fed); err != nil {
 		logger.V(1).Info("status update failed (may be transient)", "err", err)
 	}
 
-	logger.V(1).Info("federation reconciled (skeleton — cycle 8 강화 예정)",
+	logger.V(1).Info("federation reconciled (cycle 17 cross-cluster propagation)",
 		"regions", len(fed.Spec.Regions),
 		"phase", fed.Status.Phase)
 	return ctrl.Result{}, nil
 }
 
 func hasRegionStatus(statuses []mongodbv1alpha1.FederationRegionStatus, name string) bool {
-	for _, s := range statuses {
+	return indexOfRegion(statuses, name) >= 0
+}
+
+// indexOfRegion — region name 의 index 또는 -1.
+func indexOfRegion(statuses []mongodbv1alpha1.FederationRegionStatus, name string) int {
+	for i, s := range statuses {
 		if s.Name == name {
-			return true
+			return i
 		}
 	}
-	return false
+	return -1
 }
 
 func computeFederationPhase(fed *mongodbv1alpha1.MongoDBFederation) string {
@@ -92,7 +116,7 @@ func computeFederationPhase(fed *mongodbv1alpha1.MongoDBFederation) string {
 		switch s.Phase {
 		case federationPhaseSynced:
 			syncedCount++
-		case "Failed":
+		case federationPhaseFailed:
 			failedCount++
 		}
 	}
