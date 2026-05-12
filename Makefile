@@ -145,6 +145,10 @@ HELM_KEYRING  ?= $(HOME)/.gnupg/secring.gpg
 # Multi-arch build platforms (AGENTS.md unified policy: amd64+arm64).
 # Override per-invocation for hotfix builds: `make release PLATFORMS=linux/amd64`.
 PLATFORMS     ?= linux/amd64,linux/arm64
+# docker buildx --load (used by `docker-build` for local dev) can only
+# import single-arch images into the docker daemon. Auto-detect host arch
+# so `make docker-build` works on both amd64 and arm64 (Apple Silicon).
+LOCAL_PLATFORM ?= linux/$(shell uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/' -e 's/arm64/arm64/')
 
 .PHONY: release-notes
 release-notes: ## git-cliff 로 release notes 자동 생성 — /tmp/release-notes-VERSION.md.
@@ -296,9 +300,9 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go
 
 .PHONY: docker-build
-docker-build: ## Build docker image with the manager ($(PLATFORMS), default builder).
+docker-build: ## Build docker image with the manager (host arch via $(LOCAL_PLATFORM), --load can't do manifest lists).
 	# 글로벌 §2: docker buildx의 기본 빌더(default)만 사용. 커스텀 빌더 인스턴스 금지.
-	docker buildx build --platform $(PLATFORMS) --load -t ${IMG} .
+	docker buildx build --platform $(LOCAL_PLATFORM) --load -t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Build and push docker image ($(PLATFORMS), default builder).
