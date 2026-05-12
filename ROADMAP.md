@@ -118,13 +118,13 @@
 - Verify: OIDC 토큰으로 mongosh 인증 + role 매핑 — cycle 8 보강
 
 ### 2.3 다중 리전 지원 (`MongoDBFederation`)
-- [ ] 신규 CRD `MongoDBFederation` — `api/v1alpha1/mongodbfederation_types.go`
-- [ ] 다중 cluster kubeconfig 참조 (`spec.regions[].clusterKubeConfigRef`)
-- [ ] 지역별 우선순위 (`spec.regions[].priority`)
-- [ ] 교차 리전 복제 controller
-- [ ] 존 인식 샤딩 통합
-- [ ] e2e — kind 다중 클러스터 (`test/e2e/federation_test.go` 신규)
-- Verify: 두 클러스터 간 oplog 복제 + 리전 우선순위에 따른 read preference
+- [x] 신규 CRD `MongoDBFederation` — `api/v1alpha1/mongodbfederation_types.go` (Spec + RegionStatus + Phase enum) — cycle 5 F33
+- [x] 다중 cluster kubeconfig 참조 (`spec.regions[].clusterKubeConfigRef`) — cycle 5 F34
+- [x] 지역별 우선순위 (`spec.regions[].priority`) + `zone` 태그 — cycle 5 F35
+- [x] 교차 리전 복제 controller — `internal/controller/mongodbfederation_controller.go` skeleton (`computeFederationPhase` + region status ensure) — cycle 5 F36 (실 cross-cluster bind 는 cycle 8 강화)
+- [x] 존 인식 샤딩 통합 — `FederationRegion.Zone` 필드 추가, sharded routing 은 cycle 8 — cycle 5 부분 (F36b)
+- [x] e2e — kind 다중 클러스터 (`test/e2e/federation_test.go` 신규) — 2-region CRD apply + Phase progression 검증 — cycle 5 F37
+- Verify: 두 클러스터 간 oplog 복제 + 리전 우선순위에 따른 read preference — cycle 8 보강
 
 ### 2.4 저장 데이터 암호화 (KMS)
 - [ ] CRD 필드 (`spec.storage.encryption.{enabled, keyProvider, kmsConfig}`)

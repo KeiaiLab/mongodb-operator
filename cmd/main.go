@@ -60,6 +60,7 @@ func main() {
 	var enableBackupController bool
 	var enableAutoscaling bool
 	var enableWebhooks bool
+	var enableFederationController bool
 	var tlsOpts []func(*tls.Config)
 
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -86,6 +87,8 @@ func main() {
 		"Enable HorizontalPodAutoscaler reconciliation. Beta default: false (carve-out scope, drift mutex absent).")
 	flag.BoolVar(&enableWebhooks, "enable-webhooks", false,
 		"Enable validating admission webhooks for MongoDB / MongoDBSharded. Default false — cert-manager 의존성으로 helm chart 게이트로 활성화.")
+	flag.BoolVar(&enableFederationController, "enable-federation-controller", false,
+		"Enable MongoDBFederation reconciler (cycle 5, skeleton). Default false — cross-cluster bind cycle 8+ 강화 후 활성화.")
 
 	opts := zap.Options{
 		Development: true,
@@ -190,6 +193,19 @@ func main() {
 		}
 	} else {
 		setupLog.Info("MongoDBBackup controller disabled by feature gate (--enable-backup-controller=false)")
+	}
+
+	// F33-F37 (cycle 5): MongoDBFederation reconciler feature gate.
+	if enableFederationController {
+		if err = (&controller.MongoDBFederationReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MongoDBFederation")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("MongoDBFederation controller disabled by feature gate (--enable-federation-controller=false)")
 	}
 
 	// Autoscaling 게이트는 reconciler 내부에서 enableAutoscaling 검사 — 현재 cmd 단에서는

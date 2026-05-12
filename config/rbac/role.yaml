@@ -98,6 +98,7 @@ rules:
   - mongodb.keiailab.com
   resources:
   - mongodbbackups
+  - mongodbfederations
   - mongodbs
   - mongodbshardeds
   verbs:
@@ -112,6 +113,7 @@ rules:
   - mongodb.keiailab.com
   resources:
   - mongodbbackups/finalizers
+  - mongodbfederations/finalizers
   - mongodbs/finalizers
   - mongodbshardeds/finalizers
   verbs:
@@ -120,6 +122,7 @@ rules:
   - mongodb.keiailab.com
   resources:
   - mongodbbackups/status
+  - mongodbfederations/status
   - mongodbs/status
   - mongodbshardeds/status
   verbs:

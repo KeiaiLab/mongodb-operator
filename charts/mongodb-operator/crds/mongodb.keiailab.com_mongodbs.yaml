@@ -111,14 +111,129 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
+                  ldap:
+                    description: |-
+                      LDAP defines optional LDAP-backed enterprise authentication.
+                      Mechanism 이 PLAIN 또는 SCRAM-SHA-256 일 때 sasl-passthrough 적용.
+                    properties:
+                      authorizationQueryTemplate:
+                        description: |-
+                          AuthorizationQueryTemplate is the LDAP query template for role
+                          mapping. e.g. `{USER}?memberOf?base`.
+                        type: string
+                      bindCredentialsSecretRef:
+                        description: |-
+                          BindCredentialsSecretRef references LDAP service account credentials
+                          (keys: bindDN / password) for user lookup.
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      bindMethod:
+                        default: simple
+                        description: |-
+                          BindMethod = simple | sasl. simple 은 bind DN + password, sasl 은
+                          SASL mechanism (e.g. PLAIN).
+                        enum:
+                        - simple
+                        - sasl
+                        type: string
+                      caSecretRef:
+                        description: 'CASecretRef references the LDAP CA bundle (key:
+                          ca.crt).'
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      servers:
+                        description: |-
+                          Servers is a comma-separated list of LDAP server hostnames
+                          (host:port). MongoDB 가 client 로 접속할 LDAP server.
+                        minLength: 1
+                        type: string
+                      tls:
+                        default: true
+                        description: |-
+                          TLS enables LDAP over TLS (ldaps://). 별도 CA secret 필요 시
+                          CASecretRef 사용.
+                        type: boolean
+                      userToDNMapping:
+                        description: |-
+                          UserToDNMapping is a MongoDB-format JSON array string for LDAP user
+                          to DN transformation. e.g. `[{match:"(.+)",ldapQuery:"OU=Users,DC=ex,DC=com??sub?(uid={0})"}]`
+                        type: string
+                    required:
+                    - servers
+                    type: object
                   mechanism:
                     default: SCRAM-SHA-256
-                    description: Mechanism defines the auth mechanism
+                    description: |-
+                      Mechanism defines the auth mechanism. PLAIN 은 LDAP-backed
+                      (sasl-passthrough), MONGODB-OIDC 는 OIDC IdP bind.
                     enum:
                     - SCRAM-SHA-256
                     - SCRAM-SHA-1
                     - X509
+                    - PLAIN
+                    - MONGODB-OIDC
                     type: string
+                  oidc:
+                    description: |-
+                      OIDC defines optional OIDC / OAuth2 authentication.
+                      Mechanism 이 MONGODB-OIDC 일 때 활성. Keycloak / Okta / Auth0
+                      호환 — issuerURL + clientID 매핑.
+                    properties:
+                      clientID:
+                        description: ClientID is the OIDC client identifier registered
+                          with the IdP.
+                        minLength: 1
+                        type: string
+                      identityProvider:
+                        default: generic
+                        description: SupportedIdentityProviders 정합 hint — IdP 호환 검증용.
+                        enum:
+                        - keycloak
+                        - okta
+                        - auth0
+                        - google
+                        - generic
+                        type: string
+                      issuerURL:
+                        description: IssuerURL is the OIDC provider issuer (must match
+                          `iss` claim).
+                        minLength: 1
+                        type: string
+                      rolesClaim:
+                        default: groups
+                        description: |-
+                          RolesClaim is the JWT claim that carries role memberships.
+                          Default `groups`.
+                        type: string
+                      userClaim:
+                        default: sub
+                        description: UserClaim is the JWT claim used as MongoDB username.
+                          Default `sub`.
+                        type: string
+                    required:
+                    - clientID
+                    - issuerURL
+                    type: object
                   users:
                     description: Users defines additional users to create
                     items:
