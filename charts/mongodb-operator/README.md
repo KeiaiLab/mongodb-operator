@@ -245,3 +245,35 @@ Contributions are welcome! Please read our [Contributing Guide](https://github.c
 
 - [GitHub Issues](https://github.com/keiailab/mongodb-operator/issues)
 - [Documentation](https://github.com/keiailab/mongodb-operator/blob/main/docs/)
+
+## Secure metrics scraping with Prometheus
+
+When `metrics.secure: true` the operator exposes `/metrics` over HTTPS behind
+kube-rbac-proxy (or the controller-runtime native authenticated handler). For
+Prometheus to scrape it, the ServiceMonitor must present a bearer token and the
+Prometheus ServiceAccount must be allowed to invoke a TokenReview.
+
+### Minimal setup with kube-prometheus-stack
+
+```yaml
+metrics:
+  enabled: true
+  secure: true
+  serviceMonitor:
+    enabled: true
+    bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+    tlsConfig:
+      insecureSkipVerify: true   # or pin CA via caFile / ca.configMap
+```
+
+Grant the Prometheus ServiceAccount `system:auth-delegator` so kube-rbac-proxy's
+TokenReview succeeds:
+
+```bash
+kubectl create clusterrolebinding prometheus-auth-delegator \
+  --clusterrole=system:auth-delegator \
+  --serviceaccount=monitoring:kube-prometheus-stack-prometheus
+```
+
+For a hardened setup, prefer `authorization.credentials` (referencing a Secret)
+over `bearerTokenFile`, and pin the CA instead of `insecureSkipVerify`.

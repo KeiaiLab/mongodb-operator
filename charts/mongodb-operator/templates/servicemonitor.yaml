@@ -12,12 +12,26 @@ metadata:
 spec:
   endpoints:
     - port: metrics
-      {{- if .Values.metrics.secure }}
+      {{- if .Values.metrics.serviceMonitor.scheme }}
+      scheme: {{ .Values.metrics.serviceMonitor.scheme }}
+      {{- else if .Values.metrics.secure }}
       scheme: https
-      tlsConfig:
-        insecureSkipVerify: true
       {{- else }}
       scheme: http
+      {{- end }}
+      {{- if .Values.metrics.serviceMonitor.tlsConfig }}
+      tlsConfig:
+        {{- toYaml .Values.metrics.serviceMonitor.tlsConfig | nindent 8 }}
+      {{- else if .Values.metrics.secure }}
+      tlsConfig:
+        insecureSkipVerify: true
+      {{- end }}
+      {{- with .Values.metrics.serviceMonitor.bearerTokenFile }}
+      bearerTokenFile: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.metrics.serviceMonitor.authorization }}
+      authorization:
+        {{- toYaml . | nindent 8 }}
       {{- end }}
       interval: {{ .Values.metrics.serviceMonitor.interval }}
       {{- with .Values.metrics.serviceMonitor.metricRelabelings }}

@@ -172,6 +172,23 @@ metrics:
     metricRelabelings: []
     # -- Relabeling configs
     relabelings: []
+    # -- Override scrape scheme (http|https). Empty = derive from metrics.secure.
+    scheme: ""
+    # -- Path to bearer token file mounted in Prometheus pod
+    # When metrics.secure=true and the operator stays behind kube-rbac-proxy,
+    # use Prometheus SA token. Example: /var/run/secrets/kubernetes.io/serviceaccount/token
+    bearerTokenFile: ""
+    # -- Prometheus Operator authorization config (preferred over bearerTokenFile)
+    # https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api-reference/api.md#monitoring.coreos.com/v1.SafeAuthorization
+    # Example:
+    #   authorization:
+    #     credentials:
+    #       name: prometheus-bearer
+    #       key: token
+    authorization: {}
+    # -- TLS config for secure endpoints. Empty = chart default (insecureSkipVerify when metrics.secure=true)
+    # Override to pin a CA, ServerName, or disable insecureSkipVerify.
+    tlsConfig: {}
 
 # Webhook configuration (for future use)
 webhook:
