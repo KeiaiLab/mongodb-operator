@@ -1076,3 +1076,62 @@ func TestPVCRetentionPolicyPropagation(t *testing.T) {
 		assert.Nil(t, sts.Spec.PersistentVolumeClaimRetentionPolicy)
 	})
 }
+
+// F-IMP-04 (cycle 0): DiagnosticMode 를 sharded ConfigServer / Shard / Mongos 까지
+// 확장 — `applyDiagnosticMode` 가 각 컴포넌트의 첫 컨테이너 (mongod / mongos) 에
+// `sleep infinity` 를 주입하고 probe 를 nil 로 만든다. 본 테스트는 3 컴포넌트
+// 모두 활성화 시 회귀를 가드한다. (RFC: ROADMAP L223 [~] → [x] sharded 확장)
+func TestDiagnosticMode_Sharded_ConfigServer_Shard_Mongos(t *testing.T) {
+	enable := &mongodbv1alpha1.PodSpec{
+		DiagnosticMode: &mongodbv1alpha1.DiagnosticModeSpec{Enabled: true},
+	}
+
+	mdbsh := shardedWithAuth()
+	mdbsh.Spec.ConfigServer.Pod = enable
+	mdbsh.Spec.Shards.Pod = enable
+	mdbsh.Spec.Mongos.Pod = enable
+
+	t.Run("ConfigServer mongod is replaced by sleep infinity", func(t *testing.T) {
+		sts := BuildConfigServerStatefulSet(mdbsh)
+		require.NotEmpty(t, sts.Spec.Template.Spec.Containers)
+		c := sts.Spec.Template.Spec.Containers[0]
+		assert.Equal(t, []string{"sleep", "infinity"}, c.Command)
+		assert.Nil(t, c.Args)
+		assert.Nil(t, c.LivenessProbe)
+		assert.Nil(t, c.ReadinessProbe)
+		assert.Nil(t, c.StartupProbe)
+		assert.Nil(t, c.Lifecycle)
+	})
+
+	t.Run("Shard mongod is replaced by sleep infinity", func(t *testing.T) {
+		sts := BuildShardStatefulSet(mdbsh, 0)
+		require.NotEmpty(t, sts.Spec.Template.Spec.Containers)
+		c := sts.Spec.Template.Spec.Containers[0]
+		assert.Equal(t, []string{"sleep", "infinity"}, c.Command)
+		assert.Nil(t, c.LivenessProbe)
+		assert.Nil(t, c.ReadinessProbe)
+	})
+
+	t.Run("Mongos is replaced by sleep infinity", func(t *testing.T) {
+		dep := BuildMongosDeployment(mdbsh)
+		require.NotEmpty(t, dep.Spec.Template.Spec.Containers)
+		c := dep.Spec.Template.Spec.Containers[0]
+		assert.Equal(t, []string{"sleep", "infinity"}, c.Command)
+		assert.Nil(t, c.LivenessProbe)
+		assert.Nil(t, c.ReadinessProbe)
+	})
+
+	t.Run("Disabled 또는 nil Pod 면 컨테이너 그대로", func(t *testing.T) {
+		off := shardedWithAuth()
+		// Pod 미설정 (nil) 경로
+		stsCfg := BuildConfigServerStatefulSet(off)
+		assert.NotEqual(t, []string{"sleep", "infinity"}, stsCfg.Spec.Template.Spec.Containers[0].Command)
+
+		// Pod 있고 DiagnosticMode 가 Enabled=false 인 경로
+		off.Spec.Mongos.Pod = &mongodbv1alpha1.PodSpec{
+			DiagnosticMode: &mongodbv1alpha1.DiagnosticModeSpec{Enabled: false},
+		}
+		dep := BuildMongosDeployment(off)
+		assert.NotEqual(t, []string{"sleep", "infinity"}, dep.Spec.Template.Spec.Containers[0].Command)
+	})
+}

@@ -220,7 +220,7 @@
 - [ ] ResourceBuilder Service 생성 분기
 
 ### 4.8 Diagnostic mode + Resource presets (P2)
-- [~] CRD `pod.diagnosticMode.enabled` — `command: ["sleep","infinity"]` + probe 비활성화 — `api/v1alpha1/common_types.go` + `internal/resources/builder.go` (ReplicaSet 적용, Sharded/ConfigServer 후속 sub-task) — Refs: PR #137
+- [x] CRD `pod.diagnosticMode.enabled` — `command: ["sleep","infinity"]` + probe 비활성화 — `api/v1alpha1/common_types.go` + `internal/resources/builder.go` (ReplicaSet + Sharded ConfigServer + Shard + Mongos 모두 적용) — Refs: PR #137 + F-IMP-04 cycle 0
 - [ ] CRD `pod.resources.preset` — `none/nano/micro/small/medium/large/xlarge/2xlarge`
 - [ ] 직접 `resources` 지정 시 preset 무시 우선순위
 

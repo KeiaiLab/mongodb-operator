@@ -827,7 +827,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 		args = append(args, tlsArgs()...)
 	}
 
-	return &appsv1.StatefulSet{
+	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      mdbsh.Name + "-cfg",
 			Namespace: mdbsh.Namespace,
@@ -918,6 +918,14 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 			PersistentVolumeClaimRetentionPolicy: mdbsh.Spec.ConfigServer.Storage.PersistentVolumeClaimRetentionPolicy,
 		},
 	}
+
+	// F-IMP-04 (cycle 0): DiagnosticMode 를 sharded ConfigServer 까지 확장.
+	// MongoDB (RS) 와 동일 패턴 — mongod 컨테이너를 sleep infinity 로 교체하여
+	// 기동 실패 없이 exec 진단 가능 (probe / lifecycle 도 동시 nil).
+	if mdbsh.Spec.ConfigServer.Pod != nil && mdbsh.Spec.ConfigServer.Pod.DiagnosticMode != nil && mdbsh.Spec.ConfigServer.Pod.DiagnosticMode.Enabled {
+		applyDiagnosticMode(&sts.Spec.Template.Spec.Containers[0])
+	}
+	return sts
 }
 
 // BuildShardService creates a headless service for a Shard
@@ -1012,7 +1020,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 		args = append(args, tlsArgs()...)
 	}
 
-	return &appsv1.StatefulSet{
+	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: mdbsh.Namespace,
@@ -1103,6 +1111,13 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 			PersistentVolumeClaimRetentionPolicy: mdbsh.Spec.Shards.Storage.PersistentVolumeClaimRetentionPolicy,
 		},
 	}
+
+	// F-IMP-04 (cycle 0): DiagnosticMode 를 sharded Shard 까지 확장.
+	// 각 shard 의 mongod 컨테이너 (shard 별 STS 인스턴스) 가 진단 모드 진입.
+	if mdbsh.Spec.Shards.Pod != nil && mdbsh.Spec.Shards.Pod.DiagnosticMode != nil && mdbsh.Spec.Shards.Pod.DiagnosticMode.Enabled {
+		applyDiagnosticMode(&sts.Spec.Template.Spec.Containers[0])
+	}
+	return sts
 }
 
 // BuildMongosConfigMap creates a ConfigMap for Mongos configuration.
@@ -1297,6 +1312,12 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 			},
 			SecurityContext: buildDefaultContainerSecurityContext(),
 		})
+	}
+
+	// F-IMP-04 (cycle 0): DiagnosticMode 를 sharded Mongos 까지 확장.
+	// mongos 컨테이너 (containers[0]) 만 적용 — exporter sidecar 는 그대로.
+	if mdbsh.Spec.Mongos.Pod != nil && mdbsh.Spec.Mongos.Pod.DiagnosticMode != nil && mdbsh.Spec.Mongos.Pod.DiagnosticMode.Enabled {
+		applyDiagnosticMode(&containers[0])
 	}
 
 	return &appsv1.Deployment{
