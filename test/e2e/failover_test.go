@@ -143,9 +143,13 @@ spec:
 
 			// mongo shell 또는 mongosh 호출. mongo 8.x 는 mongosh 만 제공.
 			// rs.status().members[?] 가 PRIMARY (state=1) 인지 검증.
+			// cycle 14: auth required — admin credentials 명시.
 			rsStatus, err := utils.Run(exec.Command("kubectl", "exec", "-n",
 				failoverNamespace, newPrimary, "--",
-				"mongosh", "--quiet", "--eval",
+				"mongosh", "--quiet",
+				"-u", "admin", "-p", "changeme123",
+				"--authenticationDatabase", "admin",
+				"--eval",
 				"JSON.stringify(rs.status().members.find(m => m.stateStr === 'PRIMARY'))"))
 			Expect(err).NotTo(HaveOccurred(),
 				"mongosh rs.status() 호출 실패 — pod 내 mongosh 부재 또는 인증 실패 가능")

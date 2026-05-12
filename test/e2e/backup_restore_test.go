@@ -104,9 +104,13 @@ spec:
 		It("dummy data insert (testdb.col 1 doc)", func() {
 			// primary pod 에 mongosh 로 testdb.col 에 문서 1개 insert.
 			// 본 데이터는 backup → 후속 iteration 의 restore 시 비교 ground truth.
+			// cycle 14: auth 가 required 이므로 admin credentials 명시.
 			cmd := exec.Command("kubectl", "exec", "-n",
 				backupNamespace, backupSourceCRName+"-0", "--",
-				"mongosh", "--quiet", "--eval",
+				"mongosh", "--quiet",
+				"-u", "admin", "-p", "changeme123",
+				"--authenticationDatabase", "admin",
+				"--eval",
 				"db.getSiblingDB('testdb').col.insertOne({_id: 'e2e-it13', value: 'backup-source'})")
 			out, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred(), "insertOne 실행 실패: "+out)
