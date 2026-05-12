@@ -101,6 +101,15 @@ func validateMongoDBSpec(m *mongodbv1alpha1.MongoDB) field.ErrorList {
 		errs = append(errs, err)
 	}
 
+	// cycle 19 — G-11 standalone mode (members=1) 자동 검증:
+	// autoScaling.enabled=true 인데 members=1 이면 reject (단일 member RS scale 의미 없음).
+	if m.Spec.IsStandaloneMode() {
+		if m.Spec.AutoScaling != nil && m.Spec.AutoScaling.Enabled {
+			errs = append(errs, field.Invalid(p.Child("autoScaling", "enabled"), true,
+				"autoScaling not allowed when members=1 (standalone mode)"))
+		}
+	}
+
 	// cycle 18 — LDAP/OIDC/Encryption/Audit 검증 호출 (webhook integration).
 	if m.Spec.Auth.LDAP != nil {
 		if err := authpkg.ValidateLDAPSpec(m.Spec.Auth.LDAP); err != nil {

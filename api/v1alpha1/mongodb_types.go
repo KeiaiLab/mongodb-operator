@@ -37,9 +37,21 @@ const (
 	PhaseUpgrading MongoDBPhase = "Upgrading"
 )
 
+// IsStandaloneMode — G-11 (cycle 19) explicit standalone detection helper.
+// CloudPirates parity #1 (architecture: standalone) — operator-side semantic.
+// Members=1 시 *replica set 모드이지만 single-member* → autoscaling/PDB
+// 기본값이 부적절. caller (controller/webhook) 가 본 helper 로 분기.
+func (s *MongoDBSpec) IsStandaloneMode() bool {
+	return s.Members == 1
+}
+
 // MongoDBSpec defines the desired state of MongoDB ReplicaSet
 type MongoDBSpec struct {
-	// Members is the number of replica set members
+	// Members is the number of replica set members.
+	// G-11 (cycle 19): Members=1 = standalone mode (CloudPirates parity #1).
+	// CRD allows 1 (Minimum=1), controller treats 1 as standalone-aware:
+	//   - autoScaling.enabled = true 시 webhook reject (single-member rs scale 의미 없음)
+	//   - pdb.minAvailable 자동 조정 (members=1 시 pdb 무의미하므로 0)
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=50
 	// +kubebuilder:default=3

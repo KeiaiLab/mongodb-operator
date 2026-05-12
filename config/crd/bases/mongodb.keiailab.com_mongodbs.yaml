@@ -591,7 +591,12 @@ spec:
                 type: object
               members:
                 default: 3
-                description: Members is the number of replica set members
+                description: |-
+                  Members is the number of replica set members.
+                  G-11 (cycle 19): Members=1 = standalone mode (CloudPirates parity #1).
+                  CRD allows 1 (Minimum=1), controller treats 1 as standalone-aware:
+                    - autoScaling.enabled = true 시 webhook reject (single-member rs scale 의미 없음)
+                    - pdb.minAvailable 자동 조정 (members=1 시 pdb 무의미하므로 0)
                 format: int32
                 maximum: 50
                 minimum: 1

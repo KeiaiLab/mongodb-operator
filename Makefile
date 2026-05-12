@@ -190,6 +190,19 @@ sbom: ## syft 로 SBOM (SPDX-2.3) 생성 — image 의 binary + Go modules. SLSA
 	@SIZE=$$(wc -c < "/tmp/mongodb-operator-$(VERSION).spdx.json" | tr -d ' '); \
 	echo "✓ SBOM: /tmp/mongodb-operator-$(VERSION).spdx.json ($$SIZE bytes)"
 
+.PHONY: helm-cosign-sign
+helm-cosign-sign: ## G-13 (cycle 19) — CloudPirates parity Cosign chart 서명. helm package 후 cosign sign-blob 으로 .sig 생성.
+	@echo "=== helm cosign sign (G-13 CloudPirates parity) ==="
+	@if ! command -v cosign >/dev/null 2>&1; then echo "ERROR: cosign not installed (brew install cosign)"; exit 1; fi
+	@mkdir -p /tmp/release-cosign
+	@helm package charts/mongodb-operator -d /tmp/release-cosign/
+	@CHART=$$(ls /tmp/release-cosign/mongodb-operator-*.tgz | head -1); \
+	  echo "INFO- signing $$CHART with cosign keyless (OIDC)"; \
+	  COSIGN_EXPERIMENTAL=1 cosign sign-blob --yes "$$CHART" --output-signature "$$CHART.sig" --output-certificate "$$CHART.crt"; \
+	  echo "INFO- signature: $$CHART.sig"; \
+	  echo "INFO- certificate: $$CHART.crt"
+	@echo "✓ Cosign signing complete — chart + .sig + .crt artifacts ready for publish"
+
 .PHONY: helm-publish
 helm-publish: ## Publish helm chart to gh-pages (RFC 0002 helm-publish.yml 대체 로컬 자동화). HELM_SIGN=1 시 PGP .prov 동반.
 	@echo "=== helm package ==="
