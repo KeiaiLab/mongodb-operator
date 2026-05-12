@@ -36,9 +36,10 @@ const (
 var _ = Describe("MongoDB ReplicaSet Bootstrap (Phase 1 M2)", Ordered, func() {
 	BeforeAll(func() {
 		_, _ = utils.Run(exec.Command("kubectl", "create", "ns", bootstrapNamespace))
+		ensureAdminSecret(bootstrapNamespace)
 
 		manifest := fmt.Sprintf(`
-apiVersion: mongodb.keiailab.io/v1alpha1
+apiVersion: mongodb.keiailab.com/v1alpha1
 kind: MongoDB
 metadata:
   name: %s
@@ -49,6 +50,10 @@ spec:
     version: "8.3"
   storage:
     size: 1Gi
+  auth:
+    mechanism: SCRAM-SHA-256
+    adminCredentialsSecretRef:
+      name: mdb-admin
 `, bootstrapCRName, bootstrapNamespace)
 
 		cmd := exec.Command("kubectl", "apply", "-f", "-")

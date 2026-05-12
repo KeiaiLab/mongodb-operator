@@ -41,9 +41,10 @@ const (
 var _ = Describe("MongoDBSharded Topology (Phase 1 M2 / iteration 12)", Ordered, func() {
 	BeforeAll(func() {
 		_, _ = utils.Run(exec.Command("kubectl", "create", "ns", shardedNamespace))
+		ensureAdminSecret(shardedNamespace)
 
 		manifest := fmt.Sprintf(`
-apiVersion: mongodb.keiailab.io/v1alpha1
+apiVersion: mongodb.keiailab.com/v1alpha1
 kind: MongoDBSharded
 metadata:
   name: %s
@@ -64,6 +65,10 @@ spec:
       deliberate: true
   mongos:
     replicas: 3
+  auth:
+    mechanism: SCRAM-SHA-256
+    adminCredentialsSecretRef:
+      name: mdb-admin
 `, shardedCRName, shardedNamespace)
 
 		cmd := exec.Command("kubectl", "apply", "-f", "-")

@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -79,6 +80,26 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	teardownCertManager()
 })
+
+// ensureAdminSecret 는 주어진 namespace 에 "mdb-admin" Secret 을 생성한다.
+// 모든 RS/Sharded e2e 의 BeforeAll 에서 호출되며, MongoDB.spec.auth.
+// adminCredentialsSecretRef.name 와 일치한다. 이미 존재하면 noop.
+func ensureAdminSecret(ns string) {
+	manifest := fmt.Sprintf(`
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mdb-admin
+  namespace: %s
+type: Opaque
+stringData:
+  username: admin
+  password: changeme123
+`, ns)
+	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(manifest)
+	_, _ = utils.Run(cmd)
+}
 
 func configureKubectlKubeRC() {
 	if os.Getenv("KUBECTL_KUBERC") != "true" {

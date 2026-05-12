@@ -49,10 +49,11 @@ const (
 var _ = Describe("MongoDBBackup PVC Round-Trip (Phase 1 M2 / iteration 13)", Ordered, func() {
 	BeforeAll(func() {
 		_, _ = utils.Run(exec.Command("kubectl", "create", "ns", backupNamespace))
+		ensureAdminSecret(backupNamespace)
 
 		// 1. Source MongoDB ReplicaSet (3 members) 부트스트랩.
 		sourceManifest := fmt.Sprintf(`
-apiVersion: mongodb.keiailab.io/v1alpha1
+apiVersion: mongodb.keiailab.com/v1alpha1
 kind: MongoDB
 metadata:
   name: %s
@@ -63,6 +64,10 @@ spec:
     version: "8.3"
   storage:
     size: 1Gi
+  auth:
+    mechanism: SCRAM-SHA-256
+    adminCredentialsSecretRef:
+      name: mdb-admin
 `, backupSourceCRName, backupNamespace)
 		cmd := exec.Command("kubectl", "apply", "-f", "-")
 		cmd.Stdin = strings.NewReader(sourceManifest)
@@ -112,7 +117,7 @@ spec:
 	Context("MongoDBBackup CR (PVC type) → Phase=Completed", func() {
 		It("MongoDBBackup CR 생성 (storage.type=pvc, size=2Gi)", func() {
 			backupManifest := fmt.Sprintf(`
-apiVersion: mongodb.keiailab.io/v1alpha1
+apiVersion: mongodb.keiailab.com/v1alpha1
 kind: MongoDBBackup
 metadata:
   name: %s

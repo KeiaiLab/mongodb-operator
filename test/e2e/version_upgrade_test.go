@@ -46,9 +46,10 @@ const (
 var _ = Describe("MongoDB Version Upgrade Rolling (Phase 1 M2 / iteration 14)", Ordered, func() {
 	BeforeAll(func() {
 		_, _ = utils.Run(exec.Command("kubectl", "create", "ns", versionUpgradeNamespace))
+		ensureAdminSecret(versionUpgradeNamespace)
 
 		manifest := fmt.Sprintf(`
-apiVersion: mongodb.keiailab.io/v1alpha1
+apiVersion: mongodb.keiailab.com/v1alpha1
 kind: MongoDB
 metadata:
   name: %s
@@ -59,6 +60,10 @@ spec:
     version: "8.0"
   storage:
     size: 1Gi
+  auth:
+    mechanism: SCRAM-SHA-256
+    adminCredentialsSecretRef:
+      name: mdb-admin
 `, versionUpgradeCRName, versionUpgradeNamespace)
 
 		cmd := exec.Command("kubectl", "apply", "-f", "-")

@@ -37,9 +37,10 @@ const (
 var _ = Describe("MongoDB ReplicaSet Failover (Phase 1 M2 / iteration 11)", Ordered, func() {
 	BeforeAll(func() {
 		_, _ = utils.Run(exec.Command("kubectl", "create", "ns", failoverNamespace))
+		ensureAdminSecret(failoverNamespace)
 
 		manifest := fmt.Sprintf(`
-apiVersion: mongodb.keiailab.io/v1alpha1
+apiVersion: mongodb.keiailab.com/v1alpha1
 kind: MongoDB
 metadata:
   name: %s
@@ -50,6 +51,10 @@ spec:
     version: "8.3"
   storage:
     size: 1Gi
+  auth:
+    mechanism: SCRAM-SHA-256
+    adminCredentialsSecretRef:
+      name: mdb-admin
 `, failoverCRName, failoverNamespace)
 
 		cmd := exec.Command("kubectl", "apply", "-f", "-")
