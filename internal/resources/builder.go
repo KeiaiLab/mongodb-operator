@@ -1141,6 +1141,29 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 		},
 	}
 
+	// cycle 16: sharded ConfigServer 에도 oplog tailer / audit forwarder sidecar.
+	if IsOplogTailerEnabled(mdbsh.Spec.Backup) {
+		hasAdmin := mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name != ""
+		sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers,
+			BuildOplogTailerSidecar(mdbsh.Spec.Version, 27019, hasAdmin))
+		sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, BuildOplogStagingVolume())
+		sts.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			sts.Spec.Template.Spec.Containers[0].VolumeMounts,
+			corev1.VolumeMount{Name: oplogStagingVolume, MountPath: oplogStagingMount},
+		)
+	}
+	if mdbsh.Spec.AuditLog != nil && mdbsh.Spec.AuditLog.Enabled && mdbsh.Spec.AuditLog.CentralForwarder != nil {
+		sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers,
+			buildAuditForwarderSidecar(mdbsh.Spec.AuditLog.CentralForwarder))
+		sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, corev1.Volume{
+			Name: "audit-log", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		})
+		sts.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			sts.Spec.Template.Spec.Containers[0].VolumeMounts,
+			corev1.VolumeMount{Name: "audit-log", MountPath: "/var/log/mongodb-audit"},
+		)
+	}
+
 	// F-IMP-04 (cycle 0): DiagnosticMode 를 sharded ConfigServer 까지 확장.
 	// MongoDB (RS) 와 동일 패턴 — mongod 컨테이너를 sleep infinity 로 교체하여
 	// 기동 실패 없이 exec 진단 가능 (probe / lifecycle 도 동시 nil).
@@ -1367,6 +1390,29 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 			},
 			PersistentVolumeClaimRetentionPolicy: mdbsh.Spec.Shards.Storage.PersistentVolumeClaimRetentionPolicy,
 		},
+	}
+
+	// cycle 16: sharded Shard 에도 oplog tailer / audit forwarder sidecar.
+	if IsOplogTailerEnabled(mdbsh.Spec.Backup) {
+		hasAdmin := mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name != ""
+		sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers,
+			BuildOplogTailerSidecar(mdbsh.Spec.Version, 27018, hasAdmin))
+		sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, BuildOplogStagingVolume())
+		sts.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			sts.Spec.Template.Spec.Containers[0].VolumeMounts,
+			corev1.VolumeMount{Name: oplogStagingVolume, MountPath: oplogStagingMount},
+		)
+	}
+	if mdbsh.Spec.AuditLog != nil && mdbsh.Spec.AuditLog.Enabled && mdbsh.Spec.AuditLog.CentralForwarder != nil {
+		sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers,
+			buildAuditForwarderSidecar(mdbsh.Spec.AuditLog.CentralForwarder))
+		sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, corev1.Volume{
+			Name: "audit-log", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		})
+		sts.Spec.Template.Spec.Containers[0].VolumeMounts = append(
+			sts.Spec.Template.Spec.Containers[0].VolumeMounts,
+			corev1.VolumeMount{Name: "audit-log", MountPath: "/var/log/mongodb-audit"},
+		)
 	}
 
 	// F-IMP-04 (cycle 0): DiagnosticMode 를 sharded Shard 까지 확장.
@@ -1614,6 +1660,15 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 	}
 	mongosVolumes := buildMongosVolumes(mdbsh)
 	containers, mongosVolumes = appendPodSpecPodLevel(containers, mongosVolumes, mdbsh.Spec.Mongos.Pod)
+	// cycle 16: audit forwarder sidecar (mongos audit log forward).
+	if mdbsh.Spec.AuditLog != nil && mdbsh.Spec.AuditLog.Enabled && mdbsh.Spec.AuditLog.CentralForwarder != nil {
+		containers = append(containers, buildAuditForwarderSidecar(mdbsh.Spec.AuditLog.CentralForwarder))
+		mongosVolumes = append(mongosVolumes, corev1.Volume{
+			Name: "audit-log", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		})
+		containers[0].VolumeMounts = append(containers[0].VolumeMounts,
+			corev1.VolumeMount{Name: "audit-log", MountPath: "/var/log/mongodb-audit"})
+	}
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
