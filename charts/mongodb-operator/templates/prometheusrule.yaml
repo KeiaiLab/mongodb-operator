@@ -1,0 +1,94 @@
+{{- /*
+PrometheusRule — bitnami mongodb-sharded chart parity + controller-runtime
+operator health alerts (8 alerts). Chart 사용자가 monitoring 활성 시 자동 렌더.
+
+*prometheus-operator CRD 미설치* 환경에서는 helm install 시 거절 —
+opt-out: monitoring.prometheusRule.enabled=false.
+*/}}
+{{- if and .Values.monitoring.enabled .Values.monitoring.prometheusRule.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "mongodb-operator.fullname" . }}-alerts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "mongodb-operator.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: mongodb-operator.rules
+      interval: 30s
+      rules:
+        - alert: MongoDBOperatorReconcileFailureRate
+          expr: rate(controller_runtime_reconcile_errors_total{controller=~"mongodb|mongodbsharded|mongodbbackup"}[5m]) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+            component: mongodb-operator
+          annotations:
+            summary: "MongoDB Operator reconcile failure rate elevated ({{`{{ $value | humanize }}`}}/s)"
+            description: "controller-runtime reconcile errors > 0.1/s 지속 — controller logs 확인 + CR events grep."
+            runbook_url: https://github.com/keiailab/mongodb-operator/blob/main/docs/operations/runbook.md
+        - alert: MongoDBOperatorLeaderElectionLost
+          expr: leader_election_master_status{name="mongodb-operator-controller-manager"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: mongodb-operator
+          annotations:
+            summary: "MongoDB Operator leader election lost"
+            description: "Leader instance 가 lease 갱신 실패. controller-manager Pod 재시작 또는 RBAC 검증."
+        - alert: MongoDBReplsetMemberStateAbnormal
+          expr: mongodb_replset_member_state{state!~"PRIMARY|SECONDARY|ARBITER"} == 1
+          for: 5m
+          labels:
+            severity: critical
+            component: mongodb
+          annotations:
+            summary: "MongoDB ReplicaSet {{`{{ $labels.set }}`}} member {{`{{ $labels.name }}`}} state={{`{{ $labels.state }}`}}"
+            description: "member state 가 RECOVERING/STARTUP/DOWN — replication lag / network / oplog 검증."
+        - alert: MongoDBOplogLagHigh
+          expr: mongodb_replset_member_optime_date{state="PRIMARY"} - on(set) group_right mongodb_replset_member_optime_date{state="SECONDARY"} > 60
+          for: 10m
+          labels:
+            severity: warning
+            component: mongodb
+          annotations:
+            summary: "MongoDB ReplicaSet {{`{{ $labels.set }}`}} secondary lag > 60s"
+            description: "Replication lag 가 60초 초과 — secondary 가 primary 따라가지 못하는 상태. workload / network / disk I/O 검증."
+        - alert: MongoDBConnectionsHigh
+          expr: mongodb_ss_connections{state="current"} / mongodb_ss_connections{state="available"} > 0.8
+          for: 5m
+          labels:
+            severity: warning
+            component: mongodb
+          annotations:
+            summary: "MongoDB {{`{{ $labels.instance }}`}} connections > 80% capacity"
+            description: "Connection pool 의 80% 초과 사용 — connection leak 또는 maxConns 인상 검토."
+        - alert: MongoDBShardedChunksImbalance
+          expr: max by (cluster) (mongodb_mongos_chunks_count) / min by (cluster) (mongodb_mongos_chunks_count) > 2
+          for: 30m
+          labels:
+            severity: warning
+            component: mongodb-sharded
+          annotations:
+            summary: "MongoDB Sharded {{`{{ $labels.cluster }}`}} chunk distribution imbalanced"
+            description: "Shard 간 chunk 비율 > 2:1 — balancer 비활성 또는 chunk migration 차단. sh.status() 확인."
+        - alert: MongoDBBackupJobFailed
+          expr: kube_job_status_failed{job_name=~"mongodb-backup-.*"} > 0
+          for: 5m
+          labels:
+            severity: warning
+            component: mongodb-operator
+          annotations:
+            summary: "MongoDB Backup Job {{`{{ $labels.job_name }}`}} failed"
+            description: "MongoDBBackup CR 의 backup Job 실패 — kubectl logs 검증."
+        - alert: MongoDBOperatorWorkqueueDepthHigh
+          expr: workqueue_depth{name=~"mongodb.*"} > 50
+          for: 10m
+          labels:
+            severity: warning
+            component: mongodb-operator
+          annotations:
+            summary: "MongoDB Operator workqueue {{`{{ $labels.name }}`}} depth > 50"
+            description: "Reconcile 처리 backlog — controller bottleneck 또는 cluster load."
+{{- end -}}
