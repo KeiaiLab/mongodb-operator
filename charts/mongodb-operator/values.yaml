@@ -295,3 +295,30 @@ grafana:
       grafana_dashboard: "1"
     # -- Override namespace (default: Release namespace)
     namespace: ""
+
+# Vault Transit KMS encryption-at-rest integration.
+# cycle 17 internal/auth/vault-transit/ SDK 가 Vault 와 통신하며, 본 values 의
+# 활성 시 operator 가 MongoDB CR spec.encryption.vaultTransit reference 로
+# Vault address + Token Secret 을 자동 inject 한다. AppRole / Token / Kubernetes
+# auth 모든 mode 지원 (SDK 활성화).
+#
+# Bitnami parity: bitnami/mongodb chart 는 native Vault Transit 미지원 — 본
+# operator 가 동등 또는 초과 (cycle 17 cross-cluster federation 동반).
+vaultTransit:
+  enabled: false
+  # Vault address (e.g. https://vault.platform-security.svc.cluster.local:8200)
+  endpoint: ""
+  # Transit key path (e.g. transit/keys/mongodb-storage-key)
+  keyName: ""
+  # Auth mode: token | approle | kubernetes
+  auth:
+    mode: kubernetes
+    # kubernetes auth role (Vault 의 role)
+    role: mongodb-operator
+    # Token Secret reference (mode=token)
+    tokenSecretRef:
+      name: ""
+      key: token
+    # AppRole secret reference (mode=approle)
+    appRoleSecretRef:
+      name: ""
