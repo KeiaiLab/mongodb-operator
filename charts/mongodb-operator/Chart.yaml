@@ -31,6 +31,11 @@ icon: https://raw.githubusercontent.com/mongodb/mongo/master/docs/leaf.svg
 annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/category: database
+  artifacthub.io/maturity: stable
+  artifacthub.io/operator: "true"
+  artifacthub.io/signKey: |
+    fingerprint: 89A409476828CB992338C378651E51AF520BCB78
+    url: https://github.com/keiailab.gpg
   # operatorCapabilities — OperatorHub Phase II "Seamless Upgrades" (보수적
   # claim). 사용자 지원 기능: MongoDB ReplicaSet + Sharded install + version
   # upgrade allowlist + PodSecurity restricted. backup/failover automation
