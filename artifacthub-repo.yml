@@ -1,0 +1,17 @@
+# Artifact Hub repository metadata.
+# repositoryID 는 Artifact Hub UI 에서 repository 등록 시 부여되며,
+# 그 시점에 본 file 에 반영 후 PR 으로 갱신한다.
+#
+# Reference: https://artifacthub.io/docs/topics/repositories/
+
+repositoryID: TBD-set-after-UI-registration
+
+owners:
+  - name: Keiailab
+    email: support@keiailab.com
+
+# Packages to ignore during scan. mongodb-cluster (wrapper sub-chart) 는
+# v1.5.0 이후 mongodb-operator chart 에 통합 — 별 wrapper 불필요.
+ignore:
+  - name: mongodb-cluster
+    version: ".*"
