@@ -8,7 +8,7 @@ description: |
   배포되어 CRD 가 cluster 에 존재해야 한다.
 type: application
 version: 0.1.0
-appVersion: "1.4.23"
+appVersion: "1.5.0"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
