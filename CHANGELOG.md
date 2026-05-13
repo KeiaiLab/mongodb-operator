@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - audit (4-repo cross-cut, 2026-05-09): RFC-0017 채택 — `.lefthook.yml` 신설 (valkey 패턴), `.codecov.yml` target `auto` → 70% (testing.md §5 절대 floor), HANDOFF.md 88% 압축 (token-budget §3, archive 100% 보존), ADR-0020 등재. 코드/CRD 영향 0. 후속 작업: ADR-0020 AI-MO20-1~4.
 
+## [1.5.0] - 2026-05-13
+
+### Added
+
+- **Cycle 14–19 누적 — Sharded topology 완전체 + 외부 시스템 SDK + Webhook validation + Cosign signing.**
+  - cycle 13 builder 실 통합 — auth/encryption/audit args + PodSpec extension merge (48f2d25).
+  - cycle 14 sharded builder integration — ConfigServer/Shard/Mongos (bb40736 + 427c4de e2e fix).
+  - cycle 15 mongorestore Job + oplog tailer + audit forwarder sidecar inject (4d46739).
+  - cycle 16 sharded ConfigServer/Shard/Mongos sidecar inject (dc1e02a).
+  - cycle 17 real external system SDK — LDAP probe + OIDC discovery + Vault Transit + cross-cluster (4f2e956 + 989905c verify scripts).
+  - cycle 18 G-12 mongos StatefulSet + webhook integration validators (8b3ec9c + d015d6f federation Phase fix + 7235518 webhook reject e2e).
+  - cycle 19 G-11 standalone-aware webhook + G-13 cosign sign target (cb812e4 NEW CODE).
+
+### Changed
+
+- Chart.yaml + appVersion bump 1.4.23 → 1.5.0 (mongodb-operator chart).
+- mongodb-cluster sub-chart appVersion 1.4.23 → 1.5.0 (chart version 0.1.0 그대로).
+
+### Security
+
+- G-13 cosign sign target (Helm chart + container image + SBOM) — keyless OIDC via GH Actions release.yml (id-token: write).
+
+### Notes
+
+- CHANGELOG drift: v1.4.17~v1.4.23 의 7 release entry 가 main CHANGELOG.md 에 누락된 상태 (release.yml 의 git-cliff 자동 release notes 가 GitHub Releases page 에 존재). 별 cleanup ticket 으로 분리.
+- 본 entry 는 v1.4.23 tag 이후 진행분 (31 commits) 강조. Unreleased 의 RFC-0017 audit (4-repo cross-cut) 도 본 release 의 일부.
+
 ## [1.4.16] - 2026-05-08
 
 ### Added
