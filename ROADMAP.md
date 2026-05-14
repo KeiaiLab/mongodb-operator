@@ -301,3 +301,57 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 | 2026-04-28 | Phase 4 부분 완료 — 4.1 NetworkPolicy ✅, 4.9 Sharded scale-in ✅, PDB 자동화 ✅, 부트스트랩 race-free ✅ | production-readiness cycle |
 
 본 ROADMAP 은 살아있는 문서이며, 커뮤니티 피드백과 코드 사실에 따라 갱신된다.
+
+---
+
+## Phase 5 — Post-v1.5.0 (candidate baseline, brainstorm pending)
+
+> Phase 1-4 100% (93/93) 마감 후 *후속 가치 영역*. 본 section 은 `~/.claude/plans/2026-05-14-4-operators-100pct/P-E.md` 의 후보 6 카테고리 (observability v2 / DR / sharded v2 / security v2 / commons import / community) 를 *기준 baseline* 으로 등재. 사용자 brainstorm session 합의 후 확정 / 교체 / 통합.
+
+### 5.1 Production observability v2
+
+- [ ] Sharded topology 분산 trace OTLP — `internal/controller/trace.go`
+- [ ] Long-tail latency histogram — `prometheus_latency_bucket` 패턴
+- [ ] Profile-guided optimization (PGO) — `make build-pgo`
+
+### 5.2 Disaster recovery 고도화
+
+- [ ] Multi-region cluster federation — `api/v1alpha1/mongodbfederation_types.go`
+- [ ] PITR cross-region replication — `internal/controller/backup/cross_region.go`
+- [ ] Automated DR drill — `test/dr/quarterly_drill.go`
+
+### 5.3 Sharded topology v2
+
+- [ ] Zone-aware shard placement — `internal/controller/shard/zone_placement.go`
+- [ ] Chunk migration throttling — `internal/controller/shard/throttle.go`
+- [ ] Auto-rebalance feedback loop — `internal/controller/shard/rebalancer.go`
+
+### 5.4 Security hardening v2
+
+- [ ] KMS encryption-at-rest — `internal/security/kms.go`
+- [ ] mTLS internal pod-to-pod — `internal/security/mtls.go`
+- [ ] SPIFFE/SPIRE identity — `internal/security/spiffe.go`
+
+### 5.5 operator-commons v1.0.0 import
+
+- [ ] `go.mod` bump → `operator-commons v1.0.0` (P-B.11.4 후)
+- [ ] commons pkg/webhook conversion 도입 (P-B.10.3 후)
+
+### 5.6 Community + ecosystem
+
+- [ ] Helm OperatorHub charts repository — `charts/repo/` + GitHub Pages
+- [ ] community-operators upstream sync 6 minor 무사고 (ADR-0027 봉인)
+- [ ] SUPPORT.md + i18n (.ko/.en/.ja) — `docs/i18n/`
+
+### Brainstorm gate
+
+- [ ] Phase 5 영역 사용자 합의 — `superpowers:brainstorming` skill 후 본 6 카테고리 *확정 / 교체 / 통합* 결정
+
+Verify (section 존재 확인):
+
+```bash
+grep -c '^## Phase 5' ROADMAP.md  # ≥ 1
+grep -c '^### 5\.[0-9]' ROADMAP.md  # ≥ 6
+```
+
+Refs: `~/.claude/plans/2026-05-14-4-operators-100pct/P-E.md` (sub-task 18 candidate)
