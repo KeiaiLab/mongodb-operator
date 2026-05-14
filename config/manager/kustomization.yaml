@@ -9,7 +9,7 @@ resources:
 images:
 - name: controller
   newName: ghcr.io/keiailab/mongodb-operator
-  newTag: latest
+  newTag: v1.5.0
 - name: ghcr.io/keiailab/mongodb-operator
   newName: ghcr.io/keiailab/mongodb-operator
   newTag: latest
