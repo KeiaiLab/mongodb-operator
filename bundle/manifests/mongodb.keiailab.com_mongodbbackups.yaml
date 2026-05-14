@@ -85,6 +85,35 @@ spec:
                 - zstd
                 - snappy
                 type: string
+              restore:
+                description: |-
+                  Restore defines optional restore configuration. When set, this
+                  MongoDBBackup CR triggers a restore (not a new backup capture). The
+                  referenced source backup (SourceBackupName) must already be Completed.
+                  PointInTime requires the source cluster to have BackupSpec.PITREnabled
+                  true and OplogRetentionHours window covering the target timestamp.
+                properties:
+                  pointInTime:
+                    description: |-
+                      PointInTime is the target timestamp for point-in-time recovery. When
+                      nil, restore replays the backup snapshot only. When set, the controller
+                      performs `mongorestore --oplogReplay --oplogLimit <ts>` against the
+                      archived oplog stream uploaded by the oplog uploader controller.
+
+                      Must fall within the source cluster's oplog retention window
+                      (BackupSpec.OplogRetentionHours). Past timestamps that have been
+                      trimmed will be rejected by the validating webhook.
+                    format: date-time
+                    type: string
+                  sourceBackupName:
+                    description: |-
+                      SourceBackupName references the source MongoDBBackup (must be Completed)
+                      in the same namespace as this restore CR.
+                    minLength: 1
+                    type: string
+                required:
+                - sourceBackupName
+                type: object
               storage:
                 description: Storage defines backup storage location
                 properties:
@@ -241,6 +270,7 @@ spec:
                 - Running
                 - Completed
                 - Failed
+                - Restoring
                 type: string
               size:
                 description: Size is the backup size

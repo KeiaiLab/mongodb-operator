@@ -1,3 +1,4 @@
+cliVersion: 4.14.0
 domain: keiailab.com
 layout:
 - go.kubebuilder.io/v4
