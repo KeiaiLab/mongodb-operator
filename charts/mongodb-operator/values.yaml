@@ -190,6 +190,19 @@ metrics:
     # Override to pin a CA, ServerName, or disable insecureSkipVerify.
     tlsConfig: {}
 
+# Monitoring configuration (PR #162 PrometheusRule, bitnami mongodb-sharded parity)
+# 별도 top-level 블록 — metrics.serviceMonitor 와 의도적으로 분리:
+#   metrics.*           = ServiceMonitor (Prometheus scrape target)
+#   monitoring.*        = PrometheusRule (alert rules)
+monitoring:
+  # -- Enable monitoring CRD rendering (master switch for PrometheusRule)
+  # default false = opt-in. prometheus-operator CRD 미설치 환경에서 helm install 거절 차단.
+  enabled: false
+  # PrometheusRule for 8-alert pack (operator health + replica set state + member churn)
+  prometheusRule:
+    # -- Enable PrometheusRule rendering (requires monitoring.enabled)
+    enabled: false
+
 # Webhook configuration (for future use)
 webhook:
   # -- Enable admission webhooks
