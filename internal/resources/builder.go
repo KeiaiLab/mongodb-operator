@@ -77,14 +77,38 @@ const MongoTLSPEMPath = "/etc/ssl/mongo-pem"
 
 // BuildPEMMergeInitContainer 는 cert-manager Secret 의 tls.crt + tls.key 를
 // 단일 PEM file 로 합치는 init container 를 반환한다 (mongod 의 --tlsCertificateKeyFile
-// 호환). PSA restricted 정합 (busybox 사용, drop ALL caps).
+// 호환). PSA restricted 정합 (busybox + drop ALL except CHOWN).
+//
+// SecurityContext = RunAsUser:0 — emptyDir `/tls-pem` 의 default ownership 이
+// root 이고 PodSecurityContext.FSGroup 이 emptyDir 에 *항상 적용되지 않을 수 있다*
+// (kubelet fsGroupChangePolicy / storage driver 변종). 라이브 사고 (2026-05-16
+// KeiaiLab data/argos-mongo-cfg-1/2): UID 999 로 run 시 `sh: can't create
+// /tls-pem/server.pem: Permission denied` 로 init fail → mongos NotReady →
+// mailstory 서비스 cascade. 정합 sister 패턴 = data-permission-init (chown /data/db)
+// 가 이미 root + CHOWN cap drop ALL.
+//
+// merge 후 chown 999:999 으로 mongod (UID 999) 가 read 가능.
+//
 // Exported — caller (cfg/shard/mongos reconciler) 가 STS build 후 conditional append.
 func BuildPEMMergeInitContainer() corev1.Container {
 	return corev1.Container{
-		Name:            "tls-pem-merge",
-		Image:           keyfileInitImage, // busybox:1.37 const 단일화 정합
-		Command:         []string{"sh", "-c", "cat /tls-input/tls.crt /tls-input/tls.key > /tls-pem/server.pem && chmod 0400 /tls-pem/server.pem"},
-		SecurityContext: buildKeyfileInitContainerSecurityContext(),
+		Name:  "tls-pem-merge",
+		Image: keyfileInitImage, // busybox:1.37 const 단일화 정합
+		Command: []string{
+			"sh", "-c",
+			"cat /tls-input/tls.crt /tls-input/tls.key > /tls-pem/server.pem && " +
+				"chown 999:999 /tls-pem/server.pem && " +
+				"chmod 0400 /tls-pem/server.pem",
+		},
+		SecurityContext: &corev1.SecurityContext{
+			RunAsUser:                ptr.To[int64](0),
+			RunAsNonRoot:             ptr.To(false),
+			AllowPrivilegeEscalation: ptr.To(false),
+			Capabilities: &corev1.Capabilities{
+				Add:  []corev1.Capability{"CHOWN"},
+				Drop: []corev1.Capability{"ALL"},
+			},
+		},
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "tls-server", MountPath: "/tls-input", ReadOnly: true},
 			{Name: "tls-server-pem", MountPath: "/tls-pem"},

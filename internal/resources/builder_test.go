@@ -1135,3 +1135,35 @@ func TestDiagnosticMode_Sharded_ConfigServer_Shard_Mongos(t *testing.T) {
 		assert.NotEqual(t, []string{"sleep", "infinity"}, dep.Spec.Template.Spec.Containers[0].Command)
 	})
 }
+
+// TestBuildPEMMergeInitContainer_SecurityContext 는 tls-pem-merge init container
+// 의 SecurityContext 가 *명시적 root + CHOWN cap + drop ALL* 임을 검증한다.
+//
+// 회귀 가드: 라이브 사고 (2026-05-16 KeiaiLab data/argos-mongo-cfg-1/2) 의
+// `Permission denied` cascade 재발 차단. emptyDir `/tls-pem` 의 default ownership
+// (root) 에 UID 999 가 write 못 함을 회피.
+func TestBuildPEMMergeInitContainer_SecurityContext(t *testing.T) {
+	c := BuildPEMMergeInitContainer()
+
+	require.Equal(t, "tls-pem-merge", c.Name)
+	require.NotNil(t, c.SecurityContext, "SecurityContext 필수 — 외부 hardening 의존 차단")
+
+	sc := c.SecurityContext
+	require.NotNil(t, sc.RunAsUser)
+	assert.Equal(t, int64(0), *sc.RunAsUser, "root run — emptyDir write 권한 확보")
+	require.NotNil(t, sc.RunAsNonRoot)
+	assert.False(t, *sc.RunAsNonRoot, "PSA restricted 외부 hardening 우회")
+	require.NotNil(t, sc.AllowPrivilegeEscalation)
+	assert.False(t, *sc.AllowPrivilegeEscalation)
+	require.NotNil(t, sc.Capabilities)
+	assert.Contains(t, sc.Capabilities.Add, corev1.Capability("CHOWN"),
+		"CHOWN 만 add — server.pem ownership 변경용")
+	assert.Contains(t, sc.Capabilities.Drop, corev1.Capability("ALL"),
+		"나머지 cap 모두 drop")
+
+	// merge 후 chown 999:999 명령 포함 검증
+	require.GreaterOrEqual(t, len(c.Command), 3)
+	cmdJoined := strings.Join(c.Command, " ")
+	assert.Contains(t, cmdJoined, "chown 999:999 /tls-pem/server.pem",
+		"merge 후 mongod (UID 999) 가 read 가능하도록 ownership 변경")
+}
