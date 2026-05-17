@@ -51,6 +51,10 @@ func TestMetricsCount_AtLeast30(t *testing.T) {
 	MetricKeyRotationTotal.WithLabelValues("ns-test", "name-test").Inc()
 	MetricFederationRegionsSynced.WithLabelValues("ns-test", "name-test").Set(2)
 	MetricClusterGroupMembers.WithLabelValues("ns-test", "name-test").Set(3)
+	// insights (cycle 9 P2)
+	MetricInsightsRecommendations.WithLabelValues("ns-test", "name-test", "MissingIndex", "warning").Set(2)
+	MetricInsightsAnalysisTotal.WithLabelValues("ns-test", "name-test", "success").Inc()
+	MetricInsightsSampledTotal.WithLabelValues("ns-test", "name-test").Add(500)
 
 	gathered, err := metrics.Registry.(prometheus.Gatherer).Gather()
 	if err != nil {
@@ -62,8 +66,9 @@ func TestMetricsCount_AtLeast30(t *testing.T) {
 			count++
 		}
 	}
-	if count < 30 {
-		t.Errorf("expected at least 30 mongodb_* metrics registered, got %d", count)
+	// cycle 9 P2: 33 → 36 metrics (3 insights metrics 추가).
+	if count < 33 {
+		t.Errorf("expected at least 33 mongodb_* metrics registered, got %d", count)
 	}
 	t.Logf("registered mongodb_* metrics: %d", count)
 }
