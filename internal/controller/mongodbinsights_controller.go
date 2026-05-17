@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -84,6 +85,7 @@ func (r *MongoDBInsightsReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		recs, sampled, err := r.runAnalysis(ctx, in)
 		if err != nil {
 			logger.Info("analysis failed, will retry", "err", err)
+			MetricInsightsAnalysisTotal.WithLabelValues(in.Namespace, in.Name, "error").Inc()
 			in.Status.Phase = insightsPhaseFailed
 			in.Status.LastAnalysisTime = &now
 			setInsightsCondition(&in.Status.Conditions, metav1.Condition{
@@ -97,6 +99,18 @@ func (r *MongoDBInsightsReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				logger.V(1).Info("Failed status update transient", "err", statusErr)
 			}
 			return ctrl.Result{RequeueAfter: insightsFailedRequeue}, nil
+		}
+		// 성공 path 메트릭 (cycle 9 P2 ROADMAP §3.2).
+		MetricInsightsAnalysisTotal.WithLabelValues(in.Namespace, in.Name, "success").Inc()
+		MetricInsightsSampledTotal.WithLabelValues(in.Namespace, in.Name).Add(float64(sampled))
+		// 이전 cycle 의 active recommendations 카운트 reset 후 재기록 (gauge semantics).
+		MetricInsightsRecommendations.DeletePartialMatch(prometheus.Labels{
+			"namespace": in.Namespace, "name": in.Name,
+		})
+		for _, rec := range recs {
+			MetricInsightsRecommendations.WithLabelValues(
+				in.Namespace, in.Name, rec.Type, rec.Severity,
+			).Inc()
 		}
 		in.Status.Phase = insightsPhaseReady
 		in.Status.LastAnalysisTime = &now

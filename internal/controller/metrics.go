@@ -110,8 +110,29 @@ var (
 	MetricClusterGroupMembers = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{Subsystem: metricSubsystem, Name: "clustergroup_members", Help: "Total members in MongoDBClusterGroup"}, labelNamespaceName)
 
+	// --- MongoDBInsights (3) — cycle 9 P2 (ROADMAP §3.2) ---
+	// `mongodb_insights_recommendations` Gauge — 현재 active recommendations
+	// 수 (type × severity 별). 분석 cycle 마다 reset + 재기록.
+	MetricInsightsRecommendations = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{Subsystem: metricSubsystem, Name: "insights_recommendations",
+			Help: "Current active MongoDBInsights recommendations by type and severity"},
+		[]string{"namespace", "name", "type", "severity"})
+	// `mongodb_insights_analysis_total` Counter — 분석 사이클 시도 누적
+	// (result=success|error). Reconcile loop 의 가시성 + SLO 추적.
+	MetricInsightsAnalysisTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{Subsystem: metricSubsystem, Name: "insights_analysis_total",
+			Help: "Total MongoDBInsights analysis cycles attempted, partitioned by result"},
+		[]string{"namespace", "name", "result"})
+	// `mongodb_insights_sampled_total` Counter — 수집된 system.profile 문서 누적.
+	// fetcher.Fetch 의 throughput 가시성 + analyzer 입력 추적.
+	MetricInsightsSampledTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{Subsystem: metricSubsystem, Name: "insights_sampled_total",
+			Help: "Total MongoDBInsights profile docs sampled across analysis cycles"},
+		labelNamespaceName)
+
 	// Total: 3 (existing reconcile) + 5 (query) + 6 (replication) + 5 (storage)
-	//      + 4 (connections) + 5 (backup) + 5 (audit/kms/fed) = 33 metrics.
+	//      + 4 (connections) + 5 (backup) + 5 (audit/kms/fed)
+	//      + 3 (insights, cycle 9 P2) = 36 metrics.
 )
 
 func init() {
@@ -136,6 +157,8 @@ func init() {
 		// audit/kms/federation (5)
 		MetricAuditEventsTotal, MetricEncryptionEnabled, MetricKeyRotationTotal,
 		MetricFederationRegionsSynced, MetricClusterGroupMembers,
+		// insights (3, cycle 9 P2)
+		MetricInsightsRecommendations, MetricInsightsAnalysisTotal, MetricInsightsSampledTotal,
 	)
 }
 
