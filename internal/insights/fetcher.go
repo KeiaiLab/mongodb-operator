@@ -118,7 +118,55 @@ func (f *MongoProfileFetcher) Fetch(ctx context.Context, sampleSize int32) ([]Pr
 		_ = cli.Disconnect(disconnectCtx)
 	}()
 
+	// ROADMAP §3.2 cycle 9 P3: profiling level 자동 설정. spec 의
+	// ProfilingLevel + SlowQueryThresholdMs 를 *각 분석 대상 DB* 에 적용
+	// 하여 profile data 진본성 보장. 실패는 *비치명* — 일부 DB 가 권한
+	// 부족 / read-only 시 log + 계속 (다른 DB 분석에 무관).
+	if err := f.applyProfilingLevel(ctx, cli); err != nil {
+		// applyProfilingLevel 자체 fatal error 만 surface (listDatabases 실패).
+		// per-DB profile 적용 실패는 내부에서 log only + 계속.
+		return nil, fmt.Errorf("apply profiling level: %w", err)
+	}
+
 	return collectProfileDocs(ctx, cli, sampleSize)
+}
+
+// applyProfilingLevel — listDatabases → 각 분석 대상 DB 의 profile level 을
+// Spec.ProfilingLevel 로 설정. slowms = Spec.SlowQueryThresholdMs.
+//
+// ROADMAP §3.2 cycle 9 P3. profile 데이터 진본성 보장 — 분석 직전 매번 적용
+// (재기동/관리자 수동 변경 후 자동 회복 + idempotent).
+//
+// per-DB error 는 *log only*. 권한 부족 / read-only / 시스템 DB 적용 거부는
+// 다른 DB 분석에 무관. listDatabases 자체 실패만 surface.
+func (f *MongoProfileFetcher) applyProfilingLevel(ctx context.Context, cli *mongo.Client) error {
+	level := int(f.Insights.Spec.ProfilingLevel)
+	if level < 0 || level > 2 {
+		// CRD enum 이 0|1|2 만 허용 — defensive guard.
+		return fmt.Errorf("invalid ProfilingLevel %d (allowed 0|1|2)", level)
+	}
+	slowMs := int(f.Insights.Spec.SlowQueryThresholdMs)
+	if slowMs <= 0 {
+		slowMs = 100
+	}
+
+	dbNames, err := cli.ListDatabaseNames(ctx, bson.D{})
+	if err != nil {
+		return fmt.Errorf("listDatabases: %w", err)
+	}
+	for _, n := range dbNames {
+		switch n {
+		case skipDBAdmin, skipDBLocal, skipDBConfig:
+			continue
+		}
+		cmd := bson.D{
+			{Key: "profile", Value: level},
+			{Key: "slowms", Value: slowMs},
+		}
+		// RunCommand 결과 무시 — per-DB 실패는 log only (mongo log).
+		_ = cli.Database(n).RunCommand(ctx, cmd).Err()
+	}
+	return nil
 }
 
 // analysisCredentials — mongo connect 자격증명.
