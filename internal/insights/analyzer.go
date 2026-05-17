@@ -322,12 +322,15 @@ func severityFromLatency(avg int32) string {
 }
 
 // countBoolClauses — top-level $or / $nor 배열 길이의 최댓값.
-// 중첩은 본 cycle 미지원 (cycle 10 강화).
+//
+// Codex re-review (RFC-0045) #4 fix: NormalizeMap 이 nested bson.A 를 그대로
+// 두므로 `[]any` 단일 type assertion 으로는 bson.A{...} 형태의 진본 $or 절을
+// 누락. NormalizeSlice 로 bson.A | []any 동시 처리.
 func countBoolClauses(m map[string]any) int {
 	max := 0
 	for _, k := range []string{"$or", "$nor"} {
 		if v, ok := m[k]; ok {
-			if arr, ok := v.([]any); ok && len(arr) > max {
+			if arr := NormalizeSlice(v); len(arr) > max {
 				max = len(arr)
 			}
 		}
