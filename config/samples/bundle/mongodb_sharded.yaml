@@ -1,0 +1,124 @@
+---
+# MongoDB Sharded Cluster 샘플
+apiVersion: mongodb.keiailab.com/v1alpha1
+kind: MongoDBSharded
+metadata:
+  name: my-sharded
+  namespace: database
+spec:
+  # MongoDB 버전
+  version:
+    version: "8.3.1"
+
+  # Config Server 설정
+  configServer:
+    members: 3
+    storage:
+      storageClassName: fast-ssd
+      size: 10Gi
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "512Mi"
+      limits:
+        cpu: "1"
+        memory: "2Gi"
+
+  # Shard 설정
+  shards:
+    count: 3
+    membersPerShard: 3
+    storage:
+      storageClassName: ceph-block
+      size: 100Gi
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "2Gi"
+      limits:
+        cpu: "2"
+        memory: "8Gi"
+    # Shard Auto-scaling (선택사항)
+    autoScaling:
+      enabled: false
+      minShards: 2
+      maxShards: 10
+      metrics:
+        - type: custom
+          target: 80
+          customMetric:
+            name: mongodb_sharding_chunks_total
+
+  # Mongos 설정
+  mongos:
+    replicas: 2
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "256Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+    service:
+      type: LoadBalancer
+      port: 27017
+      annotations:
+        metallb.universe.tf/address-pool: default-pool
+    # Mongos Auto-scaling
+    autoScaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      metrics:
+        - type: cpu
+          target: 70
+        - type: memory
+          target: 80
+
+  # 인증 설정
+  auth:
+    mechanism: SCRAM-SHA-256
+    adminCredentialsSecretRef:
+      name: mongodb-sharded-admin
+    users:
+      - name: appuser
+        db: admin
+        passwordSecretRef:
+          name: mongodb-sharded-app
+          key: password
+        roles:
+          - name: readWrite
+            db: myapp
+
+  # TLS 설정
+  tls:
+    enabled: true
+    certManager:
+      issuerRef:
+        name: letsencrypt-cloudflare
+        kind: ClusterIssuer
+
+  # 모니터링 설정
+  monitoring:
+    enabled: true
+    serviceMonitor:
+      interval: "30s"
+      labels:
+        release: prometheus
+    prometheusRules:
+      enabled: true
+
+  # 백업 설정
+  backup:
+    enabled: true
+    schedule: "0 3 * * *"  # 매일 새벽 3시
+    retention:
+      days: 14
+    storage:
+      type: s3
+      s3:
+        bucket: mongodb-backups
+        endpoint: http://ceph-objectstore.rook-ceph.svc:80
+        credentialsRef:
+          name: ceph-objectstore-credentials
+        prefix: mongodb/sharded/

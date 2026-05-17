@@ -1,8 +1,15 @@
 # ADR-0027: community-operators sync 자동화 (RFC 0002 예외 ③ 확장)
 
 - Date: 2026-05-14
-- Status: Accepted
+- Status: **Deprecated** (superseded by ADR-0028 Phase D, 2026-05-17)
 - Authors: @eightynine01
+
+> **Deprecation note (2026-05-17)**: 본 ADR 의 결정 — `.github/workflows/release.yml`
+> 의 `sync-community-operators` job 자동화 — 는 ADR-0028 Phase D (OLM v0 cluster
+> install path 영구 폐기) 에 의해 *완전 폐기*. OperatorHub.io 의 community-operators
+> 채널을 통한 외부 사용자 distribution 자동화 영구 중단. 외부 사용자는 helm chart
+> (`charts/mongodb-operator/`) 또는 OLM v1 ClusterCatalog (`deploy/olm-v1/`) 사용.
+> 본 ADR 본문은 *역사 기록 보존* 용도로 유지.
 
 ## Context
 

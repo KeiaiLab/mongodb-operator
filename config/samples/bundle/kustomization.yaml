@@ -1,0 +1,11 @@
+# ADR-0028: OLM 번들 alm-examples 생성 전용 CR-only sample.
+# 기존 config/samples/*.yaml 은 multi-doc (CR + Secret) 로 dev/deploy workflow 용도.
+# operator-sdk generate bundle 은 kustomize input 에서 owned CRD kind 의 CR 만 추출해 alm-examples 채움.
+# Secret 등 비 owned 리소스는 bundle/manifests/ 에 stray 로 들어가므로 분리.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - mongodb_replicaset.yaml
+  - mongodb_sharded.yaml
+  - mongodb_backup.yaml

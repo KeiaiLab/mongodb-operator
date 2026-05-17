@@ -1,0 +1,15 @@
+# ADR-0028: mongodb-operator OLM install target namespace.
+# AllNamespaces install mode 이므로 operator pod 는 본 ns 에 deploy 되어 cluster-wide watch.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mongodb-system
+  labels:
+    app.kubernetes.io/name: mongodb-operator
+    app.kubernetes.io/managed-by: argocd
+    # OLM 이 본 ns 에 ServiceAccount + RBAC 등을 생성.
+    openshift.io/cluster-monitoring: "false"
+    # PSA — operator 는 restricted 충족 (cosign signed image, non-root, RO root).
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

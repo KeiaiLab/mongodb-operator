@@ -119,10 +119,37 @@ The operator automatically handles MongoDB cluster initialization:
 ### Prerequisites
 
 - Kubernetes cluster v1.26+
-- Helm v3.8+
 - kubectl configured with cluster access
+- *Install method* 별 추가:
+  - **OLM v1** (recommended, modern): cert-manager 라이브 + cluster admin (1회 bootstrap)
+  - **Helm**: Helm v3.8+
+  - **OLM v0** (legacy): Helm 의 단순함과 OLM v1 의 단순함 사이의 중간 — *권장 안 함*
 
-### Installation
+### Installation — 3 paths (matrix)
+
+| Method | Target audience | Modernity | Steps |
+|---|---|---|---|
+| **OLM v1** *(recommended)* | external users, GitOps platforms (ArgoCD App-of-Apps), Day-0 production | **next-generation** (v1.8.0, 2026-02 GA) | 2 manifests (ClusterCatalog + ClusterExtension) |
+| Helm chart | local dev, single-cluster simple deploy | stable | 1 command (`helm install`) |
+| OLM v0 | OpenShift legacy, OperatorHub.io community | maintenance mode (v0.42, 2026-04) | 4 manifests + InstallPlan approve |
+
+**상세 절차**: [INSTALL.md](INSTALL.md). 본 절은 *Quick Start*.
+
+#### Path 1 — OLM v1 (현대 표준, recommended)
+
+```bash
+# (1) OLM v1 cluster install — 1회 bootstrap
+curl -L -s https://github.com/operator-framework/operator-controller/releases/latest/download/install.sh | bash -s
+
+# (2) ClusterCatalog + ClusterExtension 적용
+kubectl apply -f https://raw.githubusercontent.com/keiailab/mongodb-operator/v1.5.0/deploy/olm-v1/clustercatalog.yaml
+kubectl apply -f https://raw.githubusercontent.com/keiailab/mongodb-operator/v1.5.0/deploy/olm-v1/clusterextension.yaml
+
+# (3) install 검증
+kubectl wait --for=condition=Installed=True clusterextension/mongodb-operator --timeout=180s
+```
+
+#### Path 2 — Helm chart
 
 ```bash
 # Add Helm repository
@@ -134,6 +161,9 @@ helm install mongodb-operator mongodb-operator/mongodb-operator \
   --namespace mongodb-operator-system \
   --create-namespace
 ```
+
+<!-- Path 3 (OLM v0 legacy) removed — ADR-0028 Phase D, v1 only. helm 또는 OLM v1 사용. -->
+
 
 ### Deploy a MongoDB ReplicaSet
 

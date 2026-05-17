@@ -1,0 +1,31 @@
+---
+# MongoDB 백업 샘플 (수동 백업)
+apiVersion: mongodb.keiailab.com/v1alpha1
+kind: MongoDBBackup
+metadata:
+  name: my-mongodb-backup-manual
+  namespace: database
+spec:
+  # 대상 클러스터 참조
+  clusterRef:
+    name: my-mongodb
+    kind: MongoDB
+
+  # 백업 타입
+  type: full
+
+  # 압축 설정
+  compression: true
+  compressionType: zstd
+
+  # 저장소 설정 (S3/Ceph ObjectStore)
+  storage:
+    type: s3
+    s3:
+      bucket: mongodb-backups
+      endpoint: http://ceph-objectstore.rook-ceph.svc:80
+      region: us-east-1
+      credentialsRef:
+        name: ceph-objectstore-credentials
+      prefix: mongodb/manual-backups/
+      insecureSkipTLS: true

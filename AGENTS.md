@@ -23,6 +23,16 @@ Makefile                         Build / test / deploy / docker / helm-publish
 
 ## Critical Rules (절대 위반 금지)
 
+### Autonomy Constitution (글로벌 §2.0, 2026-05-15)
+*사용자 질의 최소화*. AskUserQuestion + 확인 발화는 3 조건만:
+1. 외부 권한 부여 (예: cluster admin, GHCR org owner)
+2. *돌이킬 수 없는 운영 작업* — `kubectl delete ns/csv/clusterextension`, helm release uninstall, ArgoCD App spec.source 변경, force push main, 운영 DB drop, 시크릿 회전
+3. 사용자만 아는 *비즈니스 결정* — mailstory FerretDB 교체 시점, downtime 윈도우, license 결정
+
+본 operator 작업의 적용 분기:
+- **자동 진행 (사용자 redirect 권한 보유)**: code change + ADR + manifest + 검증 명령 + PR open
+- **사용자 명시 게이트**: production cluster apply (RBAC binding 변경 / NetworkPolicy 차단 / CRD delete) + 외부 PR (community-operators upstream, k8s-operatorhub fork) + data migration (mailstory cutover)
+
 ### Never Edit These (Auto-Generated)
 - `config/crd/bases/*.yaml` — `make manifests` 산출
 - `config/rbac/role.yaml` — `make manifests` 산출
@@ -59,10 +69,27 @@ make test                      # go test ./internal/... + envtest
 - `CHANGELOG.md` 에 신규 버전 섹션 추가
 - 별도 commit 으로 `chore(release): vX.Y.Z` 형태
 
-### 배포
+### 배포 — 3 deployment models (ADR-0028~0030)
+
+**operator container image** (모든 model 공통):
 - `make docker-push IMG=ghcr.io/keiailab/mongodb-operator:X.Y.Z` (linux/amd64 단일, 글로벌 §2)
+
+**Path 1 — OLM v1 (recommended, current modern standard)**:
+- `make bundle VERSION=X.Y.Z && make bundle-build VERSION=X.Y.Z && make bundle-push VERSION=X.Y.Z`
+- `make catalog-build VERSION=X.Y.Z && make catalog-push VERSION=X.Y.Z`
+- ClusterCatalog + ClusterExtension manifests: `deploy/olm-v1/`
+- 외부 사용자: `kubectl apply -k deploy/olm-v1/` (cluster-admin) 또는 `clusterextension-narrow-rbac.yaml` (production)
+- ADR 분기: ADR-0029 (채택) + ADR-0030 (narrow RBAC + NetworkPolicy)
+
+**Path 2 — Helm chart**:
 - `make helm-publish` (gh-pages branch 갱신)
-- `argos-platform-data/mongodb/Chart.yaml` 의 dependency version 갱신 → ArgoCD auto-sync
+- `keiailab/platform/data` (또는 sister) 의 helm chart dependency version 갱신 → ArgoCD auto-sync
+- 본 cluster 의 *현재 활성 path* — 영구 cutover 전까지 helm v1.4.20 라이브 (data ns).
+
+<!-- Path 3 (OLM v0 legacy) 영구 폐기 — ADR-0028 Phase D. -->
+<!-- 외부 사용자는 Path 1 (OLM v1) 또는 Path 2 (Helm) 선택. community-operators sync 자동화 폐기. -->
+
+상세: [INSTALL.md](INSTALL.md) 2-path matrix (OLM v1 / Helm).
 
 ## E2E / Integration
 
@@ -116,6 +143,21 @@ cluster-ops mode 의 ADR (cluster-side governance):
 - ADR-0017 CRD default vs webhook invariant (Type A/A'/B/C)
 - ADR-0018 MonitoringSpec orphan 단계적 해소
 - ADR-0019 operator-commons v0.5.0 helper 승격 (Proposed)
+
+### Deployment governance (ADR-0028 ~ ADR-0030 chain, 2026-05-14~15)
+
+- **ADR-0028**: 외부 사용자 운영 수준 OLM 번들 (5 결격 동시 해소 — containerImage/alm-examples/replaces+skipRange/channels stable+alpha/maturity stable)
+- **ADR-0029**: OLM v1 채택 (operator-controller v1.8 + catalogd) — *현대 표준*, ClusterCatalog + ClusterExtension 단 2 자원. v0.30 legacy 와 분리 path
+- **ADR-0030**: narrow installer RBAC + olmv1-system NetworkPolicy — bundle CSV derive + operator-controller `derive-service-account` 표준 정합
+
+cluster-ops 진입 시 *deployment model* 확인:
+```bash
+kubectl get clustercatalog 2>/dev/null     # OLM v1 → mongodb-operator 있나
+kubectl get csv -A 2>/dev/null              # OLM v0 → mongodb-operator.vX.Y.Z 있나
+kubectl get deployment -A -l app.kubernetes.io/name=mongodb-operator  # helm 또는 OLM 의 manager pod
+```
+
+본 cluster 의 *현재 deployment matrix* — `deploy/olm-v1/README.md` §2 라이브 검증 (2026-05-15).
 
 ## Refs
 

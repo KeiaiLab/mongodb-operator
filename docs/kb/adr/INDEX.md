@@ -33,6 +33,10 @@
 | [ADR-0024](0024-inc-0001-cross-cut-audit.md) | INC-0001 cross-cut audit — mongodb 의 ReplicaSetInitialized once-shot 패턴, milder anti-pattern (hasPrimary mitigation), Phase 2 auto reconfig 별 RFC | Accepted | 2026-05-10 |
 | [ADR-0025](0025-cycle-0-baseline-and-cross-verification.md) | Cycle 0 — baseline 검증 + Bitnami/CloudPirates 3-way cross-verification matrix + 12-cycle program 분해 + F-IMP-04 diagnosticMode sharded 확장 | Implemented | 2026-05-12 |
 | [ADR-0026](0026-cycle-0-through-12-program-retrospective.md) | Cycle 0~12 retrospective — ROADMAP 100% 도달 (105 [x]) + 4 신규 CRD + 5 e2e + 5 Grafana dashboard + 33 metric + 15 alert rule. Action items 5건 (실 시스템 통합) deferred | Implemented | 2026-05-12 |
+| [ADR-0027](0027-community-operators-sync-automation.md) | community-operators sync 자동화 — release.yml 후속 job 으로 fork PR 자동 생성 (RFC 0002 예외 ③ 확장) | Accepted | 2026-05-13 |
+| [ADR-0028](0028-olm-external-user-production-readiness.md) | OLM 번들 외부 사용자 운영 수준 — 5 결격 동시 해소, stable 채널 default 승격. (Phase C 의 Decision 부분 ADR-0029 가 supersede — 그 외 bundle/CSV 표준은 유효) | Accepted | 2026-05-14 |
+| [ADR-0029](0029-olm-v1-migration-from-v0.md) | OLM v1 (operator-controller v1.8) 채택 — v0.30 (legacy, 18개월 stale) → v1.8 (next-generation, ClusterCatalog + ClusterExtension) migration. 옵션 C 사용자 결정. Phase C 라이브 적용 완료 (KeiaiLab Cluster, 2026-05-15) | Accepted | 2026-05-15 |
+| [ADR-0030](0030-olm-v1-narrow-installer-rbac-and-network-policy.md) | OLM v1 narrow installer RBAC + olmv1-system NetworkPolicy — bundle CSV 의 13 clusterPermissions + 3 permissions derive (operator-controller `derive-service-account` 표준), cluster-admin 대체. olmv1-system NP 2종 (operator-controller + catalogd) 으로 zero-trust 정합 | Accepted | 2026-05-15 |
 
 ## 작성 가이드
 

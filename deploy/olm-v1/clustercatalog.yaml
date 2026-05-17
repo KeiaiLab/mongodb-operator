@@ -1,0 +1,21 @@
+# OLM v1 ClusterCatalog — keiailab-operators FBC reference
+# 참조: https://operator-framework.github.io/operator-controller/getting-started/olmv1_getting_started/
+#
+# 라이브 검증 (2026-05-15): Serving=True, digest auto-pin
+#   sha256:eba590d6898e4ed50feef2e8948bc49f53a94304d96543972123d2a99a0032ae
+#
+# pull authentication: olmv1-system 의 ServiceAccount imagePullSecrets (catalogd-controller-manager + operator-controller-controller-manager)
+# 에 ghcr-keiailab-pull 추가됨. pull-secret-controller 가 자동 sync.
+apiVersion: olm.operatorframework.io/v1
+kind: ClusterCatalog
+metadata:
+  name: keiailab-operators
+  labels:
+    app.kubernetes.io/managed-by: argocd
+spec:
+  priority: 0
+  source:
+    type: Image
+    image:
+      ref: ghcr.io/keiailab/mongodb-operator-catalog:v1.5.0
+      pollIntervalMinutes: 10

@@ -7,9 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ⚠ BREAKING CHANGES
+
+- **OLM v0 cluster install path 영구 폐기 (ADR-0028 Phase D, 2026-05-17)** — `deploy/olm/` (CatalogSource + Subscription + OperatorGroup + NetworkPolicies + ArgoCD Application + namespace + kustomization + README) 전체 제거. KeiaiLab 클러스터는 OLM v1 (`deploy/olm-v1/`, operator-controller v1.8.0, ClusterCatalog + ClusterExtension) single canonical path 로 *완전 cutover*.
+- **community-operators upstream sync 자동화 영구 폐기 (ADR-0027 Deprecated)** — `.github/workflows/release.yml` 의 `sync-community-operators` job (54 lines) 제거. OperatorHub.io 의 community-operators 채널을 통한 외부 사용자 distribution 자동화 *영구 중단*. community-operators v0.3.0 registration (8 개월 stale) 마이그레이션 없음.
+- **외부 사용자 install 경로** (3-path → 2-path matrix):
+  - 권장: `helm install` (`charts/mongodb-operator/`, v1.5.0+)
+  - OLM v1 사용자: `deploy/olm-v1/` 의 ClusterCatalog + ClusterExtension manifest 직접 적용
+  - **OLM v0 사용자**: 지원 종료. helm 또는 OLM v1 로 마이그레이션 필요
+  - **OperatorHub.io community-operators 사용자**: 지원 종료. helm 또는 OLM v1 로 마이그레이션 필요
+- **FBC catalog 경로 이동**: `deploy/olm/catalog/` → `deploy/catalog/` (commit `3bd0406`). `deploy/olm-v1/clustercatalog.yaml` 의 image tag (`ghcr.io/keiailab/mongodb-operator-catalog:v1.5.0`) 동일. Makefile `catalog-build` / `catalog-push` target 의 path 만 갱신.
+- **유지 (정책 reversal 옵션 보존)**: `bundle/` + `bundle.Dockerfile` + `config/manifests/` + Makefile `bundle/bundle-build/bundle-push` target 은 OLM v1 ClusterCatalog 의 backing input 으로 유지. 향후 OperatorHub 재등록 또는 외부 catalog 노출 시 즉시 활용 가능.
+
+라이브 검증 (KeiaiLab Cluster, 2026-05-17 예정):
+- `kubectl get clusterextension mongodb-operator -o jsonpath='{.status.conditions[?(@.type=="Installed")].status}'` = `True`
+- `kubectl get clustercatalog keiailab-operators -o jsonpath='{.status.conditions[?(@.type=="Serving")].status}'` = `True`
+- v0 자원 manual cleanup 필요 (사용자 실행): `kubectl delete subscription/operatorgroup/catalogsource ... -n olm`
+
+Plan: `~/.claude/plans/olm-v1-only-lucky-sloth.md`. Refs: ADR-0028 Phase D, ADR-0029, ADR-0027 (Deprecated).
+
 ### Changed
 
 - audit (4-repo cross-cut, 2026-05-09): RFC-0017 채택 — `.lefthook.yml` 신설 (valkey 패턴), `.codecov.yml` target `auto` → 70% (testing.md §5 절대 floor), HANDOFF.md 88% 압축 (token-budget §3, archive 100% 보존), ADR-0020 등재. 코드/CRD 영향 0. 후속 작업: ADR-0020 AI-MO20-1~4.
+- **OLM v1 narrow installer RBAC + NetworkPolicy (ADR-0030, 2026-05-15)**:
+  - `deploy/olm-v1/clusterextension-narrow-rbac.yaml` 신설 — operator-controller `derive-service-account` 표준 정합. bundle CSV (v1.5.0) 의 13 clusterPermissions + 3 permissions inline. cluster-admin binding alternative — production 권장.
+  - `deploy/olm-v1/networkpolicies.yaml` 신설 — olmv1-system 의 2 NP (operator-controller + catalogd). OPRUN-3923 PR #1008 의 OLM v1 변형 (CatalogSource/Subscription 부재 architecture 정합).
+  - cluster-side apply 는 사용자 결정 (cluster-admin 제거 + NP traffic 차단의 운영 영향).
+- **OLM v1 (operator-controller v1.8) 채택 — 가장 현대 표준 (ADR-0029, 2026-05-15)**:
+  - v0.30 (legacy, 2024-11, 18개월 stale) → v1.8.0 (next-generation, 2026-02 GA) migration.
+  - `deploy/olm-v1/` 신설 — 단 2 자원 (`ClusterCatalog` + `ClusterExtension`) 으로 install (v0 의 4 자원 모델 대체).
+  - `INSTALL.md` 신설 — 3-path matrix (OLM v1 recommended / Helm / OLM v0 legacy) + Day-2 upgrade/rollback + private registry.
+  - `DESIGN.md` 신설 — open source charter + 5 design principles + extension points + 11 section design SSOT.
+  - `ARCHITECTURE.md` "Build / deploy" section 확장 — 3 deployment models matrix + release pipeline.
+  - `README.md` Quick Start — 3 install path 명시 (OLM v1 default).
+  - 라이브 검증 (KeiaiLab Cluster, 2026-05-15): `ClusterExtension mongodb-operator` Installed=True/Succeeded, operator pod Running v1.5.0.
+- **OLM 번들 외부 사용자 운영 수준 승격 (ADR-0028, 2026-05-14)** — 5 결격 동시 해소:
+  - `containerImage` ↔ `version` drift 정정 (Makefile `kustomize edit set image` 매칭 정정 + `sed` step 으로 base CSV 의 `containerImage` annotation 도 VERSION 에 맞춰 자동 갱신).
+  - `alm-examples` `'[]'` → 3 owned CRD (MongoDB / MongoDBSharded / MongoDBBackup) 자동 채움 (`config/samples/bundle/` CR-only subdir 신설 + `config/manifests/kustomization.yaml` 에 추가).
+  - CSV `spec.replaces: mongodb-operator.v1.4.23` + `olm.skipRange: '>=0.3.0 <1.5.0'` 신규 — OperatorHub-published 0.3.0 + 본 repo v1.0.0~v1.4.x 사용자 자동 업그레이드 경로.
+  - bundle channels `alpha` → `stable,alpha` (default `stable`).
+  - CSV `spec.maturity` `alpha` → `stable`.
+  - `operator-sdk bundle validate ./bundle --select-optional suite=operatorframework` PASS.
+- 잔여 warning (`ROADMAP.md` Phase 5.6 신규 [ ] 항목): RBAC v1.25 deprecated apiVersion cleanup (HPA `autoscaling/v2beta1`, PDB `policy/v1beta1`).
 
 ## [1.5.0] - 2026-05-13
 

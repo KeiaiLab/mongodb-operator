@@ -2,16 +2,324 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   annotations:
-    alm-examples: '[]'
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "mongodb.keiailab.com/v1alpha1",
+          "kind": "MongoDB",
+          "metadata": {
+            "name": "my-mongodb",
+            "namespace": "database"
+          },
+          "spec": {
+            "auth": {
+              "adminCredentialsSecretRef": {
+                "name": "mongodb-admin-credentials"
+              },
+              "mechanism": "SCRAM-SHA-256",
+              "users": [
+                {
+                  "db": "admin",
+                  "name": "appuser",
+                  "passwordSecretRef": {
+                    "key": "password",
+                    "name": "mongodb-app-credentials"
+                  },
+                  "roles": [
+                    {
+                      "db": "myapp",
+                      "name": "readWrite"
+                    }
+                  ]
+                }
+              ]
+            },
+            "backup": {
+              "enabled": true,
+              "oplogRetentionHours": 24,
+              "pitrEnabled": true,
+              "retention": {
+                "days": 7
+              },
+              "schedule": "0 2 * * *",
+              "storage": {
+                "s3": {
+                  "bucket": "mongodb-backups",
+                  "credentialsRef": {
+                    "name": "ceph-objectstore-credentials"
+                  },
+                  "endpoint": "http://ceph-objectstore.rook-ceph.svc:80",
+                  "prefix": "mongodb/my-mongodb/",
+                  "region": "us-east-1"
+                },
+                "type": "s3"
+              }
+            },
+            "members": 3,
+            "monitoring": {
+              "enabled": true,
+              "exporter": {
+                "image": "percona/mongodb_exporter:0.40",
+                "resources": {
+                  "limits": {
+                    "cpu": "200m",
+                    "memory": "256Mi"
+                  },
+                  "requests": {
+                    "cpu": "50m",
+                    "memory": "64Mi"
+                  }
+                }
+              },
+              "prometheusRules": {
+                "enabled": true
+              },
+              "serviceMonitor": {
+                "interval": "30s",
+                "labels": {
+                  "release": "prometheus"
+                }
+              }
+            },
+            "pod": {
+              "priorityClassName": "system-cluster-critical",
+              "securityContext": {
+                "fsGroup": 999,
+                "runAsNonRoot": true,
+                "runAsUser": 999
+              }
+            },
+            "replicaSetName": "rs0",
+            "resources": {
+              "limits": {
+                "cpu": "2",
+                "memory": "4Gi"
+              },
+              "requests": {
+                "cpu": "500m",
+                "memory": "1Gi"
+              }
+            },
+            "storage": {
+              "dataDirPath": "/data/db",
+              "size": "50Gi",
+              "storageClassName": "ceph-block"
+            },
+            "tls": {
+              "certManager": {
+                "duration": "2160h",
+                "issuerRef": {
+                  "kind": "ClusterIssuer",
+                  "name": "letsencrypt-cloudflare"
+                },
+                "renewBefore": "360h"
+              },
+              "enabled": true
+            },
+            "version": {
+              "version": "8.3.1"
+            }
+          }
+        },
+        {
+          "apiVersion": "mongodb.keiailab.com/v1alpha1",
+          "kind": "MongoDBBackup",
+          "metadata": {
+            "name": "my-mongodb-backup-manual",
+            "namespace": "database"
+          },
+          "spec": {
+            "clusterRef": {
+              "kind": "MongoDB",
+              "name": "my-mongodb"
+            },
+            "compression": true,
+            "compressionType": "zstd",
+            "storage": {
+              "s3": {
+                "bucket": "mongodb-backups",
+                "credentialsRef": {
+                  "name": "ceph-objectstore-credentials"
+                },
+                "endpoint": "http://ceph-objectstore.rook-ceph.svc:80",
+                "insecureSkipTLS": true,
+                "prefix": "mongodb/manual-backups/",
+                "region": "us-east-1"
+              },
+              "type": "s3"
+            },
+            "type": "full"
+          }
+        },
+        {
+          "apiVersion": "mongodb.keiailab.com/v1alpha1",
+          "kind": "MongoDBSharded",
+          "metadata": {
+            "name": "my-sharded",
+            "namespace": "database"
+          },
+          "spec": {
+            "auth": {
+              "adminCredentialsSecretRef": {
+                "name": "mongodb-sharded-admin"
+              },
+              "mechanism": "SCRAM-SHA-256",
+              "users": [
+                {
+                  "db": "admin",
+                  "name": "appuser",
+                  "passwordSecretRef": {
+                    "key": "password",
+                    "name": "mongodb-sharded-app"
+                  },
+                  "roles": [
+                    {
+                      "db": "myapp",
+                      "name": "readWrite"
+                    }
+                  ]
+                }
+              ]
+            },
+            "backup": {
+              "enabled": true,
+              "retention": {
+                "days": 14
+              },
+              "schedule": "0 3 * * *",
+              "storage": {
+                "s3": {
+                  "bucket": "mongodb-backups",
+                  "credentialsRef": {
+                    "name": "ceph-objectstore-credentials"
+                  },
+                  "endpoint": "http://ceph-objectstore.rook-ceph.svc:80",
+                  "prefix": "mongodb/sharded/"
+                },
+                "type": "s3"
+              }
+            },
+            "configServer": {
+              "members": 3,
+              "resources": {
+                "limits": {
+                  "cpu": "1",
+                  "memory": "2Gi"
+                },
+                "requests": {
+                  "cpu": "200m",
+                  "memory": "512Mi"
+                }
+              },
+              "storage": {
+                "size": "10Gi",
+                "storageClassName": "fast-ssd"
+              }
+            },
+            "mongos": {
+              "autoScaling": {
+                "enabled": true,
+                "maxReplicas": 10,
+                "metrics": [
+                  {
+                    "target": 70,
+                    "type": "cpu"
+                  },
+                  {
+                    "target": 80,
+                    "type": "memory"
+                  }
+                ],
+                "minReplicas": 2
+              },
+              "replicas": 2,
+              "resources": {
+                "limits": {
+                  "cpu": "1",
+                  "memory": "1Gi"
+                },
+                "requests": {
+                  "cpu": "200m",
+                  "memory": "256Mi"
+                }
+              },
+              "service": {
+                "annotations": {
+                  "metallb.universe.tf/address-pool": "default-pool"
+                },
+                "port": 27017,
+                "type": "LoadBalancer"
+              }
+            },
+            "monitoring": {
+              "enabled": true,
+              "prometheusRules": {
+                "enabled": true
+              },
+              "serviceMonitor": {
+                "interval": "30s",
+                "labels": {
+                  "release": "prometheus"
+                }
+              }
+            },
+            "shards": {
+              "autoScaling": {
+                "enabled": false,
+                "maxShards": 10,
+                "metrics": [
+                  {
+                    "customMetric": {
+                      "name": "mongodb_sharding_chunks_total"
+                    },
+                    "target": 80,
+                    "type": "custom"
+                  }
+                ],
+                "minShards": 2
+              },
+              "count": 3,
+              "membersPerShard": 3,
+              "resources": {
+                "limits": {
+                  "cpu": "2",
+                  "memory": "8Gi"
+                },
+                "requests": {
+                  "cpu": "500m",
+                  "memory": "2Gi"
+                }
+              },
+              "storage": {
+                "size": "100Gi",
+                "storageClassName": "ceph-block"
+              }
+            },
+            "tls": {
+              "certManager": {
+                "issuerRef": {
+                  "kind": "ClusterIssuer",
+                  "name": "letsencrypt-cloudflare"
+                }
+              },
+              "enabled": true
+            },
+            "version": {
+              "version": "8.3.1"
+            }
+          }
+        }
+      ]
     capabilities: Seamless Upgrades
     categories: Database, Storage
-    containerImage: ghcr.io/keiailab/mongodb-operator:v1.4.19
-    createdAt: "2026-05-14T02:03:23Z"
+    containerImage: ghcr.io/keiailab/mongodb-operator:v1.5.0
+    createdAt: "2026-05-14T13:55:42Z"
     description: |
       Kubernetes operator for MongoDB — manages MongoDB (ReplicaSet) and
       MongoDBSharded (config server + shards + mongos) CRDs with K8s Lease
       distributed lock for race-free admin bootstrap, mongos HPA, and shard
       drain backoff.
+    olm.skipRange: '>=0.3.0 <1.5.0'
     operators.operatorframework.io/builder: operator-sdk-v1.42.2
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/keiailab/mongodb-operator
@@ -264,7 +572,7 @@ spec:
                 - --health-probe-bind-address=:8081
                 - --metrics-bind-address=:8443
                 - --metrics-secure=true
-                image: ghcr.io/keiailab/mongodb-operator:latest
+                image: ghcr.io/keiailab/mongodb-operator:v1.5.0
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -368,9 +676,10 @@ spec:
   maintainers:
   - email: help@masblue.studio
     name: Keiailab
-  maturity: alpha
+  maturity: stable
   minKubeVersion: 1.26.0
   provider:
     name: Keiailab
     url: https://github.com/keiailab
+  replaces: mongodb-operator.v1.4.23
   version: 1.5.0
