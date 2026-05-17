@@ -8,6 +8,8 @@ package insights
 
 import (
 	"testing"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestAnalyze_EmptyInputReturnsNil(t *testing.T) {
@@ -117,6 +119,41 @@ func TestAnalyze_SchemaHintOnManyOrClauses(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("SchemaHint emit 기대, recs=%+v", recs)
+	}
+}
+
+// Codex re-review (RFC-0045) #4 fix 회귀 가드 — ConvertProfile 경로에서
+// bson.A 가 잔존하는 진본 시나리오. NormalizeMap 은 nested bson.A 를 그대로
+// 두므로 countBoolClauses 가 `[]any` 만 봤다면 miss. NormalizeSlice 경유로 fix.
+func TestAnalyze_SchemaHintViaConvertProfileWithBsonA(t *testing.T) {
+	// bson.M 전체를 ConvertProfile 에 통과 — Filter 의 $or 가 bson.A 잔존.
+	clauses := bson.A{
+		bson.M{"a": 1}, bson.M{"b": 2}, bson.M{"c": 3},
+		bson.M{"d": 4}, bson.M{"e": 5}, bson.M{"f": 6},
+	}
+	m := bson.M{
+		"op":           "query",
+		"ns":           "log.events",
+		"millis":       int64(100),
+		"planSummary":  "IXSCAN",
+		"filter":       bson.M{"$or": clauses},
+		"docsExamined": int64(10),
+		"nreturned":    int64(6),
+	}
+	doc := ConvertProfile(m)
+	// Filter["$or"] 가 bson.A 그대로 잔존하는지 verify (NormalizeMap 의 shallow copy 동작).
+	if _, ok := doc.Filter["$or"].(bson.A); !ok {
+		t.Logf("nested $or type=%T (NormalizeMap 가 nested 변환 시 본 가정 변경)", doc.Filter["$or"])
+	}
+	recs := Analyze([]ProfileDoc{doc}, 100)
+	var found bool
+	for _, r := range recs {
+		if r.Type == "SchemaHint" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("bson.A $or 6절 → SchemaHint emit 기대, recs=%+v", recs)
 	}
 }
 
