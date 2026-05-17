@@ -4,11 +4,11 @@ Copyright 2026 Keiailab.
 Licensed under the Apache License, Version 2.0.
 */
 
-// mongodbinsights_convert_test.go — Codex review (RFC-0045) #2 fix 회귀 가드.
-// BSON variance (bson.M / bson.D / bson.A / []any) + command.{filter,q,pipeline}
-// + command.sort + sort 위치 변동에 대한 unit test.
+// convert_test.go — BSON variance 회귀 가드 (Codex review (RFC-0045) #2 fix).
+// ProfileFetcher refactor 시 controller 패키지에서 본 패키지로 이전 — insights
+// 가 *수집 + 변환 + 분석* 3 단계를 자기-격리 단위로 보유.
 
-package controller
+package insights
 
 import (
 	"testing"
@@ -18,45 +18,45 @@ import (
 
 func TestNormalizeMap_BSON_M_And_D(t *testing.T) {
 	m := bson.M{"a": 1, "b": "x"}
-	got := normalizeMap(m)
+	got := NormalizeMap(m)
 	if got["a"] != 1 || got["b"] != "x" {
 		t.Errorf("bson.M 변환 실패, got %+v", got)
 	}
 
 	d := bson.D{{Key: "a", Value: 1}, {Key: "b", Value: "x"}}
-	got = normalizeMap(d)
+	got = NormalizeMap(d)
 	if got["a"] != 1 || got["b"] != "x" {
 		t.Errorf("bson.D 변환 실패, got %+v", got)
 	}
 
 	plain := map[string]any{"a": 1}
-	got = normalizeMap(plain)
+	got = NormalizeMap(plain)
 	if got["a"] != 1 {
 		t.Errorf("map[string]any 변환 실패, got %+v", got)
 	}
 
-	if normalizeMap(nil) != nil {
+	if NormalizeMap(nil) != nil {
 		t.Errorf("nil → nil 기대")
 	}
-	if normalizeMap("not-a-map") != nil {
+	if NormalizeMap("not-a-map") != nil {
 		t.Errorf("unknown 타입 → nil 기대")
 	}
 }
 
 func TestNormalizeSlice_BSON_A(t *testing.T) {
 	a := bson.A{"x", 1, true}
-	got := normalizeSlice(a)
+	got := NormalizeSlice(a)
 	if len(got) != 3 || got[0] != "x" {
 		t.Errorf("bson.A 변환 실패, got %+v", got)
 	}
 
 	plain := []any{"y"}
-	got = normalizeSlice(plain)
+	got = NormalizeSlice(plain)
 	if len(got) != 1 || got[0] != "y" {
 		t.Errorf("[]any 변환 실패, got %+v", got)
 	}
 
-	if normalizeSlice(nil) != nil {
+	if NormalizeSlice(nil) != nil {
 		t.Errorf("nil → nil 기대")
 	}
 }
@@ -72,7 +72,7 @@ func TestConvertProfile_TopLevelFilter(t *testing.T) {
 		"docsExamined": int64(9999),
 		"nreturned":    int64(1),
 	}
-	d := convertProfile(m)
+	d := ConvertProfile(m)
 	if d.Op != "query" || d.NS != "app.users" || d.Millis != 120 || d.PlanSummary != "COLLSCAN" {
 		t.Errorf("기본 필드 변환 실패, got %+v", d)
 	}
@@ -88,7 +88,6 @@ func TestConvertProfile_TopLevelFilter(t *testing.T) {
 }
 
 func TestConvertProfile_CommandFilter(t *testing.T) {
-	// command op — filter 가 command.filter 안.
 	m := bson.M{
 		"op": "command",
 		"ns": "app.users",
@@ -99,7 +98,7 @@ func TestConvertProfile_CommandFilter(t *testing.T) {
 		},
 		"millis": int32(50),
 	}
-	d := convertProfile(m)
+	d := ConvertProfile(m)
 	if _, ok := d.Filter["status"]; !ok {
 		t.Errorf("command.filter 추출 실패, got %+v", d.Filter)
 	}
@@ -109,7 +108,6 @@ func TestConvertProfile_CommandFilter(t *testing.T) {
 }
 
 func TestConvertProfile_LegacyQueryQ(t *testing.T) {
-	// legacy: command.q 위치 (predates 'filter').
 	m := bson.M{
 		"op": "command",
 		"ns": "shop.orders",
@@ -117,14 +115,13 @@ func TestConvertProfile_LegacyQueryQ(t *testing.T) {
 			"q": bson.M{"region": "us"},
 		},
 	}
-	d := convertProfile(m)
+	d := ConvertProfile(m)
 	if _, ok := d.Filter["region"]; !ok {
 		t.Errorf("command.q legacy 추출 실패, got %+v", d.Filter)
 	}
 }
 
 func TestConvertProfile_AggregationPipelineMatch(t *testing.T) {
-	// aggregation: command.pipeline[0].$match.
 	m := bson.M{
 		"op": "command",
 		"ns": "log.events",
@@ -136,20 +133,19 @@ func TestConvertProfile_AggregationPipelineMatch(t *testing.T) {
 			},
 		},
 	}
-	d := convertProfile(m)
+	d := ConvertProfile(m)
 	if _, ok := d.Filter["severity"]; !ok {
 		t.Errorf("aggregation $match 추출 실패, got %+v", d.Filter)
 	}
 }
 
 func TestConvertProfile_BSON_D_Filter(t *testing.T) {
-	// driver 가 decode mode 에 따라 bson.D 로 디코딩하는 경우.
 	m := bson.M{
 		"op":     "query",
 		"ns":     "app.users",
 		"filter": bson.D{{Key: "tenant", Value: "t1"}},
 	}
-	d := convertProfile(m)
+	d := ConvertProfile(m)
 	if _, ok := d.Filter["tenant"]; !ok {
 		t.Errorf("bson.D filter 추출 실패, got %+v", d.Filter)
 	}
@@ -164,8 +160,8 @@ func TestReadInt64Any(t *testing.T) {
 		{nil, 0}, {"x", 0},
 	}
 	for _, c := range cases {
-		if got := readInt64Any(c.in); got != c.want {
-			t.Errorf("readInt64Any(%v) = %d, want %d", c.in, got, c.want)
+		if got := ReadInt64Any(c.in); got != c.want {
+			t.Errorf("ReadInt64Any(%v) = %d, want %d", c.in, got, c.want)
 		}
 	}
 }
