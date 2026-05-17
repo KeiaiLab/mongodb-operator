@@ -99,6 +99,26 @@ make test                      # go test ./internal/... + envtest
 
 ## 작업 순서 (글로벌 §workflow.md 준수)
 
+### 세션 시작 의식 — worktree base stale 검사 (의무, 2026-05-17)
+
+본 repo 는 multi-worktree 운영 (`.claude/worktrees/commons-bump-v0.7`, `fix-tls-pem-securitycontext`, `agents-base-stale` 등). 세션 시작 시 *반드시* 다음 verify:
+
+```bash
+# 1. 본 worktree branch 가 origin/main 보다 N commit behind 인지
+git fetch origin main
+git rev-list --count HEAD..origin/main
+# N >= 5 → rebase 의무 (작업 진입 전): git rebase origin/main
+# N == 0 → safe, 진입
+
+# 2. 다른 active worktree race 검사
+git worktree list --porcelain | grep -c "^worktree "
+# 2+ 면 동일 topic 사용자 active branch 존재 여부 grep → match 시 진본 양보
+```
+
+**라이브 evidence (트리거 사고, 2026-05-17)**: OLM v1 only 전환 cycle (PR #173, ADR-0028 Phase D, squash merge `a39c7f2`) 에서 본 검사 누락 → 본 worktree 가 merge-base `6478d9a` 위에서 9 commit 만드는 동안 main 에 7 insights commit 머지 → 9h silent drift → `mergeable_state=dirty` → Phase E squash + rebase --onto origin/main + force-push-with-lease + ROADMAP 4 entry 보존 resolve 로 해소. `standards/workflow.md §2 시작 의식 §6` + `principles.md §1.1` multi-worktree namespace 가정 명시 의 repo-local echo.
+
+### 표준 작업 흐름
+
 1. 사용자 시나리오 명세 → TASKS.md 갱신
 2. 실패 재현 테스트 작성 (TDD)
 3. 구현 → `make lint test` PASS
