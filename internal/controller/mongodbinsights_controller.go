@@ -29,6 +29,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"github.com/keiailab/mongodb-operator/internal/insights"
@@ -157,7 +158,7 @@ func (r *MongoDBInsightsReconciler) analyzeFromCluster(ctx context.Context, in *
 		return nil, 0, fmt.Errorf("get MongoDB: %w", err)
 	}
 
-	password, err := r.loadAnalysisCredentials(ctx, in, mdb)
+	creds, err := r.loadAnalysisCredentials(ctx, in, mdb)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -165,9 +166,9 @@ func (r *MongoDBInsightsReconciler) analyzeFromCluster(ctx context.Context, in *
 	host := fmt.Sprintf("%s-headless.%s.svc.cluster.local:27017", mdb.Name, mdb.Namespace)
 	cli, err := mongoclient.NewClient(ctx, mongoclient.ConnectOpts{
 		Hosts:      []string{host},
-		Username:   "admin",
-		Password:   password,
-		AuthDB:     "admin",
+		Username:   creds.Username,
+		Password:   creds.Password,
+		AuthDB:     creds.AuthDB,
 		ReplicaSet: mdb.Name,
 		Timeout:    10 * time.Second,
 	})
@@ -189,76 +190,141 @@ func (r *MongoDBInsightsReconciler) analyzeFromCluster(ctx context.Context, in *
 	return recs, int32(len(docs)), nil
 }
 
+// analysisCredentials — mongo connect 자격증명 정합.
+type analysisCredentials struct {
+	Username string
+	Password string
+	AuthDB   string
+}
+
 // loadAnalysisCredentials — Spec.AnalysisCredentialsSecretRef 우선,
 // 미설정 시 cluster 의 Auth.AdminCredentialsSecretRef 재사용.
-func (r *MongoDBInsightsReconciler) loadAnalysisCredentials(ctx context.Context, in *mongodbv1alpha1.MongoDBInsights, mdb *mongodbv1alpha1.MongoDB) (string, error) {
+//
+// Codex review (RFC-0045) #5 fix: 이전 구현은 secret 의 password 만 읽고
+// username/authDB 를 admin/admin 으로 고정 — AnalysisCredentialsSecretRef 가
+// 분리된 read-only user 라는 spec 의도를 무시. 본 fix 는 secret 의 username +
+// authDB 필드를 우선 읽고, ref 미설정 시에만 admin/admin fallback.
+func (r *MongoDBInsightsReconciler) loadAnalysisCredentials(ctx context.Context, in *mongodbv1alpha1.MongoDBInsights, mdb *mongodbv1alpha1.MongoDB) (analysisCredentials, error) {
+	custom := in.Spec.AnalysisCredentialsSecretRef != nil && in.Spec.AnalysisCredentialsSecretRef.Name != ""
 	var name string
-	if in.Spec.AnalysisCredentialsSecretRef != nil && in.Spec.AnalysisCredentialsSecretRef.Name != "" {
+	if custom {
 		name = in.Spec.AnalysisCredentialsSecretRef.Name
 	} else {
 		name = mdb.Spec.Auth.AdminCredentialsSecretRef.Name
 	}
 	if name == "" {
-		return "", fmt.Errorf("no credentials secret resolvable for analysis")
+		return analysisCredentials{}, fmt.Errorf("no credentials secret resolvable for analysis")
 	}
 	sec := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: in.Namespace}, sec); err != nil {
-		return "", fmt.Errorf("get secret %s: %w", name, err)
+		return analysisCredentials{}, fmt.Errorf("get secret %s: %w", name, err)
 	}
 	pw, ok := sec.Data["password"]
 	if !ok {
-		return "", fmt.Errorf("secret %s missing 'password' key", name)
+		return analysisCredentials{}, fmt.Errorf("secret %s missing 'password' key", name)
 	}
-	return string(pw), nil
+	creds := analysisCredentials{Password: string(pw)}
+	if u, ok := sec.Data["username"]; ok && len(u) > 0 {
+		creds.Username = string(u)
+	}
+	if a, ok := sec.Data["authDB"]; ok && len(a) > 0 {
+		creds.AuthDB = string(a)
+	} else if a, ok := sec.Data["authSource"]; ok && len(a) > 0 {
+		// mongosh 관례: authSource. 양쪽 키 허용.
+		creds.AuthDB = string(a)
+	}
+	// admin fallback — ref 미설정 시에만 (spec 의도 보존).
+	if !custom {
+		if creds.Username == "" {
+			creds.Username = "admin"
+		}
+		if creds.AuthDB == "" {
+			creds.AuthDB = "admin"
+		}
+	} else {
+		if creds.Username == "" {
+			return analysisCredentials{}, fmt.Errorf("secret %s missing 'username' key (required for AnalysisCredentialsSecretRef)", name)
+		}
+		if creds.AuthDB == "" {
+			// custom secret 인데 authDB 미설정 시 admin 으로 fallback (mongo 기본).
+			creds.AuthDB = "admin"
+		}
+	}
+	return creds, nil
 }
 
 // collectProfileDocs — listDatabases → 각 DB 의 system.profile 에서
-// limit=sampleSize 만큼 최신 문서 수집 (admin/local/config 제외).
+// 최신 sampleSize 문서 수집 (admin/local/config 제외).
+//
+// Codex review (RFC-0045) #1 fix: Find 옵션에 SetSort(ts:-1) + SetLimit 적용.
+// 이전 구현은 limit 없이 cursor 전체를 메모리에 읽은 뒤 잘라 — 대형 profile
+// 컬렉션에서 OOM 위험 + 최신 정렬 미보장. 본 fix 는 server-side sort + limit
+// + global cap.
 func collectProfileDocs(ctx context.Context, cli *mongo.Client, sampleSize int32) ([]insights.ProfileDoc, error) {
 	dbNames, err := cli.ListDatabaseNames(ctx, bson.D{})
 	if err != nil {
 		return nil, fmt.Errorf("listDatabases: %w", err)
 	}
 
+	// 분석 대상 DB 만 carve out (admin/local/config 제외).
+	targetDBs := make([]string, 0, len(dbNames))
+	for _, n := range dbNames {
+		switch n {
+		case insightsSkipDBAdmin, insightsSkipDBLocal, insightsSkipDBConfig:
+			continue
+		}
+		targetDBs = append(targetDBs, n)
+	}
+
 	perDBLimit := int64(sampleSize)
-	if len(dbNames) > 0 {
+	if len(targetDBs) > 0 {
 		// 균등 분배 — 최소 10 보장.
-		share := int64(sampleSize) / int64(len(dbNames))
+		share := int64(sampleSize) / int64(len(targetDBs))
 		if share < 10 {
 			share = 10
 		}
 		perDBLimit = share
 	}
 
+	findOpts := options.Find().
+		SetSort(bson.D{{Key: "ts", Value: -1}}).
+		SetLimit(perDBLimit)
+
 	var all []insights.ProfileDoc
-	for _, dbName := range dbNames {
-		switch dbName {
-		case insightsSkipDBAdmin, insightsSkipDBLocal, insightsSkipDBConfig:
-			continue
-		}
+	globalCap := int(sampleSize)
+	for _, dbName := range targetDBs {
 		coll := cli.Database(dbName).Collection("system.profile")
-		cursor, err := coll.Find(ctx, bson.D{}, nil)
+		cursor, err := coll.Find(ctx, bson.D{}, findOpts)
 		if err != nil {
 			// profiling 비활성 DB 는 system.profile 없음 — skip.
 			continue
 		}
-		var raw []bson.M
-		if err := cursor.All(ctx, &raw); err != nil {
-			_ = cursor.Close(ctx)
-			continue
-		}
-		_ = cursor.Close(ctx)
-		for i, m := range raw {
-			if int64(i) >= perDBLimit {
+		for cursor.Next(ctx) {
+			if len(all) >= globalCap {
 				break
 			}
+			var m bson.M
+			if err := cursor.Decode(&m); err != nil {
+				continue
+			}
 			all = append(all, convertProfile(m))
+		}
+		_ = cursor.Close(ctx)
+		if len(all) >= globalCap {
+			break
 		}
 	}
 	return all, nil
 }
 
 // convertProfile — bson.M (system.profile row) → ProfileDoc.
+//
+// Codex review (RFC-0045) #2 fix: BSON 의 실제 variance 대응.
+// - filter shape 후보: top-level `filter` | `command.filter` |
+//   `command.q` (legacy) | `command.pipeline[0].$match` (aggregation)
+// - sort shape 후보: top-level `sort` | `command.sort`
+// - 값 타입 후보: bson.M | bson.D | map[string]any (driver 버전·decode 모드별)
+// - 배열 타입 후보: bson.A | []any | []interface{}
 func convertProfile(m bson.M) insights.ProfileDoc {
 	d := insights.ProfileDoc{}
 	if v, ok := m["op"].(string); ok {
@@ -267,47 +333,105 @@ func convertProfile(m bson.M) insights.ProfileDoc {
 	if v, ok := m["ns"].(string); ok {
 		d.NS = v
 	}
-	if v, ok := m["millis"].(int32); ok {
-		d.Millis = v
-	} else if v, ok := m["millis"].(int64); ok {
-		d.Millis = int32(v)
-	}
+	d.Millis = int32(readInt64Any(m["millis"]))
 	if v, ok := m["planSummary"].(string); ok {
 		d.PlanSummary = v
 	}
-	if v, ok := m["filter"].(bson.M); ok {
-		d.Filter = bsonMToMap(v)
-	} else if v, ok := m["command"].(bson.M); ok {
-		// command op 의 경우 filter 가 command.filter 안.
-		if f, ok := v["filter"].(bson.M); ok {
-			d.Filter = bsonMToMap(f)
+
+	cmd := normalizeMap(m["command"])
+	switch {
+	case m["filter"] != nil:
+		d.Filter = normalizeMap(m["filter"])
+	case cmd != nil && cmd["filter"] != nil:
+		d.Filter = normalizeMap(cmd["filter"])
+	case cmd != nil && cmd["q"] != nil:
+		// legacy `query` op 의 filter 위치.
+		d.Filter = normalizeMap(cmd["q"])
+	case cmd != nil && cmd["pipeline"] != nil:
+		// aggregation: pipeline[0] 의 $match.
+		if arr := normalizeSlice(cmd["pipeline"]); len(arr) > 0 {
+			if stage := normalizeMap(arr[0]); stage != nil {
+				if mt, ok := stage["$match"]; ok {
+					d.Filter = normalizeMap(mt)
+				}
+			}
 		}
 	}
-	if v, ok := m["sort"].(bson.M); ok {
-		d.Sort = bsonMToMap(v)
+
+	switch {
+	case m["sort"] != nil:
+		d.Sort = normalizeMap(m["sort"])
+	case cmd != nil && cmd["sort"] != nil:
+		d.Sort = normalizeMap(cmd["sort"])
 	}
-	d.DocsExamined = readInt64(m, "docsExamined")
-	d.NReturned = readInt64(m, "nreturned")
-	d.KeysExamined = readInt64(m, "keysExamined")
+
+	d.DocsExamined = readInt64Any(m["docsExamined"])
+	d.NReturned = readInt64Any(m["nreturned"])
+	if d.NReturned == 0 {
+		// command op 의 경우 nreturned 가 command 응답 안.
+		d.NReturned = readInt64Any(m["nReturned"])
+	}
+	d.KeysExamined = readInt64Any(m["keysExamined"])
 	return d
 }
 
-func bsonMToMap(m bson.M) map[string]any {
-	out := make(map[string]any, len(m))
-	for k, v := range m {
-		out[k] = v
+// normalizeMap — bson.M | bson.D | map[string]any → map[string]any.
+// nil 또는 인식 불가 시 nil 반환.
+func normalizeMap(v any) map[string]any {
+	switch m := v.(type) {
+	case nil:
+		return nil
+	case bson.M:
+		out := make(map[string]any, len(m))
+		for k, vv := range m {
+			out[k] = vv
+		}
+		return out
+	case map[string]any:
+		// 호출자 mutation 방지 위해 얕은 복사.
+		out := make(map[string]any, len(m))
+		for k, vv := range m {
+			out[k] = vv
+		}
+		return out
+	case bson.D:
+		out := make(map[string]any, len(m))
+		for _, e := range m {
+			out[e.Key] = e.Value
+		}
+		return out
 	}
-	return out
+	return nil
 }
 
-func readInt64(m bson.M, key string) int64 {
-	switch v := m[key].(type) {
+// normalizeSlice — bson.A | []any → []any.
+func normalizeSlice(v any) []any {
+	switch s := v.(type) {
+	case nil:
+		return nil
+	case bson.A:
+		out := make([]any, len(s))
+		copy(out, s)
+		return out
+	case []any:
+		out := make([]any, len(s))
+		copy(out, s)
+		return out
+	}
+	return nil
+}
+
+// readInt64Any — int32 | int64 | float64 | nil → int64.
+func readInt64Any(v any) int64 {
+	switch x := v.(type) {
 	case int32:
-		return int64(v)
+		return int64(x)
 	case int64:
-		return v
+		return x
 	case float64:
-		return int64(v)
+		return int64(x)
+	case int:
+		return int64(x)
 	}
 	return 0
 }

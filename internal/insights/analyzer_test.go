@@ -160,6 +160,65 @@ func TestAnalyze_HighExaminedRatioNoCollscan(t *testing.T) {
 	}
 }
 
+// Codex review #3 fix 회귀 가드 — mixed sample (일부 below threshold) 도
+// 그룹 평균이 threshold ≥ 면 emit.
+func TestAnalyze_SlowQueryPatternUsesGroupAverage(t *testing.T) {
+	// 5건 동일 (ns, filterShape). latency = {50, 600, 700, 800, 50}
+	// → avg = 440 < threshold 500 → emit 금지.
+	docs := []ProfileDoc{
+		{Op: "query", NS: "app.users", Millis: 50, PlanSummary: "IXSCAN",
+			Filter: map[string]any{"email": "a@x.com"}, DocsExamined: 1, NReturned: 1},
+		{Op: "query", NS: "app.users", Millis: 600, PlanSummary: "IXSCAN",
+			Filter: map[string]any{"email": "b@x.com"}, DocsExamined: 1, NReturned: 1},
+		{Op: "query", NS: "app.users", Millis: 700, PlanSummary: "IXSCAN",
+			Filter: map[string]any{"email": "c@x.com"}, DocsExamined: 1, NReturned: 1},
+		{Op: "query", NS: "app.users", Millis: 800, PlanSummary: "IXSCAN",
+			Filter: map[string]any{"email": "d@x.com"}, DocsExamined: 1, NReturned: 1},
+		{Op: "query", NS: "app.users", Millis: 50, PlanSummary: "IXSCAN",
+			Filter: map[string]any{"email": "e@x.com"}, DocsExamined: 1, NReturned: 1},
+	}
+	recs := Analyze(docs, 500)
+	for _, r := range recs {
+		if r.Type == "SlowQueryPattern" {
+			t.Errorf("group avg 440 < 500 → emit 금지, got %+v", r)
+		}
+	}
+
+	// 같은 5건이지만 threshold=400 일 때는 avg=440 ≥ 400 → emit.
+	recs2 := Analyze(docs, 400)
+	var found int
+	for _, r := range recs2 {
+		if r.Type == "SlowQueryPattern" {
+			found++
+			if r.AvgLatencyMs != 440 {
+				t.Errorf("avg 440 기대, got %d", r.AvgLatencyMs)
+			}
+		}
+	}
+	if found != 1 {
+		t.Errorf("threshold 400 시 1건 emit 기대, got %d", found)
+	}
+}
+
+// Codex review #4 fix 회귀 가드 — NReturned=0 + 대량 scan → MissingIndex.
+func TestAnalyze_ZeroReturnedHighScanEmitsMissingIndex(t *testing.T) {
+	docs := []ProfileDoc{
+		{Op: "query", NS: "shop.orders", Millis: 350, PlanSummary: "IXSCAN { status: 1 }",
+			Filter:       map[string]any{"status": "deleted"},
+			DocsExamined: 50000, NReturned: 0},
+	}
+	recs := Analyze(docs, 1000)
+	var found bool
+	for _, r := range recs {
+		if r.Type == "MissingIndex" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("NReturned=0 + DocsExamined=50000 → MissingIndex 기대, recs=%+v", recs)
+	}
+}
+
 func TestSeverityFromLatency(t *testing.T) {
 	cases := []struct {
 		ms   int32

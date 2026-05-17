@@ -145,6 +145,11 @@ func detectMissingIndexes(docs []ProfileDoc) []mongodbv1alpha1.Recommendation {
 
 // detectSlowQueryPatterns — 동일 (ns, filterShape) 그룹의 평균 latency 가
 // threshold 를 넘고 발생이 3회 이상이면 emit.
+//
+// Codex review (RFC-0045) #3 fix: threshold 필터링을 *그룹화 이후* 로 이동.
+// 이전 구현은 threshold 미만 doc 을 먼저 버려 mixed sample 에서 평균을 잘못
+// 산정 (false negative). 본 fix 는 모든 doc 을 그룹화한 뒤 *그룹 평균* 으로
+// 판정.
 func detectSlowQueryPatterns(docs []ProfileDoc, thresholdMs int32) []mongodbv1alpha1.Recommendation {
 	type bucket struct {
 		ns      string
@@ -155,9 +160,6 @@ func detectSlowQueryPatterns(docs []ProfileDoc, thresholdMs int32) []mongodbv1al
 	}
 	groups := make(map[string]*bucket)
 	for _, d := range docs {
-		if d.Millis < thresholdMs {
-			continue
-		}
 		key := d.NS + "|" + filterShape(d.Filter)
 		b, ok := groups[key]
 		if !ok {
@@ -173,9 +175,14 @@ func detectSlowQueryPatterns(docs []ProfileDoc, thresholdMs int32) []mongodbv1al
 
 	keys := make([]string, 0, len(groups))
 	for k, b := range groups {
-		if b.count >= 3 {
-			keys = append(keys, k)
+		if b.count < 3 {
+			continue
 		}
+		avg := b.total / int64(b.count)
+		if avg < int64(thresholdMs) {
+			continue
+		}
+		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
@@ -230,8 +237,14 @@ func looksLikeMissingIndex(d ProfileDoc) bool {
 	if d.PlanSummary == "COLLSCAN" {
 		return true
 	}
-	if d.DocsExamined > 1000 && d.NReturned > 0 {
-		ratio := float64(d.DocsExamined) / float64(d.NReturned)
+	// Codex review (RFC-0045) #4 fix: NReturned==0 + 대량 scan 도 MissingIndex.
+	// max(NReturned, 1) 을 분모로 사용 — 흔한 real slow query 패턴 cover.
+	if d.DocsExamined > 1000 {
+		denom := d.NReturned
+		if denom < 1 {
+			denom = 1
+		}
+		ratio := float64(d.DocsExamined) / float64(denom)
 		if ratio > 100 {
 			return true
 		}
