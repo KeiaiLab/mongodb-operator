@@ -155,8 +155,8 @@
 
 ### 3.2 성능 분석 도구 (`MongoDBInsights`)
 - [x] 신규 CRD `MongoDBInsights` — `api/v1alpha1/mongodbinsights_types.go` (Spec + Status + Recommendation type) — cycle 7 F51
-- [x] 쿼리 프로파일링 자동 분석 — `ProfilingLevel` (0/1/2) + `SlowQueryThresholdMs` + `SampleSize` + `AnalysisInterval` 필드 + skeleton reconciler — cycle 7 F52 (실 system.profile 분석은 cycle 9)
-- [x] 인덱스 추천 엔진 — `Recommendation.Type=MissingIndex/UnusedIndex` + `IndexSuggestion` BSON spec — cycle 7 F53 (실 엔진은 cycle 9)
+- [~] 쿼리 프로파일링 자동 분석 — `ProfilingLevel` + `SlowQueryThresholdMs` + `SampleSize` + `AnalysisInterval` 필드 + reconciler 가 `internal/insights/ProfileFetcher` 경유 system.profile 수집 → `insights.Analyze` 호출 — cycle 7 F52 / cycle 9 P1 적용 완료 (MongoDB kind 한정, MongoDBSharded 는 후속). ProfilingLevel 동적 설정 자동화는 후속 sub-task.
+- [~] 인덱스 추천 엔진 — `internal/insights/analyzer.go` 순수 함수 (COLLSCAN + examined/returned ratio + ESR 휴리스틱 suggestion) + 11 unit test (cycle 9 P1 적용). `Recommendation.Type=MissingIndex` 라이브 검출. `UnusedIndex` 는 별도 sub-task (`serverStatus.metrics.queryExecutor` 통합 필요) — cycle 7 F53 / cycle 9 P1 부분 완료.
 - [x] 느린 쿼리 감지 + 경고 — `Recommendation.Type=SlowQueryPattern` + `Severity` + `AvgLatencyMs` + `QuerySamples[]` — cycle 7 F54
 - [x] 스키마 디자인 제안 — `Recommendation.Type=SchemaHint` + `Detail` 자유 텍스트 — cycle 7 F55
 - Verify: `kubectl get mongodbinsights <name> -o yaml` 의 `.status.recommendations` 비어있지 않음 — cycle 9 분석 엔진 후
@@ -194,7 +194,7 @@
 
 ### 4.3 워크로드 사이드카·extraVolumes·extraEnvVars 주입 (P1)
 - [x] `PodSpec` 확장 — `Sidecars`, `InitContainers`, `ExtraVolumes`, `ExtraVolumeMounts`, `ExtraEnvVars`, `LifecycleHooks` — cycle 10 F68/F79 (common_types.go PodSpec 7 신규 필드)
-- [x] ResourceBuilder StatefulSet/Deployment 합성 로직 — cycle 10 (필드 정의 — builder merge 통합은 cycle 11 운영 강화)
+- [x] ResourceBuilder StatefulSet/Deployment 합성 로직 — `internal/resources/builder.go` `applyPodSpecExtensions` (Container-level: ExtraVolumeMounts/ExtraEnvVars/LifecycleHooks merge, operator postStart 우선) + `appendPodSpecPodLevel` (Pod-level: Sidecars/ExtraVolumes/InitScripts volume append) — RS/ConfigServer/Shard/Mongos 4 빌더 모두 통합 (cycle 14 적용 완료, line 634/721/1175/1183/1425/1431/1677/1683)
 - [x] 보안 가드 — operator admin bootstrap postStart 우선순위 — comment 명시 (operator hook 항상 우선)
 - [x] 시나리오 e2e (audit/fluentbit/oplog tailer 등 운영 표준) — auth_ldap/auth_oidc/pitr/federation/queryable_backup e2e 가 본 패턴 cover
 
@@ -206,7 +206,7 @@
 
 ### 4.5 volumePermissions init container (P1)
 - [x] CRD `pod.volumePermissions.{enabled, image, resources}` — `VolumePermissionsSpec` — cycle 10 F70
-- [x] ResourceBuilder init container 주입 (`chown -R mongodb:mongodb /data/db`) — 필드 정의 (builder merge 는 cycle 11 운영 강화)
+- [x] ResourceBuilder init container 주입 (`chown -R mongodb:mongodb /data/db`) — `internal/resources/builder.go` `buildVolumePermissionsInit` + 4 빌더 모두 PVC ownership init container 자동 prepend (cycle 13 적용 완료, line 569/1186/1433)
 - [x] 비활성화 기본값 (fsGroup 우선) — `Enabled` default false
 - Verify: non-root/restricted PSA 클러스터에서 pod ready 도달 — cycle 11
 
@@ -297,6 +297,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 | Date | Change | Refs |
 |---|---|---|
+| 2026-05-17 | 사실 정정 — §3.2 (MongoDBInsights cycle 9 P1 적용 완료, [x]→[~]) + §4.3 (builder merge cycle 14 적용 완료) + §4.5 (VolumePermissions cycle 13 적용 완료). 코드-문서 정합. | dev cycle C — Goal-Driven 자율 |
 | 2026-05-11 | 전면 재작성 — 분기/주 타임라인 + 날짜 컬럼 완전 제거, sub-task 체크리스트 입자도로 재구성 | parallel-leaping-seal plan |
 | 2026-04-28 | Phase 4 부분 완료 — 4.1 NetworkPolicy ✅, 4.9 Sharded scale-in ✅, PDB 자동화 ✅, 부트스트랩 race-free ✅ | production-readiness cycle |
 
