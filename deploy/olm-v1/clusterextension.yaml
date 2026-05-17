@@ -1,0 +1,51 @@
+# OLM v1 ClusterExtension — mongodb-operator install (v1.5.0 stable)
+# 참조: https://github.com/operator-framework/operator-controller/blob/main/config/samples/olm_v1_clusterextension.yaml
+#
+# 라이브 검증 (2026-05-15): Installed=True/Succeeded, operator pod Running v1.5.0
+#
+# 본 manifest 의 cluster-admin binding 은 *Phase B 단순화 path*. 후속 phase 의 narrow RBAC
+# (operator-framework/operator-controller/docs/howto/derive-service-account.md 정합) 으로 강화 필요 (별 ADR).
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mongodb-operator-installer
+  namespace: mongodb-system
+  labels:
+    app.kubernetes.io/managed-by: argocd
+---
+# Phase B 단순화 (후속 narrow RBAC 별 ADR):
+#   현재: cluster-admin binding (helm chart v1.4.20 도 cluster-admin scope 으로 deploy 되어 있어 *동등 권한*)
+#   후속: bundle-derived narrow ClusterRole (CRDs + ClusterRoles + Webhook + Deployment + Service 등 명시)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mongodb-operator-installer-cluster-admin
+  labels:
+    app.kubernetes.io/managed-by: argocd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: mongodb-operator-installer
+    namespace: mongodb-system
+---
+apiVersion: olm.operatorframework.io/v1
+kind: ClusterExtension
+metadata:
+  name: mongodb-operator
+  labels:
+    app.kubernetes.io/managed-by: argocd
+spec:
+  namespace: mongodb-system
+  serviceAccount:
+    name: mongodb-operator-installer
+  source:
+    sourceType: Catalog
+    catalog:
+      packageName: mongodb-operator
+      version: 1.5.0
+      channels:
+        - stable

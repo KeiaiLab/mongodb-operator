@@ -312,8 +312,12 @@ metadata:
       ]
     capabilities: Seamless Upgrades
     categories: Database, Storage
-    containerImage: ghcr.io/keiailab/mongodb-operator:v1.4.19
+    containerImage: ghcr.io/keiailab/mongodb-operator:v1.5.0
     createdAt: "2026-05-10T00:00:00Z"
+    # ADR-0028 (외부 사용자 운영 수준): OperatorHub.io 0.3.0 + 본 repo v1.0.0~v1.4.x 모든 사용자가
+    # `stable` channel 구독 시 v1.5.0 으로 자동 업그레이드 가능하도록 광 범위 skipRange.
+    # `replaces:` (spec) 는 직전 정식 OLM bundle (v1.4.23) 와 연결 — 점진 업그레이드 경로 보존.
+    olm.skipRange: '>=0.3.0 <1.5.0'
     description: |
       Kubernetes operator for MongoDB — manages MongoDB (ReplicaSet) and
       MongoDBSharded (config server + shards + mongos) CRDs with K8s Lease
@@ -414,9 +418,15 @@ spec:
   maintainers:
   - email: help@masblue.studio
     name: Keiailab
-  maturity: alpha
+  # ADR-0028: maturity = stable (외부 사용자 운영 수준).
+  # 기준: v1.4.x 누적 14 release / v1.5.0 Sharded GA / e2e + webhook validation + cosign 서명 / SLSA-3 / CRD v1alpha1 → 무파괴 변경 정책 (RFC-0019).
+  # GA 의미 아님 (semver pre-1.0 graduation 별도) — OLM 사용자 노출 readiness 만 의미.
+  maturity: stable
   minKubeVersion: 1.26.0
   provider:
     name: Keiailab
     url: https://github.com/keiailab
+  # ADR-0028: OLM upgrade graph 정식 진입점. 본 base 의 version 은 `operator-sdk generate bundle --version $VERSION` 가 덮어쓴다.
+  # `replaces` 는 직전 정식 OLM bundle 명. v1.5.0 의 직전 = v1.4.23.
+  replaces: mongodb-operator.v1.4.23
   version: 0.0.0

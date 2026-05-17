@@ -1,0 +1,13 @@
+# OLM v1 (operator-controller v1.8.0) deployment for mongodb-operator.
+# 참조: deploy/olm-v1/README.md
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml  # symlink to ../olm/namespace.yaml (mongodb-system + PSA restricted)
+  - clustercatalog.yaml
+  - clusterextension.yaml
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: mongodb-operator-olm-v1

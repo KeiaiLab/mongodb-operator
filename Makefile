@@ -158,28 +158,62 @@ release-notes: ## git-cliff 로 release notes 자동 생성 — /tmp/release-not
 	@echo "✓ release notes: /tmp/release-notes-$(VERSION).md"
 
 .PHONY: bundle
-bundle: ## OperatorHub.io bundle 생성 — operator-sdk + kustomize. VERSION 필수 (e.g. 1.4.19). PR-B9 / ADR-0023.
+bundle: ## OperatorHub.io bundle 생성 — operator-sdk + kustomize. VERSION 필수 (e.g. 1.5.0). PR-B9 / ADR-0023 / ADR-0028.
 	@command -v operator-sdk >/dev/null 2>&1 || { echo "[error] operator-sdk not installed: brew install operator-sdk"; exit 1; }
 	@command -v kustomize >/dev/null 2>&1 || { echo "[error] kustomize not installed"; exit 1; }
-	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수 (e.g. make bundle VERSION=1.4.19)"; exit 1; fi
-	@echo "=== set image controller=ghcr.io/keiailab/mongodb-operator:v$(VERSION) ==="
-	cd config/manager && kustomize edit set image controller=ghcr.io/keiailab/mongodb-operator:v$(VERSION)
+	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수 (e.g. make bundle VERSION=1.5.0)"; exit 1; fi
+	@echo "=== set image ghcr.io/keiailab/mongodb-operator=ghcr.io/keiailab/mongodb-operator:v$(VERSION) ==="
+	# 실 manager.yaml 의 image 명 (ghcr.io/keiailab/mongodb-operator) 를 정확히 타겟해야 newTag 가 적용됨.
+	# 'controller' placeholder 는 manager.yaml 에 없으므로 매칭 실패 → 이전 cycle 의 version drift 원인 (CSV containerImage 가 stale tag 유지).
+	cd config/manager && kustomize edit set image ghcr.io/keiailab/mongodb-operator=ghcr.io/keiailab/mongodb-operator:v$(VERSION)
+	@echo "=== bump base CSV containerImage annotation to v$(VERSION) ==="
+	# ADR-0028: operator-sdk 는 input CSV 의 containerImage annotation 이 이미 있으면 deployment spec 의 image 로 덮어쓰지 않는다.
+	# 이 sed 단계가 없으면 base CSV 의 stale tag 가 그대로 bundle 로 흘러간다 (결격 1 RCA).
+	sed -i.bak -E 's|(containerImage: ghcr.io/keiailab/mongodb-operator:)v[0-9]+\.[0-9]+\.[0-9]+.*|\1v$(VERSION)|' config/manifests/bases/mongodb-operator.clusterserviceversion.yaml
+	rm -f config/manifests/bases/mongodb-operator.clusterserviceversion.yaml.bak
 	@echo "=== kustomize build config/manifests | operator-sdk generate bundle ==="
+	# ADR-0028: stable + alpha 양 channel 동시 push, default = stable (외부 사용자 운영 수준).
 	kustomize build config/manifests | operator-sdk generate bundle \
 		--overwrite \
 		--version "$(VERSION)" \
-		--channels alpha \
-		--default-channel alpha \
+		--channels stable,alpha \
+		--default-channel stable \
 		--package mongodb-operator
-	@echo "=== operator-sdk bundle validate ==="
-	operator-sdk bundle validate ./bundle
-	@echo "✓ bundle: ./bundle/ ($(VERSION), channel alpha)"
+	@echo "=== operator-sdk bundle validate (operatorhub + community suite) ==="
+	operator-sdk bundle validate ./bundle --select-optional suite=operatorframework
+	@echo "✓ bundle: ./bundle/ ($(VERSION), channels=stable+alpha, default=stable)"
 
 .PHONY: bundle-build
 bundle-build: bundle ## bundle image 빌드 — registry push 는 community-operators PR 시점에 별.
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
-	docker buildx build --platform $(PLATFORMS) -f bundle.Dockerfile -t ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) .
-	@echo "✓ bundle image: ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION)"
+	# ADR-0028: GOVERNANCE.md §2 — 멀티아키 빌드 금지. PLATFORMS=linux/amd64 강제.
+	docker buildx build --platform linux/amd64 -f bundle.Dockerfile -t ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) --load .
+	@echo "✓ bundle image: ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) (local docker daemon)"
+
+.PHONY: bundle-push
+bundle-push: ## bundle image push to ghcr.io. ADR-0028 외부 사용자 운영 수준 + community-operators PR 입력.
+	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
+	docker push ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION)
+	@DIGEST=$$(docker manifest inspect ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) | python3 -c "import sys,json; m=json.load(sys.stdin); print(m['manifests'][0]['digest']) if 'manifests' in m else print(m.get('config',{}).get('digest',''))"); \
+	echo "✓ bundle pushed: ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION)@$$DIGEST"
+
+.PHONY: catalog-build
+catalog-build: ## FBC catalog image 빌드. deploy/catalog/ 의 plain YAML 을 opm serve image 로 wrap. ADR-0028 Phase D.
+	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
+	# bundle 의 라이브 digest 를 catalog.yaml 의 image 필드에 자동 주입 (mutable tag 보호).
+	@BUNDLE_DIGEST=$$(docker manifest inspect ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) 2>/dev/null | python3 -c "import sys,json; m=json.load(sys.stdin); print(m.get('config',{}).get('digest') or m['manifests'][0]['digest'])"); \
+	if [ -z "$$BUNDLE_DIGEST" ]; then echo "ERROR: bundle image v$(VERSION) 의 GHCR 의 digest 가져오지 못함 — bundle-push 먼저 실행"; exit 1; fi; \
+	echo "=== bundle digest: $$BUNDLE_DIGEST"; \
+	sed -i.bak -E "s|image: ghcr.io/keiailab/mongodb-operator-bundle:v[0-9.]+(@sha256:[a-f0-9]+)?|image: ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION)@$$BUNDLE_DIGEST|g" deploy/catalog/catalog/mongodb-operator/catalog.yaml; \
+	rm -f deploy/catalog/catalog/mongodb-operator/catalog.yaml.bak
+	cd deploy/catalog && docker buildx build --platform linux/amd64 -t ghcr.io/keiailab/mongodb-operator-catalog:v$(VERSION) --load .
+	@echo "✓ catalog image: ghcr.io/keiailab/mongodb-operator-catalog:v$(VERSION)"
+
+.PHONY: catalog-push
+catalog-push: ## catalog image push to ghcr.io. OLM v1 ClusterCatalog 의 image: 가 본 image pull.
+	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
+	docker push ghcr.io/keiailab/mongodb-operator-catalog:v$(VERSION)
+	@echo "✓ catalog pushed: ghcr.io/keiailab/mongodb-operator-catalog:v$(VERSION)"
 
 .PHONY: sbom
 sbom: ## syft 로 SBOM (SPDX-2.3) 생성 — image 의 binary + Go modules. SLSA / EU CRA 표준.

@@ -297,7 +297,11 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 | Date | Change | Refs |
 |---|---|---|
+| 2026-05-17 | OLM v1 only 전환 ([x]) — v0 cluster path (`deploy/olm/`) + community-operators sync 자동화 영구 폐기. INSTALL 3-path → 2-path matrix. FBC catalog `deploy/olm/catalog/` → `deploy/catalog/` 이동. bundle/ 유지 (v1 ClusterCatalog backing). | ADR-0028 Phase D, PR #173 |
 | 2026-05-17 | 사실 정정 — §3.2 (MongoDBInsights cycle 9 P1 적용 완료, [x]→[~]) + §4.3 (builder merge cycle 14 적용 완료) + §4.5 (VolumePermissions cycle 13 적용 완료). 코드-문서 정합. | dev cycle C — Goal-Driven 자율 |
+| 2026-05-15 | Phase 5.6 — OLM v1 narrow installer RBAC ([x]) + olmv1-system NetworkPolicy ([x]). `deploy/olm-v1/clusterextension-narrow-rbac.yaml` + `networkpolicies.yaml`. 잔여 후속: community-operators sync / RBAC v1.25 deprecated | ADR-0030 |
+| 2026-05-15 | Phase 5.6 — OLM v1 (operator-controller v1.8) 채택 ([x]) + 후속 4 항목 ([ ]: narrow RBAC / NetworkPolicy / community-operators sync / RBAC v1.25 deprecated). `deploy/olm-v1/` + `INSTALL.md` + `DESIGN.md` 신설 | ADR-0029 |
+| 2026-05-14 | Phase 5.6 — OLM 번들 외부 사용자 운영 수준 5 결격 동시 해소 ([x]) + RBAC v1.25 deprecated cleanup ([ ]) 신규 항목 | ADR-0028 |
 | 2026-05-11 | 전면 재작성 — 분기/주 타임라인 + 날짜 컬럼 완전 제거, sub-task 체크리스트 입자도로 재구성 | parallel-leaping-seal plan |
 | 2026-04-28 | Phase 4 부분 완료 — 4.1 NetworkPolicy ✅, 4.9 Sharded scale-in ✅, PDB 자동화 ✅, 부트스트랩 race-free ✅ | production-readiness cycle |
 
@@ -343,6 +347,12 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 - [ ] Helm OperatorHub charts repository — `charts/repo/` + GitHub Pages
 - [ ] community-operators upstream sync 6 minor 무사고 (ADR-0027 봉인)
 - [ ] SUPPORT.md + i18n (.ko/.en/.ja) — `docs/i18n/`
+- [x] OLM 번들 외부 사용자 운영 수준 (ADR-0028, 2026-05-14) — 5 결격 동시 해소: `containerImage` ↔ `version` drift / `alm-examples: '[]'` / `replaces`+`olm.skipRange` 부재 / 채널 alpha 단일 / `maturity: alpha`. `make bundle VERSION=1.5.0` 단일 명령으로 stable+alpha 양 채널 + alm-examples 3 CRD 자동 채움 + skipRange `>=0.3.0 <1.5.0`. `operator-sdk bundle validate --select-optional suite=operatorframework` PASS. `bundle/manifests/mongodb-operator.clusterserviceversion.yaml` + `config/manifests/bases/...csv.yaml` + `config/samples/bundle/` + `Makefile bundle target`.
+- [x] **OLM v1 (operator-controller v1.8) 채택** (ADR-0029, 2026-05-15) — *현대 표준* (next-generation, 2026-02 GA). `deploy/olm-v1/` (ClusterCatalog + ClusterExtension + installer SA + cluster-admin binding) + `INSTALL.md` 3-path matrix. 라이브 검증: KeiaiLab Cluster — `ClusterExtension mongodb-operator` Installed=True/Succeeded, operator pod Running v1.5.0, helm chart + mailstory-ferretdb 무영향. v0 (`olm` ns + 7 CRD) cleanup 완료.
+- [x] OLM v1 narrow installer RBAC (ADR-0030, 2026-05-15) — `deploy/olm-v1/clusterextension-narrow-rbac.yaml` (200+ line, bundle CSV 의 13 cluster + 3 namespace permissions derive, operator-controller `docs/howto/derive-service-account` 표준 정합). cluster-admin alternative — production 권장. cluster-side apply 는 사용자 결정 (cluster-admin binding 제거 + narrow apply 의 운영 영향).
+- [x] OLM v1 NetworkPolicy (ADR-0030, 2026-05-15) — `deploy/olm-v1/networkpolicies.yaml`: operator-controller + catalogd 2 NP (zero-trust 정합, OPRUN-3923 OLM v1 변형). cluster-side apply 사용자 결정.
+- [ ] community-operators upstream PR (0.3.0 → 1.5.0 sync) — ADR-0027 자동화 deferred 상태. `bundle/` + `bundle.Dockerfile` fork PR + Cosign signature + ADR-0029 의 OLM v1 변형.
+- [ ] OLM 번들 RBAC v1.25-deprecated apiVersion cleanup (HPA `autoscaling/v2beta1` + PDB `policy/v1beta1` → `autoscaling/v2` + `policy/v1`) — ADR-0028 잔여 warning. `config/rbac/role.yaml` 의 ClusterPermissions Rules[4] / Rules[12].
 
 ### Brainstorm gate
 

@@ -8,3 +8,6 @@ resources:
 - ../crd
 - ../rbac
 - ../manager
+# ADR-0028: CR-only sample subdir (multi-doc 의 첫 CR document 만) 을 input 에 포함시켜
+# operator-sdk generate bundle 가 alm-examples 를 owned CRD kinds (MongoDB / MongoDBSharded / MongoDBBackup) 로 자동 채우게 함.
+- ../samples/bundle

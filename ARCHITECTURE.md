@@ -77,11 +77,32 @@ Adoption per `operator-commons/ARCHITECTURE.md` matrix: **6/8 (75%)**.
 
 ## Build / deploy
 
-- Container image: `ghcr.io/keiailab/mongodb-operator:v1.5.0`
-- Helm chart: `charts/mongodb-operator/`
-- OLM bundle: `bundle/`
-- ArtifactHub: `mongodb-operator` repo (`artifacthub-repo.yml`)
-- CI: GitHub Actions per ADR-0027 (community-operators upstream sync automation)
+### Build artifacts (per release tag, e.g. v1.5.0)
+
+| Artifact | Image / Path | Purpose |
+|---|---|---|
+| Operator container | `ghcr.io/keiailab/mongodb-operator:v1.5.0` | manager pod runtime |
+| Helm chart | `charts/mongodb-operator/` → `helm package` | Path 2 install (single command) |
+| OLM bundle (CSV + CRDs + scorecard) | `bundle/` → `ghcr.io/keiailab/mongodb-operator-bundle:v1.5.0` | OLM packaging unit (referenced by FBC catalog) |
+| FBC catalog | `deploy/catalog/` → `ghcr.io/keiailab/mongodb-operator-catalog:v1.5.0` | OLM v1 ClusterCatalog source (ADR-0028 Phase D) |
+| ArtifactHub repo | `artifacthub-repo.yml` | discovery + signature verification |
+| SBOM | `make sbom` → SPDX-2.3 | SLSA / EU CRA |
+
+### 3 deployment models (외부 사용자 노출, ADR-0028 + ADR-0029)
+
+| Model | Cluster install | Operator install | Modernity | Day-2 |
+|---|---|---|---|---|
+| **OLM v1** *(recommended)* | `operator-controller + catalogd` (olmv1-system ns) | `ClusterCatalog + ClusterExtension` 단 2 자원 | 🟢 next-generation (2026-02 GA) | catalog channels + version pin/range |
+| Helm chart | (없음, direct deploy) | `helm install` | 🟡 stable | `helm upgrade/rollback` |
+| OLM v0 *(legacy)* | `olm-operator + catalog-operator + packageserver` (olm ns) | `CatalogSource + OperatorGroup + Subscription + InstallPlan` | 🔴 maintenance mode | Subscription channels + approve |
+
+상세 절차 + Day-2 upgrade/rollback: [INSTALL.md](INSTALL.md). KeiaiLab Cluster 라이브 evidence: [deploy/olm-v1/README.md](deploy/olm-v1/README.md) (OLM v0 path 는 ADR-0028 Phase D 로 폐기).
+
+### Release pipeline
+
+- CI: ADR-0027 community-operators upstream sync (OLM v0 path) + 본 release tag → GHCR push (operator + bundle + catalog) + Helm chart Pages publish.
+- Cosign: container image + Helm chart + SBOM 모두 keyless OIDC signed (G-13, ADR-0023).
+- Renovate: digest pinning (ADR-0066 정합).
 
 ## Feature gates (beta scope opt-in)
 
@@ -92,13 +113,15 @@ Per `values.yaml`:
 
 Production-cluster pattern: GA-only. Beta CRDs require explicit opt-in.
 
-## ADR cross-link (28 ADRs)
+## ADR cross-link (29 ADRs)
 
 Notable:
 - ADR-0001: charter / project identity
 - ADR-0013: scorecard OLM test parity standard (postgres co-author)
+- ADR-0023: OperatorHub bundle scaffold
 - ADR-0027: community-operators upstream sync automation
-- ADR-0028: latest (cycle 25 sealing)
+- ADR-0028: 외부 사용자 운영 수준 (5 결격 해소, channel/maturity stable 승격)
+- **ADR-0029: OLM v1 채택 (next-generation, ClusterCatalog + ClusterExtension)**
 
 Full list: `docs/kb/adr/INDEX.md`.
 

@@ -1,0 +1,133 @@
+# OLM v1 NetworkPolicies — olmv1-system 의 zero-trust 정합
+#
+# 출처:
+#   - OPRUN-3923 PR #1008 (OLM v0 baseline): https://github.com/openshift/operator-framework-olm/pull/1008
+#   - 본 OLM v1 변형: catalogd + operator-controller 의 *간략화 architecture* (Subscription/InstallPlan 부재) 정합
+#
+# KeiaiLab 적응 (cilium default-deny):
+#   - namespace: olmv1-system (vs OLM v0 의 olm)
+#   - DNS pod: kube-system 의 coredns (k8s-app=kube-dns)
+#   - kube-apiserver: svc kubernetes.default:443 → control-plane:6443
+#
+# 라이브 검증된 라벨 (2026-05-15):
+#   - operator-controller deployment: app.kubernetes.io/name=operator-controller
+#   - catalogd deployment: app.kubernetes.io/name=catalogd
+#   - ClusterCatalog source pod: olm.operatorframework.io/catalogSource=<name>
+---
+# 1. operator-controller — OLM v1 ClusterExtension processor + finalizer
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: operator-controller
+  namespace: olmv1-system
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    olm.operatorgroup.policy: standard
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: operator-controller
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # metrics scrape (Prometheus)
+    - ports:
+        - port: 8443
+          protocol: TCP
+    # healthz / readyz
+    - ports:
+        - port: 8081
+          protocol: TCP
+  egress:
+    # kube-apiserver
+    - ports:
+        - port: 443
+          protocol: TCP
+        - port: 6443
+          protocol: TCP
+    # DNS resolve
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # catalogd grpc (resolver)
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: catalogd
+      ports:
+        - port: 8443
+          protocol: TCP
+    # bundle image pull — operator-controller 가 직접 image 받아 helm release 처리.
+    # cluster CIDR 외 외부 registry (ghcr.io, quay.io, etc.) → egress 광범위 필요.
+    # 안전한 방법: kube-apiserver + DNS 외에 *모든 outbound* 허용 (registry endpoint 가변).
+    - ports:
+        - port: 443
+          protocol: TCP
+        - port: 80
+          protocol: TCP
+---
+# 2. catalogd — OLM v1 ClusterCatalog processor (FBC server)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: catalogd
+  namespace: olmv1-system
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    olm.operatorgroup.policy: standard
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: catalogd
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # operator-controller 의 resolver query
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: operator-controller
+      ports:
+        - port: 8443
+          protocol: TCP
+    # metrics scrape
+    - ports:
+        - port: 7443
+          protocol: TCP
+    # cluster-wide HTTP catalog endpoint (legacy access)
+    - ports:
+        - port: 8443
+          protocol: TCP
+  egress:
+    # kube-apiserver
+    - ports:
+        - port: 443
+          protocol: TCP
+        - port: 6443
+          protocol: TCP
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # catalog image pull (external registry)
+    - ports:
+        - port: 443
+          protocol: TCP
+        - port: 80
+          protocol: TCP

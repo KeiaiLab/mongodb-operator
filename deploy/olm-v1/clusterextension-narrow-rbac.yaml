@@ -1,0 +1,233 @@
+# OLM v1 ClusterExtension — mongodb-operator install with *narrow installer RBAC*
+# (clusterextension.yaml 의 cluster-admin alternative; ADR-0030).
+#
+# 표준 출처: https://operator-framework.github.io/operator-controller/howto/derive-service-account/
+# 본 manifest 의 RBAC 는 bundle CSV (v1.5.0) 의 spec.install.spec.{clusterPermissions, permissions}
+# 를 derive — operator 가 자체 declare 한 *최소 필요* 권한만 installer 에 부여.
+#
+# vs clusterextension.yaml (cluster-admin):
+#   - clusterextension.yaml: cluster-admin (Phase C 단순화)
+#   - clusterextension-narrow-rbac.yaml (본 파일): bundle-derived narrow (Phase C 후속, production)
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mongodb-operator-installer
+  namespace: mongodb-system
+  labels:
+    app.kubernetes.io/managed-by: argocd
+---
+# Installer ClusterRole — *bundle-derived*, mongodb-operator v1.5.0 의 CSV 기반.
+# resourceNames 의 generated name 은 *first install 후* 라이브 grep 으로 정정 가능 (ADR-0030 §Future).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mongodb-operator-installer
+  labels:
+    app.kubernetes.io/managed-by: argocd
+rules:
+  # ─── §2A. RBAC Management (Cluster-Scoped) ──────────────────────────────
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles, clusterrolebindings]
+    verbs: [create, list, watch]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles, clusterrolebindings]
+    verbs: [get, update, patch, delete]
+    # First install 후 라이브 검증으로 정확한 generated name pinning:
+    # kubectl get clusterrole,clusterrolebinding | grep mongodb-operator
+    resourceNames:
+      - mongodb-operator.v1.5.0  # placeholder, post-install pinning 권장
+  # ─── §2B. CustomResourceDefinition ────────────────────────────────
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [create, list, watch]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, update, patch, delete]
+    resourceNames:
+      - mongodbs.mongodb.keiailab.com
+      - mongodbbackups.mongodb.keiailab.com
+      - mongodbshardeds.mongodb.keiailab.com
+  # ─── §2C. ClusterExtension finalizer ─────────────────────────────
+  - apiGroups: [olm.operatorframework.io]
+    resources: [clusterextensions/finalizers]
+    verbs: [update]
+    resourceNames: [mongodb-operator]
+  # ─── §2D. Operator's CSV clusterPermissions (13 rules from bundle v1.5.0) ──────
+  - apiGroups: [""]
+    resources: [configmaps, secrets, services]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [cert-manager.io]
+    resources: [certificates]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [mongodb.keiailab.com]
+    resources:
+      - mongodbbackups
+      - mongodbclustergroups
+      - mongodbfederations
+      - mongodbinsights
+      - mongodbs
+      - mongodbshardeds
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [mongodb.keiailab.com]
+    resources:
+      - mongodbbackups/finalizers
+      - mongodbfederations/finalizers
+      - mongodbs/finalizers
+      - mongodbshardeds/finalizers
+    verbs: [update]
+  - apiGroups: [mongodb.keiailab.com]
+    resources:
+      - mongodbbackups/status
+      - mongodbclustergroups/status
+      - mongodbfederations/status
+      - mongodbinsights/status
+      - mongodbs/status
+      - mongodbshardeds/status
+    verbs: [get, patch, update]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [create, delete, get, list, patch, update, watch]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [create, delete, get, list, patch, update, watch]
+  # ─── §2E. Webhook (CSV install 시 ValidatingAdmissionWebhook + Cert) ────────
+  - apiGroups: [admissionregistration.k8s.io]
+    resources: [validatingwebhookconfigurations, mutatingwebhookconfigurations]
+    verbs: [create, list, watch]
+  - apiGroups: [admissionregistration.k8s.io]
+    resources: [validatingwebhookconfigurations, mutatingwebhookconfigurations]
+    verbs: [get, update, patch, delete]
+    resourceNames:
+      - mongodb-operator-validating-webhook-configuration
+      - mongodb-operator-mutating-webhook-configuration
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mongodb-operator-installer
+  labels:
+    app.kubernetes.io/managed-by: argocd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mongodb-operator-installer
+subjects:
+  - kind: ServiceAccount
+    name: mongodb-operator-installer
+    namespace: mongodb-system
+---
+# Installer Role (namespace-scoped, mongodb-system).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mongodb-operator-installer
+  namespace: mongodb-system
+  labels:
+    app.kubernetes.io/managed-by: argocd
+rules:
+  # ─── §3A. Deployment Management (CSV deployment: mongodb-operator-controller-manager) ──
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [create]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, watch, update, patch, delete]
+    resourceNames:
+      - mongodb-operator-controller-manager
+  # ─── §3B. ServiceAccount Management ─────────────────────────────
+  - apiGroups: [""]
+    resources: [serviceaccounts]
+    verbs: [create, list, watch]
+  - apiGroups: [""]
+    resources: [serviceaccounts]
+    verbs: [get, update, patch, delete]
+    resourceNames:
+      - mongodb-operator-controller-manager
+  # ─── §3C. RoleBinding Management ────────────────────────────────
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    verbs: [create, list, watch]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    verbs: [get, update, patch, delete]
+    resourceNames:
+      - mongodb-operator-leader-election
+  # ─── §3D. Bundled Namespace-Scoped Resources (Service + ConfigMap) ────────
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [get, list, watch, update, patch, delete]
+    resourceNames:
+      - mongodb-operator-controller-manager-metrics-service
+      - mongodb-operator-webhook-service
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, list, watch, update, patch, delete]
+  # ─── §3E. Operator's CSV permissions (3 rules from bundle v1.5.0) ───────
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mongodb-operator-installer
+  namespace: mongodb-system
+  labels:
+    app.kubernetes.io/managed-by: argocd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mongodb-operator-installer
+subjects:
+  - kind: ServiceAccount
+    name: mongodb-operator-installer
+    namespace: mongodb-system
+---
+apiVersion: olm.operatorframework.io/v1
+kind: ClusterExtension
+metadata:
+  name: mongodb-operator
+  labels:
+    app.kubernetes.io/managed-by: argocd
+spec:
+  namespace: mongodb-system
+  serviceAccount:
+    name: mongodb-operator-installer
+  source:
+    sourceType: Catalog
+    catalog:
+      packageName: mongodb-operator
+      version: 1.5.0
+      channels:
+        - stable

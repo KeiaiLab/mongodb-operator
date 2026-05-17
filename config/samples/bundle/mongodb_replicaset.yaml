@@ -1,0 +1,102 @@
+---
+# MongoDB ReplicaSet 샘플
+apiVersion: mongodb.keiailab.com/v1alpha1
+kind: MongoDB
+metadata:
+  name: my-mongodb
+  namespace: database
+spec:
+  # 멤버 수 (기본값: 3)
+  members: 3
+
+  # MongoDB 버전
+  version:
+    version: "8.3.1"
+
+  # ReplicaSet 이름
+  replicaSetName: rs0
+
+  # 스토리지 설정
+  storage:
+    storageClassName: ceph-block
+    size: 50Gi
+    dataDirPath: /data/db
+
+  # 리소스 설정
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+  # 인증 설정
+  auth:
+    mechanism: SCRAM-SHA-256
+    adminCredentialsSecretRef:
+      name: mongodb-admin-credentials
+    users:
+      - name: appuser
+        db: admin
+        passwordSecretRef:
+          name: mongodb-app-credentials
+          key: password
+        roles:
+          - name: readWrite
+            db: myapp
+
+  # TLS 설정 (cert-manager 통합)
+  tls:
+    enabled: true
+    certManager:
+      issuerRef:
+        name: letsencrypt-cloudflare
+        kind: ClusterIssuer
+      duration: "2160h"
+      renewBefore: "360h"
+
+  # 모니터링 설정 (Prometheus)
+  monitoring:
+    enabled: true
+    serviceMonitor:
+      interval: "30s"
+      labels:
+        release: prometheus
+    prometheusRules:
+      enabled: true
+    exporter:
+      image: percona/mongodb_exporter:0.40
+      resources:
+        requests:
+          cpu: "50m"
+          memory: "64Mi"
+        limits:
+          cpu: "200m"
+          memory: "256Mi"
+
+  # 백업 설정
+  backup:
+    enabled: true
+    schedule: "0 2 * * *"  # 매일 새벽 2시
+    retention:
+      days: 7
+    storage:
+      type: s3
+      s3:
+        bucket: mongodb-backups
+        endpoint: http://ceph-objectstore.rook-ceph.svc:80
+        region: us-east-1
+        credentialsRef:
+          name: ceph-objectstore-credentials
+        prefix: mongodb/my-mongodb/
+    pitrEnabled: true
+    oplogRetentionHours: 24
+
+  # Pod 설정
+  pod:
+    priorityClassName: system-cluster-critical
+    securityContext:
+      fsGroup: 999
+      runAsUser: 999
+      runAsNonRoot: true
