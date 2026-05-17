@@ -20,7 +20,16 @@
 
 ## codex-review
 
-codex-review: 백그라운드 dispatched, challenge 결과 본 plan 본문에 hook 으로 반영 예정 (cycle 1 implementation 중 처리).
+codex-review: 5 challenge 수신 (critical 2 + major 3) → 모두 본 plan 본문 + 구현에 반영. 후속 commit (challenge fix) 가 verify gate.
+
+| # | category | challenge | Claude 처리 |
+|---|---|---|---|
+| 1 | critical | `Find(..., nil)` 가 limit/sort 미적용 → DB 전체 메모리 적재 + 최신 보장 X | 수용. `options.Find().SetSort(bson.D{{"ts",-1}}).SetLimit(perDBLimit)` + global cap streaming decode 으로 수정 (controller `collectProfileDocs`) |
+| 2 | critical | BSON variance 과소가정 — `bson.A`/`bson.D`/legacy `command.q`/`command.pipeline[0].$match`/`command.sort` 누락 | 수용. `normalizeMap` + `normalizeSlice` helper + `convertProfile` 4 path (top-level / command.filter / command.q / pipeline $match) + 7 unit test 추가 |
+| 3 | major | SlowQueryPattern: plan = "그룹 평균 ≥ threshold", 구현은 threshold 미만 doc 사전 제외 → mixed sample false negative | 수용. `detectSlowQueryPatterns` 가 모든 doc 그룹화 후 `count≥3 && avg≥threshold` 판정으로 수정 + `TestAnalyze_SlowQueryPatternUsesGroupAverage` 회귀 가드 |
+| 4 | major | MissingIndex ratio: `NReturned>0` 가드가 *0건 반환 + 대량 scan* 케이스 누락 | 수용. `looksLikeMissingIndex` 가 `denom=max(NReturned,1)` 사용 + `TestAnalyze_ZeroReturnedHighScanEmitsMissingIndex` 회귀 가드 |
+| 5 | major | `AnalysisCredentialsSecretRef` 가 username/authDB 무시하고 admin/admin 고정 + `AnalyzeOverride` DI 가 너무 광범위 | 부분 수용. `loadAnalysisCredentials` 가 secret 의 `username`/`authDB`/`authSource` 읽도록 수정 (custom ref 시 username 필수, fallback 시 admin/admin). `AnalyzeOverride` 좁은 interface 화는 *follow-up* (e2e 도입 시 ProfileFetcher interface 분리 — 후속 sub-task) |
+
 
 ## 본 plan (T2) 범위
 
