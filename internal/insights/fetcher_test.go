@@ -12,6 +12,7 @@ package insights
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -86,9 +87,9 @@ func TestMongoProfileFetcher_NilGuards(t *testing.T) {
 	}
 }
 
-func TestMongoProfileFetcher_RejectsShardedKind(t *testing.T) {
-	// kind 체크가 K8sClient nil 체크보다 *우선* 정합 — spec-level 검증이
-	// 의존성 nil-guard 보다 앞.
+// cycle 9 P4: MongoDBSharded kind 가 더 이상 "unsupported" 로 reject 되지
+// 않음. K8sClient nil 단계에서 reject (실 cluster 조회 시도 직전).
+func TestMongoProfileFetcher_AcceptsShardedKindAndFailsOnNilClient(t *testing.T) {
 	f := &MongoProfileFetcher{
 		Insights: &mongodbv1alpha1.MongoDBInsights{
 			ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "ns"},
@@ -96,9 +97,32 @@ func TestMongoProfileFetcher_RejectsShardedKind(t *testing.T) {
 				ClusterRef: mongodbv1alpha1.ClusterReference{Name: "cluster1", Kind: "MongoDBSharded"},
 			},
 		},
+		// K8sClient nil
 	}
 	_, err := f.Fetch(context.Background(), 100)
 	if err == nil {
-		t.Errorf("MongoDBSharded kind 시 error 기대 (cycle 9 미지원)")
+		t.Fatalf("K8sClient nil 시 error 기대")
+	}
+	if !strings.Contains(err.Error(), "K8sClient nil") {
+		t.Errorf("error 가 K8sClient nil 표시 기대, got %q", err.Error())
+	}
+}
+
+// cycle 9 P4: MongoDB / MongoDBSharded 외 kind 는 unsupported 로 fail-fast.
+func TestMongoProfileFetcher_RejectsUnknownKind(t *testing.T) {
+	f := &MongoProfileFetcher{
+		Insights: &mongodbv1alpha1.MongoDBInsights{
+			ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "ns"},
+			Spec: mongodbv1alpha1.MongoDBInsightsSpec{
+				ClusterRef: mongodbv1alpha1.ClusterReference{Name: "c", Kind: "Postgres"},
+			},
+		},
+	}
+	_, err := f.Fetch(context.Background(), 100)
+	if err == nil {
+		t.Fatalf("unknown kind 시 error 기대")
+	}
+	if !strings.Contains(err.Error(), "unsupported ClusterRef.Kind") {
+		t.Errorf("error 가 unsupported kind 표시 기대, got %q", err.Error())
 	}
 }

@@ -22,6 +22,7 @@ package insights
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -65,14 +66,19 @@ type MongoProfileFetcher struct {
 }
 
 // Fetch — ProfileFetcher 인터페이스 구현.
+//
+// ROADMAP §3.2 cycle 9 P4: MongoDB + MongoDBSharded kind 둘 다 지원.
+// - MongoDB: headless replicaset DNS (`<name>-headless`) + ReplicaSet opt
+// - MongoDBSharded: mongos service DNS (`<name>-mongos`) + ReplicaSet="" (router)
+// per-shard 직접 connect 는 후속 sub-task (정확도 향상).
 func (f *MongoProfileFetcher) Fetch(ctx context.Context, sampleSize int32) ([]ProfileDoc, error) {
 	if f.Insights == nil {
 		return nil, fmt.Errorf("MongoProfileFetcher.Insights nil")
 	}
 	// spec-level 검증 우선 (K8sClient 의존 없음).
-	if f.Insights.Spec.ClusterRef.Kind != "MongoDB" {
-		// MongoDBSharded 는 후속 sub-task.
-		return nil, fmt.Errorf("unsupported ClusterRef.Kind %q (only MongoDB in this cycle)", f.Insights.Spec.ClusterRef.Kind)
+	kind := f.Insights.Spec.ClusterRef.Kind
+	if kind != "MongoDB" && kind != "MongoDBSharded" {
+		return nil, fmt.Errorf("unsupported ClusterRef.Kind %q (allowed MongoDB|MongoDBSharded)", kind)
 	}
 	if f.K8sClient == nil {
 		return nil, fmt.Errorf("MongoProfileFetcher.K8sClient nil")
@@ -81,33 +87,26 @@ func (f *MongoProfileFetcher) Fetch(ctx context.Context, sampleSize int32) ([]Pr
 		sampleSize = 500
 	}
 
-	mdb := &mongodbv1alpha1.MongoDB{}
-	if err := f.K8sClient.Get(ctx, types.NamespacedName{
-		Name:      f.Insights.Spec.ClusterRef.Name,
-		Namespace: f.Insights.Namespace,
-	}, mdb); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("ClusterRef MongoDB/%s not found", f.Insights.Spec.ClusterRef.Name)
-		}
-		return nil, fmt.Errorf("get MongoDB: %w", err)
-	}
-
-	creds, err := f.loadCredentials(ctx, mdb)
+	target, err := f.resolveConnectTarget(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	host := fmt.Sprintf("%s-headless.%s.svc.cluster.local:27017", mdb.Name, mdb.Namespace)
+	creds, err := f.loadCredentialsFromSecret(ctx, target.AdminSecretName, target.Namespace)
+	if err != nil {
+		return nil, err
+	}
+
 	cli, err := mongoclient.NewClient(ctx, mongoclient.ConnectOpts{
-		Hosts:      []string{host},
+		Hosts:      []string{target.Host},
 		Username:   creds.Username,
 		Password:   creds.Password,
 		AuthDB:     creds.AuthDB,
-		ReplicaSet: mdb.Name,
+		ReplicaSet: target.ReplicaSet,
 		Timeout:    defaultConnectTimeout,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("connect %s: %w", host, err)
+		return nil, fmt.Errorf("connect %s: %w", target.Host, err)
 	}
 	// Codex re-review #2 fix: disconnect 전용 context. reconcile ctx 가 이미
 	// canceled/timeout 인 경우에도 cleanup 보장 — context.Background() + 짧은
@@ -122,10 +121,15 @@ func (f *MongoProfileFetcher) Fetch(ctx context.Context, sampleSize int32) ([]Pr
 	// ProfilingLevel + SlowQueryThresholdMs 를 *각 분석 대상 DB* 에 적용
 	// 하여 profile data 진본성 보장. 실패는 *비치명* — 일부 DB 가 권한
 	// 부족 / read-only 시 log + 계속 (다른 DB 분석에 무관).
-	if err := f.applyProfilingLevel(ctx, cli); err != nil {
-		// applyProfilingLevel 자체 fatal error 만 surface (listDatabases 실패).
-		// per-DB profile 적용 실패는 내부에서 log only + 계속.
-		return nil, fmt.Errorf("apply profiling level: %w", err)
+	//
+	// Codex re-review (cycle 9 P4) #1 critical fix: mongos 는 profiler enable
+	// 불가 (level 1/2 invalid). MongoDBSharded kind 시 skip — applyProfilingLevel
+	// 호출이 silent no-op 으로 "적용됨" 오인 방지. per-shard 직접 적용은 후속
+	// sub-task (P5).
+	if kind == "MongoDB" {
+		if err := f.applyProfilingLevel(ctx, cli); err != nil {
+			return nil, fmt.Errorf("apply profiling level: %w", err)
+		}
 	}
 
 	return collectProfileDocs(ctx, cli, sampleSize)
@@ -169,6 +173,53 @@ func (f *MongoProfileFetcher) applyProfilingLevel(ctx context.Context, cli *mong
 	return nil
 }
 
+// connectTarget — kind 분기 결과 모음.
+type connectTarget struct {
+	Host            string // <name>-{headless|mongos}.<ns>.svc.cluster.local:27017
+	ReplicaSet      string // MongoDB kind 만 set, MongoDBSharded 는 빈 문자열 (router)
+	AdminSecretName string // Auth.AdminCredentialsSecretRef.Name (fallback)
+	Namespace       string // CR namespace (Insights.Namespace 와 동일하지만 명시)
+}
+
+// resolveConnectTarget — ClusterRef.Kind 분기 → connectTarget.
+// cycle 9 P4: MongoDB headless / MongoDBSharded mongos service.
+func (f *MongoProfileFetcher) resolveConnectTarget(ctx context.Context) (connectTarget, error) {
+	ns := f.Insights.Namespace
+	name := f.Insights.Spec.ClusterRef.Name
+	switch f.Insights.Spec.ClusterRef.Kind {
+	case "MongoDB":
+		mdb := &mongodbv1alpha1.MongoDB{}
+		if err := f.K8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: ns}, mdb); err != nil {
+			if apierrors.IsNotFound(err) {
+				return connectTarget{}, fmt.Errorf("ClusterRef MongoDB/%s not found", name)
+			}
+			return connectTarget{}, fmt.Errorf("get MongoDB: %w", err)
+		}
+		return connectTarget{
+			Host:            fmt.Sprintf("%s-headless.%s.svc.cluster.local:27017", mdb.Name, mdb.Namespace),
+			ReplicaSet:      mdb.Name,
+			AdminSecretName: mdb.Spec.Auth.AdminCredentialsSecretRef.Name,
+			Namespace:       mdb.Namespace,
+		}, nil
+	case "MongoDBSharded":
+		mdbsh := &mongodbv1alpha1.MongoDBSharded{}
+		if err := f.K8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: ns}, mdbsh); err != nil {
+			if apierrors.IsNotFound(err) {
+				return connectTarget{}, fmt.Errorf("ClusterRef MongoDBSharded/%s not found", name)
+			}
+			return connectTarget{}, fmt.Errorf("get MongoDBSharded: %w", err)
+		}
+		// BuildMongosService 정합: <name>-mongos, ClusterIP. router → ReplicaSet="" .
+		return connectTarget{
+			Host:            fmt.Sprintf("%s-mongos.%s.svc.cluster.local:27017", mdbsh.Name, mdbsh.Namespace),
+			ReplicaSet:      "",
+			AdminSecretName: mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name,
+			Namespace:       mdbsh.Namespace,
+		}, nil
+	}
+	return connectTarget{}, fmt.Errorf("unreachable: kind validation should have caught %q", f.Insights.Spec.ClusterRef.Kind)
+}
+
 // analysisCredentials — mongo connect 자격증명.
 type analysisCredentials struct {
 	Username string
@@ -176,24 +227,26 @@ type analysisCredentials struct {
 	AuthDB   string
 }
 
-// loadCredentials — Spec.AnalysisCredentialsSecretRef 우선,
-// 미설정 시 cluster 의 Auth.AdminCredentialsSecretRef 재사용.
+// loadCredentialsFromSecret — Spec.AnalysisCredentialsSecretRef 우선,
+// 미설정 시 fallbackSecretName 재사용 (보통 cluster 의 admin secret).
 //
 // Codex review (RFC-0045) #5 fix: secret 의 username + authDB (alias
 // authSource) 를 우선 읽고, ref 미설정 시에만 admin/admin fallback.
-func (f *MongoProfileFetcher) loadCredentials(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (analysisCredentials, error) {
+// cycle 9 P4: MongoDB / MongoDBSharded 공통 path 위해 fallbackSecretName
+// 파라미터화. ns 는 Insights namespace.
+func (f *MongoProfileFetcher) loadCredentialsFromSecret(ctx context.Context, fallbackSecretName, ns string) (analysisCredentials, error) {
 	custom := f.Insights.Spec.AnalysisCredentialsSecretRef != nil && f.Insights.Spec.AnalysisCredentialsSecretRef.Name != ""
 	var name string
 	if custom {
 		name = f.Insights.Spec.AnalysisCredentialsSecretRef.Name
 	} else {
-		name = mdb.Spec.Auth.AdminCredentialsSecretRef.Name
+		name = fallbackSecretName
 	}
 	if name == "" {
 		return analysisCredentials{}, fmt.Errorf("no credentials secret resolvable for analysis")
 	}
 	sec := &corev1.Secret{}
-	if err := f.K8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: f.Insights.Namespace}, sec); err != nil {
+	if err := f.K8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: ns}, sec); err != nil {
 		return analysisCredentials{}, fmt.Errorf("get secret %s: %w", name, err)
 	}
 	pw, ok := sec.Data["password"]
@@ -302,16 +355,33 @@ func collectProfileDocs(ctx context.Context, cli *mongo.Client, sampleSize int32
 //
 // mongo v2 driver 는 NamespaceNotFound (server error code 26) + 종종 error
 // 메시지 substring 으로 노출. 본 helper 는 *문자열 패턴* 보수적 매칭.
+// isProfileAbsent — mongo CommandError code 26 (NamespaceNotFound) 만 absent
+// 로 인정. 그 외 (auth, network, command not supported, routing) 는 surface.
+//
+// Codex re-review (cycle 9 P4) #3 major fix: 이전 구현이 error 메시지 substring
+// 만 봐서 sharded/mongos 의 unsupported/auth/routing error 가 namespace 를
+// 포함하면 silent skip → "성공 + 0 docs" 함정. 본 fix 는 mongo.CommandError
+// type assertion + code 26 정밀 매칭.
+//
+// fallback: mongo CommandError 가 아닌 error (driver 내부 wrap 또는 mongo-driver
+// v2 의 다른 error type) 는 namespace not found 의 진본 substring marker
+// 만 보수적으로 매칭.
 func isProfileAbsent(err error) bool {
 	if err == nil {
 		return false
 	}
+	// 진본 mongo CommandError code 26 → NamespaceNotFound.
+	var cmdErr mongo.CommandError
+	if errors.As(err, &cmdErr) {
+		return cmdErr.Code == 26 // NamespaceNotFound
+	}
+	// driver wrapping 시 정확한 type 추출 실패할 수 있어 marker fallback.
+	// "system.profile" 단독 marker 는 제거 — auth/routing error 가 namespace
+	// 를 포함 시 silent miss 함정 (Codex #3).
 	lower := strings.ToLower(err.Error())
 	for _, marker := range []string{
 		"ns not found",
 		"namespacenotfound",
-		"system.profile",
-		"profiling is off",
 	} {
 		if strings.Contains(lower, marker) {
 			return true
