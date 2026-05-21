@@ -1,538 +1,560 @@
+<p align="center">
+  <img src="https://keiailab.com/assets/logo.svg" alt="keiailab" width="120"/>
+</p>
+
 # mongodb-operator (한국어)
 
 > English README: [README.md](README.md) — canonical / 정본
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)](https://golang.org/)
-[![Valkey](https://img.shields.io/badge/Valkey-8.0+-FF4438?logo=redis)](https://valkey.io/)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes)](https://kubernetes.io/)
-[![Container Image](https://img.shields.io/badge/ghcr.io-keiailab%2Fvalkey--operator-blue?logo=github)](https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator)
-[![Helm Chart](https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/keiailab/mongodb-operator/main/charts/mongodb-operator/Chart.yaml&label=helm%20v)](https://keiailab.github.io/mongodb-operator)
-[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/keiailab-mongodb-operator)](https://artifacthub.io/packages/helm/keiailab-mongodb-operator/mongodb-operator)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/keiailab/mongodb-operator/badge)](https://scorecard.dev/viewer/?uri=github.com/keiailab/mongodb-operator)
-[![GitHub Discussions](https://img.shields.io/github/discussions/keiailab/mongodb-operator?label=discussions&logo=github)](https://github.com/keiailab/mongodb-operator/discussions)
+> **Apache-2.0 MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+**
 
-Kubebuilder 기반 Kubernetes operator. Valkey (Redis fork, BSD-3) 의 세 가지
-운용 토폴로지를 단일 controller 로 관리한다:
+<p align="center">
+  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="라이선스"/></a>
+  <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go" alt="Go 버전"/></a>
+  <a href="https://www.mongodb.com/"><img src="https://img.shields.io/badge/MongoDB-7.0%2B-47A248?logo=mongodb" alt="MongoDB"/></a>
+  <a href="https://kubernetes.io/"><img src="https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes" alt="Kubernetes"/></a>
+  <a href="https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator"><img src="https://img.shields.io/badge/ghcr.io-keiailab%2Fmongodb--operator-blue?logo=github" alt="컨테이너 이미지"/></a>
+  <a href="https://github.com/keiailab/mongodb-operator"><img src="https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/keiailab/mongodb-operator/main/charts/mongodb-operator/Chart.yaml&label=helm%20v" alt="Helm 차트"/></a>
+  <a href="https://artifacthub.io/packages/search?repo=mongodb-operator"><img src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/mongodb-operator" alt="Artifact Hub"/></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/keiailab/mongodb-operator"><img src="https://api.scorecard.dev/projects/github.com/keiailab/mongodb-operator/badge" alt="OpenSSF Scorecard"/></a>
+  <a href="https://github.com/keiailab/mongodb-operator/discussions"><img src="https://img.shields.io/github/discussions/keiailab/mongodb-operator?label=discussions&logo=github" alt="GitHub Discussions"/></a>
+</p>
 
-| CRD | 용도 | 토폴로지 |
-|---|---|---|
-| `Valkey` | 단일 인스턴스 또는 1-primary + N-replica | Standalone / Replication |
-| `ValkeyCluster` | 샤딩된 MongoDB Sharded Cluster (16384 슬롯) | 3+ shards × (1 primary + 0~5 replicas) |
-| `ValkeyBackup` | 일회성 RDB 또는 AOF 백업 | PVC (`<backup>-backup`) — 외부 저장 별개 |
-| `ValkeyBackupTarget` | 외부 저장 (S3/GCS/Azure) endpoint + 자격증명 추상화 | Backup ↔ Restore 공유 — ADR-0016 |
-| `ValkeyRestore` | Backup PVC 의 RDB 를 cluster 로 복원 | Init Container 패턴 — ADR-0015 |
+<p align="center">
+  <a href="README.md">English</a> |
+  <b>한국어</b> |
+  <a href="README.ja.md">日本語</a> |
+  <a href="README.zh.md">中文</a>
+</p>
 
-자동화 범위: STS / ConfigMap / Secret / Service (headless + clusterIP) /
-PodDisruptionBudget / NetworkPolicy / cert-manager Certificate /
-Prometheus ServiceMonitor — 모두 Spec drift 감지.
-
-## Quickstart (kind)
-
-검증된 로컬 부트스트랩 시퀀스. 본 README 의 모든 명령은 *실측 통과 버전* 이다.
-
-### 1. 사전 요구사항
-
-| 도구 | 최소 버전 | 비고 |
-|---|---|---|
-| Go | 1.26 | `go.mod` 와 일치 |
-| Docker | 24+ | buildx 기본 빌더 사용 |
-| kind | 0.27+ | 로컬 클러스터 |
-| kubectl | 1.34+ | k3s/kind 모두 지원 |
-| cert-manager | 1.16+ | webhook serving cert |
-
-### 2. kind 클러스터 + cert-manager
-
-```sh
-make setup-test-e2e                   # kind cluster "mongodb-operator-test-e2e" 생성
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.16.2/cert-manager.yaml
-kubectl wait --for=condition=Available --timeout=120s -n cert-manager deploy --all
-```
-
-### 3. 이미지 빌드 + 로드 + 배포
-
-```sh
-make docker-build IMG=mongodb-operator:dev
-kind load docker-image mongodb-operator:dev --name mongodb-operator-test-e2e
-make install                          # CRD 설치
-make deploy IMG=mongodb-operator:dev   # operator + RBAC + webhook 배포
-kubectl -n mongodb-operator-system rollout status deploy/mongodb-operator-controller-manager
-```
-
-### 4. 샘플 CR 적용
-
-```sh
-kubectl apply -f config/samples/cache_v1alpha1_valkey.yaml
-kubectl apply -f config/samples/cache_v1alpha1_valkeycluster.yaml
-kubectl apply -f config/samples/cache_v1alpha1_valkeybackup.yaml
-```
-
-### 5. 데이터 plane 검증
-
-```sh
-PASS=$(kubectl get secret valkey-sample-auth -o jsonpath='{.data.password}' | base64 -d)
-kubectl exec valkey-sample-0 -- valkey-cli -a "$PASS" ping        # → PONG
-kubectl exec valkey-sample-0 -- valkey-cli -a "$PASS" set k v     # → OK
-kubectl exec valkey-sample-0 -- valkey-cli -a "$PASS" get k       # → v
-
-# 클러스터 모드 — `-c` 로 MOVED 자동 follow
-PASS=$(kubectl get secret valkeycluster-sample-auth -o jsonpath='{.data.password}' | base64 -d)
-kubectl exec valkeycluster-sample-0 -- valkey-cli -a "$PASS" cluster info | head -3
-# cluster_state:ok / cluster_slots_assigned:16384 / cluster_slots_ok:16384
-```
-
-## 보안 동작
-
-- **Auth 항상 강제** (ADR-0013): `Spec.Auth.Enabled` 값과 무관하게 random 32B
-  password 생성, `requirepass` + `masterauth` 설정.
-- **TLS** 는 `Spec.TLS.Enabled=true` 에서 cert-manager Certificate 자동 발급
-  (ADR-0010) 또는 사용자 제공 Secret (`Spec.TLS.CustomCert.SecretName`).
-- **NetworkPolicy** (`Spec.NetworkPolicy.Enabled=true`): pod-to-pod 6379/16379
-  외 모든 인그레스 차단.
-
-## ValkeyBackupTarget + 외부 저장 (S3) 사용법 — 신규
-
-ADR-0016 + ADR-0022 + ADR-0023. ValkeyBackupTarget 으로 외부 저장 endpoint /
-자격증명을 *추상화* — Backup ↔ Restore 가 동일 target 참조 (대칭).
-
-### 1. ValkeyBackupTarget + 자격증명 Secret 생성
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: s3-creds
-  namespace: default
-stringData:
-  AWS_ACCESS_KEY_ID:     "AKIAEXAMPLE..."
-  AWS_SECRET_ACCESS_KEY: "secret..."
 ---
+
+Kubernetes 위에서 MongoDB ReplicaSet 과 Sharded Cluster 의 배포·관리를 자동화하는 Operator 입니다.
+
+> ## ⚠️ 베타 출시 — v1.3.2-beta.x (carve-out)
+>
+> 현재 최신 release는 **prerelease 베타**입니다 — 정식 1.4.0 GA 출시 전까지 *비프로덕션 데이터* 한정 사용을 권장합니다.
+>
+> **베타 scope (기본 활성)**: MongoDB ReplicaSet
+>
+> **베타 scope 밖 (기본 비활성, RBAC + reconciler feature gate로 차단)**:
+> - `MongoDBSharded` — ConfigServer init/HPA ordering 미해결 (`features.sharded.enabled=true`로 활성)
+> - `MongoDBBackup` — 자동 테스트 0건, connectionString 평문 노출 위험 (`features.backup.enabled=true`로 활성)
+> - HorizontalPodAutoscaler — RS/cfg drift mutex 부재 (`features.autoscaling.enabled=true`로 활성)
+>
+> 자세한 잔여 위험은 [CHANGELOG.md](CHANGELOG.md) 의 Known Issues 섹션 참조.
+
+## Overview (개요)
+
+MongoDB Operator 는 Kubernetes 위에서 MongoDB 클러스터의 배포, 스케일링, 관리를 자동화합니다. CRD(Custom Resource Definitions)를 사용해 MongoDB 인프라를 선언적으로 관리할 수 있는 방법을 제공합니다.
+
+### Features (기능)
+
+- **MongoDB ReplicaSet**: 자동 페일오버를 갖춘 3개 이상 멤버의 고가용성 replica set 배포
+- **Sharded Cluster** *(베타 비활성)*: config server, shard, mongos 라우터를 포함한 분산 클러스터 배포
+- **TLS 암호화**: cert-manager 연동을 통한 TLS 인증서 자동 관리
+- **인증**: 클러스터 내부 통신을 위한 keyfile 지원 SCRAM-SHA-256 인증
+- **모니터링**: ServiceMonitor 지원 Prometheus 메트릭 내보내기
+- **백업/복원** *(베타 비활성)*: S3 호환 스토리지 또는 PVC 대상 자동 백업
+- **자동 스케일링**: Mongos 라우터를 위한 Horizontal Pod Autoscaler 지원
+
+## Architecture (아키텍처)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    MongoDB Operator                              │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │  MongoDB    │  │ MongoDBShar │  │    MongoDBBackup        │  │
+│  │  Controller │  │ Controller  │  │    Controller           │  │
+│  └──────┬──────┘  └──────┬──────┘  └───────────┬─────────────┘  │
+│         │                │                      │                │
+│         ▼                ▼                      ▼                │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                  Resource Builder                           ││
+│  │  (StatefulSets, Deployments, Services, Secrets, Jobs)       ││
+│  └─────────────────────────────────────────────────────────────┘│
+│         │                │                      │                │
+│         ▼                ▼                      ▼                │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                  MongoDB Package                            ││
+│  │  (Executor, ReplicaSet, Auth, Sharding)                     ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Kubernetes Cluster                            │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐        │
+│  │  StatefulSet  │  │  StatefulSet  │  │  Deployment   │        │
+│  │  (ReplicaSet) │  │  (Shards)     │  │  (Mongos)     │        │
+│  └───────────────┘  └───────────────┘  └───────────────┘        │
+│                                                                  │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐        │
+│  │   Services    │  │    Secrets    │  │  ConfigMaps   │        │
+│  └───────────────┘  └───────────────┘  └───────────────┘        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 자동 초기화 (Automatic Initialization)
+
+Operator 는 MongoDB 클러스터 초기화를 자동으로 처리합니다.
+
+**ReplicaSet 초기화:**
+```
+1. Keyfile Secret 생성 (내부 인증용)
+2. ConfigMap 생성 (mongod.conf)
+3. Service 생성 (headless + client)
+4. StatefulSet 생성
+5. 모든 pod 준비 완료 대기
+6. primary 후보에서 rs.initiate() 실행
+7. primary 선출 대기
+8. admin 사용자 생성 (localhost exception 활용)
+```
+
+**Sharded Cluster 초기화:**
+```
+1. 공유 Keyfile Secret 생성
+2. Config Server StatefulSet 배포 (포트 27019)
+3. Shard StatefulSet 배포 (포트 27018)
+4. Mongos Deployment 배포 (포트 27017)
+5. Config Server ReplicaSet 초기화
+6. 각 Shard ReplicaSet 초기화
+7. Mongos 에서 admin 사용자 생성
+8. 각 shard 에 대해 sh.addShard() 실행
+```
+
+### 포트 구성 (Port Configuration)
+
+| 컴포넌트 | 포트 | 플래그 |
+|-----------|------|------|
+| Mongos | 27017 | - |
+| Shard | 27018 | `--shardsvr` |
+| Config Server | 27019 | `--configsvr` |
+
+## Quick Start (빠른 시작)
+
+### Prerequisites (사전 요구사항)
+
+- Kubernetes 클러스터 v1.26+
+- 클러스터 접근이 구성된 kubectl
+- *설치 방법* 별 추가 요구사항:
+  - **OLM v1** (권장, 최신): cert-manager 가동 중 + cluster admin (1회 bootstrap)
+  - **Helm**: Helm v3.8+
+  - **OLM v0** (레거시): Helm 의 단순함과 OLM v1 의 단순함 사이의 중간 — *권장하지 않음*
+
+### Installation (설치) — 3가지 방법 (매트릭스)
+
+| 방법 | 대상 | 현대성 | 단계 수 |
+|---|---|---|---|
+| **OLM v1** *(권장)* | 외부 사용자, GitOps 플랫폼 (ArgoCD App-of-Apps), Day-0 프로덕션 | **차세대** (v1.8.0, 2026-02 GA) | 2개 매니페스트 (ClusterCatalog + ClusterExtension) |
+| Helm 차트 | 로컬 개발, 단일 클러스터 간단 배포 | 안정 | 1개 명령 (`helm install`) |
+| OLM v0 | OpenShift 레거시, OperatorHub.io 커뮤니티 | 유지보수 모드 (v0.42, 2026-04) | 4개 매니페스트 + InstallPlan 승인 |
+
+**상세 절차**: [INSTALL.md](INSTALL.md). 본 절은 *Quick Start* 입니다.
+
+#### 방법 1 — OLM v1 (현대 표준, 권장)
+
+```bash
+# (1) OLM v1 클러스터 설치 — 1회 bootstrap
+curl -L -s https://github.com/operator-framework/operator-controller/releases/latest/download/install.sh | bash -s
+
+# (2) ClusterCatalog + ClusterExtension 적용
+kubectl apply -f https://raw.githubusercontent.com/keiailab/mongodb-operator/v1.5.0/deploy/olm-v1/clustercatalog.yaml
+kubectl apply -f https://raw.githubusercontent.com/keiailab/mongodb-operator/v1.5.0/deploy/olm-v1/clusterextension.yaml
+
+# (3) 설치 검증
+kubectl wait --for=condition=Installed=True clusterextension/mongodb-operator --timeout=180s
+```
+
+#### 방법 2 — Helm 차트
+
+```bash
+# Helm 레포지토리 추가
+helm repo add mongodb-operator https://keiailab.github.io/mongodb-operator
+helm repo update
+
+# Operator 설치
+helm install mongodb-operator mongodb-operator/mongodb-operator \
+  --namespace mongodb-operator-system \
+  --create-namespace
+```
+
+<!-- 방법 3 (OLM v0 레거시) 제거 — ADR-0028 Phase D, v1 전용. helm 또는 OLM v1 사용. -->
+
+
+### MongoDB ReplicaSet 배포
+
+```yaml
 apiVersion: mongodb.keiailab.com/v1alpha1
-kind: ValkeyBackupTarget
+kind: MongoDB
 metadata:
-  name: s3-prod
-  namespace: default
+  name: my-mongodb
+  namespace: database
 spec:
-  type: S3
-  s3:
-    endpoint: https://s3.ap-northeast-2.amazonaws.com  # MinIO 사내: https://minio.local:9000
-    region: ap-northeast-2
-    bucket: valkey-backups-prod
-    prefix: cluster-A/
-    forcePathStyle: false   # MinIO/Ceph RGW 시 true
-    credentialsSecretRef:
-      name: s3-creds
+  members: 3
+  version:
+    version: "8.3.1"
+  storage:
+    storageClassName: standard
+    size: 10Gi
+  auth:
+    mechanism: SCRAM-SHA-256
+    adminCredentialsSecretRef:
+      name: mongodb-admin
+  monitoring:
+    enabled: true
 ```
 
-operator 가 BucketExists 호출하여 reachability 검증 → Status.Phase=Reachable.
+```bash
+# 네임스페이스 및 자격증명 생성
+kubectl create namespace database
+kubectl create secret generic mongodb-admin \
+  --from-literal=username=admin \
+  --from-literal=password=your-secure-password \
+  -n database
 
-### 2. ValkeyBackup → S3 업로드
+# MongoDB 배포
+kubectl apply -f mongodb-replicaset.yaml
+```
+
+### Sharded Cluster 배포
 
 ```yaml
 apiVersion: mongodb.keiailab.com/v1alpha1
-kind: ValkeyBackup
-metadata: { name: vkb-s3, namespace: default }
-spec:
-  clusterRef: { kind: Valkey, name: vk-standalone }
-  type: RDB
-  destination:
-    type: TargetRef
-    targetRef:
-      name: s3-prod
-      path: 2026-05-06/dump.rdb     # 미명시 시 default <backup>/<startedAt>/dump.rdb
-```
-
-흐름: Pending → InProgress → Copying (PVC 저장) → **Uploading** (Upload Job
-이 operator image 의 `upload` sub-command 호출 → S3 업로드) → Completed.
-
-### 3. ValkeyRestore from S3 (cross-cluster 가능)
-
-```yaml
-apiVersion: mongodb.keiailab.com/v1alpha1
-kind: ValkeyRestore
-metadata: { name: vkr-from-s3, namespace: default }
-spec:
-  clusterRef: { kind: Valkey, name: vk-standalone }
-  source:
-    targetRef:
-      name: s3-prod
-      path: 2026-05-06/dump.rdb     # ValkeyBackup 의 path 와 동일
-  restoreType: RDB
-```
-
-흐름: Pending → **Mounting** (target Reachable 검증 + 임시 PVC 생성 +
-Download Job spawn → S3 → 임시 PVC) → Restoring (init container 가 PVC 의
-RDB 를 /data/dump.rdb 로 cp) → Verifying → Completed.
-
-## ValkeyCluster Backup / Restore
-
-ADR-0015 의 *Standalone-only* 제약 완전 해소. ValkeyCluster mode 도 restore
-가능 — 단일 STS 의 ordinal 기반 shard mapping init container 활용.
-
-`ValkeyBackup` 은 `ValkeyCluster` 대상에서 샤드별 primary pod 를 읽어
-source PVC 에 `shard-0/dump.rdb`, `shard-1/dump.rdb`, ... 구조로 저장한다.
-사전 생성한 RWX/ROX PVC 를 `spec.targetPVC.name` 으로 지정하면 동일 PVC 를
-복구 source 로 재사용할 수 있다.
-
-```yaml
-apiVersion: mongodb.keiailab.com/v1alpha1
-kind: ValkeyRestore
+kind: MongoDBSharded
 metadata:
-  name: vkr-cluster-recovery
-  namespace: default
+  name: my-sharded
+  namespace: database
+spec:
+  version:
+    version: "8.3.1"
+  configServer:
+    members: 3
+    storage:
+      size: 5Gi
+  shards:
+    count: 3
+    membersPerShard: 3
+    storage:
+      size: 50Gi
+  mongos:
+    replicas: 2
+    service:
+      type: LoadBalancer
+```
+
+## Custom Resource Definitions (CRD)
+
+### MongoDB (ReplicaSet)
+
+| 필드 | 설명 | 기본값 |
+|-------|-------------|---------|
+| `spec.members` | replica set 멤버 수 | `3` |
+| `spec.version.version` | MongoDB 버전 | `8.3.1` |
+| `spec.storage.storageClassName` | 스토리지 클래스 이름 | - |
+| `spec.storage.size` | 멤버당 PVC 크기 | `10Gi` |
+| `spec.auth.mechanism` | 인증 메커니즘 | `SCRAM-SHA-256` |
+| `spec.tls.enabled` | TLS 활성화 | `false` |
+| `spec.monitoring.enabled` | Prometheus 메트릭 활성화 | `false` |
+| `spec.arbiter.enabled` | arbiter 노드 활성화 | `false` |
+
+### MongoDBSharded
+
+| 필드 | 설명 | 기본값 |
+|-------|-------------|---------|
+| `spec.configServer.members` | Config server replica 수 | `3` |
+| `spec.shards.count` | shard 수 | `2` |
+| `spec.shards.membersPerShard` | shard당 멤버 수 | `3` |
+| `spec.mongos.replicas` | Mongos 라우터 replica 수 | `2` |
+| `spec.mongos.autoScaling.enabled` | mongos HPA 활성화 | `false` |
+
+## Scaling (스케일링)
+
+### 수평 스케일 아웃 (Shard 추가)
+
+Operator 는 동적 shard 스케일링을 지원합니다. `spec.shards.count` 를 늘리면 operator 가 자동으로 다음을 수행합니다:
+
+1. 새 Shard StatefulSet 과 headless Service 생성
+2. 모든 pod 준비 완료 대기
+3. 새 shard 의 ReplicaSet 초기화 (`rs.initiate()`)
+4. mongos 에 새 shard 등록 (`sh.addShard()`)
+5. MongoDB balancer 가 자동으로 새 shard 로 chunk 이동
+
+**예시: 3개에서 5개 shard 로 스케일 아웃**
+
+```bash
+# 현재 shard 수 확인
+kubectl get mongodbsharded my-cluster -o jsonpath='{.spec.shards.count}'
+# 출력: 3
+
+# 5개 shard 로 스케일 아웃
+kubectl patch mongodbsharded my-cluster --type='merge' \
+  -p '{"spec":{"shards":{"count":5}}}'
+
+# 새 shard pod 모니터링
+kubectl get pods -l app.kubernetes.io/component=shard
+
+# shard 등록 확인
+kubectl exec -it my-cluster-mongos-xxx -c mongos -- \
+  mongosh -u admin -p $PASSWORD --eval 'sh.status()'
+```
+
+**상태 추적:**
+```yaml
+status:
+  shardsInitialized: [true, true, true, true, true]
+  shardsAdded: [true, true, true, true, true]
+  shards:
+    - name: my-cluster-shard-0
+      phase: Running
+    - name: my-cluster-shard-1
+      phase: Running
+    - name: my-cluster-shard-2
+      phase: Running
+    - name: my-cluster-shard-3
+      phase: Running
+    - name: my-cluster-shard-4
+      phase: Running
+```
+
+### 수직 스케일링 (리소스 조정)
+
+리소스 requests/limits 업데이트 (rolling restart 트리거):
+
+```bash
+kubectl patch mongodbsharded my-cluster --type='merge' -p '{
+  "spec": {
+    "shards": {
+      "resources": {
+        "requests": {"memory": "2Gi", "cpu": "1"},
+        "limits": {"memory": "4Gi", "cpu": "2"}
+      }
+    }
+  }
+}'
+```
+
+### Mongos Replica 스케일링
+
+Mongos 라우터 수 증가 또는 감소:
+
+```bash
+# 스케일 업
+kubectl patch mongodbsharded my-cluster --type='merge' \
+  -p '{"spec":{"mongos":{"replicas":3}}}'
+
+# 스케일 다운
+kubectl patch mongodbsharded my-cluster --type='merge' \
+  -p '{"spec":{"mongos":{"replicas":1}}}'
+```
+
+## Resource Recommendations (리소스 권장사항)
+
+### 최소 요구사항
+
+| 컴포넌트 | 메모리 | CPU | 비고 |
+|-----------|--------|-----|-------|
+| Config Server | 256Mi | 100m | 3개 멤버 필수 |
+| Shard Member | 512Mi | 250m | replica당 |
+| Mongos | 512Mi | 250m | 256Mi 시 OOM 발생 |
+
+### 프로덕션 권장사항
+
+| 컴포넌트 | 메모리 | CPU | 스토리지 |
+|-----------|--------|-----|---------|
+| Config Server | 1Gi | 500m | 10Gi SSD |
+| Shard Member | 4Gi | 2 | 100Gi+ SSD |
+| Mongos | 1Gi | 500m | - |
+
+## Tested Features (검증된 기능)
+
+상태 표기 기준:
+- **✅ Stable**: envtest 회귀 + 단위 테스트 + 실제 mongod workload(testcontainers/kind/실 클러스터)에서 부하/내구 검증 완료. 증거(stress test 결과/incident 후처리) 보존.
+- **✅ Implemented**: 코드 + envtest 회귀 + 단위 테스트로 *기능적* 정확성 확인. *부하 검증은 운영자 책임*.
+- **⚠️ Beta**: 코드는 동작하나 단위 테스트만 일부, 실 환경 검증 없음 — 운영 환경에 적용 전 추가 검증 필요.
+
+| 기능 | 상태 | 비고 |
+|---------|--------|-------|
+| ReplicaSet 자동 초기화 | ✅ Implemented | `rs.initiate()` 자동. envtest + driver 단위 테스트. |
+| Sharded cluster 초기화 | ✅ Implemented | Config server, shard, mongos. envtest 검증. |
+| Admin 사용자 생성 | ✅ Implemented | K8s Lease lock + post-bootstrap usersInfo verify 포함 driver 기반 bootstrap. |
+| Shard 스케일 아웃 (2→5) | ⚠️ Beta | 자동 `sh.addShard()` — driver 호출 검증, *실 cluster 부하* 미검증. |
+| Shard 스케일 인 (5→2) | ⚠️ Beta | 자동 `removeShard()` + ShardDraining condition + 리소스 정리 (PVC 보존). chunk 마이그레이션 long-running polling은 30s 고정(backoff 미적용). |
+| Mongos replica 스케일링 | ✅ Implemented | Deployment replicas 변경 → rolling. |
+| 리소스 업데이트 | ✅ Implemented | STS UpdateStrategy 통한 Rolling restart. |
+| 스케일링 중 데이터 무결성 | ⚠️ Beta | 코드 흐름상 데이터 손실 차단(PVC retain, removeShard drain wait) — *실 데이터 부하 검증* 미수행. |
+| 스케일 중 동시 쓰기 | ⚠️ Beta | stress test 증거 없음. 향후 testcontainers-go 기반 부하 시험 예정. |
+| PodDisruptionBudget 자동화 | ✅ Implemented | `spec.podDisruptionBudget` 으로 opt-in (MongoDB + Sharded). builder 단위 테스트로 4 컴포넌트 생성 검증. |
+| NetworkPolicy 자동화 | ✅ Implemented | `spec.networkPolicy` 으로 opt-in (deny-by-default + additional peers). 단위 테스트로 cfg=27019/shard=27018/mongos=27017 포트 검증. *실 통신 차단 검증 미수행*. |
+| Admin bootstrap race-free | ✅ Implemented | K8s Lease 분산락(30s TTL) + post-bootstrap `usersInfo` verify. fake-client 단위 테스트(busy/takeover/release). holder pod crash 시 30s까지 다른 reconcile은 backoff. |
+
+## Limitations (제한사항)
+
+### 미지원 기능
+
+| 기능 | 상태 | 우회 방법 |
+|---------|--------|------------|
+| ReplicaSet 멤버 제거 | ❌ 미구현 | 수동 `rs.remove()` 필요 |
+| 자동 백업 스케줄링 | ❌ 계획됨 | 외부 CronJob 사용 |
+| 크로스 클러스터 복제 | ❌ 계획됨 | - |
+| Sharded Arbiter/Hidden 토폴로지 | ⚠️ ReplicaSet 전용 | Arbiter는 MongoDB CR에서 지원; Sharded 확장은 로드맵에 있음 |
+
+### 알려진 이슈
+
+1. **Mongos 메모리**: 최소 512Mi 권장. 256Mi 는 부하 시 OOM 발생.
+2. **ReplicaSet 멤버 우아한 제거 없음**: ReplicaSet 멤버 스케일 다운 시 `rs.remove()` 를 호출하지 않음 — StatefulSet replicas 만 감소.
+3. **스케일 인 PVC 보존**: `removeShard` 완료 후 drain된 shard 의 PVC 는 의도적으로 보존되어 우발적 데이터 손실을 방지합니다. 운영자는 검증 후 수동으로 삭제해야 합니다.
+
+### MongoDBBackup
+
+| 필드 | 설명 | 기본값 |
+|-------|-------------|---------|
+| `spec.clusterRef.name` | 대상 클러스터 이름 | - |
+| `spec.clusterRef.kind` | 대상 클러스터 종류 | `MongoDB` |
+| `spec.type` | 백업 유형 (full/incremental) | `full` |
+| `spec.compression` | 압축 활성화 | `true` |
+| `spec.storage.type` | 스토리지 유형 (s3/pvc) | `s3` |
+
+## Configuration (설정)
+
+### cert-manager 를 이용한 TLS
+
+```yaml
+spec:
+  tls:
+    enabled: true
+    certManager:
+      issuerRef:
+        name: letsencrypt-prod
+        kind: ClusterIssuer
+```
+
+### Prometheus 모니터링
+
+```yaml
+spec:
+  monitoring:
+    enabled: true
+    prometheusRule:
+      enabled: true
+    serviceMonitor:
+      interval: 30s
+```
+
+### S3 백업
+
+```yaml
+apiVersion: mongodb.keiailab.com/v1alpha1
+kind: MongoDBBackup
+metadata:
+  name: daily-backup
 spec:
   clusterRef:
-    kind: ValkeyCluster
-    name: valkeycluster-sample
-  source:
-    pvc:
-      name: backup-cluster-pvc           # ROX 또는 RWX accessMode 필요
-      shardLayout:                       # shard 별 source path 매핑 (옵션)
-        "0": shard-0/dump.rdb
-        "1": shard-1/dump.rdb
-        "2": shard-2/dump.rdb
-        # 미명시 시 default `shard-{N}/dump.rdb` 자동 적용
-  restoreType: RDB
+    name: my-mongodb
+    kind: MongoDB
+  storage:
+    type: s3
+    s3:
+      bucket: mongodb-backups
+      endpoint: https://s3.amazonaws.com
+      region: us-east-1
+      credentialsRef:
+        name: s3-credentials
 ```
 
-흐름: 단일 STS 의 모든 pod 가 동일 init container 사용 → shell 에서
-`${HOSTNAME##*-}` ordinal 추출 → shard index 계산 (0..shards-1 = primary,
-shards..total-1 = replica) → 적절한 source path 의 RDB cp.
+## Development (개발)
 
-**ROX/RWX accessMode 필수** — RWO source 는 multi-pod 동시 mount 불가. EFS /
-NFS / GlusterFS / Ceph FS 등 file system 기반 storage class 사용. 외부 저장
-(Source.TargetRef) 사용 시 현재는 `Spec.SourcePVCAccessMode: ReadOnlyMany`
-명시 필수.
+### 사전 요구사항
 
-## 관측성 (OTEL Tracing) — 신규 (cycle 10-14)
+- Go 1.21+
+- Docker
+- kubectl
+- Kind 또는 Minikube (로컬 테스트용)
 
-ADR-0025 채택. *Optional* OTEL tracer provider — `OTEL_EXPORTER_OTLP_ENDPOINT`
-env 미설정 시 noop (zero overhead). 설정 시 OTLP gRPC exporter 로 22 spans
-발행.
+### 빌드
 
-### 활성화
+```bash
+# Operator 빌드
+make build
 
-**Helm chart 사용자** (cycle 65 추가):
+# 테스트 실행
+make test
 
-```sh
-helm upgrade mongodb-operator charts/mongodb-operator \
-  --set tracing.endpoint=tempo.observability.svc:4317 \
-  --set tracing.serviceName=mongodb-operator
+# Docker 이미지 빌드
+make docker-build IMG=your-registry/mongodb-operator:tag
+
+# Docker 이미지 push
+make docker-push IMG=your-registry/mongodb-operator:tag
 ```
 
-`tracing.endpoint` 비어있으면 OTEL 비활성 (no-op tracer, 성능 영향 0).
+### 로컬 개발
 
-**Kustomize / 직접 manifest 편집** 사용자: operator Deployment 의 env 추가:
+```bash
+# CRD 설치
+make install
 
-```yaml
-env:
-  - name: OTEL_EXPORTER_OTLP_ENDPOINT
-    value: "tempo.observability.svc:4317"  # Tempo / Jaeger / Honeycomb 호환
-  - name: OTEL_SERVICE_NAME
-    value: "mongodb-operator"
-  # 옵션: OTEL_RESOURCE_ATTRIBUTES=env=prod,team=cache
+# Operator 로컬 실행
+make run
+
+# 샘플 MongoDB 생성
+kubectl apply -f config/samples/mongodb_replicaset.yaml
 ```
 
-### Trace hierarchy (22 spans)
+## License (라이선스)
 
-| Span | 발행 위치 | 목적 |
-|---|---|---|
-| `Valkey/Reconcile` | ValkeyController root | reconcile loop |
-| `ValkeyCluster/Reconcile` | ValkeyClusterController root | reconcile loop |
-| `ValkeyBackup/Reconcile` | ValkeyBackupController root | reconcile loop |
-| `ValkeyRestore/Reconcile` | ValkeyRestoreController root | reconcile loop |
-| `ValkeyBackupTarget/Reconcile` | ValkeyBackupTargetController root | reconcile loop |
-| `Failover/INFO_replication` | reconcileFailover | 모든 replica offset 수집 |
-| `Failover/PromoteToPrimary` | reconcileFailover | REPLICAOF NO ONE |
-| `Failover/EnsureReplicaOf_all` | reconcileFailover | 다른 replicas 새 primary 가리키도록 |
-| `ValkeyBackup/Copying` | reconcileCopyingPhase | Job-based PVC 백업 |
-| `ValkeyBackup/Uploading` | reconcileUploadingPhase | S3 업로드 Job |
-| `ValkeyBackup/TriggerBGSAVE` | triggerBackup | BGSAVE 발행 |
-| `ValkeyBackup/LASTSAVE` | queryLastSave | LASTSAVE 폴링 |
-| `ValkeyRestore/Mounting` | handleMounting | PVC/외부 source 다운로드 |
-| `ValkeyRestore/EnsureTargetRefSource` | ensureTargetRefSource | Download Job spawn |
-| `ValkeyRestore/Restoring` | handleRestoring | STS init container patch + rolling |
-| `ValkeyRestore/Verifying` | handleVerifying | STS 원복 + paused 제거 |
-| `ValkeyRestore/VerifyDataPlane` | verifyDataPlane | INFO keyspace (RestoredKeys) |
-| `ValkeyCluster/EnsureClusterMeet` | ensureClusterMeet | CLUSTER MEET + ADDSLOTS + REPLICATE |
-| `ValkeyCluster/CreateCluster` | (nested in EnsureClusterMeet) | vk.CreateCluster 호출 |
-| `ValkeyCluster/QueryAnyNode` | queryAnyNode | INFO + NODES 폴링 |
-| `ValkeyCluster/GracefulTeardown` | gracefulClusterTeardown | finalizer CLUSTER FORGET |
-| `ValkeyBackupTarget/BucketExists` | verifyEndpoint | S3 reachability ping |
+본 프로젝트는 Apache License 2.0 하에 배포됩니다 — 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
 
-### 운영 활용
+### 써드파티 라이선스
 
-- **Latency p95/p99**: span duration 으로 phase 별 SLO 추적
-- **Error rate**: `span.RecordError` 로 critical path 실패 분류
-- **Hierarchy**: trace UI 에서 reconcile loop 의 child span 시간 분포 확인
-  → bottleneck 식별
+본 operator 는 MongoDB 데이터베이스를 관리하지만 MongoDB 소프트웨어를 포함하거나 배포하지 않습니다. MongoDB Community Server 는 [Server Side Public License (SSPL)](https://www.mongodb.com/licensing/server-side-public-license) 하에 배포됩니다.
 
-### 한계
+**중요한 라이선스 참고사항:**
+- 본 operator (Apache 2.0) 는 MongoDB 배포를 조율하는 독립 소프트웨어입니다
+- MongoDB 컨테이너 이미지는 공식 MongoDB 레포지토리에서 가져옵니다
+- 사용자는 MongoDB 라이선스 조건 준수에 책임이 있습니다
+- Operator 는 MongoDB 바이너리를 수정하거나 재배포하지 않습니다
 
-- HTTP exporter 미지원 (gRPC 만). TLS / OAuth 인증 미지원 — 별개 ADR.
-- *Application-level metrics* 는 별개 (controller-runtime 의 metrics 활용).
+## Contributing (기여)
 
-## Replication 자동 Failover — 신규 (cycle 7)
+기여를 환영합니다! 행동 강령과 pull request 제출 절차에 대한 자세한 내용은 [Contributing Guide](CONTRIBUTING.md) 를 참조하세요.
 
-ADR-0017 채택. Replication mode (replicas≥2) 에서 primary pod NotReady
-30s+ 감지 시 *operator 가 자동 failover*. 데이터 손실 최소화 — replica 의
-master_repl_offset / slave_repl_offset 가장 큰 노드 선출 → REPLICAOF NO ONE.
+## Support (지원)
 
-### 동작 조건
+- **이슈**: [GitHub Issues](https://github.com/keiailab/mongodb-operator/issues)
+- **토론**: [GitHub Discussions](https://github.com/keiailab/mongodb-operator/discussions)
 
-- `Spec.Mode == Replication` + `Spec.Replicas > 1`
-- `Spec.AutoFailover == true` (default — `false` 명시 시 비활성)
+## Roadmap (로드맵)
 
-### 알고리즘
+- [x] ReplicaSet 자동 초기화
+- [x] Sharded Cluster 자동 초기화
+- [x] 수평 shard 스케일링 (스케일 아웃)
+- [x] Admin 사용자 자동 생성
+- [ ] Point-in-Time Recovery (PITR)
+- [ ] 자동화된 버전 업그레이드
+- [ ] 크로스 클러스터 복제
+- [ ] Grafana 대시보드 템플릿
+- [ ] CronJob 을 이용한 백업 스케줄링
+- [ ] 데이터 마이그레이션을 포함한 스케일 다운
 
-1. 현재 primary (`Status.CurrentPrimary` 또는 `<name>-0`) Pod Ready 검증.
-2. NotReady 가 30s+ 미만이면 transient flap 으로 무시.
-3. 모든 replica (primary 제외) 의 INFO replication 호출 → offset 추출.
-4. `selectFailoverCandidate` 로 가장 큰 offset replica 선출 (tie 시
-   ordinal 작은 것).
-5. PromoteToPrimary (`REPLICAOF NO ONE`) 발행 → 새 primary.
-6. 다른 Ready replicas 에 `EnsureReplicaOf <new-primary>` 발행.
-7. `Status.CurrentPrimary` 갱신 (in-memory, 다음 reconcile 의 Status update
-   에 반영).
+## Acknowledgments (감사의 말)
 
-### 비활성
+- [Kubernetes](https://kubernetes.io/)
+- [Operator SDK](https://sdk.operatorframework.io/)
+- [MongoDB](https://www.mongodb.com/)
+- [Bitnami MongoDB Charts](https://github.com/bitnami/charts) — 설계 영감
 
-```yaml
-spec:
-  autoFailover: false   # primary kill 시 사용자가 수동 처리
-```
+---
 
-### 한계
+<p align="center">
+  <b>keiailab operator family</b><br/>
+  <a href="https://github.com/keiailab/postgres-operator">postgres-operator</a> ·
+  <a href="https://github.com/keiailab/mongodb-operator">mongodb-operator</a> ·
+  <a href="https://github.com/keiailab/valkey-operator">valkey-operator</a> ·
+  <a href="https://github.com/keiailab/operator-commons">operator-commons</a>
+</p>
 
-- **Split-brain 강력 보장 없음** — 네트워크 분단 시 두 primary 발생 가능.
-  *완화*: NotReady 30s 임계값 + operator leader-elect (단일 인스턴스).
-  Stronger 일관성은 별개 ADR (Sentinel/Raft 추후).
-- **ValkeyCluster 모드는 N/A** — valkey native cluster mode 의
-  `cluster_replica_validity_factor` 가 처리. ValkeyClusterReconciler 는
-  관여 안 함.
-- **e2e 자동 검증 미진행** (별개 cycle).
-
-## ValkeyRestore (Standalone PVC) 사용법 — 신규
-
-전제: 이미 ValkeyBackup 으로 backup PVC (`<backup-name>-backup`) 가 생성됨.
-
-```yaml
-apiVersion: mongodb.keiailab.com/v1alpha1
-kind: ValkeyRestore
-metadata:
-  name: vk-standalone-restore
-  namespace: default
-spec:
-  clusterRef:
-    kind: Valkey         # ValkeyCluster 는 후속 commit
-    name: vk-standalone  # 대상 Valkey CR (Mode=Standalone, replicas=1)
-  source:
-    pvc:
-      name: vkb-rdb-backup  # ValkeyBackup 결과 PVC
-      path: dump.rdb        # 기본값
-  restoreType: RDB
-```
-
-동작:
-1. operator 가 대상 Valkey 에 `mongodb.keiailab.com/paused=true` annotation set
-   → ValkeyController 의 정상 reconcile 차단.
-2. STS PodTemplate 에 init container `valkey-restore-init` + source volume 추가
-   → STS rolling restart 자동 → init container 가 `/restore/dump.rdb` 를
-   `/data/dump.rdb` 로 cp.
-3. Main valkey-server 가 시작 시 *자동 RDB 로드* (Valkey 의 표준 매커니즘).
-4. 모든 pod Ready → STS 원복 (init container 제거) → 두 번째 rolling →
-   paused annotation 제거 → Phase=Completed.
-
-```sh
-kubectl apply -f valkeyrestore.yaml
-kubectl wait --for=jsonpath='{.status.phase}'=Completed valkeyrestore/vk-standalone-restore
-PASS=$(kubectl get secret vk-standalone-auth -o jsonpath='{.data.password}' | base64 -d)
-kubectl exec vk-standalone-0 -- valkey-cli -a "$PASS" get <키>
-```
-
-## 운영 시나리오 검증 (실측)
-
-| 시나리오 | 동작 | 데이터 |
-|---|---|---|
-| primary pod kill (force) | STS 재생성 → operator 가 pod-0 재 promote | PVC 보존 |
-| replica scale up (3→5) | 새 replica 가 자동으로 master link up | — |
-| replica scale down (5→2) | 잉여 pod 정리 | 기존 데이터 유지 |
-| ValkeyCluster shard pod kill | cluster_state=ok 유지 (replica 가 즉시 take over) | 모든 슬롯 보존 |
-| TLS+mTLS ValkeyCluster (cert-manager) | Phase=Running, slots=16384, 데이터 plane SET/GET ✓ | — |
-| TLS+mTLS Valkey Standalone (cert-manager) | Phase=Running, ping/set/get on 6380 ✓ | — |
-| TLS+mTLS Valkey Replication (3 replicas) | master_link_status:up, write propagation 모든 replica ✓ | — |
-| ValkeyBackup (RDB) | Pending → InProgress → Completed, /data/dump.rdb 89 bytes 생성 | — |
-| ValkeyBackup M3.5 (Job-based PVC) | Copying → Completed, `<name>-backup` PVC 에 dump.rdb 보존 | TLS 자동 전파 |
-| ValkeyRestore (Standalone PVC) | Mounting → Restoring → Verifying → Completed, init container 가 /data/dump.rdb cp | RestoredKeys status 채움 |
-| ValkeyRestore (Source.TargetRef, S3) | 임시 PVC + Download Job → 기존 init container 흐름 | cross-cluster restore 가능 |
-| ValkeyRestore (ValkeyCluster, ROX) | shard 별 ordinal → SHARD_IDX shell 매핑 + per-pod cp | ROX source PVC 필수 |
-| Replication 자동 Failover (ADR-0017) | primary NotReady 30s+ → 가장 큰 offset replica REPLICAOF NO ONE → Status.CurrentPrimary 갱신 | e2e: test/e2e/failover_test.go |
-| NetworkPolicy 리소스 생성 | selfPeer + 6379(/16379) ingress + ownerReferences | (CNI 의존) |
-| operator metrics endpoint (HTTPS:8443) | controller_runtime_* + valkey_cluster_* 노출 | — |
-| Prometheus alert rules | 6 alerts (state / slots / replicas / phase / errors / operator down) | config/prometheus/alert-rules.yaml |
-
-## 잠재적 운영 이슈 (현재 알려진 한계)
-
-- `Spec.Auth.Enabled=false` 가 무시됨 — ADR-0013 옵션 A. operator 항상 auth 강제.
-- IPv6-only 환경 미테스트 (CLUSTER MEET 의 IPv4 prefer, ADR-0012).
-- `cluster-announce-hostname` 미사용 (필요 시 별도 RFC 검토).
-- **ValkeyBackup M3.5 완료** (commit 7458228): `valkey-cli --rdb` Job 이
-  SYNC 프로토콜로 fresh RDB 를 별도 PVC (`<backup-name>-backup`) 에 저장. Phase
-  Copying 추가. TLS 자동 전파. Job TTL 24h.
-- **ValkeyRestore Standalone 첫 동작** (commit fbb96d7, ADR-0015):
-  Init Container 패턴 — backup PVC 를 mount 후 `/data/dump.rdb` 로 cp →
-  valkey-server 가 표준 RDB 자동 로드. paused annotation 으로 ValkeyController
-  와의 충돌 차단. **현재 한계**: Standalone Valkey (replicas=1) + Source.PVC
-  만 지원. Replication / Cluster + 외부 source (TargetRef) 는 후속 commit.
-- **외부 저장 (S3 호환) 통합 완료** (commits 505c6c1, fc04cdd, bc6e28b,
-  ADR-0022 + ADR-0023): minio-go v7 채택 (CVE 0건 검증). ValkeyBackupTarget
-  실제 BucketExists ping. ValkeyBackup.Spec.Destination.Type=TargetRef 시
-  Uploading phase 가 별도 Upload Job 으로 외부 저장 업로드. ValkeyRestore.
-  Source.TargetRef 시 임시 PVC + Download Job 으로 다운로드 → cross-cluster
-  restore 가능. **TTL 기반 자동 삭제 + GCS/Azure** 는 별개. AWS S3 + MinIO
-  + Ceph RGW 호환 (forcePathStyle 옵션).
-- ~~Replication 모드 + TLS 미구현~~ → **iter 9 에서 구현 완료** (ADR-0014 AI-007):
-  `tlsConfigForValkey` + `dialValkey` 추가 + `tls-replication yes` 디렉티브.
-  3-replica + cert-manager 검증 통과 (master_link_status:up, write propagation).
-- **NetworkPolicy 강제 동작 검증 부재**: 리소스 정의 정합성만 확인.
-  Calico / Cilium 등 NP-enforcing CNI 클러스터 에서 별도 검증 필요.
-
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
-
-```sh
-kubectl delete -k config/samples/
-```
-
-**Delete the APIs(CRDs) from the cluster:**
-
-```sh
-make uninstall
-```
-
-**UnDeploy the controller from the cluster:**
-
-```sh
-make undeploy
-```
-
-## Project Distribution
-
-Following the options to release and provide this solution to the users.
-
-### By providing a bundle with all YAML files
-
-1. Build the installer for the image built and published in the registry:
-
-```sh
-make build-installer IMG=<some-registry>/mongodb-operator:tag
-```
-
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
-
-2. Using the installer
-
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/mongodb-operator/<tag or branch>/dist/install.yaml
-```
-
-### By providing a Helm Chart
-
-1. Build the chart using the optional helm plugin
-
-```sh
-kubebuilder edit --plugins=helm/v2-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
-
-## Roadmap
-
-본 섹션은 *현재 알려진 우선순위* 를 표시 — 일정 확약 아님 (시간 기반 일정
-대신 *완성도 + 영향도* 기반). 자세한 계획은 `docs/plans/` 참조.
-
-### 진행 중 / 완료 (alpha 단계)
-
-- ✅ Standalone / Replication / ValkeyCluster 모드 (Track A 100%)
-- ✅ Backup → PVC / S3 (`ValkeyBackupTarget` CRD)
-- ✅ Restore (init container 패턴, ADR-0015)
-- ✅ Replication 자동 Failover (replica with largest offset, ADR-0017)
-- ✅ Prometheus Alerts 10건 + runbook §9 + ServiceMonitor 자동화
-- ✅ OTEL Tracing 22 spans
-- ✅ Helm Chart + ArtifactHub publish (ADR-0024)
-- ✅ Supply Chain: SBOM (syft SPDX) + trivy scan + helm-docs
-
-### 다음 단계 (예정)
-
-- [ ] **e2e 자동화** — kind + MinIO 환경에서 Backup/Restore/Cluster 실측.
-- [ ] **ValkeyCluster 자동 resharding** — 슬롯 배치 + ASKING 처리 (ADR-0018 결정 필요).
-- [ ] **HPA 통합** — Replication 모드 only, operator-managed (ADR-0027 deferred — v1alpha1 stable 후).
-- [ ] **Conversion Webhook** — v1beta1 도입 시 (ADR-0026 deferred).
-- [ ] **첫 v0.1.0 GA release** — Track A/B/E 안정 + 24h soak test 후.
-
-상세 결정 근거: [docs/kb/adr/INDEX.md](docs/kb/adr/INDEX.md). 신규 기능 요청은
-[Issues](https://github.com/keiailab/mongodb-operator/issues) 또는 GitHub
-Discussions 에서.
-
-## Production Readiness
-
-본 operator 는 alpha 단계지만 *상용 제품 수준* 의 품질 시스템을 갖추고 있다:
-
-- **29 SSOT 동기 게이트** — alert/runbook/RBAC/CRD/sample/chart artifacts 등
-  drift 자동 차단 (lefthook pre-push). 상세: [docs/operations/release-checklist.md §2](docs/operations/release-checklist.md).
-- **3 자동화** — release pipeline SBOM/trivy 자동 첨부, `make manifests` 가
-  chart CRD 자동 sync, `git push` 의 go mod tidy drift 자동 차단.
-- **Performance baseline** — hot path parser 5 종 microbenchmark
-  (`go test -bench=. ./internal/valkey/`).
-- **운영 문서** — [docs/operations/runbook.md](docs/operations/runbook.md) 9 섹션
-  + alert 별 대응 (§9, 10 alert × Trigger/Diagnosis/Mitigation/Escalation).
-- **Supply chain** — Apache-2.0 LICENSE + SECURITY.md PGP fingerprint +
-  ArtifactHub 검증 (3-repo 통일 — mongodb-operator + postgresql-operator).
-
-[release-checklist.md](docs/operations/release-checklist.md) 에서 release tag
-push 직전 통과 게이트 전체 인벤토리 확인 가능.
-
-## Contributing
-
-[CONTRIBUTING.md](CONTRIBUTING.md) 참조 — 환경 요구사항, PR 절차,
-Conventional Commits, ADR 작성 의무 시점, 코드 스타일.
-
-보안 취약점은 **공개 issue 로 보고하지 마세요**. [SECURITY.md](SECURITY.md)
-의 비공개 보고 경로 사용 (GitHub Security Advisory 또는 email).
-
-운영 절차 (Backup / Restore / Scaling / Upgrade / 응급 조치) 는
-[docs/operations/runbook.md](docs/operations/runbook.md).
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
-
-## License
-
-Copyright 2026 Keiailab.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+<p align="center">
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+</p>
