@@ -133,7 +133,7 @@ The following templates are already configured in `.github/ISSUE_TEMPLATE/`:
 - Prerequisites (search existing issues, reproduce in clean environment, not a security vulnerability)
 - Kubernetes Version (1.26, 1.27, 1.28, 1.29, 1.30, Other)
 - MongoDB Version (8.2, 8.0, 7.0, 6.0, Other)
-- MongoDB Operator Version (v0.0.5, v0.0.3, Other)
+- MongoDB Operator Version (v1.5.0, v1.4.x, v1.3.x, v1.x other, main)
 - Installation Method (Helm, Manual, OLM, Other)
 - Description of the Bug
 - Steps to Reproduce
