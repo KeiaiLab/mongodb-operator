@@ -40,6 +40,7 @@
 | [ADR-0031](0031-gha-retention-for-public-oss.md) | GitHub Actions 보존 — Public OSS Operator 외부 신뢰 게이트 (S7 cycle 폐기, 본 문서는 history 보존 용) | Superseded by ADR-0032 | 2026-05-21 |
 | [ADR-0032](0032-gha-to-local-4-layer.md) | GHA 전면 제거 → 로컬 4계층 단일 운영 (RFC-0002 strict, 12 workflow 전면 제거 + scripts/helm-publish.sh + scripts/release.sh + 3종 보강) | Superseded by ADR-0033 | 2026-05-21 |
 | [ADR-0033](0033-gha-retention-for-public-oss.md) | GitHub Actions 유지 — operator family v2.0 통합 정합 (12 workflow 복원 + ADR-0032 phase 2/3 인프라 유지 + dual-track 운영) | Accepted | 2026-05-21 |
+| [ADR-0034](0034-sprint-1-commons-pvc-topology-adoption.md) | Sprint 1 — operator-commons pkg/pvc + pkg/topology 채택 (-327 LOC, mongodb callsite 1 + pvc 1 교체) | Accepted | 2026-05-21 |
 
 ## 작성 가이드
 

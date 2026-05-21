@@ -43,6 +43,7 @@ import (
 	"github.com/keiailab/mongodb-operator/internal/mongodb"
 	"github.com/keiailab/mongodb-operator/internal/resources"
 	commonsfinalizer "github.com/keiailab/operator-commons/pkg/finalizer"
+	commonspvc "github.com/keiailab/operator-commons/pkg/pvc"
 )
 
 const (
@@ -156,7 +157,7 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 
 	// 5.1. PVC online expansion — Spec.Storage.Size 증가 시 자동 expansion.
 	// valkey-operator PR #39 + postgres-operator PR #33 cross-operator 패턴.
-	if err := expandDataPVCs(ctx, r.Client, mdb.Namespace, []string{mdb.Name}, mdb.Spec.Storage.Size); err != nil {
+	if err := commonspvc.ExpandDataPVCs(ctx, r.Client, mdb.Namespace, []string{mdb.Name}, mdb.Spec.Storage.Size); err != nil {
 		log.FromContext(ctx).Error(err, "PVC resize failed (best-effort)")
 	}
 
