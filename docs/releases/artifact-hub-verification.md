@@ -54,7 +54,7 @@ curl -s https://keiailab.github.io/mongodb-operator/index.yaml | grep -A 10 "ver
   - Source Code → GitHub Repository
   - MongoDB Documentation → mongodb.com
 - [ ] **이미지 정보**:
-  - ghcr.io/eightynine01/mongodb-operator:1.0.0
+  - ghcr.io/keiailab/mongodb-operator:1.0.0
   - mongo:8.2
   - percona/mongodb_exporter:0.40
 - [ ] **변경사항**: CHANGELOG 내용 렌더링
@@ -144,7 +144,7 @@ yq eval '.annotations."artifacthub.io/crdsExamples"' charts/mongodb-operator/Cha
 annotations:
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/eightynine01/mongodb-operator:1.0.0
+      image: ghcr.io/keiailab/mongodb-operator:1.0.0
     - name: mongodb
       image: mongo:8.2
 ```
@@ -199,7 +199,7 @@ annotations:
   # 이미지
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/eightynine01/mongodb-operator:1.0.0
+      image: ghcr.io/keiailab/mongodb-operator:1.0.0
   
   # 변경사항
   artifacthub.io/changes: |
@@ -226,7 +226,7 @@ Artifact Hub는 자동으로 보안 취약점을 스캔합니다:
 
 ```bash
 # 로컬에서 Trivy 스캔 실행
-trivy image ghcr.io/eightynine01/mongodb-operator:1.0.0
+trivy image ghcr.io/keiailab/mongodb-operator:1.0.0
 
 # 결과는 Artifact Hub 웹 페이지의 "Security Report" 섹션에 표시됨
 ```

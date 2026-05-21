@@ -1,10 +1,3 @@
-<p align="center">
-  <b>English</b> |
-  <a href="CHANGELOG.ko.md">한국어</a> |
-  <a href="CHANGELOG.ja.md">日本語</a> |
-  <a href="CHANGELOG.zh.md">中文</a>
-</p>
-
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -409,7 +402,7 @@ EventRecorder 도입 + gosec G115 정합 + Makefile/pre-commit 운영 친화 개
 - **`--enable-autoscaling` flag가 reconciler에 미주입되어 carve-out 무력화 fix**: `MongoDBReconciler` / `MongoDBShardedReconciler` struct에 `EnableAutoscaling bool` 필드 추가. `reconcileRSHPA` / `reconcileMongosHPA` / `reconcileConfigServerHPA` 진입부에 guard 추가. `cmd/main.go`에서 struct 초기화 시 주입. **이전 베타에서는 helm `features.autoscaling.enabled=false`로 설정해도 HPA reconcile이 계속 일어나는 silent 무력화 상태였음**.
 
 ### Fixed
-- **README.md 옛 owner 참조 정리**: `eightynine01.github.io` helm repo URL + Issues/Discussions 링크 등 잔존 4건을 `keiailab`로 정정 (line 125, 472, 473).
+- **README.md 옛 owner 참조 정리**: `keiailab.github.io` helm repo URL + Issues/Discussions 링크 등 잔존 4건을 `keiailab`로 정정 (line 125, 472, 473).
 - **`.github/dependabot.yml`**: `reviewers: [keiailab]` 제거 — Organization명 단독은 GitHub Dependabot에서 invalid (404 → orphan PR). 유효 user/team 정해지면 `keiailab/team-slug` 형태로 추가. `open-pull-requests-limit` 50 → 10 (운영 부담 감소).
 - **`internal/mongodb/replicaset.go`**: 사용 안 되는 `notYetInitializedCode` const 제거 (staticcheck U1000).
 
@@ -440,7 +433,7 @@ Carve-out 정합성 강화 — 코드 레벨 feature gate 도입 + 문서/예제
 
 ### Documentation (베타 carve-out 경고)
 - **`README.md`**: 상단에 베타 출시 안내 블록 추가. Features 섹션의 Sharded/Backup/Auto-scaling 항목에 `(베타 비활성)` 표기.
-- **`README.md` 배지**: 옛 `eightynine01` 참조 정리 (`Build Status`, `Container Image`, `Helm Chart`, `Go Report Card`, `codecov` 5건). keiailab GHCR + Helm으로 일관 정정.
+- **`README.md` 배지**: 옛 `keiailab` 참조 정리 (`Build Status`, `Container Image`, `Helm Chart`, `Go Report Card`, `codecov` 5건). keiailab GHCR + Helm으로 일관 정정.
 - **`examples/minimal/mongodb-sharded.yaml`**: YAML 헤더에 `features.sharded.enabled=true` 필요 경고.
 - **`examples/production/mongodb-sharded-prod.yaml`**: 1.4.0 GA 전 production 사용 권장 안 함 경고.
 - **`examples/backups/s3-backup.yaml`**: YAML 헤더에 `features.backup.enabled=true` 필요 + 보안 위험 경고.
@@ -456,7 +449,7 @@ Carve-out 정합성 강화 — 코드 레벨 feature gate 도입 + 문서/예제
 - **otel exporter 동반 업그레이드**: `otlptrace`, `otlptracegrpc` v1.39.0 → v1.40.0 (`go.mod`). v1.3.2-beta.1에서 SDK만 v1.40.0이고 exporter는 v1.39.0에 머물러 trace export silent fail 위험 있던 부분 정정.
 
 ### Fixed
-- **Dependabot orphan PR 방지**: `.github/dependabot.yml`의 `reviewers`/`assignees`를 `eightynine01` → `keiailab`로 수정. 옛 owner 참조로 인한 PR 할당 404 → 자동 보안 업데이트가 사실상 무력화되어 있던 부분 정정.
+- **Dependabot orphan PR 방지**: `.github/dependabot.yml`의 `reviewers`/`assignees`를 `keiailab` → `keiailab`로 수정. 옛 owner 참조로 인한 PR 할당 404 → 자동 보안 업데이트가 사실상 무력화되어 있던 부분 정정.
 
 ### 검증 후 잔여 P1 (다음 출시 대상)
 - carve-out 정합성 — `cmd/main.go`에 features flag 미적용. RBAC는 거부하나 controller가 등록되어 Forbidden 로그 발생.
@@ -490,7 +483,7 @@ Carve-out 정합성 강화 — 코드 레벨 feature gate 도입 + 문서/예제
 
 ## [1.3.1] - 2026-04-29
 
-배포 경로 복구 — owner가 `eightynine01` → `keiailab`로 이전됐는데 release/helm-publish 워크플로와 chart 메타데이터가 옛 owner를 참조해 v1.1.1~v1.3.0 release 워크플로가 모두 ghcr push 단계에서 fail했고, `index.yaml`의 .tgz URL이 죽은 도메인을 가리켜 ArtifactHub이 chart 본체를 가져가지 못한 문제를 일괄 정정한다.
+배포 경로 복구 — owner가 `keiailab` → `keiailab`로 이전됐는데 release/helm-publish 워크플로와 chart 메타데이터가 옛 owner를 참조해 v1.1.1~v1.3.0 release 워크플로가 모두 ghcr push 단계에서 fail했고, `index.yaml`의 .tgz URL이 죽은 도메인을 가리켜 ArtifactHub이 chart 본체를 가져가지 못한 문제를 일괄 정정한다.
 
 ### Fixed
 - **`.github/workflows/release.yml`**: `IMAGE_NAME: keiailab/mongodb-operator`로 정정. `--url`과 chart annotation sed 패턴의 owner도 keiailab로 통일.
@@ -733,9 +726,9 @@ Bitnami Helm chart 동등성 갭 4건 클로즈, envtest 회귀 봉쇄망 가동
 fresh install 시:
 ```bash
 kind create cluster --name mongo-op-e2e
-make docker-build IMG=ghcr.io/eightynine01/mongodb-operator:test-v2
-kind load docker-image ghcr.io/eightynine01/mongodb-operator:test-v2
-make deploy IMG=ghcr.io/eightynine01/mongodb-operator:test-v2
+make docker-build IMG=ghcr.io/keiailab/mongodb-operator:test-v2
+kind load docker-image ghcr.io/keiailab/mongodb-operator:test-v2
+make deploy IMG=ghcr.io/keiailab/mongodb-operator:test-v2
 kubectl apply -f examples/minimal/
 # 검증:
 # - replica set 3 멤버 init 성공
@@ -759,7 +752,7 @@ kubectl apply -f examples/minimal/
 
 ### Changed
 - **BREAKING**: Migrated container registry from Docker Hub to GitHub Container Registry (GHCR)
-  - New image path: `ghcr.io/eightynine01/mongodb-operator` (previously `eightynine01/mongodb-operator`)
+  - New image path: `ghcr.io/keiailab/mongodb-operator` (previously `keiailab/mongodb-operator`)
   - No Docker Hub Secrets required - uses GITHUB_TOKEN automatically
   - Public images with no rate limits for authenticated users
   - Better integration with GitHub Security scanning
@@ -768,10 +761,10 @@ kubectl apply -f examples/minimal/
 Existing users need to update image references:
 ```yaml
 # Old (Docker Hub)
-image: eightynine01/mongodb-operator:1.0.0
+image: keiailab/mongodb-operator:1.0.0
 
 # New (GHCR)
-image: ghcr.io/eightynine01/mongodb-operator:1.0.1
+image: ghcr.io/keiailab/mongodb-operator:1.0.1
 ```
 
 For Helm users, the repository is automatically updated. Just upgrade:
@@ -903,7 +896,7 @@ None. This is a major release representing stabilization of the project with all
 ## [0.0.6] - 2026-01-05
 
 ### Changed
-- Updated image repository to `eightynine01/mongodb-operator`
+- Updated image repository to `keiailab/mongodb-operator`
 
 ## [0.0.5] - 2025-12-31
 
@@ -990,15 +983,9 @@ None. This is a major release representing stabilization of the project with all
 
 ---
 
-[Unreleased]: https://github.com/eightynine01/mongodb-operator/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/eightynine01/mongodb-operator/compare/v0.0.7...v1.0.0
-[0.0.7]: https://github.com/eightynine01/mongodb-operator/compare/v0.0.6...v0.0.7
-[0.0.6]: https://github.com/eightynine01/mongodb-operator/compare/v0.0.5...v0.0.6
-[0.0.5]: https://github.com/eightynine01/mongodb-operator/compare/v0.0.4...v0.0.5
-[0.0.4]: https://github.com/eightynine01/mongodb-operator/compare/v0.0.3...v0.0.4
-[0.0.3]: https://github.com/eightynine01/mongodb-operator/compare/v0.0.2...v0.0.3
-[0.0.2]: https://github.com/eightynine01/mongodb-operator/compare/v0.0.1...v0.0.2
-[0.0.1]: https://github.com/eightynine01/mongodb-operator/releases/tag/v0.0.1
+[Unreleased]: https://github.com/keiailab/mongodb-operator/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/keiailab/mongodb-operator/releases/tag/v1.5.0
+[1.0.0]: https://github.com/keiailab/mongodb-operator/releases/tag/v1.0.0
 
 ---
 

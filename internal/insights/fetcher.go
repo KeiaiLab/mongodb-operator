@@ -46,6 +46,15 @@ const (
 	skipDBLocal  = "local"
 	skipDBConfig = "config"
 
+	// defaultAuthDB — 사용자 미지정 시 mongo 인증 DB 기본값 (admin). skipDBAdmin
+	// 과 값은 같지만 의미가 분리되므로 별도 상수.
+	defaultAuthDB = "admin"
+
+	// clusterKindMongoDB / clusterKindSharded — Insights.Spec.ClusterRef.Kind
+	// 가 가질 수 있는 유효 값 두 가지.
+	clusterKindMongoDB = "MongoDB"
+	clusterKindSharded = "MongoDBSharded"
+
 	defaultConnectTimeout = 10 * time.Second
 )
 
@@ -77,8 +86,8 @@ func (f *MongoProfileFetcher) Fetch(ctx context.Context, sampleSize int32) ([]Pr
 	}
 	// spec-level 검증 우선 (K8sClient 의존 없음).
 	kind := f.Insights.Spec.ClusterRef.Kind
-	if kind != "MongoDB" && kind != "MongoDBSharded" {
-		return nil, fmt.Errorf("unsupported ClusterRef.Kind %q (allowed MongoDB|MongoDBSharded)", kind)
+	if kind != clusterKindMongoDB && kind != clusterKindSharded {
+		return nil, fmt.Errorf("unsupported ClusterRef.Kind %q (allowed %s|%s)", kind, clusterKindMongoDB, clusterKindSharded)
 	}
 	if f.K8sClient == nil {
 		return nil, fmt.Errorf("MongoProfileFetcher.K8sClient nil")
@@ -126,7 +135,7 @@ func (f *MongoProfileFetcher) Fetch(ctx context.Context, sampleSize int32) ([]Pr
 	// 불가 (level 1/2 invalid). MongoDBSharded kind 시 skip — applyProfilingLevel
 	// 호출이 silent no-op 으로 "적용됨" 오인 방지. per-shard 직접 적용은 후속
 	// sub-task (P5).
-	if kind == "MongoDB" {
+	if kind == clusterKindMongoDB {
 		if err := f.applyProfilingLevel(ctx, cli); err != nil {
 			return nil, fmt.Errorf("apply profiling level: %w", err)
 		}
@@ -187,7 +196,7 @@ func (f *MongoProfileFetcher) resolveConnectTarget(ctx context.Context) (connect
 	ns := f.Insights.Namespace
 	name := f.Insights.Spec.ClusterRef.Name
 	switch f.Insights.Spec.ClusterRef.Kind {
-	case "MongoDB":
+	case clusterKindMongoDB:
 		mdb := &mongodbv1alpha1.MongoDB{}
 		if err := f.K8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: ns}, mdb); err != nil {
 			if apierrors.IsNotFound(err) {
@@ -264,10 +273,10 @@ func (f *MongoProfileFetcher) loadCredentialsFromSecret(ctx context.Context, fal
 	}
 	if !custom {
 		if creds.Username == "" {
-			creds.Username = "admin"
+			creds.Username = defaultAuthDB
 		}
 		if creds.AuthDB == "" {
-			creds.AuthDB = "admin"
+			creds.AuthDB = defaultAuthDB
 		}
 	} else {
 		if creds.Username == "" {
@@ -275,7 +284,7 @@ func (f *MongoProfileFetcher) loadCredentialsFromSecret(ctx context.Context, fal
 		}
 		if creds.AuthDB == "" {
 			// custom secret 인데 authDB 미설정 시 admin fallback.
-			creds.AuthDB = "admin"
+			creds.AuthDB = defaultAuthDB
 		}
 	}
 	return creds, nil

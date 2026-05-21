@@ -43,7 +43,7 @@ Initial stable (GA) release with comprehensive CI/CD, documentation, and example
 
 ### CI/CD & Infrastructure (6 Workflows)
 - **CI Pipeline**: Continuous integration with Go tests, linting, and Docker build verification
-- **Docker Build**: Automated multi-arch image building (linux/amd64, linux/arm64) and publishing to Docker Hub
+- **Docker Build**: Automated single-platform image building (linux/amd64, RFC-0002 §2) and publishing to Docker Hub
 - **Release Automation**: Complete release automation for GitHub releases with binary artifacts
 - **Helm Publishing**: Helm chart packaging and publishing to gh-pages branch
 - **Security Scanning**: Comprehensive security scanning (dependencies, containers, licenses)
@@ -115,7 +115,7 @@ kubectl get deployment -n mongodb-operator-system \
   mongodb-operator-controller-manager \
   -o jsonpath='{.spec.template.spec.containers[0].image}'
 
-# Expected: ghcr.io/eightynine01/mongodb-operator:1.0.0
+# Expected: ghcr.io/keiailab/mongodb-operator:1.0.0
 
 # Verify CRDs
 kubectl get crd | grep mongodb
@@ -143,7 +143,7 @@ Special thanks to all contributors who made this release possible!
 
 ---
 
-**Full Changelog**: https://github.com/eightynine01/mongodb-operator/compare/v0.0.5...v1.0.0
+**Full Changelog**: https://github.com/keiailab/mongodb-operator/compare/v0.0.5...v1.0.0
 EOF
 
 # GitHub Release 생성
@@ -186,7 +186,7 @@ gh release upload v1.0.0 mongodb-operator-1.0.0.tgz
 ### 1. GitHub Releases 페이지 접속
 
 ```
-https://github.com/eightynine01/mongodb-operator/releases/new
+https://github.com/keiailab/mongodb-operator/releases/new
 ```
 
 ### 2. 릴리스 정보 입력
@@ -238,7 +238,7 @@ RELEASE_NOTES=$(cat /tmp/release-notes-v1.0.0.md)
 curl -X POST \
   -H "Accept: application/vnd.github+json" \
   -H "Authorization: Bearer $GITHUB_TOKEN" \
-  https://api.github.com/repos/eightynine01/mongodb-operator/releases \
+  https://api.github.com/repos/keiailab/mongodb-operator/releases \
   -d @- <<EOF
 {
   "tag_name": "v1.0.0",
@@ -260,7 +260,7 @@ EOF
 gh release view v1.0.0
 
 # 웹에서
-https://github.com/eightynine01/mongodb-operator/releases/tag/v1.0.0
+https://github.com/keiailab/mongodb-operator/releases/tag/v1.0.0
 ```
 
 **검증 항목:**
@@ -275,7 +275,7 @@ https://github.com/eightynine01/mongodb-operator/releases/tag/v1.0.0
 
 ```bash
 # 바이너리 다운로드
-curl -LO https://github.com/eightynine01/mongodb-operator/releases/download/v1.0.0/mongodb-operator-linux-amd64
+curl -LO https://github.com/keiailab/mongodb-operator/releases/download/v1.0.0/mongodb-operator-linux-amd64
 
 # 실행 권한 부여
 chmod +x mongodb-operator-linux-amd64
@@ -323,7 +323,7 @@ gh release delete-asset v1.0.0 old-binary.tar.gz
 ### 웹에서
 
 ```
-1. https://github.com/eightynine01/mongodb-operator/releases 접속
+1. https://github.com/keiailab/mongodb-operator/releases 접속
 2. v1.0.0 릴리스 우측 "Edit" 버튼 클릭
 3. 내용 수정 후 "Update release" 클릭
 ```

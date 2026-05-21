@@ -113,6 +113,6 @@ ADR-0025 §Alternatives A 와 동일 — 토큰 예산 초과 + 회귀 위험.
 
 - 선행 ADR: [0025-cycle-0-baseline-and-cross-verification.md](./0025-cycle-0-baseline-and-cross-verification.md)
 - Plan: `/Users/phil/.claude/plans/nifty-snuggling-ocean.md`
-- 3-way summary: [`../comparison/three-way-summary.md`](../comparison/three-way-summary.md)
+- 3-way summary: [`../../comparison/three-way-summary.md`](../../comparison/three-way-summary.md)
 - 12-cycle commits: `10167cb..fea1298` (main branch, 12 atomic feat/docs commits)
 - 사용자 instruction: 본 세션 `/goal` (Stop hook session-scoped)

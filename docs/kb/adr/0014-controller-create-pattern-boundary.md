@@ -2,7 +2,7 @@
 
 - Date: 2026-05-07
 - Status: Accepted
-- Authors: @eightynine01
+- Authors: @keiailab
 - Refs: ADR-0008 (operator-commons 채택), ADR-0013 (conditions LastTransitionTime),
   HANDOFF iteration 41-43 (3 operator race-tolerant audit + CreateOrUpdate 마이그레이션)
 

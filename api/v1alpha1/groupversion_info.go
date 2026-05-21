@@ -29,7 +29,10 @@ var (
 	GroupVersion = schema.GroupVersion{Group: "mongodb.keiailab.com", Version: "v1alpha1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme.
-	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
+	// scheme.Builder 는 controller-runtime 에서 deprecated 되었으나 kubebuilder
+	// 표준 scaffold 패턴이며 v1alpha1 안정 호환을 위해 유지. 후속 마이그레이션은
+	// 별도 RFC 로 추적.
+	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion} //nolint:staticcheck // SA1019: kubebuilder scaffold pattern, see RFC backlog
 
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme

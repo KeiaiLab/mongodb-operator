@@ -21,7 +21,7 @@
   },
   "vulnerabilityAlerts": {
     "labels": ["security", "priority:p0"],
-    "assignees": ["@eightynine01"],
+    "assignees": ["@keiailab"],
     "minimumReleaseAge": null
   },
   "packageRules": [

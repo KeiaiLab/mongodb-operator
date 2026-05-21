@@ -24,7 +24,7 @@ import (
     "sigs.k8s.io/controller-runtime/pkg/client"
     "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-    mongodbv1alpha1 "github.com/eightynine01/mongodb-operator/api/v1alpha1"
+    mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
 func TestMongoDBReconciler(t *testing.T) {
@@ -131,8 +131,8 @@ import (
     +logf "sigs.k8s.io/controller-runtime/pkg/log"
     "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-    mongodbv1alpha1 "github.com/eightynine01/mongodb-operator/api/v1alpha1"
-    "github.com/eightynine01/mongodb-operator/controllers"
+    mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
+    "github.com/keiailab/mongodb-operator/controllers"
 )
 
 var (
@@ -191,7 +191,7 @@ import (
     corev1 "k8s.io/api/core/v1"
     "k8s.io/apimachinery/pkg/types"
 
-    mongodbv1alpha1 "github.com/eightynine01/mongodb-operator/api/v1alpha1"
+    mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
 var _ = Describe("MongoDB Controller", func() {

@@ -30,11 +30,14 @@ This document is the canonical reference for `mongodb-operator` branding decisio
 
 | Asset | URL | Usage |
 |---|---|---|
-| Primary logo (SVG) | `https://keiailab.com/assets/logo.svg` | README header, slides |
-| Mono mark | `https://keiailab.com/assets/mark.svg` | Favicon, social cards |
-| Wordmark | `https://keiailab.com/assets/wordmark.svg` | Footer, dark backgrounds |
+| Primary logo (current) | `https://github.com/keiailab.png` | README header (all repos), slides |
+| Primary logo (SVG, planned) | `https://keiailab.com/assets/logo.svg` *(not yet published)* | future replacement for GitHub avatar |
+| Mono mark (planned) | `https://keiailab.com/assets/mark.svg` *(not yet published)* | Favicon, social cards |
+| Wordmark (planned) | `https://keiailab.com/assets/wordmark.svg` *(not yet published)* | Footer, dark backgrounds |
 
 **Logo placement**: Top-center of README, width 120px. Always link to https://keiailab.com.
+
+**Migration note (2026-05-21)**: until `keiailab.com/assets/*.svg` is published, all repos in the family use the GitHub avatar (`https://github.com/keiailab.png`) as canonical primary logo. The SVG row is reserved for the future migration.
 
 **Clear space**: Minimum padding around logo = 25% of logo width.
 
@@ -86,7 +89,7 @@ GitHub README 의 shield.io badge 는 위 hex 사용 권장.
 
 ```markdown
 <p align="center">
-  <img src="https://keiailab.com/assets/logo.svg" alt="keiailab" width="120"/>
+  <img src="https://github.com/keiailab.png" alt="keiailab" width="120"/>
 </p>
 
 # mongodb-operator

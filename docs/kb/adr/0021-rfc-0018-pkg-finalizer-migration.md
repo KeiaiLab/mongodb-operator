@@ -2,7 +2,7 @@
 
 - Date: 2026-05-09
 - Status: Accepted (PR-A5 first cut — finalizer only, status migration 별 PR)
-- Authors: @eightynine01
+- Authors: @keiailab
 - Refs: RFC-0018 (operator-commons/docs/kb/rfc/0018-status-finalizer-standard.md), ADR-0003 (commons), Plan §2 D10
 
 ## Context

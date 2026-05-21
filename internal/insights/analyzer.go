@@ -23,6 +23,10 @@ import (
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
+// planSummaryCollscan — mongo profile docs 의 plan summary "COLLSCAN" 문자열.
+// MissingIndex heuristic 의 1차 trigger (full collection scan).
+const planSummaryCollscan = "COLLSCAN"
+
 // ProfileDoc — db.system.profile 의 분석 대상 필드 subset.
 // driver 의 bson.M 그대로가 아니라 *분석 entry point* 로 normalize.
 type ProfileDoc struct {
@@ -62,7 +66,7 @@ func Analyze(docs []ProfileDoc, slowThresholdMs int32) []mongodbv1alpha1.Recomme
 		return nil
 	}
 
-	var recs []mongodbv1alpha1.Recommendation
+	recs := make([]mongodbv1alpha1.Recommendation, 0, 8)
 	recs = append(recs, detectMissingIndexes(docs)...)
 	recs = append(recs, detectSlowQueryPatterns(docs, slowThresholdMs)...)
 	recs = append(recs, detectSchemaHints(docs)...)
@@ -97,7 +101,7 @@ func detectMissingIndexes(docs []ProfileDoc) []mongodbv1alpha1.Recommendation {
 		}
 		b.count++
 		b.totalMillis += int64(d.Millis)
-		if d.PlanSummary == "COLLSCAN" {
+		if d.PlanSummary == planSummaryCollscan {
 			b.collscanSeen = true
 		}
 		if d.NReturned > 0 {
@@ -234,7 +238,7 @@ func detectSchemaHints(docs []ProfileDoc) []mongodbv1alpha1.Recommendation {
 }
 
 func looksLikeMissingIndex(d ProfileDoc) bool {
-	if d.PlanSummary == "COLLSCAN" {
+	if d.PlanSummary == planSummaryCollscan {
 		return true
 	}
 	// Codex review (RFC-0045) #4 fix: NReturned==0 + 대량 scan 도 MissingIndex.

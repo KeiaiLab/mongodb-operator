@@ -15,7 +15,7 @@
 - mongodb-operator 기준 버전: v1.4.23
 - Bitnami chart 기준: 9.4.12 (app version 8.0.x)
 - CloudPirates chart 기준: 0.17.1 (app version 8.3.1)
-- 작성 cycle: cycle 0 baseline (12-cycle program 의 첫 단계, [plan](../../../../../.claude/plans/nifty-snuggling-ocean.md))
+- 작성 cycle: cycle 0 baseline (12-cycle program 의 첫 단계 — plan 은 외부 세션 artifact 로 commit 외 보관)
 
 ## 통합 갭 → cycle 매핑
 
@@ -138,6 +138,4 @@
 ## 참고
 
 - ROADMAP: [`../../ROADMAP.md`](../../ROADMAP.md)
-- HANDOFF: [`../../HANDOFF.md`](../../HANDOFF.md)
-- TASKS: [`../../TASKS.md`](../../TASKS.md)
 - ADR (cycle 0 의사결정): [`../kb/adr/0025-cycle-0-baseline-and-cross-verification.md`](../kb/adr/0025-cycle-0-baseline-and-cross-verification.md)

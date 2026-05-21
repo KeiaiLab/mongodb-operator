@@ -2,7 +2,7 @@
 
 - Date: 2026-05-21
 - Status: Accepted
-- Authors: @eightynine01 (Codex Major #7 — Sprint 1 Phase 2)
+- Authors: @keiailab (Codex Major #7 — Sprint 1 Phase 2)
 - Refs: operator-commons ADR-0012 (commons-side decisions)
 
 ## Context

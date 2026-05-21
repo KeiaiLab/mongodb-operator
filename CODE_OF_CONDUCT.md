@@ -69,14 +69,14 @@ For answers to common questions about this code of conduct, see the FAQ at [http
 
 If you experience or witness unacceptable behavior, or have any other concerns, please report it by contacting the project maintainers:
 
-* **GitHub Issues**: https://github.com/eightynine01/mongodb-operator/issues
+* **GitHub Issues**: https://github.com/keiailab/mongodb-operator/issues
 * **Email**: [Insert contact email here]
 
 All reports will be handled with discretion and confidentiality. We will respond to your report as soon as possible and take appropriate action.
 
 ---
 
-Copyright 2026 eightynine01
+Copyright 2026 keiailab
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

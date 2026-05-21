@@ -2,7 +2,7 @@
 
 - Status: Draft
 - Date: 2026-05-10
-- Authors: @eightynine01
+- Authors: @keiailab
 - Related: ADR-0024 (INC-0001 cross-cut audit Phase 2 후속)
 
 ## Summary

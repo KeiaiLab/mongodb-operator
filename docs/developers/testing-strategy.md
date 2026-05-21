@@ -854,7 +854,7 @@ EOF
 
 # Load Docker image
 docker load -i mongodb-operator.tar
-kind load docker-image --name mongodb-operator-test eightynine01/mongodb-operator:test
+kind load docker-image --name mongodb-operator-test keiailab/mongodb-operator:test
 
 # Install operator
 helm install mongodb-operator ./charts/mongodb-operator \
@@ -1099,7 +1099,7 @@ go test ./... -coverprofile=coverage.out -covermode=atomic
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/eightynine01/mongodb-operator.git
+git clone https://github.com/keiailab/mongodb-operator.git
 cd mongodb-operator
 
 # 2. Install dependencies

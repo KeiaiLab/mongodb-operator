@@ -52,7 +52,7 @@ GITHUB_TOKEN은 자동으로 제공되므로 별도 설정 불필요:
 ```yaml
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: eightynine01/mongodb-operator
+  IMAGE_NAME: keiailab/mongodb-operator
 ```
 
 ## 로컬 개발자 설정
@@ -78,7 +78,7 @@ env:
 
 ```bash
 # PAT를 사용하여 로그인
-echo "ghp_xxxxxxxxxxxxxxxxxxxx" | docker login ghcr.io -u eightynine01 --password-stdin
+echo "ghp_xxxxxxxxxxxxxxxxxxxx" | docker login ghcr.io -u keiailab --password-stdin
 
 # 로그인 확인
 docker info | grep -A 5 "Registry"
@@ -87,26 +87,26 @@ docker info | grep -A 5 "Registry"
 ### 이미지 빌드 및 푸시
 
 ```bash
-# 멀티아키텍처 이미지 빌드
+# linux/amd64 단일 아키 이미지 빌드 (RFC-0002 §2)
 docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  --tag ghcr.io/eightynine01/mongodb-operator:1.0.0 \
-  --tag ghcr.io/eightynine01/mongodb-operator:latest \
+  --platform linux/amd64 \
+  --tag ghcr.io/keiailab/mongodb-operator:1.0.0 \
+  --tag ghcr.io/keiailab/mongodb-operator:latest \
   --push \
   .
 
 # 빌드 성공 확인
-docker manifest inspect ghcr.io/eightynine01/mongodb-operator:1.0.0
+docker manifest inspect ghcr.io/keiailab/mongodb-operator:1.0.0
 ```
 
 **단일 아키텍처 빌드 (빠름):**
 
 ```bash
 # 로컬 아키텍처만 빌드
-docker build -t ghcr.io/eightynine01/mongodb-operator:1.0.0 .
+docker build -t ghcr.io/keiailab/mongodb-operator:1.0.0 .
 
 # GHCR에 푸시
-docker push ghcr.io/eightynine01/mongodb-operator:1.0.0
+docker push ghcr.io/keiailab/mongodb-operator:1.0.0
 ```
 
 ## 공개 이미지 설정
@@ -116,8 +116,8 @@ docker push ghcr.io/eightynine01/mongodb-operator:1.0.0
 ### 웹 인터페이스에서
 
 ```bash
-1. https://github.com/orgs/eightynine01/packages 방문
-   # 또는 개인 계정: https://github.com/eightynine01?tab=packages
+1. https://github.com/orgs/keiailab/packages 방문
+   # 또는 개인 계정: https://github.com/keiailab?tab=packages
 
 2. "mongodb-operator" 패키지 클릭
 
@@ -155,7 +155,7 @@ spec:
     spec:
       containers:
       - name: manager
-        image: ghcr.io/eightynine01/mongodb-operator:1.0.0
+        image: ghcr.io/keiailab/mongodb-operator:1.0.0
         imagePullPolicy: IfNotPresent
 ```
 
@@ -163,7 +163,7 @@ spec:
 
 ```bash
 helm install mongodb-operator mongodb-operator/mongodb-operator \
-  --set image.repository=ghcr.io/eightynine01/mongodb-operator \
+  --set image.repository=ghcr.io/keiailab/mongodb-operator \
   --set image.tag=1.0.0
 ```
 
@@ -171,7 +171,7 @@ helm install mongodb-operator mongodb-operator/mongodb-operator \
 
 ```yaml
 image:
-  repository: ghcr.io/eightynine01/mongodb-operator
+  repository: ghcr.io/keiailab/mongodb-operator
   pullPolicy: IfNotPresent
   tag: "1.0.0"
 ```
@@ -180,18 +180,18 @@ image:
 
 ```bash
 # 버전별 태그
-ghcr.io/eightynine01/mongodb-operator:1.0.0
-ghcr.io/eightynine01/mongodb-operator:1.0
-ghcr.io/eightynine01/mongodb-operator:1
+ghcr.io/keiailab/mongodb-operator:1.0.0
+ghcr.io/keiailab/mongodb-operator:1.0
+ghcr.io/keiailab/mongodb-operator:1
 
 # 최신 태그
-ghcr.io/eightynine01/mongodb-operator:latest
+ghcr.io/keiailab/mongodb-operator:latest
 
 # 브랜치 태그
-ghcr.io/eightynine01/mongodb-operator:main
+ghcr.io/keiailab/mongodb-operator:main
 
 # 커밋 SHA 태그
-ghcr.io/eightynine01/mongodb-operator:sha-b35177c
+ghcr.io/keiailab/mongodb-operator:sha-b35177c
 ```
 
 ## 검증
@@ -200,13 +200,13 @@ ghcr.io/eightynine01/mongodb-operator:sha-b35177c
 
 ```bash
 # 공개 이미지 Pull (인증 불필요)
-docker pull ghcr.io/eightynine01/mongodb-operator:1.0.0
+docker pull ghcr.io/keiailab/mongodb-operator:1.0.0
 
 # 이미지 정보 확인
-docker inspect ghcr.io/eightynine01/mongodb-operator:1.0.0
+docker inspect ghcr.io/keiailab/mongodb-operator:1.0.0
 
-# 멀티아키텍처 매니페스트 확인
-docker manifest inspect ghcr.io/eightynine01/mongodb-operator:1.0.0 | jq '.manifests[].platform'
+# linux/amd64 단일 아키 매니페스트 확인 (RFC-0002 §2)
+docker manifest inspect ghcr.io/keiailab/mongodb-operator:1.0.0 | jq '.manifests[].platform'
 
 # 예상 출력:
 # {
@@ -223,12 +223,12 @@ docker manifest inspect ghcr.io/eightynine01/mongodb-operator:1.0.0 | jq '.manif
 
 ```bash
 # 패키지 페이지
-https://github.com/eightynine01/mongodb-operator/pkgs/container/mongodb-operator
+https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator
 
 # 확인 항목:
 - ✅ Visibility: Public
 - ✅ Tags: 1.0.0, latest
-- ✅ OS/Arch: linux/amd64, linux/arm64
+- ✅ OS/Arch: linux/amd64 (단일 아키, RFC-0002 §2)
 - ✅ Linked to repository
 - ✅ README 표시
 ```
@@ -256,7 +256,7 @@ Organization에서 패키지를 관리하는 경우:
 ```bash
 1. Package settings
 2. "Connect repository" 클릭
-3. "eightynine01/mongodb-operator" 선택
+3. "keiailab/mongodb-operator" 선택
 4. "Connect repository" 클릭
 
 # 이제 Repository에서 Packages 탭에 표시됨
@@ -270,10 +270,10 @@ GitHub는 자동으로 이미지를 스캔합니다:
 
 ```bash
 # 웹에서 확인:
-https://github.com/eightynine01/mongodb-operator/security
+https://github.com/keiailab/mongodb-operator/security
 
 # 또는 CLI:
-gh api /repos/eightynine01/mongodb-operator/code-scanning/alerts
+gh api /repos/keiailab/mongodb-operator/code-scanning/alerts
 ```
 
 ### 서명 (Sigstore/Cosign)
@@ -285,10 +285,10 @@ gh api /repos/eightynine01/mongodb-operator/code-scanning/alerts
 brew install cosign
 
 # 이미지 서명
-cosign sign ghcr.io/eightynine01/mongodb-operator:1.0.0
+cosign sign ghcr.io/keiailab/mongodb-operator:1.0.0
 
 # 서명 검증
-cosign verify ghcr.io/eightynine01/mongodb-operator:1.0.0
+cosign verify ghcr.io/keiailab/mongodb-operator:1.0.0
 ```
 
 ## 마이그레이션 체크리스트
@@ -311,15 +311,15 @@ Docker Hub에서 GHCR로 마이그레이션 시:
 
 ```bash
 # 기존 (Docker Hub)
-image: eightynine01/mongodb-operator:1.0.0
+image: keiailab/mongodb-operator:1.0.0
 
 # 새로운 (GHCR)
-image: ghcr.io/eightynine01/mongodb-operator:1.0.0
+image: ghcr.io/keiailab/mongodb-operator:1.0.0
 
 # Helm values 업데이트
 helm upgrade mongodb-operator mongodb-operator/mongodb-operator \
   --reuse-values \
-  --set image.repository=ghcr.io/eightynine01/mongodb-operator
+  --set image.repository=ghcr.io/keiailab/mongodb-operator
 ```
 
 ## 트러블슈팅
@@ -331,7 +331,7 @@ helm upgrade mongodb-operator mongodb-operator/mongodb-operator \
 **해결**:
 ```bash
 # PAT로 로그인
-echo "ghp_xxxxxxxxxxxxxxxxxxxx" | docker login ghcr.io -u eightynine01 --password-stdin
+echo "ghp_xxxxxxxxxxxxxxxxxxxx" | docker login ghcr.io -u keiailab --password-stdin
 
 # 또는 패키지를 Public으로 설정
 ```
@@ -354,10 +354,10 @@ permissions:
 **해결**:
 ```bash
 # 사용 가능한 태그 확인
-docker pull ghcr.io/eightynine01/mongodb-operator:latest
+docker pull ghcr.io/keiailab/mongodb-operator:latest
 
 # 또는 웹에서 확인
-# https://github.com/eightynine01/mongodb-operator/pkgs/container/mongodb-operator
+# https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator
 ```
 
 ## 참고 자료

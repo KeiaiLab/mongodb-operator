@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://keiailab.com/assets/logo.svg" alt="keiailab" width="120"/>
+  <img src="https://github.com/keiailab.png" alt="keiailab" width="120"/>
 </p>
 
 # keiailab operator family
@@ -69,14 +69,7 @@ A breaking change in `operator-commons` requires a synchronized bump across all 
 
 ## i18n
 
-This page (and all canonical project docs) is available in four languages:
-
-- **English** (canonical, this file)
-- [한국어](family.ko.md)
-- [日本語](family.ja.md)
-- [中文](family.zh.md)
-
-When in doubt, the English version is authoritative for technical content; localized versions reflect the same decisions in native phrasing.
+The canonical project docs (README, CONTRIBUTING, SECURITY, GOVERNANCE, MAINTAINERS, ROADMAP, SUPPORT, BRANDING) are available in four languages — see the language switcher at the top of each file. This family overview is English-only; refer to each repository's localized README for native-language entry points.
 
 ---
 

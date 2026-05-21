@@ -26,11 +26,11 @@ We take security reports seriously. If you discover a security vulnerability, pl
 ### How to Report
 
 **Preferred Method**: Use GitHub's private vulnerability reporting
-1. Visit https://github.com/eightynine01/mongodb-operator/security/advisories
+1. Visit https://github.com/keiailab/mongodb-operator/security/advisories
 2. Click "Report a vulnerability"
 3. Follow the prompts to submit your report
 
-**Alternative**: Email us directly at security@eightynine01.com
+**Alternative**: Email us directly at security@keiailab.com
 
 ### What to Include
 

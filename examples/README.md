@@ -48,7 +48,7 @@ Prometheus and Grafana integration for comprehensive observability.
 
 For complete documentation, see:
 - [Main README](../README.md) - Overview and architecture
-- [Project Documentation](https://github.com/eightynine01/mongodb-operator) - GitHub repository
+- [Project Documentation](https://github.com/keiailab/mongodb-operator) - GitHub repository
 - [CRD Reference](../README.md#custom-resource-definitions) - Available configuration options
 
 ## Prerequisites

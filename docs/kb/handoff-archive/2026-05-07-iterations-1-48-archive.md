@@ -266,7 +266,7 @@ RESULT: 12 PASS / 0 FAIL
 
 ### 사용자 결정 대기 항목 (통합 plan G 절)
 
-- A-P0-2 GitHub `keiailab/maintainers` team 실재 + `@eightynine01` 멤버 여부
+- A-P0-2 GitHub `keiailab/maintainers` team 실재 + `@keiailab` 멤버 여부
 - A-P0-6 4 repo Discussions enable 토글
 - C-P0-1 멀티아키 강등 (postgres/valkey arm64/s390x/ppc64le → amd64-only) 동의 여부
 - C-P0-2 mongodb go directive 1.26.2 → 1.25.7 다운그레이드 vs 3 repo 1.26.2 업그레이드

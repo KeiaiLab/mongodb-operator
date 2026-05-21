@@ -73,7 +73,7 @@ audit 시계열 기록: [`commons/docs/quality/audit-history.md`](https://github
 
 - commons-ADR/0013: `audit-production-grade.sh` 5 repo SSOT 측정 자동화
 - commons audit-history (시계열): https://github.com/keiailab/operator-commons/blob/main/docs/quality/audit-history.md
-- CLAUDE.md §7 (v3.x-stable 정의): https://github.com/keiailab/.codex (글로벌 standards, private)
+- CLAUDE.md §7 (v3.x-stable 정의): `keiailab/.codex` 글로벌 standards (private 저장소, 외부 URL 비공개)
 - mongodb-ADR/0033: GHA retention (dual-track)
 - mongodb-ADR/0034: Sprint 1 commons pkg/pvc + pkg/topology 채택
 - mongodb-ADR/0035: RFC-0002 GHA block hook
