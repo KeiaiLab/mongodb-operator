@@ -51,3 +51,6 @@ TASKS.md
 .sisyphus/
 .claude/scheduled_tasks.lock
 .claude/
+
+# Claude Code session artifacts (broad pattern, Codex Major #6 정합)
+.claude-flow/
