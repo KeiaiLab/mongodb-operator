@@ -38,6 +38,7 @@ import (
 	commonsnp "github.com/keiailab/operator-commons/pkg/networkpolicy"
 	"github.com/keiailab/operator-commons/pkg/probes"
 	"github.com/keiailab/operator-commons/pkg/security"
+	commonstopology "github.com/keiailab/operator-commons/pkg/topology"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"github.com/keiailab/mongodb-operator/internal/assets"
@@ -768,7 +769,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 					Containers:                containers,
 					Volumes:                   volumes,
 					Affinity:                  buildDefaultAffinity(mdb.Name),
-					TopologySpreadConstraints: defaultedTopologySpread(nil, mdb.Spec.Members, labels),
+					TopologySpreadConstraints: commonstopology.Defaulted(nil, mdb.Spec.Members, labels),
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
