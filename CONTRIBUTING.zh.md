@@ -60,7 +60,7 @@ git commit -s -m "feat(controller): ..."
 
 3. 添加 upstream 远程:
    ```bash
-   git remote add upstream https://github.com/eightynine01/mongodb-operator.git
+   git remote add upstream https://github.com/keiailab/mongodb-operator.git
    ```
 
 4. 为您的变更创建一个分支:

@@ -30,13 +30,16 @@
 
 ## 2. Logo & Visual Assets (로고 및 시각 자산)
 
-| Asset | URL | Usage |
+| 자산 | URL | 용도 |
 |---|---|---|
-| Primary logo (SVG) | `https://keiailab.com/assets/logo.svg` | README header, 슬라이드 |
-| Mono mark | `https://keiailab.com/assets/mark.svg` | Favicon, 소셜 카드 |
-| Wordmark | `https://keiailab.com/assets/wordmark.svg` | Footer, 어두운 배경 |
+| Primary logo (현재) | `https://github.com/keiailab.png` | README header (전 리포), 슬라이드 |
+| Primary logo (SVG, 예정) | `https://keiailab.com/assets/logo.svg` *(아직 미공개)* | GitHub avatar 의 향후 대체 |
+| Mono mark (예정) | `https://keiailab.com/assets/mark.svg` *(아직 미공개)* | Favicon, 소셜 카드 |
+| Wordmark (예정) | `https://keiailab.com/assets/wordmark.svg` *(아직 미공개)* | Footer, 어두운 배경 |
 
 **Logo placement**: README 의 상단 중앙, 너비 120px. 항상 https://keiailab.com 으로 링크.
+
+**Migration note (2026-05-21)**: `keiailab.com/assets/*.svg` 가 게시되기 전까지, family 전 리포는 GitHub avatar (`https://github.com/keiailab.png`) 를 canonical primary logo 로 사용. SVG 행은 향후 마이그레이션용 예약.
 
 **Clear space**: 로고 주위 최소 여백 = 로고 너비의 25%.
 
@@ -88,7 +91,7 @@ GitHub README 의 shield.io badge 는 위 hex 사용 권장.
 
 ```markdown
 <p align="center">
-  <img src="https://keiailab.com/assets/logo.svg" alt="keiailab" width="120"/>
+  <img src="https://github.com/keiailab.png" alt="keiailab" width="120"/>
 </p>
 
 # mongodb-operator

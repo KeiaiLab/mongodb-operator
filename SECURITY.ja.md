@@ -26,11 +26,11 @@ MongoDB Operator チームでは、以下のバージョンに対してセキュ
 ### 報告方法
 
 **推奨方法**: GitHub の private vulnerability reporting を利用してください
-1. https://github.com/eightynine01/mongodb-operator/security/advisories にアクセスします
+1. https://github.com/keiailab/mongodb-operator/security/advisories にアクセスします
 2. 「Report a vulnerability」をクリックします
 3. 表示される指示に従って報告を送信します
 
-**代替方法**: security@eightynine01.com まで直接メールでご連絡ください
+**代替方法**: security@keiailab.com まで直接メールでご連絡ください
 
 ### 報告に含めるべき内容
 

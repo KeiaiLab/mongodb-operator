@@ -60,7 +60,7 @@ git commit -s -m "feat(controller): ..."
 
 3. upstream リモートを追加する:
    ```bash
-   git remote add upstream https://github.com/eightynine01/mongodb-operator.git
+   git remote add upstream https://github.com/keiailab/mongodb-operator.git
    ```
 
 4. 変更用のブランチを作成する:

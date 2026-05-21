@@ -28,13 +28,16 @@
 
 ## 2. Logo 与视觉资源
 
-| Asset | URL | Usage |
+| 资源 | URL | 用途 |
 |---|---|---|
-| Primary logo (SVG) | `https://keiailab.com/assets/logo.svg` | README 头部、幻灯片 |
-| Mono mark | `https://keiailab.com/assets/mark.svg` | Favicon、社交卡片 |
-| Wordmark | `https://keiailab.com/assets/wordmark.svg` | 页脚、深色背景 |
+| Primary logo (当前) | `https://github.com/keiailab.png` | README header (全部仓库)、幻灯片 |
+| Primary logo (SVG, 计划) | `https://keiailab.com/assets/logo.svg` *(尚未发布)* | GitHub avatar 的未来替代 |
+| Mono mark (计划) | `https://keiailab.com/assets/mark.svg` *(尚未发布)* | Favicon、社交卡片 |
+| Wordmark (计划) | `https://keiailab.com/assets/wordmark.svg` *(尚未发布)* | 页脚、深色背景 |
 
 **Logo placement**: README 顶部居中,宽度 120px。始终链接到 https://keiailab.com。
+
+**Migration note (2026-05-21)**: 在 `keiailab.com/assets/*.svg` 发布之前,family 全部仓库均使用 GitHub avatar (`https://github.com/keiailab.png`) 作为 canonical primary logo。SVG 行为未来迁移预留。
 
 **Clear space**: Logo 周围最小留白 = logo 宽度的 25%。
 
@@ -86,7 +89,7 @@ GitHub README 的 shield.io badge 建议使用上述 hex。
 
 ```markdown
 <p align="center">
-  <img src="https://keiailab.com/assets/logo.svg" alt="keiailab" width="120"/>
+  <img src="https://github.com/keiailab.png" alt="keiailab" width="120"/>
 </p>
 
 # mongodb-operator

@@ -28,13 +28,16 @@
 
 ## 2. ロゴおよびビジュアルアセット
 
-| Asset | URL | Usage |
+| アセット | URL | 用途 |
 |---|---|---|
-| Primary logo (SVG) | `https://keiailab.com/assets/logo.svg` | README ヘッダー、スライド |
-| Mono mark | `https://keiailab.com/assets/mark.svg` | Favicon、ソーシャルカード |
-| Wordmark | `https://keiailab.com/assets/wordmark.svg` | フッター、暗い背景 |
+| Primary logo (現行) | `https://github.com/keiailab.png` | README header (全リポ)、スライド |
+| Primary logo (SVG、予定) | `https://keiailab.com/assets/logo.svg` *(未公開)* | GitHub avatar の今後の代替 |
+| Mono mark (予定) | `https://keiailab.com/assets/mark.svg` *(未公開)* | Favicon、ソーシャルカード |
+| Wordmark (予定) | `https://keiailab.com/assets/wordmark.svg` *(未公開)* | フッター、暗い背景 |
 
 **Logo placement**: README の上部中央、幅 120px。常に https://keiailab.com へリンクします。
+
+**Migration note (2026-05-21)**: `keiailab.com/assets/*.svg` が公開されるまで、family の全リポは GitHub avatar (`https://github.com/keiailab.png`) を canonical primary logo として使用します。SVG 行は今後のマイグレーション用に予約。
 
 **Clear space**: ロゴ周囲の最小パディング = ロゴ幅の 25%。
 
@@ -86,7 +89,7 @@ GitHub README の shield.io badge には上記 hex の利用を推奨します�
 
 ```markdown
 <p align="center">
-  <img src="https://keiailab.com/assets/logo.svg" alt="keiailab" width="120"/>
+  <img src="https://github.com/keiailab.png" alt="keiailab" width="120"/>
 </p>
 
 # mongodb-operator

@@ -26,11 +26,11 @@ MongoDB Operator 团队为以下版本提供安全更新:
 ### 如何报告
 
 **首选方法**: 使用 GitHub 的 private vulnerability reporting
-1. 访问 https://github.com/eightynine01/mongodb-operator/security/advisories
+1. 访问 https://github.com/keiailab/mongodb-operator/security/advisories
 2. 点击 "Report a vulnerability"
 3. 按照提示提交您的报告
 
-**备选方法**: 直接发送邮件至 security@eightynine01.com
+**备选方法**: 直接发送邮件至 security@keiailab.com
 
 ### 应包含的内容
 
