@@ -51,7 +51,11 @@ pre-push:
   parallel: false
   commands:
     unit-test:
-      run: go test -count=1 -timeout=120s ./...
+      # envtest 의존성 (etcd/kube-apiserver) 자동 설정 + go test 통합 — `make test`
+      # 가 setup-envtest 다운로드 + KUBEBUILDER_ASSETS export + manifests/generate/
+      # fmt/vet 전체 파이프라인 보장. controller / webhook suite 의 envtest 차단
+      # 회귀 방지 (cycle 47 학습).
+      run: make test
     full-lint:
       run: ./bin/golangci-lint run
     helm-lint:
