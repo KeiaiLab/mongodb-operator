@@ -2,11 +2,14 @@
 
 | Meta | Value |
 |---|---|
-| Status | Accepted |
+| Status | Superseded by ADR-0033 |
 | Date | 2026-05-21 |
 | Author | keiailab |
 | Supersedes | ADR-0031 (GHA 보존 — Public OSS Operator 외부 신뢰 게이트) |
+| Superseded by | ADR-0033 (GitHub Actions 유지 — operator family v2.0 통합 정합) |
 | Related | RFC-0002 (GHA 영구 금지), ADR-0012 (Renovate 단일 의존성 봇 채택), ADR-0027 (community-operators sync 자동화) |
+
+> **2026-05-21 supersede**: operator family v2.0 통일 결정 (사용자 maintainer) 으로 본 ADR 의 *strict 제거* 노선은 폐기되고, ADR-0033 (GHA 유지 + dual-track 운영 + 로컬 4계층 보강 유지) 로 대체되었다. 본 문서는 history 보존 용도로만 유지된다. phase 2/3 의 인프라 (scripts/helm-publish.sh, scripts/release.sh, lefthook 3종 보강) 는 ADR-0033 에서도 dual-track fallback 으로 *유지*된다.
 
 ## Context
 
