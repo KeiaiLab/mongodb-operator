@@ -491,7 +491,7 @@ kubectl patch pvc data-my-mongodb-0 -n database -p '{"spec":{"resources":{"reque
 If issues persist:
 
 1. Collect debug information (see "Debugging Tips" section)
-2. Check [GitHub Issues](https://github.com/eightynine01/mongodb-operator/issues)
+2. Check [GitHub Issues](https://github.com/keiailab/mongodb-operator/issues)
 3. Create a detailed issue with:
    - MongoDB Operator version
    - Kubernetes version

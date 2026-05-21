@@ -86,8 +86,8 @@ Welcome to the MongoDB Operator documentation. This guide helps you deploy, mana
 ## Additional Resources
 
 - **[Project README](../README.md)** - Main project documentation
-- **[GitHub Issues](https://github.com/eightynine01/mongodb-operator/issues)** - Bug reports and feature requests
-- **[GitHub Discussions](https://github.com/eightynine01/mongodb-operator/discussions)** - Community discussions
+- **[GitHub Issues](https://github.com/keiailab/mongodb-operator/issues)** - Bug reports and feature requests
+- **[GitHub Discussions](https://github.com/keiailab/mongodb-operator/discussions)** - Community discussions
 
 ## Quick Links
 

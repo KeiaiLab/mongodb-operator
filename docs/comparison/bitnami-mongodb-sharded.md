@@ -11,7 +11,7 @@
 | 추상화 | Helm chart 기반 stateful 배포 | Kubernetes Operator (CRD reconciliation) |
 | 배포 단위 | Helm release | `MongoDB`, `MongoDBSharded`, `MongoDBBackup` CR |
 | Lifecycle 자동화 | `helm upgrade` 트리거 | spec 변경 시 자동 reconcile |
-| 컨테이너 베이스 | Bitnami Secure Images (Photon) | 공식 `mongo:8.2` + `ghcr.io/eightynine01/mongodb-operator` |
+| 컨테이너 베이스 | Bitnami Secure Images (Photon) | 공식 `mongo:8.2` + `ghcr.io/keiailab/mongodb-operator` |
 
 **판정 한 줄 요약**: 핵심 기능(SCRAM, TLS, Sharded 토폴로지, Prometheus, PVC)은 **동등**하다. 운영 사이드카·NetworkPolicy·arbiter/hidden 멤버 같은 **편의·보안·토폴로지 옵션 9건이 갭**으로 남아있다. 반대로 **백업 CRD, 선언적 sharding, PrometheusRule 자동 생성, mongo-go-driver 기반 보안 모델** 6건은 본 프로젝트가 우위다.
 
@@ -122,7 +122,7 @@
 | 항목 | Bitnami | 본 프로젝트 |
 |---|---|---|
 | Helm chart 라이선스 | Apache-2.0 | Apache-2.0 |
-| 컨테이너 이미지 | `bitnami/mongodb-sharded` (Photon, BSI) | `mongo:8.2`(공식) + `ghcr.io/eightynine01/mongodb-operator`(Apache-2.0) |
+| 컨테이너 이미지 | `bitnami/mongodb-sharded` (Photon, BSI) | `mongo:8.2`(공식) + `ghcr.io/keiailab/mongodb-operator`(Apache-2.0) |
 | 운영 모델 변화 | 2024-08 Bitnami Secure Images(BSI) 도입, Broadcom 인수 후 일부 카탈로그 상용 구독 전환 진행 | 자체 발행, 공개 GHCR |
 | 공급망 메타데이터 | SBOM/in-toto/VEX/EPSS 제공(BSI) | GHCR 표준 (provenance/SBOM은 향후 작업) |
 

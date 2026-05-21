@@ -2,7 +2,7 @@
 
 - Date: 2026-05-09
 - Status: Proposed
-- Authors: @eightynine01
+- Authors: @keiailab
 - Tags: tooling, ci, hook, lint
 
 ## Context
@@ -41,10 +41,10 @@ EventRecorder 변경 없음 (이미 mongodb 가 표준 원본).
 - linter 18종 활성화 시 *기존 코드의 미해결 issue* 노출 가능 — 단계적 fix 필요
 
 ### 후속 작업
-- [ ] AI-MO20-1: lefthook install 후 pre-commit run --all-files PASS 검증 (Owner: @eightynine01, Due: 2026-05-12)
-- [ ] AI-MO20-2: 기존 .pre-commit-config.yaml 의 모든 hook 이 .lefthook.yml 에 매핑되었는지 diff 검증 (Owner: @eightynine01, Due: 2026-05-12)
-- [ ] AI-MO20-3: golangci v2 18-linter 활성화 후 발견되는 issue 분류 + 단계 fix PR (Owner: @eightynine01, Due: 2026-05-19)
-- [ ] AI-MO20-4: helm chart deployment.yaml 의 livenessProbe / readinessProbe 보강 검증 (`helm template ... | yq '.spec.template.spec.containers[].livenessProbe'` 부재 시 PR) (Owner: @eightynine01, Due: 2026-05-12)
+- [ ] AI-MO20-1: lefthook install 후 pre-commit run --all-files PASS 검증 (Owner: @keiailab, Due: 2026-05-12)
+- [ ] AI-MO20-2: 기존 .pre-commit-config.yaml 의 모든 hook 이 .lefthook.yml 에 매핑되었는지 diff 검증 (Owner: @keiailab, Due: 2026-05-12)
+- [ ] AI-MO20-3: golangci v2 18-linter 활성화 후 발견되는 issue 분류 + 단계 fix PR (Owner: @keiailab, Due: 2026-05-19)
+- [ ] AI-MO20-4: helm chart deployment.yaml 의 livenessProbe / readinessProbe 보강 검증 (`helm template ... | yq '.spec.template.spec.containers[].livenessProbe'` 부재 시 PR) (Owner: @keiailab, Due: 2026-05-12)
 
 ## Alternatives Considered
 

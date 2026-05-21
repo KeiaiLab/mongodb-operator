@@ -11,7 +11,7 @@ This document provides a comprehensive guide for configuring the MongoDB Operato
 5. [Security Settings](#5-security-settings)
 6. [Required Checks](#6-required-checks-workflows)
 7. [Actions & Permissions](#7-actions--permissions)
-8. [Settings Checklist](#settings-checklist)
+8. [Settings Checklist](#8-settings-checklist)
 
 ---
 
@@ -461,7 +461,7 @@ The following workflows must pass before merging to `main`:
 
 **Required Checks**:
 1. **Build Docker Image** ✅
-   - Multi-arch builds (linux/amd64, linux/arm64)
+   - Single-platform builds (linux/amd64, RFC-0002 §2)
    - Buildx with QEMU
    - Cache from/to GitHub Actions cache
 
@@ -472,7 +472,7 @@ The following workflows must pass before merging to `main`:
    - Smoke test binary version check
 
 3. **Push Multi-Arch Manifest** ✅ (on push to main and tags)
-   - Create multi-arch manifest
+   - Create amd64 manifest (RFC-0002 §2)
    - Push to Docker Hub
    - Verify manifest
 
@@ -716,7 +716,7 @@ Use this checklist to verify all settings are configured correctly.
 - [ ] Docker build workflow (`.github/workflows/docker-build.yml`):
   - [ ] `Build Docker Image` check passes
   - [ ] `Test Docker Image` check passes
-  - [ ] Multi-arch builds working
+  - [ ] linux/amd64 builds working (RFC-0002 §2)
 - [ ] Helm lint workflow (`.github/workflows/helm-lint-test.yml`):
   - [ ] `Lint Helm Chart` check passes
   - [ ] `Test Helm Chart Templates` check passes
@@ -843,7 +843,7 @@ updates:
 ## References
 
 - [GitHub Branch Protection](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
-- [GitHub Issue Forms](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/creating-issue-forms)
+- [GitHub Issue Forms — Syntax](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms)
 - [GitHub Dependabot](https://docs.github.com/en/code-security/dependabot)
 - [GitHub Actions Permissions](https://docs.github.com/en/actions/security-guides/automatic-token-authentication)
 - [Conventional Commits](https://www.conventionalcommits.org/)
@@ -854,6 +854,6 @@ updates:
 
 For questions or issues with repository settings:
 
-- Open an issue using the [Question template](.github/ISSUE_TEMPLATE/question.yml)
-- Contact maintainers via [GitHub Discussions](https://github.com/eightynine01/mongodb-operator/discussions)
-- Refer to [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines
+- Open an issue using the [Question template](../.github/ISSUE_TEMPLATE/question.yml)
+- Contact maintainers via [GitHub Discussions](https://github.com/keiailab/mongodb-operator/discussions)
+- Refer to [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines

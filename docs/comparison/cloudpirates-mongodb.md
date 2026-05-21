@@ -10,7 +10,7 @@
 | Architecture 모드 | `standalone` / `replicaset` / `sharded` 1 chart 3 토폴로지 | `MongoDB` (RS) + `MongoDBSharded` 2 CRD |
 | 배포 단위 | Helm release | CR (`MongoDB`, `MongoDBSharded`, `MongoDBBackup`) |
 | Lifecycle 자동화 | `helm upgrade` 트리거 | spec 변경 시 자동 reconcile |
-| 컨테이너 베이스 | non-root, read-only FS, Cosign 서명 이미지 | 공식 `mongo:8.2` + 자체 발행 `ghcr.io/eightynine01/mongodb-operator` |
+| 컨테이너 베이스 | non-root, read-only FS, Cosign 서명 이미지 | 공식 `mongo:8.2` + 자체 발행 `ghcr.io/keiailab/mongodb-operator` |
 
 **판정 한 줄 요약**: CloudPirates 는 Helm-native 사용성 + 보안 baseline (non-root, Cosign) 에 강하다. 본 Operator 는 *선언적 reconciliation + Backup CRD + cert-manager 1급 통합* 에 강하다. **Hidden replica, lifecycleHooks, externalAccess** 3건이 CloudPirates 우위이며 Operator ROADMAP cycle 1+ 으로 인계 대상.
 
@@ -94,7 +94,7 @@ ROADMAP cycle 매핑 — 후속 cycle 진입 대상:
 | 항목 | CloudPirates | 본 프로젝트 |
 |---|---|---|
 | Helm chart 라이선스 | Apache-2.0 (추정 — GitHub 소스 확인 필요) | Apache-2.0 |
-| 컨테이너 이미지 | non-root, read-only FS, Cosign 서명 | `mongo:8.2` + `ghcr.io/eightynine01/mongodb-operator` |
+| 컨테이너 이미지 | non-root, read-only FS, Cosign 서명 | `mongo:8.2` + `ghcr.io/keiailab/mongodb-operator` |
 | 공급망 메타데이터 | Cosign (image + chart) | GHCR 표준 (provenance/SBOM 향후 작업) |
 | 운영 모델 | 신생 OSS 조직 | keiailab OSS, 자체 발행 |
 

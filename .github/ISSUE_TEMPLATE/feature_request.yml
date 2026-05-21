@@ -8,7 +8,7 @@ body:
     attributes:
       value: |
         Thanks for your interest in improving the MongoDB Operator!
-        Before creating a feature request, please check existing issues and the [roadmap](https://github.com/eightynine01/mongodb-operator#roadmap).
+        Before creating a feature request, please check existing issues and the [roadmap](https://github.com/keiailab/mongodb-operator#roadmap).
 
   - type: checkboxes
     id: prerequisites

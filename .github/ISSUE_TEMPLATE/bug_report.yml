@@ -20,7 +20,7 @@ body:
           required: true
         - label: I can reproduce this issue in a clean environment
           required: true
-        - label: This is not a security vulnerability (use [SECURITY.md](https://github.com/eightynine01/mongodb-operator/blob/main/SECURITY.md) for security issues)
+        - label: This is not a security vulnerability (use [SECURITY.md](https://github.com/keiailab/mongodb-operator/blob/main/SECURITY.md) for security issues)
 
   - type: dropdown
     id: kubernetes_version

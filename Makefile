@@ -142,9 +142,9 @@ HELM_SIGN     ?= 0
 HELM_GPG_KEY  ?= 89A409476828CB992338C378651E51AF520BCB78
 HELM_KEYRING  ?= $(HOME)/.gnupg/secring.gpg
 
-# Multi-arch build platforms (AGENTS.md unified policy: amd64+arm64).
-# Override per-invocation for hotfix builds: `make release PLATFORMS=linux/amd64`.
-PLATFORMS     ?= linux/amd64,linux/arm64
+# Build platforms — AGENTS.md §2 + RFC-0002 §2: amd64-only 강제 (multi-arch 금지).
+# C-P0-12 (.lefthook.yml: platforms-amd64-guard) 가 grep 으로 multi-arch 재발 차단.
+PLATFORMS     ?= linux/amd64
 # docker buildx --load (used by `docker-build` for local dev) can only
 # import single-arch images into the docker daemon. Auto-detect host arch
 # so `make docker-build` works on both amd64 and arm64 (Apple Silicon).

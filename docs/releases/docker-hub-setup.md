@@ -77,7 +77,7 @@ GitHub Actions가 실패한 경우, 로컬에서 수동으로 빌드하고 푸�
 ### 전제 조건
 
 ```bash
-# Docker Buildx 활성화 (멀티아키텍처 빌드용)
+# Docker Buildx 활성화 (linux/amd64 단일 아키 빌드용, RFC-0002 §2)
 docker buildx create --name multiarch --use
 docker buildx inspect --bootstrap
 ```
@@ -88,9 +88,9 @@ docker buildx inspect --bootstrap
 # Docker Hub 로그인
 docker login -u <YOUR_DOCKER_USERNAME>
 
-# 멀티아키텍처 이미지 빌드 및 푸시
+# linux/amd64 단일 아키 이미지 빌드 및 푸시 (RFC-0002 §2)
 docker buildx build \
-  --platform linux/amd64,linux/arm64 \
+  --platform linux/amd64 \
   --tag ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0 \
   --tag ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:latest \
   --push \
@@ -171,7 +171,7 @@ docker pull ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0
 # 이미지 정보 확인
 docker inspect ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0
 
-# 멀티아키텍처 매니페스트 확인
+# linux/amd64 단일 아키 매니페스트 확인 (RFC-0002 §2)
 docker manifest inspect ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0 | jq '.manifests[].platform'
 
 # 예상 출력:
@@ -186,9 +186,9 @@ docker manifest inspect ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0 | 
 ```
 
 **웹에서 확인:**
-- https://hub.docker.com/r/<YOUR_DOCKER_USERNAME>/mongodb-operator
+- `https://hub.docker.com/r/<YOUR_DOCKER_USERNAME>/mongodb-operator`
 - Tags 탭에서 1.0.0 태그 확인
-- OS/Architecture 섹션에서 linux/amd64, linux/arm64 확인
+- OS/Architecture 섹션에서 linux/amd64 확인 (multi-arch 금지 — RFC-0002 §2)
 
 ## 트러블슈팅
 
@@ -216,7 +216,7 @@ gh secret set DOCKER_PASSWORD
 **해결:**
 ```bash
 # 로컬에서 빌드 및 푸시
-docker buildx build --platform linux/amd64,linux/arm64 \
+docker buildx build --platform linux/amd64 \
   -t ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0 --push .
 ```
 

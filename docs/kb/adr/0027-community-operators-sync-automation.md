@@ -2,7 +2,7 @@
 
 - Date: 2026-05-14
 - Status: **Deprecated** (superseded by ADR-0028 Phase D, 2026-05-17)
-- Authors: @eightynine01
+- Authors: @keiailab
 
 > **Deprecation note (2026-05-17)**: 본 ADR 의 결정 — `.github/workflows/release.yml`
 > 의 `sync-community-operators` job 자동화 — 는 ADR-0028 Phase D (OLM v0 cluster
@@ -27,7 +27,7 @@ ADR-0023 'operatorhub-bundle-scaffold' 가 정립한 bundle infrastructure 는 �
 `.github/workflows/release.yml` 의 `github-release` job 후속에 `sync-community-operators` job 신설:
 
 1. release tag push trigger (기존 release.yml 의 동일 trigger)
-2. 본 repo 의 tag 시점 `bundle/` 디렉토리 + `bundle.Dockerfile` 을 fork (`eightynine01/community-operators`) 의 `operators/mongodb-operator/<version>/` 으로 복사
+2. 본 repo 의 tag 시점 `bundle/` 디렉토리 + `bundle.Dockerfile` 을 fork (`keiailab/community-operators`) 의 `operators/mongodb-operator/<version>/` 으로 복사
 3. fork branch 에 commit + push
 4. upstream `k8s-operatorhub/community-operators` 에 PR 생성 (`gh pr create`)
 5. **AI 자동 머지 0** — 외부 maintainer 가 review + 머지 책임

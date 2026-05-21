@@ -2,7 +2,7 @@
 
 - Date: 2026-05-07
 - Status: Accepted
-- Authors: @eightynine01
+- Authors: @keiailab
 - Refs: ADR-0008 (operator-commons 채택), valkey iteration 32 (cb9b807) 패턴
 
 ## Context

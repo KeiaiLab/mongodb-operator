@@ -60,7 +60,7 @@ git commit -s -m "feat(controller): ..."
 
 3. Add the upstream remote:
    ```bash
-   git remote add upstream https://github.com/eightynine01/mongodb-operator.git
+   git remote add upstream https://github.com/keiailab/mongodb-operator.git
    ```
 
 4. Create a branch for your changes:
