@@ -42,6 +42,7 @@
 | [ADR-0033](0033-gha-retention-for-public-oss.md) | GitHub Actions 유지 — operator family v2.0 통합 정합 (12 workflow 복원 + ADR-0032 phase 2/3 인프라 유지 + dual-track 운영) | Accepted | 2026-05-21 |
 | [ADR-0034](0034-sprint-1-commons-pvc-topology-adoption.md) | Sprint 1 — operator-commons pkg/pvc + pkg/topology 채택 (-327 LOC, mongodb callsite 1 + pvc 1 교체) | Accepted | 2026-05-21 |
 | [ADR-0035](0035-rfc-0002-gha-block-hook.md) | RFC-0002 GitHub Actions Block — lefthook pre-commit hook 자동 강제 (.github/workflows/ 신규 파일 추가 차단, modify 허용, ADR-0033 dual-track 정합, commons ADR-0012 + postgres ADR-0021 sister) | Accepted | 2026-05-21 |
+| [ADR-0036](0036-v3x-stable-baseline.md) | v3.x-stable baseline 인정 (audit ❌ 0 충족, CLAUDE.md §7 v3.x-stable 조건) | Accepted | 2026-05-21 |
 
 ## 작성 가이드
 
