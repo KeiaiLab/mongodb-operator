@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -35,6 +36,7 @@ import (
 
 	commonslabels "github.com/keiailab/operator-commons/pkg/labels"
 	commonsnp "github.com/keiailab/operator-commons/pkg/networkpolicy"
+	"github.com/keiailab/operator-commons/pkg/probes"
 	"github.com/keiailab/operator-commons/pkg/security"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
@@ -610,27 +612,19 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			VolumeMounts:    volumeMounts,
 			Resources:       buildResourceRequirements(mdb.Spec.Resources),
 			SecurityContext: buildDefaultContainerSecurityContext(),
-			LivenessProbe: &corev1.Probe{
-				ProbeHandler: corev1.ProbeHandler{
-					Exec: &corev1.ExecAction{
-						Command: []string{"mongosh", "--quiet", "--eval", "db.adminCommand('ping')"},
-					},
-				},
-				InitialDelaySeconds: 30,
-				PeriodSeconds:       10,
-				TimeoutSeconds:      5,
-				FailureThreshold:    6,
-			},
-			ReadinessProbe: &corev1.Probe{
-				ProbeHandler: corev1.ProbeHandler{
-					Exec: &corev1.ExecAction{
-						Command: []string{"/scripts/readiness-probe.sh"},
-					},
-				},
-				InitialDelaySeconds: 5,
-				PeriodSeconds:       10,
-				TimeoutSeconds:      5,
-			},
+			LivenessProbe: probes.New().
+				Exec("mongosh", "--quiet", "--eval", "db.adminCommand('ping')").
+				InitialDelay(30 * time.Second).
+				Period(10 * time.Second).
+				Timeout(5 * time.Second).
+				FailureThreshold(6).
+				Build(),
+			ReadinessProbe: probes.New().
+				Exec("/scripts/readiness-probe.sh").
+				InitialDelay(5 * time.Second).
+				Period(10 * time.Second).
+				Timeout(5 * time.Second).
+				Build(),
 			// pod 자체가 자기 mongod에 localhost 연결로 첫 admin user를 생성한다.
 			// operator는 pods/exec을 호출하지 않는다. 스크립트가 실패해도 mongod
 			// 시작 자체는 멈추지 않으며, 운영자는 readiness 미달 → reconcile
