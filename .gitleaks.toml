@@ -1,0 +1,25 @@
+# gitleaks.toml — 본 저장소의 secret-scan allowlist.
+#
+# 표준 gitleaks 룰셋 (`extend.useDefault = true`) 위에 *false positive*
+# 예외만 추가. 실제 비밀이 우연히 매칭됐다면 즉시 회수 + 본 파일 미수정.
+#
+# 정책: .lefthook.yml 의 `gitleaks` 가 pre-push 단계에서 `gitleaks protect
+# --staged` 로 staged 변경만 검사 — full repo 검사는 audit (`gitleaks dir .`)
+# 에서 트리거. 본 allowlist 는 양쪽 모두 적용.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "공개 PGP key fingerprint + 기타 false positive"
+regexes = [
+  # HELM_GPG_KEY (Makefile §HELM signing) — keiailab 공식 helm chart 서명용
+  # 공개 fingerprint. RFC 4880 §12.2 의 SHA-1 fingerprint 는 공개 정보.
+  # 게시 위치: https://keiailab.com/.well-known/pgp-keys/helm-publisher.asc (예정)
+  '''89A409476828CB992338C378651E51AF520BCB78''',
+]
+paths = [
+  # Apache-2.0 LICENSE 의 boilerplate copyright / 일반 license 텍스트.
+  '''(?i)^LICENSE$''',
+  '''(?i)^NOTICE$''',
+]
