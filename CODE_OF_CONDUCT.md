@@ -1,3 +1,10 @@
+<p align="center">
+  <b>English</b> |
+  <a href="CODE_OF_CONDUCT.ko.md">한국어</a> |
+  <a href="CODE_OF_CONDUCT.ja.md">日本語</a> |
+  <a href="CODE_OF_CONDUCT.zh.md">中文</a>
+</p>
+
 # Contributor Covenant Code of Conduct
 
 ## Our Pledge
@@ -82,3 +89,17 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+---
+
+<p align="center">
+  <b>keiailab operator family</b><br/>
+  <a href="https://github.com/keiailab/postgres-operator">postgres-operator</a> ·
+  <a href="https://github.com/keiailab/mongodb-operator">mongodb-operator</a> ·
+  <a href="https://github.com/keiailab/valkey-operator">valkey-operator</a> ·
+  <a href="https://github.com/keiailab/operator-commons">operator-commons</a>
+</p>
+
+<p align="center">
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+</p>

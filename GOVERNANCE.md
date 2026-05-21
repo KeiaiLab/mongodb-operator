@@ -1,3 +1,10 @@
+<p align="center">
+  <b>English</b> |
+  <a href="GOVERNANCE.ko.md">한국어</a> |
+  <a href="GOVERNANCE.ja.md">日本語</a> |
+  <a href="GOVERNANCE.zh.md">中文</a>
+</p>
+
 # Governance
 
 본 문서는 keiailab/mongodb-operator 프로젝트의 의사결정 절차를 정의합니다.
@@ -77,3 +84,17 @@ CVE 보고, 시크릿/인증 모델 변경은 [SECURITY.md](SECURITY.md) 절차�
 |---|---|---|
 | 2026-05-15 | Deployment 모델 변경 분류 + Installer RBAC scope + Network surface + Release artifact 도달 가능성 신설 | ADR-0028, ADR-0029, ADR-0030 |
 | 2026-05-07 | 본 문서 신설 — 3-repo (mongodb / postgresql / valkey) 거버넌스 자산 정합 | INC-2026-05-07 |
+
+---
+
+<p align="center">
+  <b>keiailab operator family</b><br/>
+  <a href="https://github.com/keiailab/postgres-operator">postgres-operator</a> ·
+  <a href="https://github.com/keiailab/mongodb-operator">mongodb-operator</a> ·
+  <a href="https://github.com/keiailab/valkey-operator">valkey-operator</a> ·
+  <a href="https://github.com/keiailab/operator-commons">operator-commons</a>
+</p>
+
+<p align="center">
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+</p>

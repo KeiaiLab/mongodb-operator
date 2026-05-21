@@ -1,3 +1,10 @@
+<p align="center">
+  <b>English</b> |
+  <a href="INSTALL.ko.md">한국어</a> |
+  <a href="INSTALL.ja.md">日本語</a> |
+  <a href="INSTALL.zh.md">中文</a>
+</p>
+
 # Installation Guide
 
 > mongodb-operator 의 *external user* 운영 수준 설치 가이드. 3 path matrix + 상세 절차 + Day-2 upgrade/rollback.
@@ -293,3 +300,17 @@ spec:
 - [ROADMAP.md](ROADMAP.md) — feature roadmap (deployment models 포함)
 - [ADR-0028](docs/kb/adr/0028-olm-external-user-production-readiness.md) — 외부 사용자 운영 수준 결정
 - [ADR-0029](docs/kb/adr/0029-olm-v1-migration-from-v0.md) — OLM v1 채택 결정
+
+---
+
+<p align="center">
+  <b>keiailab operator family</b><br/>
+  <a href="https://github.com/keiailab/postgres-operator">postgres-operator</a> ·
+  <a href="https://github.com/keiailab/mongodb-operator">mongodb-operator</a> ·
+  <a href="https://github.com/keiailab/valkey-operator">valkey-operator</a> ·
+  <a href="https://github.com/keiailab/operator-commons">operator-commons</a>
+</p>
+
+<p align="center">
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+</p>

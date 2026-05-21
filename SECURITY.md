@@ -1,3 +1,10 @@
+<p align="center">
+  <b>English</b> |
+  <a href="SECURITY.ko.md">한국어</a> |
+  <a href="SECURITY.ja.md">日本語</a> |
+  <a href="SECURITY.zh.md">中文</a>
+</p>
+
 # Security Policy
 
 ## Supported Versions
@@ -78,3 +85,17 @@ Our disclosure process follows these guidelines:
 This project is licensed under the Apache License 2.0. As per Section 7 of the license, the project is provided on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE.
 
 While we strive to maintain high security standards, you are solely responsible for determining the appropriateness of using or redistributing this project and assume any risks associated with your exercise of permissions under the license.
+
+---
+
+<p align="center">
+  <b>keiailab operator family</b><br/>
+  <a href="https://github.com/keiailab/postgres-operator">postgres-operator</a> ·
+  <a href="https://github.com/keiailab/mongodb-operator">mongodb-operator</a> ·
+  <a href="https://github.com/keiailab/valkey-operator">valkey-operator</a> ·
+  <a href="https://github.com/keiailab/operator-commons">operator-commons</a>
+</p>
+
+<p align="center">
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+</p>

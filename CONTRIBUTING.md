@@ -1,3 +1,10 @@
+<p align="center">
+  <b>English</b> |
+  <a href="CONTRIBUTING.ko.md">한국어</a> |
+  <a href="CONTRIBUTING.ja.md">日本語</a> |
+  <a href="CONTRIBUTING.zh.md">中文</a>
+</p>
+
 # Contributing to MongoDB Operator
 
 Thank you for your interest in contributing to MongoDB Operator! This document provides guidelines and information for contributors.
@@ -268,3 +275,17 @@ Releases are managed by maintainers. The process includes:
 ## License
 
 By contributing to this project, you agree that your contributions will be licensed under the Apache License 2.0.
+
+---
+
+<p align="center">
+  <b>keiailab operator family</b><br/>
+  <a href="https://github.com/keiailab/postgres-operator">postgres-operator</a> ·
+  <a href="https://github.com/keiailab/mongodb-operator">mongodb-operator</a> ·
+  <a href="https://github.com/keiailab/valkey-operator">valkey-operator</a> ·
+  <a href="https://github.com/keiailab/operator-commons">operator-commons</a>
+</p>
+
+<p align="center">
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+</p>
