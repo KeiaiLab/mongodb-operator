@@ -19,4 +19,6 @@ repo 로 마이그레이션* 될 때까지의 *bridge*.
 
 | Date | Resource | Status | Migration target |
 |---|---|---|---|
-| 2026-05-07 | `keiailab-valkey-prod.yaml` (ValkeyCluster, data ns) | 임시 보관 | argos-platform-data (`valkey-operator/` umbrella, 별 cycle) |
+| _(none)_ | — | — | — |
+
+**마지막 cleanup**: 2026-05-21 — `2026-05-07/keiailab-valkey-prod.yaml` 마이그레이션 완료 후 제거 (production-grade-sprint.md Phase B7 완수). 본 디렉토리는 *임시 보관소* 정합 유지 — 향후 git 추적 0 인 CR 발견 시 같은 정책으로 재사용.
