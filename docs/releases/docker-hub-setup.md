@@ -272,7 +272,8 @@ docker builder prune -a
 - [Docker Hub 공식 문서](https://docs.docker.com/docker-hub/)
 - [GitHub Actions Secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets)
 - [Docker Buildx 문서](https://docs.docker.com/buildx/working-with-buildx/)
-- [MongoDB Operator CI/CD 문서](./v1.0.0-release-guide.md)
+- [MongoDB Operator CI/CD 문서](../../.github/workflows/release.yml) (`.github/workflows/release.yml` — 현재 release pipeline)
+- [`scripts/release.sh`](../../scripts/release.sh) (`scripts/release.sh` — 로컬 4계층 release 실행 스크립트, RFC-0002 정합)
 
 ## 다음 단계
 

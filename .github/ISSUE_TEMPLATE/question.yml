@@ -30,7 +30,7 @@ body:
       description: Provide context about what you're trying to achieve
       placeholder: |
         I'm trying to deploy a MongoDB sharded cluster with TLS encryption enabled.
-        I'm running Kubernetes 1.29 on EKS and using the operator v0.0.5.
+        I'm running Kubernetes 1.30 on EKS and using the operator v1.5.0.
       render: markdown
     validations:
       required: true
@@ -66,9 +66,11 @@ body:
       label: MongoDB Operator Version
       description: Which version of the MongoDB Operator are you using?
       options:
-        - 'v0.0.5'
-        - 'v0.0.3'
-        - 'Other'
+        - 'v1.5.0 (latest stable)'
+        - 'v1.4.x'
+        - 'v1.3.x'
+        - 'v1.x (other)'
+        - 'main (development build)'
 
   - type: textarea
     id: what_tried
