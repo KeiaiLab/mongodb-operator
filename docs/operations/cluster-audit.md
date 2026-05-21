@@ -231,10 +231,13 @@ platform-data-valkey               Synced   Healthy
 
 ## DR Snapshots (임시 보관)
 
-git 추적 0 인 CR spec 의 disaster recovery snapshot:
+git 추적 0 인 CR spec 의 disaster recovery snapshot 저장 정책. 자세한
+인덱스는 [`cluster-snapshots/README.md`](./cluster-snapshots/README.md)
+참조.
 
-- `docs/operations/cluster-snapshots/2026-05-07/keiailab-valkey-prod.yaml`
-  (ValkeyCluster, data ns) — C24 마이그레이션 후 제거.
+**2026-05-21 cleanup**: `2026-05-07/keiailab-valkey-prod.yaml` (ValkeyCluster,
+data ns) — argos-platform-data 의 `valkey-operator/templates/valkeycluster.yaml`
+로 마이그레이션 완료 (production-grade-sprint Phase B7) 후 제거.
 
 ## ADR Cross-Reference (it45-47)
 

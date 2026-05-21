@@ -40,7 +40,7 @@ operator + cluster 인프라 *기 보유*. *chart values 1-2 line* 만 추가.
 | B4 | argocd Application `platform-data-valkey-operator` 신규 등록 | argos-platform-data application.yaml |
 | B5 | 기존 helm release `valkey-operator-prod` adoption (annotation `meta.helm.sh/release-name` + label `argos.io/managed=argocd` 추가) — *zero-downtime* 보장 | (cluster) |
 | B6 | 기존 ValkeyCluster CR 라벨 추가 (`argos.io/managed=argocd`) | (cluster) |
-| B7 | `cluster-snapshots/2026-05-07/keiailab-valkey-prod.yaml` 제거 + `cluster-snapshots/README.md` 인덱스 갱신 | mongodb-operator |
+| B7 ✅ | `cluster-snapshots/2026-05-07/keiailab-valkey-prod.yaml` 제거 + `cluster-snapshots/README.md` 인덱스 갱신 (2026-05-21 완료) | mongodb-operator |
 | B8 | C24 / C29 / C30 (valkey) / C32 (valkey) / C35 entries 100% 갱신 | mongodb-operator (TASKS.md) |
 
 **Risk**: B5 의 helm adoption 단계가 *spec drift* 시 ArgoCD 가 *replace 또는
