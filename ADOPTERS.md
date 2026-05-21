@@ -1,3 +1,10 @@
+<p align="center">
+  <b>English</b> |
+  <a href="ADOPTERS.ko.md">한국어</a> |
+  <a href="ADOPTERS.ja.md">日本語</a> |
+  <a href="ADOPTERS.zh.md">中文</a>
+</p>
+
 # Adopters of mongodb-operator
 
 본 문서는 `keiailab/mongodb-operator` 를 운영 환경 또는 평가 환경에서 사용하는 조직/프로젝트의 *공개* 목록입니다. 자가 등록을 환영합니다 — PR 로 row 를 추가해주세요.
@@ -33,3 +40,17 @@ PR 을 열어 위 표에 한 row 추가:
 ## CNCF Sandbox Reference
 
 본 ADOPTERS 목록은 CNCF graduation criteria 의 "≥1 public adopter" 요구사항을 충족하기 위한 공개 reference 로도 활용됩니다.
+
+---
+
+<p align="center">
+  <b>keiailab operator family</b><br/>
+  <a href="https://github.com/keiailab/postgres-operator">postgres-operator</a> ·
+  <a href="https://github.com/keiailab/mongodb-operator">mongodb-operator</a> ·
+  <a href="https://github.com/keiailab/valkey-operator">valkey-operator</a> ·
+  <a href="https://github.com/keiailab/operator-commons">operator-commons</a>
+</p>
+
+<p align="center">
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+</p>

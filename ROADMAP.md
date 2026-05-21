@@ -1,3 +1,10 @@
+<p align="center">
+  <b>English</b> |
+  <a href="ROADMAP.ko.md">한국어</a> |
+  <a href="ROADMAP.ja.md">日本語</a> |
+  <a href="ROADMAP.zh.md">中文</a>
+</p>
+
 # ROADMAP — mongodb-operator
 
 본 ROADMAP 은 *날짜 약속이 아니라* 검증 가능한 기능 체크리스트로 진행을 추적한다. Phase 1-4 골격은 가치/도메인 단위 분류이며, *시간 기반 deadline 은 의도적으로 배제*한다 (글로벌 `standards/workflow.md` "시간 기반 로드맵 금지").
@@ -366,3 +373,17 @@ grep -c '^### 5\.[0-9]' ROADMAP.md  # ≥ 6
 ```
 
 Refs: `~/.claude/plans/2026-05-14-4-operators-100pct/P-E.md` (sub-task 18 candidate)
+
+---
+
+<p align="center">
+  <b>keiailab operator family</b><br/>
+  <a href="https://github.com/keiailab/postgres-operator">postgres-operator</a> ·
+  <a href="https://github.com/keiailab/mongodb-operator">mongodb-operator</a> ·
+  <a href="https://github.com/keiailab/valkey-operator">valkey-operator</a> ·
+  <a href="https://github.com/keiailab/operator-commons">operator-commons</a>
+</p>
+
+<p align="center">
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+</p>

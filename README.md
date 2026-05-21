@@ -1,14 +1,31 @@
-# MongoDB Operator for Kubernetes
+<p align="center">
+  <img src="https://keiailab.com/assets/logo.svg" alt="keiailab" width="120"/>
+</p>
 
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go)](https://golang.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-7.0%2B-47A248?logo=mongodb)](https://www.mongodb.com/)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes)](https://kubernetes.io/)
-[![Container Image](https://img.shields.io/badge/ghcr.io-keiailab%2Fmongodb--operator-blue?logo=github)](https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator)
-[![Helm Chart](https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/keiailab/mongodb-operator/main/charts/mongodb-operator/Chart.yaml&label=helm%20v)](https://github.com/keiailab/mongodb-operator)
-[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/mongodb-operator)](https://artifacthub.io/packages/search?repo=mongodb-operator)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/keiailab/mongodb-operator/badge)](https://scorecard.dev/viewer/?uri=github.com/keiailab/mongodb-operator)
-[![GitHub Discussions](https://img.shields.io/github/discussions/keiailab/mongodb-operator?label=discussions&logo=github)](https://github.com/keiailab/mongodb-operator/discussions)
+# mongodb-operator
+
+> **Apache-2.0 MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+**
+
+<p align="center">
+  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"/></a>
+  <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go" alt="Go Version"/></a>
+  <a href="https://www.mongodb.com/"><img src="https://img.shields.io/badge/MongoDB-7.0%2B-47A248?logo=mongodb" alt="MongoDB"/></a>
+  <a href="https://kubernetes.io/"><img src="https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes" alt="Kubernetes"/></a>
+  <a href="https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator"><img src="https://img.shields.io/badge/ghcr.io-keiailab%2Fmongodb--operator-blue?logo=github" alt="Container Image"/></a>
+  <a href="https://github.com/keiailab/mongodb-operator"><img src="https://img.shields.io/badge/dynamic/yaml?url=https://raw.githubusercontent.com/keiailab/mongodb-operator/main/charts/mongodb-operator/Chart.yaml&label=helm%20v" alt="Helm Chart"/></a>
+  <a href="https://artifacthub.io/packages/search?repo=mongodb-operator"><img src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/mongodb-operator" alt="Artifact Hub"/></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/keiailab/mongodb-operator"><img src="https://api.scorecard.dev/projects/github.com/keiailab/mongodb-operator/badge" alt="OpenSSF Scorecard"/></a>
+  <a href="https://github.com/keiailab/mongodb-operator/discussions"><img src="https://img.shields.io/github/discussions/keiailab/mongodb-operator?label=discussions&logo=github" alt="GitHub Discussions"/></a>
+</p>
+
+<p align="center">
+  <b>English</b> |
+  <a href="README.ko.md">한국어</a> |
+  <a href="README.ja.md">日本語</a> |
+  <a href="README.zh.md">中文</a>
+</p>
+
+---
 
 A Kubernetes Operator for deploying and managing MongoDB ReplicaSets and Sharded Clusters.
 
@@ -525,3 +542,17 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 - [Operator SDK](https://sdk.operatorframework.io/)
 - [MongoDB](https://www.mongodb.com/)
 - [Bitnami MongoDB Charts](https://github.com/bitnami/charts) for inspiration
+
+---
+
+<p align="center">
+  <b>keiailab operator family</b><br/>
+  <a href="https://github.com/keiailab/postgres-operator">postgres-operator</a> ·
+  <a href="https://github.com/keiailab/mongodb-operator">mongodb-operator</a> ·
+  <a href="https://github.com/keiailab/valkey-operator">valkey-operator</a> ·
+  <a href="https://github.com/keiailab/operator-commons">operator-commons</a>
+</p>
+
+<p align="center">
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+</p>

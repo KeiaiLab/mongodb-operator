@@ -1,3 +1,10 @@
+<p align="center">
+  <b>English</b> |
+  <a href="AGENTS.ko.md">한국어</a> |
+  <a href="AGENTS.ja.md">日本語</a> |
+  <a href="AGENTS.zh.md">中文</a>
+</p>
+
 # mongodb-operator — AI Agent Guide
 
 본 문서는 AI agent (Claude Code, Cursor, Continue 등) 가 본 repo 에서 안전하고 효과적으로 작업하기 위한 *프로젝트별* 가이드입니다. 글로벌 규약 (`~/.claude/CLAUDE.md` + `standards/*`) 의 *추가 부속*이며, 충돌 시 글로벌 규약 우선.
@@ -186,3 +193,17 @@ kubectl get deployment -A -l app.kubernetes.io/name=mongodb-operator  # helm 또
 - 운영 사고 분석: [HANDOFF.md](HANDOFF.md) (2026-05-07)
 - 기능 우선순위: [ROADMAP.md](ROADMAP.md), [TASKS.md](TASKS.md)
 - 운영자 진입점: [docs/operations/README.md](docs/operations/README.md)
+
+---
+
+<p align="center">
+  <b>keiailab operator family</b><br/>
+  <a href="https://github.com/keiailab/postgres-operator">postgres-operator</a> ·
+  <a href="https://github.com/keiailab/mongodb-operator">mongodb-operator</a> ·
+  <a href="https://github.com/keiailab/valkey-operator">valkey-operator</a> ·
+  <a href="https://github.com/keiailab/operator-commons">operator-commons</a>
+</p>
+
+<p align="center">
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+</p>
