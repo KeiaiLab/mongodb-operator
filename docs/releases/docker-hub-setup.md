@@ -50,7 +50,7 @@ GitHub 저장소에서:
 
 ```bash
 # Docker Hub 사용자명 설정
-gh secret set DOCKER_USERNAME --body "eightynine01"
+gh secret set DOCKER_USERNAME --body "<YOUR_DOCKER_USERNAME>"
 
 # Access Token 설정 (대화형)
 gh secret set DOCKER_PASSWORD
@@ -86,30 +86,30 @@ docker buildx inspect --bootstrap
 
 ```bash
 # Docker Hub 로그인
-docker login -u eightynine01
+docker login -u <YOUR_DOCKER_USERNAME>
 
 # 멀티아키텍처 이미지 빌드 및 푸시
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  --tag ghcr.io/eightynine01/mongodb-operator:1.0.0 \
-  --tag ghcr.io/eightynine01/mongodb-operator:latest \
+  --tag ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0 \
+  --tag ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:latest \
   --push \
   .
 
 # 빌드 성공 확인
-docker manifest inspect ghcr.io/eightynine01/mongodb-operator:1.0.0
+docker manifest inspect ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0
 ```
 
 **간단한 단일 아키텍처 빌드:**
 
 ```bash
 # 로컬 아키텍처만 빌드 (빠름)
-docker build -t ghcr.io/eightynine01/mongodb-operator:1.0.0 .
-docker tag ghcr.io/eightynine01/mongodb-operator:1.0.0 ghcr.io/eightynine01/mongodb-operator:latest
+docker build -t ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0 .
+docker tag ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0 ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:latest
 
 # Docker Hub에 푸시
-docker push ghcr.io/eightynine01/mongodb-operator:1.0.0
-docker push ghcr.io/eightynine01/mongodb-operator:latest
+docker push ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0
+docker push ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:latest
 ```
 
 ## GitHub Actions 워크플로우 재실행
@@ -119,7 +119,7 @@ Secrets 설정 후 실패한 워크플로우를 재실행할 수 있습니다:
 ### 웹 인터페이스에서
 
 ```bash
-1. https://github.com/eightynine01/mongodb-operator/actions 방문
+1. https://github.com/<YOUR_DOCKER_USERNAME>/mongodb-operator/actions 방문
 2. 실패한 "Release" 워크플로우 클릭
 3. 우측 상단 "Re-run jobs" > "Re-run failed jobs" 클릭
 ```
@@ -143,15 +143,15 @@ MongoDB Operator는 다음 태그를 사용합니다:
 
 ```bash
 # 버전별 태그
-ghcr.io/eightynine01/mongodb-operator:1.0.0
-eightynine01/mongodb-operator:0.0.7
+ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0
+<YOUR_DOCKER_USERNAME>/mongodb-operator:0.0.7
 
 # 최신 태그
-ghcr.io/eightynine01/mongodb-operator:latest
+ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:latest
 
 # 개발 태그 (main 브랜치 커밋 시)
-eightynine01/mongodb-operator:dev
-eightynine01/mongodb-operator:sha-b35177c
+<YOUR_DOCKER_USERNAME>/mongodb-operator:dev
+<YOUR_DOCKER_USERNAME>/mongodb-operator:sha-b35177c
 ```
 
 **태그 규칙:**
@@ -166,13 +166,13 @@ eightynine01/mongodb-operator:sha-b35177c
 
 ```bash
 # Docker Hub에서 이미지 확인
-docker pull ghcr.io/eightynine01/mongodb-operator:1.0.0
+docker pull ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0
 
 # 이미지 정보 확인
-docker inspect ghcr.io/eightynine01/mongodb-operator:1.0.0
+docker inspect ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0
 
 # 멀티아키텍처 매니페스트 확인
-docker manifest inspect ghcr.io/eightynine01/mongodb-operator:1.0.0 | jq '.manifests[].platform'
+docker manifest inspect ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0 | jq '.manifests[].platform'
 
 # 예상 출력:
 # {
@@ -186,7 +186,7 @@ docker manifest inspect ghcr.io/eightynine01/mongodb-operator:1.0.0 | jq '.manif
 ```
 
 **웹에서 확인:**
-- https://hub.docker.com/r/eightynine01/mongodb-operator
+- https://hub.docker.com/r/<YOUR_DOCKER_USERNAME>/mongodb-operator
 - Tags 탭에서 1.0.0 태그 확인
 - OS/Architecture 섹션에서 linux/amd64, linux/arm64 확인
 
@@ -199,7 +199,7 @@ docker manifest inspect ghcr.io/eightynine01/mongodb-operator:1.0.0 | jq '.manif
 **해결:**
 ```bash
 # Docker Hub에 로그인했는지 확인
-docker login -u eightynine01
+docker login -u <YOUR_DOCKER_USERNAME>
 
 # GitHub Secrets가 올바르게 설정되었는지 확인
 gh secret list
@@ -217,7 +217,7 @@ gh secret set DOCKER_PASSWORD
 ```bash
 # 로컬에서 빌드 및 푸시
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t ghcr.io/eightynine01/mongodb-operator:1.0.0 --push .
+  -t ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0 --push .
 ```
 
 ### 문제 3: "rate limit exceeded"
@@ -227,8 +227,8 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 **해결:**
 ```bash
 # 인증된 상태에서 pull
-docker login -u eightynine01
-docker pull ghcr.io/eightynine01/mongodb-operator:1.0.0
+docker login -u <YOUR_DOCKER_USERNAME>
+docker pull ghcr.io/<YOUR_DOCKER_USERNAME>/mongodb-operator:1.0.0
 
 # 또는 GitHub Container Registry 사용 고려
 # (향후 구현 예정)
