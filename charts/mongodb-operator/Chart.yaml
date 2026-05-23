@@ -2,7 +2,7 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.5.0
+version: 1.5.1
 appVersion: "1.5.0"
 kubeVersion: ">=1.26.0-0"
 
@@ -130,6 +130,8 @@ annotations:
       image: percona/mongodb_exporter:0.51.0
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
+    - kind: fixed
+      description: "Chart RBAC — features.autoscaling.enabled=false (default) 상태에서 operator 가 HorizontalPodAutoscaler informer cache sync timeout 으로 CrashLoopBackOff 되던 결함 fix. Owns(HPA) 는 두 reconciler (MongoDB / MongoDBSharded) 모두 unconditional 등록이라 read verbs (get/list/watch) 는 항상 grant 필요 — feature gate 와 무관. Write verbs (create/update/patch/delete) 는 그대로 gate 유지."
     - kind: fixed
       description: "Sharded P0 — PodTemplate merge 를 current template 기반 overlay 로 전환해 EnableServiceLinks 등 미명시 server-default 전체를 보존. mongos Deployment generation 증가 루프를 차단."
     - kind: fixed

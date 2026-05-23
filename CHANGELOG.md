@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Helm chart RBAC — HPA informer cache timeout (chart `1.5.1`)**: `charts/mongodb-operator/templates/clusterrole.yaml` 의 autoscaling rule 이 `features.autoscaling.enabled` 게이트 아래에 통째로 묶여 있어, default (`autoscaling.enabled=false`) 설치 시 SA 가 `horizontalpodautoscalers` 를 list/watch 할 수 없었음. `MongoDBReconciler.SetupWithManager` / `MongoDBShardedReconciler.SetupWithManager` 가 `Owns(&autoscalingv2.HorizontalPodAutoscaler{})` 를 unconditional 로 등록하므로 (회귀 가드: `TestSetupWithManager_RegistersHPAOwns`), 이 상태에서는 controller-runtime cache 가 HPA informer sync 에 영원히 실패 → `failed to wait for caches to sync kind source: *v2.HorizontalPodAutoscaler` → manager exit → operator pod `CrashLoopBackOff`. 동일 증상으로 모든 RS / Sharded reconcile 정지. 수정: read verbs (`get/list/watch`) 는 feature gate 와 무관하게 항상 grant, write verbs (`create/update/patch/delete`) 만 `features.autoscaling.enabled` 로 gate. `config/rbac/role.yaml` (kustomize SoT) 와의 RBAC drift 도 동시에 해소.
+
 ### ⚠ BREAKING CHANGES
 
 - **OLM v0 cluster install path 영구 폐기 (ADR-0028 Phase D, 2026-05-17)** — `deploy/olm/` (CatalogSource + Subscription + OperatorGroup + NetworkPolicies + ArgoCD Application + namespace + kustomization + README) 전체 제거. KeiaiLab 클러스터는 OLM v1 (`deploy/olm-v1/`, operator-controller v1.8.0, ClusterCatalog + ClusterExtension) single canonical path 로 *완전 cutover*.
