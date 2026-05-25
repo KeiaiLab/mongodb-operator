@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="SUPPORT.md">English</a> |
+  <a href="(../support.md)">English</a> |
   <a href="SUPPORT.ko.md">한국어</a> |
   <a href="SUPPORT.ja.md">日本語</a> |
   <b>中文</b>
@@ -15,14 +15,14 @@
 
 | 情况 | 前往位置 |
 |---|---|
-| **您认为发现了一个安全漏洞。** | **请勿打开公开 issue。** 使用 [SECURITY.md](SECURITY.md) — GitHub Security Advisory 或 `security@keiailab.com` (PGP 签名)。 |
+| **您认为发现了一个安全漏洞。** | **请勿打开公开 issue。** 使用 [Security](../security.md) — GitHub Security Advisory 或 `security@keiailab.com` (PGP 签名)。 |
 | 您有"这应该像 X 那样工作吗?"或"我该如何配置 Y?"之类的问题。 | [GitHub Discussions](https://github.com/keiailab/mongodb-operator/discussions)。可搜索,并为将来的运维人员建立索引。 |
 | 您发现了一个 bug — 行为与文档不一致。 | 使用 **Bug report** 模板 [打开 issue](https://github.com/keiailab/mongodb-operator/issues/new/choose)。 |
-| 您希望添加功能或更改行为。 | 使用 **Feature request** 模板 [打开 issue](https://github.com/keiailab/mongodb-operator/issues/new/choose)。请先查看 [ROADMAP.md](ROADMAP.md) 确认是否已在计划中。 |
+| 您希望添加功能或更改行为。 | 使用 **Feature request** 模板 [打开 issue](https://github.com/keiailab/mongodb-operator/issues/new/choose)。请先查看 [Roadmap](../roadmap.md) 确认是否已在计划中。 |
 | 您有"这应该写进 FAQ"之类的问题。 | 使用 **Question** 模板 [打开 issue](https://github.com/keiailab/mongodb-operator/issues/new/choose)。 |
 | 您遇到 Prometheus 告警,需要 MTTR 操作流程。 | [`../troubleshooting.md`](../troubleshooting.md) §9 (每条告警的 `runbook_url` annotation 都指向此处)。 |
 | 您看到异常行为但没有告警。 | [`../troubleshooting.md`](../troubleshooting.md) — 症状 → 原因 → 诊断 → 处置流程图。 |
-| 您想为代码或文档做贡献。 | [CONTRIBUTING.md](CONTRIBUTING.md)。 |
+| 您想为代码或文档做贡献。 | [Contributing](../contributing.md)。 |
 
 ## 在打开 issue 之前,请
 
@@ -38,10 +38,10 @@
 ## 响应预期
 
 这是一个以 best-effort 时间维护的开源项目。
-[GOVERNANCE.md](GOVERNANCE.md) 描述了决策与
+[Governance](../governance.md) 描述了决策与
 评审流程。通常我们会在几个工作日内
 回复 issue;安全报告按
-[SECURITY.md](SECURITY.md) 中的 SLA 处理 (initial ack 72 h 以内,severity triage
+[Security](../security.md) 中的 SLA 处理 (initial ack 72 h 以内,severity triage
 7 天以内)。
 
 如果您需要付费支持关系或硬性 SLA,请通过
@@ -56,6 +56,6 @@
 ## Code of Conduct (行为准则)
 
 上述所有渠道均受
-[Code of Conduct](CODE_OF_CONDUCT.md) 约束。请在
+[Code of Conduct](../code-of-conduct.md) 约束。请在
 参与之前阅读。
 

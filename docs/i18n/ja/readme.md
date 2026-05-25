@@ -42,7 +42,7 @@ Kubernetes 上で MongoDB ReplicaSet および Sharded Cluster をデプロイ�
 > - `MongoDBBackup` — 自動テスト 0 件、connectionString 平文露出のリスク (`features.backup.enabled=true` で有効化)
 > - HorizontalPodAutoscaler — RS/cfg drift mutex が不在 (`features.autoscaling.enabled=true` で有効化)
 >
-> 詳細な残存リスクは [CHANGELOG.md](CHANGELOG.md) の Known Issues セクションを参照してください。
+> 詳細な残存リスクは [Changelog](../changelog.md) の Known Issues セクションを参照してください。
 
 ## 概要
 
@@ -152,7 +152,7 @@ Operator は MongoDB クラスターの初期化を自動的に処理します�
 | Helm チャート | ローカル開発、シングルクラスターのシンプルなデプロイ | stable | 1 コマンド (`helm install`) |
 | OLM v0 | OpenShift レガシー、OperatorHub.io コミュニティ | メンテナンスモード (v0.42、2026-04) | manifest 4 つ + InstallPlan の approve |
 
-**詳細な手順**: [INSTALL.md](INSTALL.md)。本節は *クイックスタート* です。
+**詳細な手順**: [Installation Guide](../install.md)。本節は *クイックスタート* です。
 
 #### Path 1 — OLM v1 (モダン標準、推奨)
 
@@ -518,7 +518,7 @@ kubectl apply -f config/samples/mongodb_replicaset.yaml
 
 ## コントリビュート
 
-コントリビュートを歓迎しています。コードオブコンダクトおよびプルリクエスト提出のプロセスについては [Contributing Guide](CONTRIBUTING.md) を参照してください。
+コントリビュートを歓迎しています。コードオブコンダクトおよびプルリクエスト提出のプロセスについては [Contributing Guide](../contributing.md) を参照してください。
 
 ## サポート
 

@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="MAINTAINERS.md">English</a> |
+  <a href="(../maintainers.md)">English</a> |
   <a href="MAINTAINERS.ko.md">한국어</a> |
   <b>日本語</b> |
   <a href="MAINTAINERS.zh.md">中文</a>
@@ -23,14 +23,14 @@ GitHub team `@keiailab/maintainers` が本プロジェクトの全領域に対�
 
 - マージされた PR ≥ 20 件 (意味のあるコード/ドキュメント貢献)
 - レビューした PR ≥ 30 件 (建設的なフィードバックを伴う)
-- 本プロジェクトの [GOVERNANCE.md](GOVERNANCE.md) と [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) の遵守
+- 本プロジェクトの [Governance](../governance.md) と [Code of Conduct](../code-of-conduct.md) の遵守
 - 一つ以上のコア領域 (controller, resource builder, sharded reconcile, bootstrap-admin script, observability など) に対する深い理解
 
 ## 追加手順
 
 1. 既存メンテナー、または candidate 本人が issue または ADR で提案
 2. `@keiailab/maintainers` チームの lazy consensus (7 日間のコメントウィンドウ)
-3. 反対がなければ GitHub team に追加し、MAINTAINERS.md 更新の PR
+3. 反対がなければ GitHub team に追加し、(../maintainers.md) 更新の PR
 
 ## 非アクティブなメンテナー
 

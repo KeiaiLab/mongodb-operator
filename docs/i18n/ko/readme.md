@@ -44,7 +44,7 @@ Kubernetes 위에서 MongoDB ReplicaSet 과 Sharded Cluster 의 배포·관리�
 > - `MongoDBBackup` — 자동 테스트 0건, connectionString 평문 노출 위험 (`features.backup.enabled=true`로 활성)
 > - HorizontalPodAutoscaler — RS/cfg drift mutex 부재 (`features.autoscaling.enabled=true`로 활성)
 >
-> 자세한 잔여 위험은 [CHANGELOG.md](CHANGELOG.md) 의 Known Issues 섹션 참조.
+> 자세한 잔여 위험은 [Changelog](../changelog.md) 의 Known Issues 섹션 참조.
 
 ## Overview (개요)
 
@@ -154,7 +154,7 @@ Operator 는 MongoDB 클러스터 초기화를 자동으로 처리합니다.
 | Helm 차트 | 로컬 개발, 단일 클러스터 간단 배포 | 안정 | 1개 명령 (`helm install`) |
 | OLM v0 | OpenShift 레거시, OperatorHub.io 커뮤니티 | 유지보수 모드 (v0.42, 2026-04) | 4개 매니페스트 + InstallPlan 승인 |
 
-**상세 절차**: [INSTALL.md](INSTALL.md). 본 절은 *Quick Start* 입니다.
+**상세 절차**: [Installation Guide](../install.md). 본 절은 *Quick Start* 입니다.
 
 #### 방법 1 — OLM v1 (현대 표준, 권장)
 
@@ -520,7 +520,7 @@ kubectl apply -f config/samples/mongodb_replicaset.yaml
 
 ## Contributing (기여)
 
-기여를 환영합니다! 행동 강령과 pull request 제출 절차에 대한 자세한 내용은 [Contributing Guide](CONTRIBUTING.md) 를 참조하세요.
+기여를 환영합니다! 행동 강령과 pull request 제출 절차에 대한 자세한 내용은 [Contributing Guide](../contributing.md) 를 참조하세요.
 
 ## Support (지원)
 

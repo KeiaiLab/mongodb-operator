@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="MAINTAINERS.md">English</a> |
+  <a href="(../maintainers.md)">English</a> |
   <a href="MAINTAINERS.ko.md">한국어</a> |
   <a href="MAINTAINERS.ja.md">日本語</a> |
   <b>中文</b>
@@ -23,14 +23,14 @@ GitHub team `@keiailab/maintainers` 拥有本项目所有领域的合并/审批�
 
 - 已合并的 PR ≥ 20 个 (有意义的代码/文档贡献)
 - 已审查的 PR ≥ 30 个 (附带建设性反馈)
-- 遵守本项目的 [GOVERNANCE.md](GOVERNANCE.md) 与 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- 遵守本项目的 [Governance](../governance.md) 与 [Code of Conduct](../code-of-conduct.md)
 - 对一个以上的核心领域 (controller, resource builder, sharded reconcile, bootstrap-admin script, observability 等) 有深入理解
 
 ## 添加流程
 
 1. 由现有维护者或 candidate 本人通过 issue 或 ADR 提案
 2. `@keiailab/maintainers` 团队的 lazy consensus (7 天评论窗口)
-3. 无反对意见则添加到 GitHub team,并提交 MAINTAINERS.md 更新 PR
+3. 无反对意见则添加到 GitHub team,并提交 (../maintainers.md) 更新 PR
 
 ## 非活跃维护者
 

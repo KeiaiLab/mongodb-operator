@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="CODE_OF_CONDUCT.md">English</a> |
+  <a href="(../code-of-conduct.md)">English</a> |
   <b>한국어</b> |
   <a href="CODE_OF_CONDUCT.ja.md">日本語</a> |
   <a href="CODE_OF_CONDUCT.zh.md">中文</a>
@@ -7,7 +7,7 @@
 
 # Contributor Covenant Code of Conduct (한국어)
 
-> English canonical: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — 정본 / canonical
+> English canonical: [Code of Conduct](../code-of-conduct.md) — 정본 / canonical
 
 ## 우리의 서약
 

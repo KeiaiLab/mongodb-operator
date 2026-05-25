@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="ROADMAP.md">English</a> |
+  <a href="(../roadmap.md)">English</a> |
   <a href="ROADMAP.ko.md">한국어</a> |
   <a href="ROADMAP.ja.md">日本語</a> |
   <b>中文</b>
@@ -284,7 +284,7 @@
 ## 社区贡献
 
 - **功能提案** — GitHub Issues + 使用场景 + 优先级投票
-- **代码贡献** — [CONTRIBUTING.md](CONTRIBUTING.md),从小 PR 开始
+- **代码贡献** — [Contributing](../contributing.md),从小 PR 开始
 - **反馈** — 生产使用经验 / bug 报告 / 性能基准
 
 ## 参考资料
@@ -307,7 +307,7 @@
 | 2026-05-17 | 切换为 OLM v1 only ([x]) — v0 cluster path (`deploy/olm/`) + community-operators sync 自动化永久废弃。INSTALL 3-path → 2-path matrix。FBC catalog `deploy/olm/catalog/` → `deploy/catalog/` 迁移。bundle/ 保留 (v1 ClusterCatalog backing)。 | ADR-0028 Phase D, PR #173 |
 | 2026-05-17 | 事实订正 — §3.2 (MongoDBInsights cycle 9 P1 应用完成,[x]→[~]) + §4.3 (builder merge cycle 14 应用完成) + §4.5 (VolumePermissions cycle 13 应用完成)。代码 - 文档对齐。 | dev cycle C — Goal-Driven 自主 |
 | 2026-05-15 | Phase 5.6 — OLM v1 narrow installer RBAC ([x]) + olmv1-system NetworkPolicy ([x])。`deploy/olm-v1/clusterextension-narrow-rbac.yaml` + `networkpolicies.yaml`。剩余后续: community-operators sync / RBAC v1.25 deprecated | ADR-0030 |
-| 2026-05-15 | Phase 5.6 — OLM v1 (operator-controller v1.8) 采用 ([x]) + 4 项后续 ([ ]: narrow RBAC / NetworkPolicy / community-operators sync / RBAC v1.25 deprecated)。新设 `deploy/olm-v1/` + `INSTALL.md` + `DESIGN.md` | ADR-0029 |
+| 2026-05-15 | Phase 5.6 — OLM v1 (operator-controller v1.8) 采用 ([x]) + 4 项后续 ([ ]: narrow RBAC / NetworkPolicy / community-operators sync / RBAC v1.25 deprecated)。新设 `deploy/olm-v1/` + `(../install.md)` + `(../design.md)` | ADR-0029 |
 | 2026-05-14 | Phase 5.6 — OLM 捆绑包外部用户运维等级 5 项缺陷的同步解决 ([x]) + RBAC v1.25 deprecated cleanup ([ ]) 新增项 | ADR-0028 |
 | 2026-05-11 | 全面重写 — 季度 / 周时间线 + 日期列完全移除,按 sub-task 清单粒度重构 | parallel-leaping-seal plan |
 | 2026-04-28 | Phase 4 部分完成 — 4.1 NetworkPolicy ✅, 4.9 Sharded scale-in ✅, PDB 自动化 ✅, bootstrap race-free ✅ | production-readiness cycle |
@@ -353,7 +353,7 @@
 
 - [ ] Helm OperatorHub charts repository — `charts/repo/` + GitHub Pages
 - [ ] community-operators upstream sync 6 minor 无事故 (ADR-0027 封存)
-- [ ] SUPPORT.md + i18n (.ko / .en / .ja) — `docs/i18n/`
+- [ ] (../support.md) + i18n (.ko / .en / .ja) — `docs/i18n/`
 - [x] OLM 捆绑包外部用户运维等级 (ADR-0028, 2026-05-14) — 5 项缺陷同步解决: `containerImage` ↔ `version` drift / `alm-examples: '[]'` / `replaces`+`olm.skipRange` 缺失 / 仅 alpha 单一 channel / `maturity: alpha`。`make bundle VERSION=1.5.0` 单命令自动填充 stable+alpha 两 channel + alm-examples 3 CRD + skipRange `>=0.3.0 <1.5.0`。`operator-sdk bundle validate --select-optional suite=operatorframework` PASS。`bundle/manifests/mongodb-operator.clusterserviceversion.yaml` + `config/manifests/bases/...csv.yaml` + `config/samples/bundle/` + `Makefile bundle target`。
 - [x] OLM v1 narrow installer RBAC (ADR-0030, 2026-05-15) — `deploy/olm-v1/clusterextension-narrow-rbac.yaml` (200+ line,从 bundle CSV 的 13 cluster + 3 namespace permissions derive,对齐 operator-controller `docs/howto/derive-service-account` 标准)。cluster-admin alternative — 生产推荐。cluster-side apply 由用户决定 (移除 cluster-admin binding + narrow apply 的运维影响)。
 - [x] OLM v1 NetworkPolicy (ADR-0030, 2026-05-15) — `deploy/olm-v1/networkpolicies.yaml`: operator-controller + catalogd 2 个 NP (对齐 zero-trust,OPRUN-3923 OLM v1 变体)。cluster-side apply 由用户决定。
@@ -367,8 +367,8 @@
 Verify (section 存在确认):
 
 ```bash
-grep -c '^## Phase 5' ROADMAP.md  # ≥ 1
-grep -c '^### 5\.[0-9]' ROADMAP.md  # ≥ 6
+grep -c '^## Phase 5' (../roadmap.md)  # ≥ 1
+grep -c '^### 5\.[0-9]' (../roadmap.md)  # ≥ 6
 ```
 
 Refs: `~/.claude/plans/2026-05-14-4-operators-100pct/P-E.md` (sub-task 18 candidate)

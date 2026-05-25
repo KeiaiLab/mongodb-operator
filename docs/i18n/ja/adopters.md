@@ -9,7 +9,7 @@
 
 本ドキュメントは、`keiailab/mongodb-operator` を本番環境または評価環境で利用している組織・プロジェクトの *公開* リストです。自己登録を歓迎します — PR で行を追加してください。
 
-> 非公開のユーザーは GitHub Discussions または SECURITY.md に記載のプライベートチャネル経由でご連絡いただけます。
+> 非公開のユーザーは GitHub Discussions または (../security.md) に記載のプライベートチャネル経由でご連絡いただけます。
 
 ## Production Users
 
@@ -34,7 +34,7 @@ PR を開いて上記のテーブルに 1 行追加してください:
 | **<組織 / プロジェクト>** ([profile](<URL>)) | <コンポーネント + トポロジー> | <利用パターン> | <導入バージョン> | <現行バージョン> | <登録日 YYYY-MM-DD> |
 ```
 
-非公開もしくは匿名での登録をご希望の場合は SECURITY.md に記載されたセキュリティチャネル経由でご連絡ください。maintainer が *organization-anonymized* の行として登録します。
+非公開もしくは匿名での登録をご希望の場合は (../security.md) に記載されたセキュリティチャネル経由でご連絡ください。maintainer が *organization-anonymized* の行として登録します。
 
 ## CNCF Sandbox Reference
 

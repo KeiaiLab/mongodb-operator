@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="ROADMAP.md">English</a> |
+  <a href="(../roadmap.md)">English</a> |
   <b>한국어</b> |
   <a href="ROADMAP.ja.md">日本語</a> |
   <a href="ROADMAP.zh.md">中文</a>
@@ -7,7 +7,7 @@
 
 # ROADMAP — mongodb-operator (한국어)
 
-> English ROADMAP: [ROADMAP.md](ROADMAP.md) — canonical / 정본
+> English ROADMAP: [Roadmap](../roadmap.md) — canonical / 정본
 
 본 ROADMAP 은 *날짜 약속이 아니라* 검증 가능한 기능 체크리스트로 진행을 추적합니다. Phase 1-4 골격은 가치 / 도메인 단위 분류이며, *시간 기반 deadline 은 의도적으로 배제*합니다 (글로벌 `standards/workflow.md` "시간 기반 로드맵 금지").
 
@@ -286,7 +286,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용을 권�
 ## 커뮤니티 기여 (Community Contribution)
 
 - **기능 제안** — GitHub Issues + 사용 사례 + 우선순위 투표
-- **코드 기여** — [CONTRIBUTING.md](CONTRIBUTING.md), 작은 PR 부터
+- **코드 기여** — [Contributing](../contributing.md), 작은 PR 부터
 - **피드백** — 프로덕션 사용 경험 / 버그 리포트 / 성능 벤치마크
 
 ## 참고 자료 (References)
@@ -309,7 +309,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용을 권�
 | 2026-05-17 | OLM v1 only 전환 ([x]) — v0 cluster path (`deploy/olm/`) + community-operators sync 자동화 영구 폐기. INSTALL 3-path → 2-path matrix. FBC catalog `deploy/olm/catalog/` → `deploy/catalog/` 이동. bundle/ 유지 (v1 ClusterCatalog backing). | ADR-0028 Phase D, PR #173 |
 | 2026-05-17 | 사실 정정 — §3.2 (MongoDBInsights cycle 9 P1 적용 완료, [x]→[~]) + §4.3 (builder merge cycle 14 적용 완료) + §4.5 (VolumePermissions cycle 13 적용 완료). 코드-문서 정합. | dev cycle C — Goal-Driven 자율 |
 | 2026-05-15 | Phase 5.6 — OLM v1 narrow installer RBAC ([x]) + olmv1-system NetworkPolicy ([x]). `deploy/olm-v1/clusterextension-narrow-rbac.yaml` + `networkpolicies.yaml`. 잔여 후속: community-operators sync / RBAC v1.25 deprecated | ADR-0030 |
-| 2026-05-15 | Phase 5.6 — OLM v1 (operator-controller v1.8) 채택 ([x]) + 후속 4 항목 ([ ]: narrow RBAC / NetworkPolicy / community-operators sync / RBAC v1.25 deprecated). `deploy/olm-v1/` + `INSTALL.md` + `DESIGN.md` 신설 | ADR-0029 |
+| 2026-05-15 | Phase 5.6 — OLM v1 (operator-controller v1.8) 채택 ([x]) + 후속 4 항목 ([ ]: narrow RBAC / NetworkPolicy / community-operators sync / RBAC v1.25 deprecated). `deploy/olm-v1/` + `(../install.md)` + `(../design.md)` 신설 | ADR-0029 |
 | 2026-05-14 | Phase 5.6 — OLM 번들 외부 사용자 운영 수준 5 결격 동시 해소 ([x]) + RBAC v1.25 deprecated cleanup ([ ]) 신규 항목 | ADR-0028 |
 | 2026-05-11 | 전면 재작성 — 분기 / 주 타임라인 + 날짜 컬럼 완전 제거, sub-task 체크리스트 입자도로 재구성 | parallel-leaping-seal plan |
 | 2026-04-28 | Phase 4 부분 완료 — 4.1 NetworkPolicy ✅, 4.9 Sharded scale-in ✅, PDB 자동화 ✅, 부트스트랩 race-free ✅ | production-readiness cycle |
@@ -355,7 +355,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용을 권�
 
 - [ ] Helm OperatorHub charts repository — `charts/repo/` + GitHub Pages
 - [ ] community-operators upstream sync 6 minor 무사고 (ADR-0027 봉인)
-- [ ] SUPPORT.md + i18n (.ko / .en / .ja) — `docs/i18n/`
+- [ ] (../support.md) + i18n (.ko / .en / .ja) — `docs/i18n/`
 - [x] OLM 번들 외부 사용자 운영 수준 (ADR-0028, 2026-05-14) — 5 결격 동시 해소: `containerImage` ↔ `version` drift / `alm-examples: '[]'` / `replaces`+`olm.skipRange` 부재 / 채널 alpha 단일 / `maturity: alpha`. `make bundle VERSION=1.5.0` 단일 명령으로 stable+alpha 양 채널 + alm-examples 3 CRD 자동 채움 + skipRange `>=0.3.0 <1.5.0`. `operator-sdk bundle validate --select-optional suite=operatorframework` PASS. `bundle/manifests/mongodb-operator.clusterserviceversion.yaml` + `config/manifests/bases/...csv.yaml` + `config/samples/bundle/` + `Makefile bundle target`.
 - [x] OLM v1 narrow installer RBAC (ADR-0030, 2026-05-15) — `deploy/olm-v1/clusterextension-narrow-rbac.yaml` (200+ line, bundle CSV 의 13 cluster + 3 namespace permissions derive, operator-controller `docs/howto/derive-service-account` 표준 정합). cluster-admin alternative — production 권장. cluster-side apply 는 사용자 결정 (cluster-admin binding 제거 + narrow apply 의 운영 영향).
 - [x] OLM v1 NetworkPolicy (ADR-0030, 2026-05-15) — `deploy/olm-v1/networkpolicies.yaml`: operator-controller + catalogd 2 NP (zero-trust 정합, OPRUN-3923 OLM v1 변형). cluster-side apply 사용자 결정.
@@ -369,8 +369,8 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용을 권�
 Verify (section 존재 확인):
 
 ```bash
-grep -c '^## Phase 5' ROADMAP.md  # ≥ 1
-grep -c '^### 5\.[0-9]' ROADMAP.md  # ≥ 6
+grep -c '^## Phase 5' (../roadmap.md)  # ≥ 1
+grep -c '^### 5\.[0-9]' (../roadmap.md)  # ≥ 6
 ```
 
 Refs: `~/.claude/plans/2026-05-14-4-operators-100pct/P-E.md` (sub-task 18 candidate)

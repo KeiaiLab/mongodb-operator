@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="DESIGN.md">English</a> |
+  <a href="(../design.md)">English</a> |
   <a href="DESIGN.ko.md">한국어</a> |
   <a href="DESIGN.ja.md">日本語</a> |
   <b>中文</b>
@@ -7,7 +7,7 @@
 
 # 设计 — mongodb-operator (Open Source)
 
-> *开源设计文档*。project charter + design decisions + extension points + contribution surface。本文档聚焦 *what + why*,*how* 请参阅 [ARCHITECTURE.md](ARCHITECTURE.md) + ADR。
+> *开源设计文档*。project charter + design decisions + extension points + contribution surface。本文档聚焦 *what + why*,*how* 请参阅 [Architecture](../architecture.md) + ADR。
 
 ## §1 Charter
 
@@ -50,13 +50,13 @@ LDAP / OIDC / Vault Transit / cross-cluster federation 这类 *external system i
 
 ## §3 CRD surface
 
-参见 [ARCHITECTURE.md §CRD surface](ARCHITECTURE.md)。3 owned CRDs (`MongoDB`、`MongoDBSharded`、`MongoDBBackup`) + 辅助 CRDs。
+参见 [Architecture §CRD surface](../architecture.md)。3 owned CRDs (`MongoDB`、`MongoDBSharded`、`MongoDBBackup`) + 辅助 CRDs。
 
 每个 CRD 的 `spec` 表示 *user intent*,`status` 表示 *operator observation* — 明确分离。
 
 ## §4 Deployment models
 
-3 path matrix — [INSTALL.md](INSTALL.md) 的 §1。本 design 要点:
+3 path matrix — [Installation Guide](../install.md) 的 §1。本 design 要点:
 
 - **OLM v1** (现代标准,ADR-0029) — *GitOps + ClusterExtension* 单 manifest 即可 operator+install。面向外部用户的默认方式。
 - **Helm chart** — *local dev + single-cluster* 的简单路径。继续保留。
@@ -116,7 +116,7 @@ LDAP / OIDC / Vault Transit / cross-cluster federation 这类 *external system i
 | **Bug fix** | `internal/controller/*` | unit + envtest + e2e (`test/e2e/`) |
 | **New feature** | 先提交 RFC 或 ADR → `internal/<feature>/` | scorecard + e2e + ROADMAP entry |
 | **External system driver** | `internal/external/<driver>/` | LDAP probe / OIDC discovery / Vault Transit (cycle 17 模式) |
-| **Documentation** | `README.md` + `INSTALL.md` + `docs/` | live-verified marker (workflow §2.7) |
+| **Documentation** | `README.md` + `(../install.md)` + `docs/` | live-verified marker (workflow §2.7) |
 
 ### §7.2 Quality gates (PR 合并条件)
 
@@ -128,11 +128,11 @@ LDAP / OIDC / Vault Transit / cross-cluster federation 这类 *external system i
 
 ### §7.3 Maintainers
 
-参见 [MAINTAINERS.md](MAINTAINERS.md)。
+参见 [Maintainers](../maintainers.md)。
 
 ## §8 Roadmap / Non-goals
 
-详见: [ROADMAP.md](ROADMAP.md)。
+详见: [Roadmap](../roadmap.md)。
 
 要点:
 - v1.5.0 = sharded GA + Webhook validation + Cosign + OLM v1 对外用户公开。
@@ -149,9 +149,9 @@ LDAP / OIDC / Vault Transit / cross-cluster federation 这类 *external system i
 ### §9.1 License + Governance
 
 - License: Apache-2.0 (LICENSE 文件)
-- Governance: [GOVERNANCE.md](GOVERNANCE.md)
-- Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- Security: [SECURITY.md](SECURITY.md) — CVE coordinator、supported versions
+- Governance: [Governance](../governance.md)
+- Code of Conduct: [Code of Conduct](../code-of-conduct.md)
+- Security: [Security](../security.md) — CVE coordinator、supported versions
 
 ### §9.2 Release cadence
 
@@ -178,17 +178,17 @@ LDAP / OIDC / Vault Transit / cross-cluster federation 这类 *external system i
 本 design 的 *所有不可逆决策* 均以 ADR 保存。从 ADR-0001 至 ADR-N (目前 29 条)。`docs/kb/adr/INDEX.md` 为 SSOT。
 
 design 变更流程:
-1. **轻微修改**: 直接提交 PR 到本 DESIGN.md
-2. **策略变更**: 编写 ADR + 更新本 DESIGN.md 的 reference
+1. **轻微修改**: 直接提交 PR 到本 (../design.md)
+2. **策略变更**: 编写 ADR + 更新本 (../design.md) 的 reference
 3. **cross-repo 影响**: 经 ai-dev/rfcs/ 的 RFC 后,以 ADR 形式采纳
 
 ## §11 References
 
 - [README.md](README.md) — project overview + Quick Start
-- [INSTALL.md](INSTALL.md) — 3-path installation guide
-- [ARCHITECTURE.md](ARCHITECTURE.md) — internal architecture (CRD + RBAC + reconcile flow)
-- [ROADMAP.md](ROADMAP.md) — feature roadmap
-- [CONTRIBUTING.md](CONTRIBUTING.md) — PR + commit conventions
+- [Installation Guide](../install.md) — 3-path installation guide
+- [Architecture](../architecture.md) — internal architecture (CRD + RBAC + reconcile flow)
+- [Roadmap](../roadmap.md) — feature roadmap
+- [Contributing](../contributing.md) — PR + commit conventions
 - [docs/kb/adr/INDEX.md](docs/kb/adr/INDEX.md) — 29 ADRs (所有决策记录)
 - [ADR-0028](docs/kb/adr/0028-olm-external-user-production-readiness.md) — 外部用户运维水平
 - [ADR-0029](docs/kb/adr/0029-olm-v1-migration-from-v0.md) — OLM v1 采用 (现代标准)

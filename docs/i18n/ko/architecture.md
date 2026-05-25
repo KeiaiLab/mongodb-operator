@@ -7,7 +7,7 @@
 
 # ARCHITECTURE — mongodb-operator (한국어)
 
-> English ARCHITECTURE: [ARCHITECTURE.md](ARCHITECTURE.md) — canonical / 정본
+> English ARCHITECTURE: [Architecture](../architecture.md) — canonical / 정본
 
 > 단일 페이지 아키텍처 기술서. CRD 표면 / RBAC / reconcile 패턴이 바뀔 때 갱신됩니다.
 
@@ -105,7 +105,7 @@
 | Helm chart | (없음, direct deploy) | `helm install` | 🟡 stable | `helm upgrade/rollback` |
 | OLM v0 *(legacy)* | `olm-operator + catalog-operator + packageserver` (olm ns) | `CatalogSource + OperatorGroup + Subscription + InstallPlan` | 🔴 maintenance mode | Subscription channel + approve |
 
-상세 절차 + Day-2 upgrade/rollback: [INSTALL.md](INSTALL.md). KeiaiLab Cluster 라이브 evidence: [deploy/olm-v1/README.md](deploy/olm-v1/README.md) (OLM v0 path 는 ADR-0028 Phase D 로 폐기).
+상세 절차 + Day-2 upgrade/rollback: [Installation Guide](../install.md). KeiaiLab Cluster 라이브 evidence: [deploy/olm-v1/README.md](deploy/olm-v1/README.md) (OLM v0 path 는 ADR-0028 Phase D 로 폐기).
 
 ### 릴리스 파이프라인 (Release pipeline)
 
@@ -152,12 +152,12 @@
 ## 참고 문서 (References)
 
 - `README.md` / `README.ko.md`
-- `ROADMAP.md` (Phase 1-4 100% complete)
-- `CHANGELOG.md`
+- `(../roadmap.md)` (Phase 1-4 100% complete)
+- `(../changelog.md)`
 - `ADOPTERS.md`
-- `CONTRIBUTING.md` / `CONTRIBUTING.ko.md`
-- `GOVERNANCE.md`
-- `SUPPORT.md`
+- `(../contributing.md)` / `CONTRIBUTING.ko.md`
+- `(../governance.md)`
+- `(../support.md)`
 - `AGENTS.md` — AI 어시스턴트 runbook
 - `docs/kb/adr/INDEX.md` — 28 ADR
 

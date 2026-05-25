@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="INSTALL.md">English</a> |
+  <a href="(../install.md)">English</a> |
   <a href="INSTALL.ko.md">한국어</a> |
   <b>日本語</b> |
   <a href="INSTALL.zh.md">中文</a>
@@ -11,7 +11,7 @@
 
 本ドキュメントは *外部ユーザー* (個別 cluster 運用者) 向けのインストール手順です。KeiaiLab Cluster 内部適用の *ライブ evidence* は [deploy/olm-v1/README.md](deploy/olm-v1/README.md) (OLM v1 ✓ ライブ) を参照してください。
 
-> **BREAKING (ADR-0028 Phase D, 2026-05-17)**: OLM v0 cluster install path + community-operators upstream sync 自動化は永久に廃止されました。Path 3 (OLM v0) の章は削除されています。外部ユーザーは *OLM v1 (Path 1)* または *Helm (Path 2)* を使用してください。詳細は [CHANGELOG.md](CHANGELOG.md) の BREAKING CHANGES セクション、および [ADR-0028](docs/kb/adr/0028-olm-external-user-production-readiness.md) Phase D を参照してください。
+> **BREAKING (ADR-0028 Phase D, 2026-05-17)**: OLM v0 cluster install path + community-operators upstream sync 自動化は永久に廃止されました。Path 3 (OLM v0) の章は削除されています。外部ユーザーは *OLM v1 (Path 1)* または *Helm (Path 2)* を使用してください。詳細は [Changelog](../changelog.md) の BREAKING CHANGES セクション、および [ADR-0028](docs/kb/adr/0028-olm-external-user-production-readiness.md) Phase D を参照してください。
 
 ## §1 2-Path Matrix
 
@@ -294,10 +294,10 @@ spec:
 ## §7 Reference
 
 - [README.md](README.md) — project overview
-- [ARCHITECTURE.md](ARCHITECTURE.md) — design + deployment models
+- [Architecture](../architecture.md) — design + deployment models
 - [deploy/olm-v1/README.md](deploy/olm-v1/README.md) — KeiaiLab live evidence (OLM v1)
 - [charts/mongodb-operator/](charts/mongodb-operator/) — Helm chart source
-- [ROADMAP.md](ROADMAP.md) — feature roadmap (deployment models を含む)
+- [Roadmap](../roadmap.md) — feature roadmap (deployment models を含む)
 - [ADR-0028](docs/kb/adr/0028-olm-external-user-production-readiness.md) — 外部ユーザー運用レベルの決定
 - [ADR-0029](docs/kb/adr/0029-olm-v1-migration-from-v0.md) — OLM v1 採用の決定
 

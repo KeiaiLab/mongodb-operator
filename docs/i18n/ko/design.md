@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="DESIGN.md">English</a> |
+  <a href="(../design.md)">English</a> |
   <b>한국어</b> |
   <a href="DESIGN.ja.md">日本語</a> |
   <a href="DESIGN.zh.md">中文</a>
@@ -7,9 +7,9 @@
 
 # DESIGN — mongodb-operator (Open Source) (한국어)
 
-> English DESIGN: [DESIGN.md](DESIGN.md) — canonical / 정본
+> English DESIGN: [Design](../design.md) — canonical / 정본
 
-> *오픈소스 설계 문서*. project charter + design decisions + extension points + contribution surface. 본 문서는 *what + why*. *how* 는 [ARCHITECTURE.md](ARCHITECTURE.md) + ADR.
+> *오픈소스 설계 문서*. project charter + design decisions + extension points + contribution surface. 본 문서는 *what + why*. *how* 는 [Architecture](../architecture.md) + ADR.
 
 ## §1 Charter
 
@@ -52,13 +52,13 @@ LDAP / OIDC / Vault Transit / cross-cluster federation 같은 *external system i
 
 ## §3 CRD surface
 
-[ARCHITECTURE.md §CRD surface](ARCHITECTURE.md) 참조. 3 owned CRDs (`MongoDB`, `MongoDBSharded`, `MongoDBBackup`) + 보조 CRDs.
+[Architecture §CRD surface](../architecture.md) 참조. 3 owned CRDs (`MongoDB`, `MongoDBSharded`, `MongoDBBackup`) + 보조 CRDs.
 
 각 CRD 의 `spec` 은 *user intent*, `status` 는 *operator observation* — 명확하게 분리됩니다.
 
 ## §4 Deployment models
 
-3 path matrix — [INSTALL.md](INSTALL.md) 의 §1. 본 design 의 핵심:
+3 path matrix — [Installation Guide](../install.md) 의 §1. 본 design 의 핵심:
 
 - **OLM v1** (현대 표준, ADR-0029) — *GitOps + ClusterExtension* 단일 manifest 로 operator+install. 외부 사용자 노출의 default.
 - **Helm chart** — *local dev + single-cluster* 의 단순 경로. 보존.
@@ -118,7 +118,7 @@ LDAP / OIDC / Vault Transit / cross-cluster federation 같은 *external system i
 | **Bug fix** | `internal/controller/*` | unit + envtest + e2e (`test/e2e/`) |
 | **New feature** | RFC 또는 ADR 먼저 → `internal/<feature>/` | scorecard + e2e + ROADMAP entry |
 | **External system driver** | `internal/external/<driver>/` | LDAP probe / OIDC discovery / Vault Transit (cycle 17 패턴) |
-| **Documentation** | `README.md` + `INSTALL.md` + `docs/` | live-verified marker (workflow §2.7) |
+| **Documentation** | `README.md` + `(../install.md)` + `docs/` | live-verified marker (workflow §2.7) |
 
 ### §7.2 Quality gates (PR 머지 조건)
 
@@ -130,11 +130,11 @@ LDAP / OIDC / Vault Transit / cross-cluster federation 같은 *external system i
 
 ### §7.3 Maintainers
 
-[MAINTAINERS.md](MAINTAINERS.md) 참조.
+[Maintainers](../maintainers.md) 참조.
 
 ## §8 Roadmap / Non-goals
 
-Detailed: [ROADMAP.md](ROADMAP.md).
+Detailed: [Roadmap](../roadmap.md).
 
 핵심:
 - v1.5.0 = sharded GA + Webhook validation + Cosign + OLM v1 외부 사용자 노출.
@@ -151,9 +151,9 @@ Detailed: [ROADMAP.md](ROADMAP.md).
 ### §9.1 License + Governance
 
 - License: Apache-2.0 (LICENSE 파일)
-- Governance: [GOVERNANCE.md](GOVERNANCE.md)
-- Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- Security: [SECURITY.md](SECURITY.md) — CVE coordinator, supported versions
+- Governance: [Governance](../governance.md)
+- Code of Conduct: [Code of Conduct](../code-of-conduct.md)
+- Security: [Security](../security.md) — CVE coordinator, supported versions
 
 ### §9.2 Release cadence
 
@@ -180,17 +180,17 @@ Detailed: [ROADMAP.md](ROADMAP.md).
 본 design 의 *모든 비역행 결정* 은 ADR 로 보존합니다. ADR-0001 부터 ADR-N (현재 29 개). `docs/kb/adr/INDEX.md` 가 SSOT.
 
 design 변경 절차:
-1. **사소한 수정**: 본 DESIGN.md 직접 PR
-2. **정책 변경**: ADR 작성 + 본 DESIGN.md 의 reference 갱신
+1. **사소한 수정**: 본 (../design.md) 직접 PR
+2. **정책 변경**: ADR 작성 + 본 (../design.md) 의 reference 갱신
 3. **cross-repo 영향**: ai-dev/rfcs/ 의 RFC 후 ADR 으로 채택
 
 ## §11 References
 
 - [README.md](README.md) — project overview + Quick Start
-- [INSTALL.md](INSTALL.md) — 3-path installation guide
-- [ARCHITECTURE.md](ARCHITECTURE.md) — internal architecture (CRD + RBAC + reconcile flow)
-- [ROADMAP.md](ROADMAP.md) — feature roadmap
-- [CONTRIBUTING.md](CONTRIBUTING.md) — PR + commit conventions
+- [Installation Guide](../install.md) — 3-path installation guide
+- [Architecture](../architecture.md) — internal architecture (CRD + RBAC + reconcile flow)
+- [Roadmap](../roadmap.md) — feature roadmap
+- [Contributing](../contributing.md) — PR + commit conventions
 - [docs/kb/adr/INDEX.md](docs/kb/adr/INDEX.md) — 29 ADRs (모든 결정 기록)
 - [ADR-0028](docs/kb/adr/0028-olm-external-user-production-readiness.md) — 외부 사용자 운영 수준
 - [ADR-0029](docs/kb/adr/0029-olm-v1-migration-from-v0.md) — OLM v1 채택 (현대 표준)

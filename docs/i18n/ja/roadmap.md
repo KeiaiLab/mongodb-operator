@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="ROADMAP.md">English</a> |
+  <a href="(../roadmap.md)">English</a> |
   <a href="ROADMAP.ko.md">한국어</a> |
   <b>日本語</b> |
   <a href="ROADMAP.zh.md">中文</a>
@@ -284,7 +284,7 @@ Enterprise 機能が必要な場合は MongoDB Enterprise Operator の使用を�
 ## コミュニティ貢献
 
 - **機能提案** — GitHub Issues + ユースケース + 優先度投票
-- **コード貢献** — [CONTRIBUTING.md](CONTRIBUTING.md)、小さな PR から
+- **コード貢献** — [Contributing](../contributing.md)、小さな PR から
 - **フィードバック** — プロダクション利用経験 / バグ報告 / パフォーマンスベンチマーク
 
 ## 参考資料
@@ -307,7 +307,7 @@ Enterprise 機能が必要な場合は MongoDB Enterprise Operator の使用を�
 | 2026-05-17 | OLM v1 only への切り替え ([x]) — v0 cluster path (`deploy/olm/`) + community-operators sync 自動化の永続的な廃止。INSTALL 3-path → 2-path matrix。FBC catalog `deploy/olm/catalog/` → `deploy/catalog/` 移動。bundle/ は維持 (v1 ClusterCatalog backing)。 | ADR-0028 Phase D, PR #173 |
 | 2026-05-17 | 事実訂正 — §3.2 (MongoDBInsights cycle 9 P1 適用完了、[x]→[~]) + §4.3 (builder merge cycle 14 適用完了) + §4.5 (VolumePermissions cycle 13 適用完了)。コード - 文書整合。 | dev cycle C — Goal-Driven 自律 |
 | 2026-05-15 | Phase 5.6 — OLM v1 narrow installer RBAC ([x]) + olmv1-system NetworkPolicy ([x])。`deploy/olm-v1/clusterextension-narrow-rbac.yaml` + `networkpolicies.yaml`。残りの後続: community-operators sync / RBAC v1.25 deprecated | ADR-0030 |
-| 2026-05-15 | Phase 5.6 — OLM v1 (operator-controller v1.8) 採用 ([x]) + 後続 4 項目 ([ ]: narrow RBAC / NetworkPolicy / community-operators sync / RBAC v1.25 deprecated)。`deploy/olm-v1/` + `INSTALL.md` + `DESIGN.md` 新設 | ADR-0029 |
+| 2026-05-15 | Phase 5.6 — OLM v1 (operator-controller v1.8) 採用 ([x]) + 後続 4 項目 ([ ]: narrow RBAC / NetworkPolicy / community-operators sync / RBAC v1.25 deprecated)。`deploy/olm-v1/` + `(../install.md)` + `(../design.md)` 新設 | ADR-0029 |
 | 2026-05-14 | Phase 5.6 — OLM バンドル外部ユーザー運用レベル 5 欠格の同時解消 ([x]) + RBAC v1.25 deprecated cleanup ([ ]) 新規項目 | ADR-0028 |
 | 2026-05-11 | 全面再執筆 — 四半期 / 週タイムライン + 日付列を完全に削除、sub-task チェックリストの粒度で再構成 | parallel-leaping-seal plan |
 | 2026-04-28 | Phase 4 部分完了 — 4.1 NetworkPolicy ✅, 4.9 Sharded scale-in ✅, PDB 自動化 ✅, ブートストラップ race-free ✅ | production-readiness cycle |
@@ -353,7 +353,7 @@ Enterprise 機能が必要な場合は MongoDB Enterprise Operator の使用を�
 
 - [ ] Helm OperatorHub charts repository — `charts/repo/` + GitHub Pages
 - [ ] community-operators upstream sync 6 minor 無事故 (ADR-0027 封印)
-- [ ] SUPPORT.md + i18n (.ko / .en / .ja) — `docs/i18n/`
+- [ ] (../support.md) + i18n (.ko / .en / .ja) — `docs/i18n/`
 - [x] OLM バンドル外部ユーザー運用レベル (ADR-0028, 2026-05-14) — 5 欠格の同時解消: `containerImage` ↔ `version` drift / `alm-examples: '[]'` / `replaces`+`olm.skipRange` 不在 / チャネル alpha 単独 / `maturity: alpha`。`make bundle VERSION=1.5.0` 単一コマンドで stable+alpha 両チャネル + alm-examples 3 CRD 自動充填 + skipRange `>=0.3.0 <1.5.0`。`operator-sdk bundle validate --select-optional suite=operatorframework` PASS。`bundle/manifests/mongodb-operator.clusterserviceversion.yaml` + `config/manifests/bases/...csv.yaml` + `config/samples/bundle/` + `Makefile bundle target`。
 - [x] OLM v1 narrow installer RBAC (ADR-0030, 2026-05-15) — `deploy/olm-v1/clusterextension-narrow-rbac.yaml` (200+ line、bundle CSV の 13 cluster + 3 namespace permissions derive、operator-controller `docs/howto/derive-service-account` 標準整合)。cluster-admin alternative — production 推奨。cluster-side apply はユーザー判断 (cluster-admin binding 削除 + narrow apply の運用影響)。
 - [x] OLM v1 NetworkPolicy (ADR-0030, 2026-05-15) — `deploy/olm-v1/networkpolicies.yaml`: operator-controller + catalogd 2 NP (zero-trust 整合、OPRUN-3923 OLM v1 変形)。cluster-side apply はユーザー判断。
@@ -367,8 +367,8 @@ Enterprise 機能が必要な場合は MongoDB Enterprise Operator の使用を�
 Verify (section 存在確認):
 
 ```bash
-grep -c '^## Phase 5' ROADMAP.md  # ≥ 1
-grep -c '^### 5\.[0-9]' ROADMAP.md  # ≥ 6
+grep -c '^## Phase 5' (../roadmap.md)  # ≥ 1
+grep -c '^### 5\.[0-9]' (../roadmap.md)  # ≥ 6
 ```
 
 Refs: `~/.claude/plans/2026-05-14-4-operators-100pct/P-E.md` (sub-task 18 candidate)

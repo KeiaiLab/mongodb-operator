@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="SECURITY.md">English</a> |
+  <a href="(../security.md)">English</a> |
   <b>한국어</b> |
   <a href="SECURITY.ja.md">日本語</a> |
   <a href="SECURITY.zh.md">中文</a>
@@ -7,7 +7,7 @@
 
 # Security Policy (한국어)
 
-> English: [SECURITY.md](SECURITY.md) — canonical / 정본
+> English: [Security](../security.md) — canonical / 정본
 
 
 ## 취약점 보고

@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="MAINTAINERS.md">English</a> |
+  <a href="(../maintainers.md)">English</a> |
   <b>한국어</b> |
   <a href="MAINTAINERS.ja.md">日本語</a> |
   <a href="MAINTAINERS.zh.md">中文</a>
@@ -7,7 +7,7 @@
 
 # Maintainers (한국어)
 
-> English MAINTAINERS: [MAINTAINERS.md](MAINTAINERS.md) — canonical / 정본
+> English MAINTAINERS: [Maintainers](../maintainers.md) — canonical / 정본
 
 본 문서는 keiailab/mongodb-operator 의 의사결정 권한을 가진 메인테이너 명단을 관리합니다.
 
@@ -25,14 +25,14 @@ GitHub team `@keiailab/maintainers` 이 본 프로젝트의 모든 영역에 대
 
 - 머지된 PR ≥ 20건 (의미 있는 코드/문서 기여)
 - 리뷰한 PR ≥ 30건 (건설적 피드백 동반)
-- 본 프로젝트의 [GOVERNANCE.md](GOVERNANCE.md) 와 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) 준수
+- 본 프로젝트의 [Governance](../governance.md) 와 [Code of Conduct](../code-of-conduct.md) 준수
 - 한 개 이상의 핵심 영역 (controller, resource builder, sharded reconcile, bootstrap-admin script, observability 등) 에 깊은 이해
 
 ## 추가 절차
 
 1. 기존 메인테이너 또는 candidate 본인이 issue 또는 ADR 로 제안
 2. `@keiailab/maintainers` 팀의 lazy consensus (7일 코멘트 윈도우)
-3. 반대 없으면 GitHub team 에 추가, MAINTAINERS.md 갱신 PR
+3. 반대 없으면 GitHub team 에 추가, (../maintainers.md) 갱신 PR
 
 ## 비활성 메인테이너
 

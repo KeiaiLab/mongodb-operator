@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="GOVERNANCE.md">English</a> |
+  <a href="(../governance.md)">English</a> |
   <b>한국어</b> |
   <a href="GOVERNANCE.ja.md">日本語</a> |
   <a href="GOVERNANCE.zh.md">中文</a>
@@ -7,7 +7,7 @@
 
 # Governance (한국어)
 
-> English GOVERNANCE: [GOVERNANCE.md](GOVERNANCE.md) — canonical / 정본
+> English GOVERNANCE: [Governance](../governance.md) — canonical / 정본
 
 본 문서는 keiailab/mongodb-operator 프로젝트의 의사결정 절차를 정의합니다.
 
@@ -48,13 +48,13 @@ OLM v0 ↔ OLM v1 ↔ Helm chart 의 *기본 권장 변경* 또는 *cluster appl
 | OLM v0 → v1 migration 같은 *모델 전환* | ADR (cluster-side) | ADR + Maintainer 2/3 + 사용자 명시 cluster apply |
 | installer RBAC 변경 (cluster-admin ↔ narrow) | PR + ADR | bundle CSV derive 검증 + cluster apply 사용자 명시 |
 | NetworkPolicy 신설 / 변경 | PR + ADR | OPRUN-3923 reference + cluster apply 사용자 명시 |
-| 외부 사용자 *recommended install path* 변경 | RFC | INSTALL.md §1 matrix 갱신 + 14 일 코멘트 |
+| 외부 사용자 *recommended install path* 변경 | RFC | (../install.md) §1 matrix 갱신 + 14 일 코멘트 |
 
 본 영역의 ADR chain: ADR-0028 (외부 사용자 운영 수준) → ADR-0029 (OLM v1 채택) → ADR-0030 (narrow RBAC + NP). 후속 ADR 의 *cluster apply* 는 사용자 명시 영역 (글로벌 §2.0 자율 헌법 ② 조건 — 돌이킬 수 없는 운영 작업).
 
 ## Security Decisions (보안 결정)
 
-CVE 보고, 시크릿 / 인증 모델 변경은 [SECURITY.md](SECURITY.md) 절차에 따라 비공개 채널에서 우선 처리한 뒤, 패치 릴리스 후 공개 합의를 거칩니다.
+CVE 보고, 시크릿 / 인증 모델 변경은 [Security](../security.md) 절차에 따라 비공개 채널에서 우선 처리한 뒤, 패치 릴리스 후 공개 합의를 거칩니다.
 
 ### Installer RBAC scope (ADR-0030, 2026-05-15)
 

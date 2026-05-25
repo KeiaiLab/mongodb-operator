@@ -103,7 +103,7 @@
 | Helm chart | (なし、direct deploy) | `helm install` | 🟡 stable | `helm upgrade/rollback` |
 | OLM v0 *(legacy)* | `olm-operator + catalog-operator + packageserver` (olm ns) | `CatalogSource + OperatorGroup + Subscription + InstallPlan` | 🔴 maintenance mode | Subscription channel + approve |
 
-詳細手順 + Day-2 upgrade/rollback: [INSTALL.md](INSTALL.md)。KeiaiLab Cluster ライブ evidence: [deploy/olm-v1/README.md](deploy/olm-v1/README.md) (OLM v0 path は ADR-0028 Phase D で廃止)。
+詳細手順 + Day-2 upgrade/rollback: [Installation Guide](../install.md)。KeiaiLab Cluster ライブ evidence: [deploy/olm-v1/README.md](deploy/olm-v1/README.md) (OLM v0 path は ADR-0028 Phase D で廃止)。
 
 ### リリースパイプライン
 
@@ -150,12 +150,12 @@
 ## 参考資料
 
 - `README.md` / `README.ko.md`
-- `ROADMAP.md` (Phase 1-4 100% complete)
-- `CHANGELOG.md`
+- `(../roadmap.md)` (Phase 1-4 100% complete)
+- `(../changelog.md)`
 - `ADOPTERS.md`
-- `CONTRIBUTING.md` / `CONTRIBUTING.ko.md`
-- `GOVERNANCE.md`
-- `SUPPORT.md`
+- `(../contributing.md)` / `CONTRIBUTING.ko.md`
+- `(../governance.md)`
+- `(../support.md)`
 - `AGENTS.md` — AI アシスタントの runbook
 - `docs/kb/adr/INDEX.md` — 28 ADR
 

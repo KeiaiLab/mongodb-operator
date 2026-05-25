@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="CONTRIBUTING.md">English</a> |
+  <a href="(../contributing.md)">English</a> |
   <a href="CONTRIBUTING.ko.md">한국어</a> |
   <b>日本語</b> |
   <a href="CONTRIBUTING.zh.md">中文</a>
@@ -11,7 +11,7 @@ MongoDB Operator へのコントリビュートに関心をお寄せいただき
 
 ## 行動規範
 
-本プロジェクトはすべてのコントリビューターが遵守すべき行動規範を採用しています。コミュニティの基準と期待を理解するため、[Code of Conduct](CODE_OF_CONDUCT.md) を必ずお読みください。
+本プロジェクトはすべてのコントリビューターが遵守すべき行動規範を採用しています。コミュニティの基準と期待を理解するため、[Code of Conduct](../code-of-conduct.md) を必ずお読みください。
 
 ## コントリビュート方法
 

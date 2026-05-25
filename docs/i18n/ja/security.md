@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="SECURITY.md">English</a> |
+  <a href="(../security.md)">English</a> |
   <a href="SECURITY.ko.md">한국어</a> |
   <b>日本語</b> |
   <a href="SECURITY.zh.md">中文</a>

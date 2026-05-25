@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="INSTALL.md">English</a> |
+  <a href="(../install.md)">English</a> |
   <b>한국어</b> |
   <a href="INSTALL.ja.md">日本語</a> |
   <a href="INSTALL.zh.md">中文</a>
@@ -7,13 +7,13 @@
 
 # Installation Guide (한국어)
 
-> English: [INSTALL.md](INSTALL.md) — canonical / 정본
+> English: [Installation Guide](../install.md) — canonical / 정본
 
 > mongodb-operator 의 *external user* 운영 수준 설치 가이드. 3 path matrix + 상세 절차 + Day-2 upgrade/rollback.
 
 본 문서는 *외부 사용자* (개별 cluster 운영자) 의 설치 절차입니다. KeiaiLab Cluster 내부 적용의 *라이브 evidence* 는 [deploy/olm-v1/README.md](deploy/olm-v1/README.md) (OLM v1 ✓ 라이브) 를 참조하세요.
 
-> **BREAKING (ADR-0028 Phase D, 2026-05-17)**: OLM v0 cluster install path + community-operators upstream sync 자동화는 영구 폐기되었습니다. Path 3 (OLM v0) 챕터는 제거되었습니다. 외부 사용자는 *OLM v1 (Path 1)* 또는 *Helm (Path 2)* 를 사용해야 합니다. 자세한 내용은 [CHANGELOG.md](CHANGELOG.md) 의 BREAKING CHANGES 섹션 및 [ADR-0028](docs/kb/adr/0028-olm-external-user-production-readiness.md) Phase D 를 참조하세요.
+> **BREAKING (ADR-0028 Phase D, 2026-05-17)**: OLM v0 cluster install path + community-operators upstream sync 자동화는 영구 폐기되었습니다. Path 3 (OLM v0) 챕터는 제거되었습니다. 외부 사용자는 *OLM v1 (Path 1)* 또는 *Helm (Path 2)* 를 사용해야 합니다. 자세한 내용은 [Changelog](../changelog.md) 의 BREAKING CHANGES 섹션 및 [ADR-0028](docs/kb/adr/0028-olm-external-user-production-readiness.md) Phase D 를 참조하세요.
 
 ## §1 2-Path Matrix
 
@@ -296,10 +296,10 @@ spec:
 ## §7 Reference
 
 - [README.md](README.md) — project overview
-- [ARCHITECTURE.md](ARCHITECTURE.md) — design + deployment models
+- [Architecture](../architecture.md) — design + deployment models
 - [deploy/olm-v1/README.md](deploy/olm-v1/README.md) — KeiaiLab live evidence (OLM v1)
 - [charts/mongodb-operator/](charts/mongodb-operator/) — Helm chart source
-- [ROADMAP.md](ROADMAP.md) — feature roadmap (deployment models 포함)
+- [Roadmap](../roadmap.md) — feature roadmap (deployment models 포함)
 - [ADR-0028](docs/kb/adr/0028-olm-external-user-production-readiness.md) — 외부 사용자 운영 수준 결정
 - [ADR-0029](docs/kb/adr/0029-olm-v1-migration-from-v0.md) — OLM v1 채택 결정
 

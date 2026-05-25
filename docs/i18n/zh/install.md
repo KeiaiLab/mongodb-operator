@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="INSTALL.md">English</a> |
+  <a href="(../install.md)">English</a> |
   <a href="INSTALL.ko.md">한국어</a> |
   <a href="INSTALL.ja.md">日本語</a> |
   <b>中文</b>
@@ -11,7 +11,7 @@
 
 本文档为 *外部用户* (单独 cluster 运维者) 的安装步骤。KeiaiLab Cluster 内部应用的 *实时 evidence* 请参阅 [deploy/olm-v1/README.md](deploy/olm-v1/README.md) (OLM v1 ✓ 运行中)。
 
-> **BREAKING (ADR-0028 Phase D, 2026-05-17)**: OLM v0 cluster install path + community-operators upstream sync 自动化已永久废弃。Path 3 (OLM v0) 章节已移除。外部用户应使用 *OLM v1 (Path 1)* 或 *Helm (Path 2)*。详情请参阅 [CHANGELOG.md](CHANGELOG.md) 的 BREAKING CHANGES 章节,以及 [ADR-0028](docs/kb/adr/0028-olm-external-user-production-readiness.md) Phase D。
+> **BREAKING (ADR-0028 Phase D, 2026-05-17)**: OLM v0 cluster install path + community-operators upstream sync 自动化已永久废弃。Path 3 (OLM v0) 章节已移除。外部用户应使用 *OLM v1 (Path 1)* 或 *Helm (Path 2)*。详情请参阅 [Changelog](../changelog.md) 的 BREAKING CHANGES 章节,以及 [ADR-0028](docs/kb/adr/0028-olm-external-user-production-readiness.md) Phase D。
 
 ## §1 2-Path Matrix
 
@@ -294,10 +294,10 @@ spec:
 ## §7 Reference
 
 - [README.md](README.md) — project overview
-- [ARCHITECTURE.md](ARCHITECTURE.md) — design + deployment models
+- [Architecture](../architecture.md) — design + deployment models
 - [deploy/olm-v1/README.md](deploy/olm-v1/README.md) — KeiaiLab live evidence (OLM v1)
 - [charts/mongodb-operator/](charts/mongodb-operator/) — Helm chart source
-- [ROADMAP.md](ROADMAP.md) — feature roadmap (包含 deployment models)
+- [Roadmap](../roadmap.md) — feature roadmap (包含 deployment models)
 - [ADR-0028](docs/kb/adr/0028-olm-external-user-production-readiness.md) — 外部用户运维级决策
 - [ADR-0029](docs/kb/adr/0029-olm-v1-migration-from-v0.md) — OLM v1 采用决策
 

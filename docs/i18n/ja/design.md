@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="DESIGN.md">English</a> |
+  <a href="(../design.md)">English</a> |
   <a href="DESIGN.ko.md">한국어</a> |
   <b>日本語</b> |
   <a href="DESIGN.zh.md">中文</a>
@@ -7,7 +7,7 @@
 
 # 設計 — mongodb-operator (Open Source)
 
-> *オープンソース設計ドキュメント*。project charter + design decisions + extension points + contribution surface。本ドキュメントは *what + why* を扱い、*how* は [ARCHITECTURE.md](ARCHITECTURE.md) + ADR を参照してください。
+> *オープンソース設計ドキュメント*。project charter + design decisions + extension points + contribution surface。本ドキュメントは *what + why* を扱い、*how* は [Architecture](../architecture.md) + ADR を参照してください。
 
 ## §1 Charter
 
@@ -50,13 +50,13 @@ LDAP / OIDC / Vault Transit / cross-cluster federation のような *external sy
 
 ## §3 CRD surface
 
-[ARCHITECTURE.md §CRD surface](ARCHITECTURE.md) を参照。3 owned CRDs (`MongoDB`、`MongoDBSharded`、`MongoDBBackup`) + 補助 CRDs。
+[Architecture §CRD surface](../architecture.md) を参照。3 owned CRDs (`MongoDB`、`MongoDBSharded`、`MongoDBBackup`) + 補助 CRDs。
 
 各 CRD の `spec` は *user intent*、`status` は *operator observation* — 明確に分離されています。
 
 ## §4 Deployment models
 
-3 path matrix — [INSTALL.md](INSTALL.md) の §1。本 design の要点:
+3 path matrix — [Installation Guide](../install.md) の §1。本 design の要点:
 
 - **OLM v1** (現代標準、ADR-0029) — *GitOps + ClusterExtension* 単一 manifest で operator+install。外部ユーザー公開の default。
 - **Helm chart** — *local dev + single-cluster* のシンプルな経路。継続維持。
@@ -116,7 +116,7 @@ LDAP / OIDC / Vault Transit / cross-cluster federation のような *external sy
 | **Bug fix** | `internal/controller/*` | unit + envtest + e2e (`test/e2e/`) |
 | **New feature** | RFC または ADR を先に → `internal/<feature>/` | scorecard + e2e + ROADMAP entry |
 | **External system driver** | `internal/external/<driver>/` | LDAP probe / OIDC discovery / Vault Transit (cycle 17 パターン) |
-| **Documentation** | `README.md` + `INSTALL.md` + `docs/` | live-verified marker (workflow §2.7) |
+| **Documentation** | `README.md` + `(../install.md)` + `docs/` | live-verified marker (workflow §2.7) |
 
 ### §7.2 Quality gates (PR マージ条件)
 
@@ -128,11 +128,11 @@ LDAP / OIDC / Vault Transit / cross-cluster federation のような *external sy
 
 ### §7.3 Maintainers
 
-[MAINTAINERS.md](MAINTAINERS.md) を参照。
+[Maintainers](../maintainers.md) を参照。
 
 ## §8 Roadmap / Non-goals
 
-Detailed: [ROADMAP.md](ROADMAP.md)。
+Detailed: [Roadmap](../roadmap.md)。
 
 要点:
 - v1.5.0 = sharded GA + Webhook validation + Cosign + OLM v1 外部ユーザー公開。
@@ -149,9 +149,9 @@ Detailed: [ROADMAP.md](ROADMAP.md)。
 ### §9.1 License + Governance
 
 - License: Apache-2.0 (LICENSE ファイル)
-- Governance: [GOVERNANCE.md](GOVERNANCE.md)
-- Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- Security: [SECURITY.md](SECURITY.md) — CVE coordinator、supported versions
+- Governance: [Governance](../governance.md)
+- Code of Conduct: [Code of Conduct](../code-of-conduct.md)
+- Security: [Security](../security.md) — CVE coordinator、supported versions
 
 ### §9.2 Release cadence
 
@@ -178,17 +178,17 @@ Detailed: [ROADMAP.md](ROADMAP.md)。
 本 design における *非可逆な決定はすべて* ADR として保存します。ADR-0001 から ADR-N まで (現在 29 件)。`docs/kb/adr/INDEX.md` が SSOT です。
 
 design 変更の手順:
-1. **軽微な修正**: 本 DESIGN.md への直接 PR
-2. **方針変更**: ADR 作成 + 本 DESIGN.md の reference 更新
+1. **軽微な修正**: 本 (../design.md) への直接 PR
+2. **方針変更**: ADR 作成 + 本 (../design.md) の reference 更新
 3. **cross-repo な影響**: ai-dev/rfcs/ の RFC を経て ADR として採択
 
 ## §11 References
 
 - [README.md](README.md) — project overview + Quick Start
-- [INSTALL.md](INSTALL.md) — 3-path installation guide
-- [ARCHITECTURE.md](ARCHITECTURE.md) — internal architecture (CRD + RBAC + reconcile flow)
-- [ROADMAP.md](ROADMAP.md) — feature roadmap
-- [CONTRIBUTING.md](CONTRIBUTING.md) — PR + commit conventions
+- [Installation Guide](../install.md) — 3-path installation guide
+- [Architecture](../architecture.md) — internal architecture (CRD + RBAC + reconcile flow)
+- [Roadmap](../roadmap.md) — feature roadmap
+- [Contributing](../contributing.md) — PR + commit conventions
 - [docs/kb/adr/INDEX.md](docs/kb/adr/INDEX.md) — 29 ADRs (すべての決定の記録)
 - [ADR-0028](docs/kb/adr/0028-olm-external-user-production-readiness.md) — 外部ユーザー運用水準
 - [ADR-0029](docs/kb/adr/0029-olm-v1-migration-from-v0.md) — OLM v1 採用 (現代標準)

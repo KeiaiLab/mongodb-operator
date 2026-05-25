@@ -42,7 +42,7 @@
 > - `MongoDBBackup` — 自动化测试 0 件,connectionString 明文暴露风险 (通过 `features.backup.enabled=true` 启用)
 > - HorizontalPodAutoscaler — RS/cfg drift mutex 缺失 (通过 `features.autoscaling.enabled=true` 启用)
 >
-> 详细的剩余风险请参阅 [CHANGELOG.md](CHANGELOG.md) 的 Known Issues 章节。
+> 详细的剩余风险请参阅 [Changelog](../changelog.md) 的 Known Issues 章节。
 
 ## 概述
 
@@ -152,7 +152,7 @@ Operator 自动处理 MongoDB 集群的初始化。
 | Helm chart | 本地开发,单集群简单部署 | stable | 1 条命令 (`helm install`) |
 | OLM v0 | OpenShift legacy,OperatorHub.io community | 维护模式 (v0.42,2026-04) | 4 个 manifest + InstallPlan approve |
 
-**详细步骤**: 请参阅 [INSTALL.md](INSTALL.md)。本节为 *快速开始*。
+**详细步骤**: 请参阅 [Installation Guide](../install.md)。本节为 *快速开始*。
 
 #### 方式 1 — OLM v1 (现代标准,推荐)
 
@@ -518,7 +518,7 @@ kubectl apply -f config/samples/mongodb_replicaset.yaml
 
 ## 贡献
 
-欢迎贡献!提交 pull request 之前请阅读我们的 [Contributing Guide](CONTRIBUTING.md),了解我们的行为准则以及提交流程。
+欢迎贡献!提交 pull request 之前请阅读我们的 [Contributing Guide](../contributing.md),了解我们的行为准则以及提交流程。
 
 ## 支持
 
@@ -550,7 +550,7 @@ kubectl apply -f config/samples/mongodb_replicaset.yaml
 - [English README](README.md) — canonical SSOT (正本)
 - [한국어 README](README.ko.md) — 韩文版
 - [日本語 README](README.ja.md) — 日文版
-- [INSTALL.md](INSTALL.md) — 安装详情
-- [DESIGN.md](DESIGN.md) — 设计文档
-- [CHANGELOG.md](CHANGELOG.md) — 变更历史
+- [Installation Guide](../install.md) — 安装详情
+- [Design](../design.md) — 设计文档
+- [Changelog](../changelog.md) — 变更历史
 

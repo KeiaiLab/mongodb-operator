@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="GOVERNANCE.md">English</a> |
+  <a href="(../governance.md)">English</a> |
   <a href="GOVERNANCE.ko.md">한국어</a> |
   <b>日本語</b> |
   <a href="GOVERNANCE.zh.md">中文</a>
@@ -46,13 +46,13 @@ OLM v0 ↔ OLM v1 ↔ Helm chart の *デフォルト推奨変更* または *cl
 | OLM v0 → v1 migration のような *モデル切替え* | ADR (cluster-side) | ADR + Maintainer 2/3 + ユーザー明示的な cluster apply |
 | installer RBAC 変更 (cluster-admin ↔ narrow) | PR + ADR | bundle CSV derive 検証 + cluster apply のユーザー明示的指示 |
 | NetworkPolicy の新設 / 変更 | PR + ADR | OPRUN-3923 reference + cluster apply のユーザー明示的指示 |
-| 外部ユーザー向け *recommended install path* の変更 | RFC | INSTALL.md §1 matrix 更新 + 14 日間のコメント |
+| 外部ユーザー向け *recommended install path* の変更 | RFC | (../install.md) §1 matrix 更新 + 14 日間のコメント |
 
 本領域の ADR chain: ADR-0028 (外部ユーザー運用水準) → ADR-0029 (OLM v1 採用) → ADR-0030 (narrow RBAC + NP)。後続 ADR の *cluster apply* はユーザー明示的指示の領域 (グローバル §2.0 自律憲章 ② の条件 — 取り返しのつかない運用作業)。
 
 ## セキュリティに関する決定
 
-CVE 報告、シークレット / 認証モデルの変更は [SECURITY.md](SECURITY.md) のプロセスに従い、非公開チャネルで優先的に処理した後、パッチリリース後に公開でのコンセンサスを取ります。
+CVE 報告、シークレット / 認証モデルの変更は [Security](../security.md) のプロセスに従い、非公開チャネルで優先的に処理した後、パッチリリース後に公開でのコンセンサスを取ります。
 
 ### Installer RBAC scope (ADR-0030、2026-05-15)
 

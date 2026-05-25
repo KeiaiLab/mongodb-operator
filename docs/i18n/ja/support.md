@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="SUPPORT.md">English</a> |
+  <a href="(../support.md)">English</a> |
   <a href="SUPPORT.ko.md">한국어</a> |
   <b>日本語</b> |
   <a href="SUPPORT.zh.md">中文</a>
@@ -15,14 +15,14 @@
 
 | 状況 | 連絡先 |
 |---|---|
-| **セキュリティ脆弱性を発見したと思われる場合。** | **公開 issue を開かないでください。** [SECURITY.md](SECURITY.md) を使用 — GitHub Security Advisory または `security@keiailab.com` (PGP 署名)。 |
+| **セキュリティ脆弱性を発見したと思われる場合。** | **公開 issue を開かないでください。** [Security](../security.md) を使用 — GitHub Security Advisory または `security@keiailab.com` (PGP 署名)。 |
 | 「これは X のように動作するのが正しいのですか?」または「Y はどのように設定するのですか?」といった質問。 | [GitHub Discussions](https://github.com/keiailab/mongodb-operator/discussions)。検索可能で、将来のオペレーターのためにインデックス化されます。 |
 | バグを発見した — ドキュメントとは異なる動作をする。 | **Bug report** テンプレートを使用して [issue を開いてください](https://github.com/keiailab/mongodb-operator/issues/new/choose)。 |
-| 機能の追加または動作の変更を希望する。 | **Feature request** テンプレートを使用して [issue を開いてください](https://github.com/keiailab/mongodb-operator/issues/new/choose)。すでに計画されているかどうか、まず [ROADMAP.md](ROADMAP.md) を確認してください。 |
+| 機能の追加または動作の変更を希望する。 | **Feature request** テンプレートを使用して [issue を開いてください](https://github.com/keiailab/mongodb-operator/issues/new/choose)。すでに計画されているかどうか、まず [Roadmap](../roadmap.md) を確認してください。 |
 | 「これは FAQ に載せるべき」という質問。 | **Question** テンプレートを使用して [issue を開いてください](https://github.com/keiailab/mongodb-operator/issues/new/choose)。 |
 | Prometheus アラートが発火し、MTTR 手順が必要。 | [`../troubleshooting.md`](../troubleshooting.md) §9 (各アラートの `runbook_url` アノテーションがここを指します)。 |
 | アラートはないが、奇妙な動作が見られる。 | [`../troubleshooting.md`](../troubleshooting.md) — 症状 → 原因 → 診断 → 是正のフローチャート。 |
-| コードまたはドキュメントに貢献したい。 | [CONTRIBUTING.md](CONTRIBUTING.md)。 |
+| コードまたはドキュメントに貢献したい。 | [Contributing](../contributing.md)。 |
 
 ## Issue を開く前に
 
@@ -38,10 +38,10 @@
 ## レスポンスへの期待値
 
 本プロジェクトは best-effort の時間で維持されているオープンソースプロジェクトです。
-[GOVERNANCE.md](GOVERNANCE.md) が意思決定および
+[Governance](../governance.md) が意思決定および
 レビュープロセスを説明しています。通常、issue には数営業日以内に
 応答します; セキュリティ報告は
-[SECURITY.md](SECURITY.md) の SLA に従って処理されます (initial ack は 72 h 以内、severity triage は
+[Security](../security.md) の SLA に従って処理されます (initial ack は 72 h 以内、severity triage は
 7 日以内)。
 
 有償サポート契約や hard SLA が必要な場合は、
@@ -56,6 +56,6 @@
 ## Code of Conduct (行動規範)
 
 上記のすべてのチャネルは
-[Code of Conduct](CODE_OF_CONDUCT.md) に従って運営されます。参加前に
+[Code of Conduct](../code-of-conduct.md) に従って運営されます。参加前に
 必ずお読みください。
 

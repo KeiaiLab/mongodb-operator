@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="CONTRIBUTING.md">English</a> |
+  <a href="(../contributing.md)">English</a> |
   <a href="CONTRIBUTING.ko.md">한국어</a> |
   <a href="CONTRIBUTING.ja.md">日本語</a> |
   <b>中文</b>
@@ -11,7 +11,7 @@
 
 ## 行为准则
 
-本项目采用所有贡献者均须遵守的行为准则。请阅读 [Code of Conduct](CODE_OF_CONDUCT.md),以了解我们的社区标准和期望。
+本项目采用所有贡献者均须遵守的行为准则。请阅读 [Code of Conduct](../code-of-conduct.md),以了解我们的社区标准和期望。
 
 ## 如何贡献
 

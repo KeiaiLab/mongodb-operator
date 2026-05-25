@@ -165,6 +165,6 @@ Bitnami chart 사용자가 본 Operator로 전환할 때 자주 쓰이는 필드
 
 - Bitnami chart 소스: https://github.com/bitnami/charts/tree/main/bitnami/mongodb-sharded
 - ArtifactHub: https://artifacthub.io/packages/helm/bitnami/mongodb-sharded
-- 본 프로젝트 ROADMAP: [`ROADMAP.md`](../../ROADMAP.md)
+- 본 프로젝트 ROADMAP: [`roadmap.md`](roadmap.md)
 - CRD 정의: `api/v1alpha1/{mongodb,mongodbsharded,mongodbbackup,common}_types.go`
 - Driver 매니저: `internal/mongodb/{client,replicaset,sharding,auth}.go`

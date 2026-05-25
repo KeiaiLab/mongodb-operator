@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="GOVERNANCE.md">English</a> |
+  <a href="(../governance.md)">English</a> |
   <a href="GOVERNANCE.ko.md">한국어</a> |
   <a href="GOVERNANCE.ja.md">日本語</a> |
   <b>中文</b>
@@ -46,13 +46,13 @@ OLM v0 ↔ OLM v1 ↔ Helm chart 的 *默认推荐变更* 或 *cluster apply* �
 | 如 OLM v0 → v1 migration 这类 *模型切换* | ADR (cluster-side) | ADR + Maintainer 2/3 + 用户明示 cluster apply |
 | installer RBAC 变更 (cluster-admin ↔ narrow) | PR + ADR | bundle CSV derive 验证 + cluster apply 用户明示 |
 | NetworkPolicy 新设 / 变更 | PR + ADR | OPRUN-3923 reference + cluster apply 用户明示 |
-| 外部用户 *recommended install path* 变更 | RFC | INSTALL.md §1 matrix 更新 + 14 天评论 |
+| 外部用户 *recommended install path* 变更 | RFC | (../install.md) §1 matrix 更新 + 14 天评论 |
 
 本领域的 ADR chain: ADR-0028 (外部用户运维水平) → ADR-0029 (OLM v1 采用) → ADR-0030 (narrow RBAC + NP)。后续 ADR 的 *cluster apply* 属于用户明示领域 (全局 §2.0 自治宪章 ② 条件 — 不可逆的运维操作)。
 
 ## 安全决策
 
-CVE 报告、密钥 / 认证模型变更按照 [SECURITY.md](SECURITY.md) 的流程在非公开渠道优先处理,待补丁发布后再进行公开共识。
+CVE 报告、密钥 / 认证模型变更按照 [Security](../security.md) 的流程在非公开渠道优先处理,待补丁发布后再进行公开共识。
 
 ### Installer RBAC scope (ADR-0030,2026-05-15)
 

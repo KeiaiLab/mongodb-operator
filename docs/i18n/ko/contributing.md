@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="CONTRIBUTING.md">English</a> |
+  <a href="(../contributing.md)">English</a> |
   <b>한국어</b> |
   <a href="CONTRIBUTING.ja.md">日本語</a> |
   <a href="CONTRIBUTING.zh.md">中文</a>
@@ -7,7 +7,7 @@
 
 # Contributing (한국어)
 
-> English: [CONTRIBUTING.md](CONTRIBUTING.md) — canonical / 정본
+> English: [Contributing](../contributing.md) — canonical / 정본
 
 mongodb-operator 에 기여해 주셔서 감사합니다. 본 문서는 PR 절차, 테스트
 실행, 디자인 결정 추적 (ADR) 의 개요입니다.
@@ -128,7 +128,7 @@ INDEX 갱신 의무 — `docs/kb/adr/INDEX.md`.
 
 ## 보안 이슈
 
-보안 취약점은 *공개 issue 로 보고하지 마세요*. `SECURITY.md` 의 비공개
+보안 취약점은 *공개 issue 로 보고하지 마세요*. `(../security.md)` 의 비공개
 보고 경로 사용.
 
 ## 라이선스
