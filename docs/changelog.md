@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] — 2026-05-25
+
+### Changed
+
+- **Documentation restructure**: All docs moved to `docs/` directory, only `README.md` at root
+- **i18n reorganization**: Translations moved to `docs/i18n/{ko,ja,zh}/`
+- **Gap analysis rewrite**: Code-verified feature matrix — 26/32 features at parity or better vs Bitnami
+- **Cross-service references removed**: Zero mentions of external services (standalone project)
+- **ADR cleanup**: Cross-project ADRs removed (0016, 0024-0027, 0031-0033), INDEX updated
+- **docs/README.md**: Complete documentation index with all links verified
+
+### Fixed
+
+- All broken documentation links after restructure (97 files updated)
+- Operator family footer removed from 54 files
+- i18n link paths corrected (37 files)
+
 ## [Unreleased]
 
 ### ⚠ BREAKING CHANGES
