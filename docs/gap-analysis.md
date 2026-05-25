@@ -43,7 +43,7 @@ Legend: ✅ Equivalent or better · ⚠️ Partial · ❌ Not supported · ⚪ N
 | 24 | Mongos service-per-replica | `mongos.servicePerReplica.enabled` | Not supported | ❌ | |
 | 25 | External config servers | `configsvr.external.host` | Not supported (always in-cluster) | ❌ | |
 | 26 | Volume permissions init | `volumePermissions.enabled` | `VolumePermissionsSpec` — PSA restricted PVC ownership | ✅ | `common_types.go:1016`, `builder.go:594` |
-| 27 | Resource presets | 8-level presets (nano~2xlarge) | Direct requests/limits only | ❌ | Convenience gap |
+| 27 | Resource presets | 8-level presets (nano~2xlarge) | 7-tier presets via `PodSpec.ResourcesPreset` | ✅ | `presets.go` + `common_types.go:1032` |
 | 28 | SessionAffinity | Per component | `MongosServiceSpec.SessionAffinity` | ✅ | `mongodbsharded_types.go:311` |
 | 29 | RS member removal | User responsibility | `RemoveMember()` via `replSetReconfig` | ✅ | `replicaset.go:264` + test |
 | 30 | Password rotation | Manual | Not automated | ⚪ | Both manual |
@@ -54,9 +54,9 @@ Legend: ✅ Equivalent or better · ⚠️ Partial · ❌ Not supported · ⚪ N
 
 | Category | Count |
 |---|---|
-| ✅ Equivalent or better | 26 |
+| ✅ Equivalent or better | 27 |
 | ⚠️ Partial | 3 |
-| ❌ Not supported | 3 |
+| ❌ Not supported | 2 |
 
 **Operator advantages** (features Bitnami lacks):
 1. Built-in `MongoDBBackup` CRD with S3/PVC support
@@ -68,10 +68,9 @@ Legend: ✅ Equivalent or better · ⚠️ Partial · ❌ Not supported · ⚪ N
 7. RS member removal via `replSetReconfig` (driver-level)
 8. Volume permissions init container for PSA restricted clusters
 
-**Remaining gaps** (3 items):
+**Remaining gaps** (2 items):
 1. Mongos service-per-replica (#24)
 2. External config server support (#25)
-3. Resource presets convenience (#27)
 
 ## Migration Guide
 
