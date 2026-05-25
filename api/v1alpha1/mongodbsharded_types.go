@@ -330,6 +330,27 @@ type MongosServiceSpec struct {
 	// +kubebuilder:default=false
 	// +optional
 	Headless bool `json:"headless,omitempty"`
+
+	// ServicePerReplica creates individual services for each mongos pod.
+	// Requires UseStatefulSet=true on MongosSpec.
+	// +optional
+	ServicePerReplica *ServicePerReplicaSpec `json:"servicePerReplica,omitempty"`
+}
+
+// ServicePerReplicaSpec configures per-pod services for mongos.
+type ServicePerReplicaSpec struct {
+	// Enabled creates one Service per mongos pod (e.g., my-sharded-mongos-0, -1, ...).
+	Enabled bool `json:"enabled"`
+
+	// Type is the per-replica service type.
+	// +kubebuilder:validation:Enum=ClusterIP;NodePort;LoadBalancer
+	// +kubebuilder:default="ClusterIP"
+	// +optional
+	Type string `json:"type,omitempty"`
+
+	// Annotations are additional annotations for per-replica services.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 // MongoDBShardedStatus defines the observed state of MongoDBSharded

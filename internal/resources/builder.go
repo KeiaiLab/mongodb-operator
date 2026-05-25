@@ -1526,6 +1526,54 @@ func BuildMongosService(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.Service {
 	return svc
 }
 
+// BuildMongosPerReplicaServices creates one Service per mongos pod for direct external routing.
+func BuildMongosPerReplicaServices(mdbsh *mongodbv1alpha1.MongoDBSharded) []*corev1.Service {
+	if mdbsh.Spec.Mongos.Service == nil || mdbsh.Spec.Mongos.Service.ServicePerReplica == nil ||
+		!mdbsh.Spec.Mongos.Service.ServicePerReplica.Enabled {
+		return nil
+	}
+
+	replicas := int32(2)
+	if mdbsh.Spec.Mongos.Replicas > 0 {
+		replicas = mdbsh.Spec.Mongos.Replicas
+	}
+
+	svcType := corev1.ServiceTypeClusterIP
+	if mdbsh.Spec.Mongos.Service.ServicePerReplica.Type != "" {
+		svcType = corev1.ServiceType(mdbsh.Spec.Mongos.Service.ServicePerReplica.Type)
+	}
+
+	var services []*corev1.Service
+	for i := int32(0); i < replicas; i++ {
+		podName := fmt.Sprintf("%s-mongos-%d", mdbsh.Name, i)
+		labels := buildLabels(mdbsh.Name, "mongos")
+
+		svc := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      podName,
+				Namespace: mdbsh.Namespace,
+				Labels:    labels,
+			},
+			Spec: corev1.ServiceSpec{
+				Type: svcType,
+				Selector: map[string]string{
+					"statefulset.kubernetes.io/pod-name": podName,
+				},
+				Ports: []corev1.ServicePort{
+					{Name: "mongodb", Port: mongoDBPort, TargetPort: intstr.FromInt(mongoDBPort)},
+				},
+			},
+		}
+
+		if mdbsh.Spec.Mongos.Service.ServicePerReplica.Annotations != nil {
+			svc.Annotations = mdbsh.Spec.Mongos.Service.ServicePerReplica.Annotations
+		}
+
+		services = append(services, svc)
+	}
+	return services
+}
+
 // BuildMongosDeployment creates a Deployment for Mongos
 // BuildMongosStatefulSet creates a StatefulSet for Mongos when
 // Mongos.UseStatefulSet=true (cycle 18, G-12 Bitnami parity).
