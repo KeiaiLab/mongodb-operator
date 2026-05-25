@@ -1,22 +1,23 @@
 <p align="center">
   <b>English</b> |
-  <a href="ADOPTERS.ko.md">한국어</a> |
-  <a href="ADOPTERS.ja.md">日本語</a> |
-  <a href="ADOPTERS.zh.md">中文</a>
+  <a href="i18n/ko/adopters.md">한국어</a> |
+  <a href="i18n/ja/adopters.md">日本語</a> |
+  <a href="i18n/zh/adopters.md">中文</a>
 </p>
 
 # Adopters of mongodb-operator
 
-본 문서는 `keiailab/mongodb-operator` 를 운영 환경 또는 평가 환경에서 사용하는 조직/프로젝트의 *공개* 목록입니다. 자가 등록을 환영합니다 — PR 로 row 를 추가해주세요.
+Organizations and projects using `keiailab/mongodb-operator` in production or evaluation. Self-registration is welcome — please add a row via Pull Request.
 
-> 비공개 사용자는 GitHub Discussions 또는 SECURITY.md 의 비공개 채널을 통해 알려주실 수 있습니다.
+> Private users may report usage via GitHub Discussions or the private channel in [SECURITY.md](security.md).
 
 ## Production Users
 
-운영 환경에서 mongodb-operator 를 *production-grade SLA* 로 사용하는 사용자.
+Organizations running mongodb-operator with production-grade SLA.
 
-| 사용자 | 컴포넌트 | 사용 패턴 | 시작 버전 | 현재 버전 | 등재 일자 |
+| Organization | Components | Usage Pattern | Since Version | Current Version | Listed |
 |---|---|---|---|---|---|
+| [keiailab](https://github.com/keiailab) | MongoDBSharded (5 shards, 3 mongos, 3 config servers) | Production metadata storage, TLS + SCRAM-SHA-256, PDB, PriorityClass, ceph-rbd storage | v1.4.5 | v1.8.0 | 2026-05 |
 
 ## Evaluators
 

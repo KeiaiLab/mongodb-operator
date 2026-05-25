@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] — 2026-05-26
+
+### Added
+
+- **Backup scheduling via CronJob** — `BuildBackupCronJob()` creates K8s CronJob that auto-creates MongoDBBackup CRs on schedule
+- **CRD v1beta1 graduation** — api/v1beta1/ with storageversion marker, v1alpha1 remains served for backward compatibility
+- **Root community files** — SECURITY.md, CODE_OF_CONDUCT.md, CONTRIBUTING.md at repo root for GitHub auto-detection
+- **First adopter registered** — keiailab production cluster (5 shards, 21 pods) listed in ADOPTERS.md
+
+### Changed
+
+- PITR restore with `--oplogReplay --oplogLimit` confirmed already implemented (builder.go)
+
 ## [1.8.0] — 2026-05-26
 
 ### Changed
