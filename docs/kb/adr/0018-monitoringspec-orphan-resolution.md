@@ -12,7 +12,7 @@ iteration 46 cross-cut audit 에서 mongodb-operator 의 `MonitoringSpec`
 `spec.monitoring.{serviceMonitor,prometheusRules,exporter}` 설정해도 *어느
 controller 도 reconcile 안 함* — UX 함정 (silent ignore).
 
-대조군: valkey-operator 의 `internal/resources/servicemonitor.go` 이
+대조군: sister operator 의 `internal/resources/servicemonitor.go` 이
 `commons.monitoring.NewServiceMonitor` 위임 + `applyServiceMonitor` fail-soft
 패턴 (NoMatchError 흡수). 즉 valkey 는 *full reconcile 보유*, mongodb 는
 *spec-only no-impl*.

@@ -90,7 +90,6 @@ spec:
 > 정적 manifest 가 cover.
 
 CR 인스턴스 metrics 의 ServiceMonitor 는 **사용자가 직접 작성** 필요 (아래
-"Custom ServiceMonitor" 섹션). 향후 Phase 2 (ADR-0018) 에서 valkey-operator
 패턴 (controller-level 동적 생성) 도입 결정 가능.
 
 ### 운영 pod metrics 자동 ServiceMonitor (chart-level)

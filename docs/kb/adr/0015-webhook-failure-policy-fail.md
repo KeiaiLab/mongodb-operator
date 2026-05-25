@@ -55,7 +55,7 @@ iteration 45 에서 mongodb-operator 에 validating admission webhook 을 도입
 
 - invalid CR 0% etcd 도달 — controller 가 잘못된 spec 으로 reconcile loop 진입
   하는 incident class 차단.
-- valkey-operator 와 동일 정책 — 3 operator 일관성.
+- sister operator 와 동일 정책 — 3 operator 일관성.
 - field-level validation error message 가 즉시 사용자에게 반환 (UX).
 
 ### 부정

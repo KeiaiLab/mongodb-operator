@@ -16,15 +16,13 @@
   <a href="https://artifacthub.io/packages/search?repo=mongodb-operator"><img src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/mongodb-operator" alt="Artifact Hub"/></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/keiailab/mongodb-operator"><img src="https://api.scorecard.dev/projects/github.com/keiailab/mongodb-operator/badge" alt="OpenSSF Scorecard"/></a>
   <a href="https://github.com/keiailab/mongodb-operator/discussions"><img src="https://img.shields.io/github/discussions/keiailab/mongodb-operator?label=discussions&logo=github" alt="GitHub Discussions"/></a>
-  <a href="https://github.com/keiailab/operator-commons/blob/main/docs/quality/audit-history.md"><img src="https://img.shields.io/badge/keiailab-v3.x--stable-success?style=flat-square" alt="keiailab v3.x-stable"/></a>
-  <a href="https://github.com/keiailab/operator-commons/blob/main/scripts/audit-production-grade.sh"><img src="https://img.shields.io/badge/audit-100%25-success?style=flat-square" alt="audit"/></a>
 </p>
 
 <p align="center">
   <b>English</b> |
-  <a href="README.ko.md">한국어</a> |
-  <a href="README.ja.md">日本語</a> |
-  <a href="README.zh.md">中文</a>
+  <a href="docs/i18n/ko/readme.md">한국어</a> |
+  <a href="docs/i18n/ja/readme.md">日本語</a> |
+  <a href="docs/i18n/zh/readme.md">中文</a>
 </p>
 
 ---
@@ -42,7 +40,7 @@ A Kubernetes Operator for deploying and managing MongoDB ReplicaSets and Sharded
 > - `MongoDBBackup` — 자동 테스트 0건, connectionString 평문 노출 위험 (`features.backup.enabled=true`로 활성)
 > - HorizontalPodAutoscaler — RS/cfg drift mutex 부재 (`features.autoscaling.enabled=true`로 활성)
 >
-> 자세한 잔여 위험은 [CHANGELOG.md](CHANGELOG.md) 의 Known Issues 섹션 참조.
+> 자세한 잔여 위험은 [CHANGELOG](docs/changelog.md) 의 Known Issues 섹션 참조.
 
 ## Overview
 
@@ -152,7 +150,7 @@ The operator automatically handles MongoDB cluster initialization:
 | Helm chart | local dev, single-cluster simple deploy | stable | 1 command (`helm install`) |
 | OLM v0 | OpenShift legacy, OperatorHub.io community | maintenance mode (v0.42, 2026-04) | 4 manifests + InstallPlan approve |
 
-**상세 절차**: [INSTALL.md](INSTALL.md). 본 절은 *Quick Start*.
+**상세 절차**: [Installation Guide](docs/install.md). 본 절은 *Quick Start*.
 
 #### Path 1 — OLM v1 (현대 표준, recommended)
 
@@ -518,7 +516,7 @@ This operator manages MongoDB databases but does not include or distribute Mongo
 
 ## Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+Contributions are welcome! Please read our [Contributing Guide](docs/contributing.md) for details on our code of conduct and the process for submitting pull requests.
 
 ## Support
 
@@ -546,14 +544,5 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 - [Bitnami MongoDB Charts](https://github.com/bitnami/charts) for inspiration
 
 ---
-
-<p align="center">
-  <b>keiailab operator family</b><br/>
-  <a href="https://github.com/keiailab/operator-commons">operator-commons</a> ·
-  <a href="https://github.com/keiailab/postgres-operator">postgres-operator</a> ·
-  <a href="https://github.com/keiailab/mongodb-operator">mongodb-operator</a> ·
-  <a href="https://github.com/keiailab/valkey-operator">valkey-operator</a> ·
-  <a href="https://github.com/keiailab/forgewise">forgewise</a>
-</p>
 
 <p align="center">© 2026 keiailab · Apache-2.0 · <a href="https://keiailab.com">keiailab.com</a></p>

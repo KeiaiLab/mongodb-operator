@@ -77,7 +77,6 @@ Phase C 단순화: `mongodb-operator-installer` SA → `cluster-admin` binding. 
 - [ ] **CRD adopt annotation 정리** — helm chart 제거 후 `meta.helm.sh/release-name/release-namespace` annotation 제거 (OLM v1 단독 소유).
 - [ ] **olmv1-system NetworkPolicy** — narrow NP (catalogd grpc + image pull egress + kube-apiserver) — 현재 default-deny cluster 의 호환 보완.
 - [ ] **PoC CR reconcile 검증** — helm chart 제거 후 `database` ns 의 `test-mongodb` CR 적용 → status.phase=Ready.
-- [ ] **mailstory FerretDB cutover** — `docs/operations/mailstory-ferretdb-to-native-mongodb-cutover.md` Draft.
 - [ ] **OLM v1 release-yml 자동화** — community-operators upstream PR (ADR-0027) 의 OLM v1 변형.
 
 ## Alternatives Considered
@@ -113,7 +112,6 @@ NAME                                                   READY   STATUS    RESTART
 mongodb-operator-controller-manager-6b65567bd8-wq8n5   1/1     Running   0
 ```
 
-ClusterExtension `Installed=True/Succeeded`, operator pod healthy `v1.5.0`, mailstory-ferretdb 무영향.
 
 `<!-- live-verified: 2026-05-15 -->`
 

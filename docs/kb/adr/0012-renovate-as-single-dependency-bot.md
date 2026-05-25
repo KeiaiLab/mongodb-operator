@@ -10,7 +10,7 @@
 
 1. 동일 의존성에 대한 *중복 PR* 발생 가능 (예: `k8s.io/api` minor 업데이트 → Dependabot PR + Renovate PR).
 2. 머지 충돌 / 리뷰 노이즈 / CI 중복 실행 (RFC 0002 의 GH Actions 폐기 후 로컬 게이트만 운영하나, 둘 다 PR 만들면 사용자 리뷰 시간 2배 소비).
-3. 3-repo 정합 부족: `postgresql-operator` / `valkey-operator` 는 `renovate.json` 만 운영. 본 repo 만 outlier.
+3. 3-repo 정합 부족: `postgresql-operator` / `sister operator` 는 `renovate.json` 만 운영. 본 repo 만 outlier.
 
 ## Decision
 
@@ -66,4 +66,4 @@
 
 - RFC 0002 §7 (GH Actions 금지의 3 예외): Dependabot / Renovate 도구 자체 허용.
 - 표준: `~/Documents/ai-dev/standards/enforcement.md §1.5` (Security scan).
-- 사례: `postgresql-operator/renovate.json`, `valkey-operator/renovate.json`.
+- 사례: `postgresql-operator/renovate.json`, `sister operator/renovate.json`.

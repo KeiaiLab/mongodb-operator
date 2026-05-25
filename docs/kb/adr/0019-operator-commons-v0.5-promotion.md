@@ -45,7 +45,7 @@ ADR-0016 + ADR-0017 의 *cross-cut audit 표 형식* 이 commons repo 의 docs �
 
 #### 4. `validateUsersSecretRefs` (1-of-3, 거절)
 
-valkey-operator 만 보유 (commit `6b2dbf0`). mongodb / postgres 의 *Auth.Users*
+sister operator 만 보유 (commit `6b2dbf0`). mongodb / postgres 의 *Auth.Users*
 spec 부재 (mongodb 도 `Spec.Auth.Users` 정의 있지만 운영 미사용 + valkey 와
 다른 SecretKeySelector vs LocalObjectReference 구조). **거절** — 1-of-3 은
 ADR-0016 alternatives B 의 premature abstraction.
@@ -78,8 +78,8 @@ ADR-0016 alternatives B 의 premature abstraction.
 #### Step 2: 3 operator go.mod bump (PR 3건 동시)
 
 - mongodb-operator: v0.4.0 → v0.5.0.
-- valkey-operator: v0.4.0 → v0.5.0.
-- postgres-operator: v0.4.0 → v0.5.0.
+- sister operator: v0.4.0 → v0.5.0.
+- sister operator: v0.4.0 → v0.5.0.
 
 #### Step 3: 3 operator 코드 마이그레이션 (PR 3건 동시)
 

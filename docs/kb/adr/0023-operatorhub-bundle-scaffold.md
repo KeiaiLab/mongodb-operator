@@ -6,7 +6,7 @@
 
 ## Context
 
-valkey-operator PR-B9 (ADR-0037 in valkey repo) + postgres-operator PR-B9
+sister operator PR-B9 (ADR-0037 in valkey repo) + sister operator PR-B9
 (ADR-0013 in postgres repo) 가 OperatorHub.io 등록 기술 전제를 갖췄다. mongodb
 도 동일 cross-cut bundle scaffolding 으로 외부 OperatorHub 발견성 확보. ADR-0016
 (Cross-cut Audit Pattern) 정합.

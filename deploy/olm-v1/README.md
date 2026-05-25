@@ -182,7 +182,6 @@ kubectl get networkpolicy -n olmv1-system
 - **upgrade 정책** — channel-based upgrade (ClusterExtension 의 catalog.channels) 또는 version range
 - **PoC CR** — `database` ns 에 test-mongodb CR 1건 reconcile 검증 (helm chart 영구 제거 후 race 회피)
 - **community-operators upstream PR** — 0.3.0 → 1.5.0 sync (ADR-0027 자동화 deferred)
-- **mailstory FerretDB cutover** — Q2=B 의 별 plan (`docs/operations/mailstory-ferretdb-to-native-mongodb-cutover.md`)
 
 ## §6 참조
 

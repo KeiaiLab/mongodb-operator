@@ -7,7 +7,7 @@
 
 ## Context
 
-RFC-0018 §3.2 의 mongodb-operator 측 채택 (valkey-operator PR-A6 / ADR-0038
+RFC-0018 §3.2 의 mongodb-operator 측 채택 (sister operator PR-A6 / ADR-0038
 패턴 동일 적용). 본 ADR 작성 시점:
 
 | 호출 위치 | 변경 전 | 변경 후 |
@@ -44,7 +44,7 @@ RFC-0018 §3.2 의 mongodb-operator 측 채택 (valkey-operator PR-A6 / ADR-0038
 
 ### Positive
 
-- 4-repo 정합성 (valkey-operator ADR-0038 / postgres-operator ADR-0011 와
+- 4-repo 정합성 (sister operator ADR-0038 / sister operator ADR-0011 와
   동일 패턴).
 - commons `pkg/finalizer` 채택률 25% (valkey) → 50% (mongodb 추가).
   postgres 비대칭 보존 시 최종 67% (3 of 4 repo, 의도된 비대칭).
@@ -75,7 +75,7 @@ RFC-0018 §3.2 의 mongodb-operator 측 채택 (valkey-operator PR-A6 / ADR-0038
 
 - RFC-0018: operator-commons/docs/kb/rfc/0018-status-finalizer-standard.md
 - ADR-0003 (commons): pkg/status 슈가 + pkg/finalizer 변경 없음 결정.
-- valkey-operator ADR-0038: 동일 패턴 (5 controller 변경).
-- postgres-operator ADR-0011: pkg/status 부분 채택 + finalizer 비대칭.
+- sister operator ADR-0038: 동일 패턴 (5 controller 변경).
+- sister operator ADR-0011: pkg/status 부분 채택 + finalizer 비대칭.
 - Plan §2 D10/D11.
 - 후속 PR-A5.2 (별도): setCondition → commonsstatus 위임.

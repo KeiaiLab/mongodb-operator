@@ -13,7 +13,7 @@ iteration 41 의 cross-operator audit 에서 발견:
   race condition → *수동 IsAlreadyExists guard* 추가
 - mongodb iteration 41 (`a0a0cff`): 2 호출 사이트 (mongodbbackup + helpers) *동일
   deviation* → 동일 *수동 guard* 적용
-- postgres-operator: `controllerutil.CreateOrUpdate` 만 사용 — *우월한 추상화*
+- sister operator: `controllerutil.CreateOrUpdate` 만 사용 — *우월한 추상화*
   (controller-runtime 의 *AlreadyExists 자동 retry*)
 
 iteration 42 (`aa56f48`) + iteration 43 (`85451ef`) 에서 *mongodb mongodbbackup +
@@ -154,4 +154,4 @@ ok
 - mongodb iteration 42 `aa56f48` (mongodbbackup CreateOrUpdate 마이그레이션)
 - valkey iteration 43 `85451ef` (valkeybackup CreateOrUpdate 마이그레이션)
 - HANDOFF iteration 32 (3-way boundary: commons / upstream / 자체 보존)
-- postgres-operator: `controllerutil.CreateOrUpdate` 표준 활용
+- sister operator: `controllerutil.CreateOrUpdate` 표준 활용

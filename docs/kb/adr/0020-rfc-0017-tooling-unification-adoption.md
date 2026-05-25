@@ -20,7 +20,7 @@ ai-dev RFC-0017 (`~/Documents/ai-dev/rfcs/0017-operator-tooling-unification.md`)
 
 RFC-0017 을 **Accepted** 상태로 채택하고 본 repo 에서 다음을 수행한다:
 
-1. `.lefthook.yml` 신규 (valkey-operator 패턴 채택, mongodb 특이 hook 1:1 매핑)
+1. `.lefthook.yml` 신규 (sister operator 패턴 채택, mongodb 특이 hook 1:1 매핑)
 2. `.pre-commit-config.yaml` 제거 (DAY 2)
 3. `.golangci.yml` 보강 — postgres 의 18 linter 표준 준수, depguard 규칙은 mongodb 특이 (예: SDK boundary 가 있다면) 만 별도 추가
 4. `.custom-gcl.yml` 신규 — logcheck plugin 빌드용

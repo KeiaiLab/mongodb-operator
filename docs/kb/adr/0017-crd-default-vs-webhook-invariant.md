@@ -7,7 +7,7 @@
 
 ## Context
 
-iteration 47 의 admission round-trip 테스트 작성 중 valkey-operator 의
+iteration 47 의 admission round-trip 테스트 작성 중 sister operator 의
 `validateClusterSpec` 의 invariant *autoFailover=true + ReplicasPerShard=0 →
 denial* 가 *real apiserver 통해 도달 불가능* 함을 발견:
 
@@ -83,7 +83,7 @@ denial* 가 *real apiserver 통해 도달 불가능* 함을 발견:
   webhook 활성 환경* 에서만 unreachable. webhook.enabled=false 환경 (helm
   values opt-out, CRD only 모드) 에서는 reachable.
   → invariant 유지 (defensive). 단 *환경 의존성* 명시.
-  - 사례: valkey-operator 의 `ValkeyClusterSpec.ReplicasPerShard` (no omitempty,
+  - 사례: sister operator 의 `ValkeyClusterSpec.ReplicasPerShard` (no omitempty,
     CRD default=1, mutating defaulter 가 0→1 보강). it47 commit `5f3f91c` 의
     *autoFailover + ReplicasPerShard=0 → unreachable* 분석은 *webhook.enabled=true
     환경 한정* 이며, helm `webhook.enabled=false` 로 mutating defaulter 우회 시
@@ -132,7 +132,7 @@ audit 비용 < dead-code 으로 인한 *implicit 운영 risk*. 정리 부담 > �
 
 ### 후속 작업
 
-- valkey-operator 의 `autoFailover + ReplicasPerShard=0` invariant 정리
+- sister operator 의 `autoFailover + ReplicasPerShard=0` invariant 정리
   (별 PR, type A 분류 명시).
 - 3 operator 의 기존 invariant retroactive sweep (별 cycle, type 분류).
 - ADR-0016 의 cross-cut audit 표에 *unreachable column* 추가.

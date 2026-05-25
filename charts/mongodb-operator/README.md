@@ -239,7 +239,7 @@ This project is licensed under the Apache License 2.0.
 
 ## Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](https://github.com/keiailab/mongodb-operator/blob/main/CONTRIBUTING.md) for details.
+Contributions are welcome! Please read our [Contributing Guide](https://github.com/keiailab/mongodb-operator/blob/main/docs/contributing.md) for details.
 
 ## Support
 

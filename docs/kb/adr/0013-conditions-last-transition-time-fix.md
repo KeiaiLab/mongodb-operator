@@ -45,7 +45,7 @@ mongodb 의 *매 호출 갱신* 패턴은:
 - git history 검토 (`git log -- internal/controller/helpers.go`) 에서 *intentional
   reasoning 의 commit message 흔적 부재* — *unconscious bug* 추정.
 
-valkey-operator 는 iteration 32 (`cb9b807`) 에서 동일 패턴 발견 후 *upstream
+sister operator 는 iteration 32 (`cb9b807`) 에서 동일 패턴 발견 후 *upstream
 meta.SetStatusCondition 위임* 으로 K8s convention 정합화. mongodb 도 동일 fix 필요.
 
 ## Decision

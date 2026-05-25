@@ -34,11 +34,9 @@ Makefile                         Build / test / deploy / docker / helm-publish
 *사용자 질의 최소화*. AskUserQuestion + 확인 발화는 3 조건만:
 1. 외부 권한 부여 (예: cluster admin, GHCR org owner)
 2. *돌이킬 수 없는 운영 작업* — `kubectl delete ns/csv/clusterextension`, helm release uninstall, ArgoCD App spec.source 변경, force push main, 운영 DB drop, 시크릿 회전
-3. 사용자만 아는 *비즈니스 결정* — mailstory FerretDB 교체 시점, downtime 윈도우, license 결정
 
 본 operator 작업의 적용 분기:
 - **자동 진행 (사용자 redirect 권한 보유)**: code change + ADR + manifest + 검증 명령 + PR open
-- **사용자 명시 게이트**: production cluster apply (RBAC binding 변경 / NetworkPolicy 차단 / CRD delete) + 외부 PR (community-operators upstream, k8s-operatorhub fork) + data migration (mailstory cutover)
 
 ### Never Edit These (Auto-Generated)
 - `config/crd/bases/*.yaml` — `make manifests` 산출
@@ -73,7 +71,7 @@ make test                      # go test ./internal/... + envtest
 
 ### Helm chart 변경 시
 - `charts/mongodb-operator/Chart.yaml` 의 `version` + `appVersion` 동기 bump
-- `CHANGELOG.md` 에 신규 버전 섹션 추가
+- `docs/changelog.md` 에 신규 버전 섹션 추가
 - 별도 commit 으로 `chore(release): vX.Y.Z` 형태
 
 ### 배포 — 3 deployment models (ADR-0028~0030)
@@ -96,7 +94,7 @@ make test                      # go test ./internal/... + envtest
 <!-- Path 3 (OLM v0 legacy) 영구 폐기 — ADR-0028 Phase D. -->
 <!-- 외부 사용자는 Path 1 (OLM v1) 또는 Path 2 (Helm) 선택. community-operators sync 자동화 폐기. -->
 
-상세: [INSTALL.md](INSTALL.md) 2-path matrix (OLM v1 / Helm).
+상세: [docs/install.md](docs/install.md) 2-path matrix (OLM v1 / Helm).
 
 ## E2E / Integration
 
@@ -155,13 +153,13 @@ argos data plane 의 *상태 audit + 격차 추적 + sprint plan* 진입.
 ./scripts/audit-cluster-state.sh
 
 # 2. 격차 + clean 영역 표 + KPI 정의
-$EDITOR docs/operations/cluster-audit.md
+$EDITOR docs/troubleshooting.md
 
 # 3. 격차 해소 procedure (7 phase)
-$EDITOR docs/operations/production-grade-sprint.md
+$EDITOR docs/roadmap.md
 ```
 
-진입점 단축: [docs/operations/README.md](docs/operations/README.md) — 운영자
+진입점 단축: [docs/README.md](docs/README.md) — 운영자
 single entry point. 사용자 의도별 *4 시나리오 표* 제공.
 
 cluster-ops mode 의 ADR (cluster-side governance):
@@ -189,21 +187,8 @@ kubectl get deployment -A -l app.kubernetes.io/name=mongodb-operator  # helm 또
 ## Refs
 
 - 글로벌 규약: `~/.claude/CLAUDE.md` + `standards/*.md`
-- 본 프로젝트 거버넌스: [GOVERNANCE.md](GOVERNANCE.md), [MAINTAINERS.md](MAINTAINERS.md)
+- 본 프로젝트 거버넌스: [Governance](docs/governance.md), [Maintainers](docs/maintainers.md)
 - 운영 사고 분석: [HANDOFF.md](HANDOFF.md) (2026-05-07)
-- 기능 우선순위: [ROADMAP.md](ROADMAP.md), [TASKS.md](TASKS.md)
-- 운영자 진입점: [docs/operations/README.md](docs/operations/README.md)
+- 기능 우선순위: [Roadmap](docs/roadmap.md), TASKS.md
+- 운영자 진입점: [docs/README.md](docs/README.md)
 
----
-
-<p align="center">
-  <b>keiailab operator family</b><br/>
-  <a href="https://github.com/keiailab/postgres-operator">postgres-operator</a> ·
-  <a href="https://github.com/keiailab/mongodb-operator">mongodb-operator</a> ·
-  <a href="https://github.com/keiailab/valkey-operator">valkey-operator</a> ·
-  <a href="https://github.com/keiailab/operator-commons">operator-commons</a>
-</p>
-
-<p align="center">
-  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
-</p>

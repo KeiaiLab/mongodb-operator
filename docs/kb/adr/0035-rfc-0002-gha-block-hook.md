@@ -16,15 +16,15 @@
 
 | repo | P2-2 |
 |---|---|
-| postgres-operator | ❌ → ✅ (sister ADR-0021) |
+| sister operator | ❌ → ✅ (sister ADR-0021) |
 | mongodb-operator | ❌ → ✅ (본 ADR) |
-| valkey-operator | ❌ (ralph-loop 관할) |
+| sister operator | ❌ (ralph-loop 관할) |
 | operator-commons | ✅ (ADR-0012 SSOT) |
 | forgewise | ✅ |
 
 즉 *정책* (RFC-0002) 은 있지만 *자동 강제* (lefthook hook) 이 부재. 사람이 의도하지 않은 `.github/workflows/` 신규 추가 시 차단 불가.
 
-본 ADR 은 operator-commons ADR-0012 패턴을 mongodb-operator 에 sync 한다. postgres-operator 의 ADR-0021 와 sister.
+본 ADR 은 operator-commons ADR-0012 패턴을 mongodb-operator 에 sync 한다. sister operator 의 ADR-0021 와 sister.
 
 ### v2.0 정합 고려 (ADR-0033 dual-track)
 
@@ -136,5 +136,5 @@ Accepted — 2026-05-21.
 - RFC-0002: `~/.codex/CLAUDE.md` §2 (GitHub Actions 영구 금지)
 - ADR-0033: `0033-gha-retention-for-public-oss.md` (GHA 유지 + dual-track)
 - commons ADR-0012: `~/Workspace/keiailab/operator-commons/docs/kb/adr/0012-rfc-0002-gha-block-hook.md` (SSOT 패턴)
-- postgres ADR-0021: `~/Workspace/keiailab/postgres-operator/docs/kb/adr/0021-rfc-0002-gha-block-hook.md` (sister)
+- postgres ADR-0021: `~/Workspace/keiailab/sister operator/docs/kb/adr/0021-rfc-0002-gha-block-hook.md` (sister)
 - audit script: `~/Workspace/keiailab/operator-commons/scripts/audit-production-grade.sh` (P2-2)

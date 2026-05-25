@@ -13,7 +13,7 @@ intervention 제거.
 
 ## Motivation
 
-valkey-operator INC-0001 (2026-05-09 19h cluster fail) 의 root cause `ClusterInitialized=
+A sister operator incident 의 root cause `ClusterInitialized=
 true` once-shot pattern. ADR-0024 (mongodb cross-cut audit) 에서 mongodb-operator 의
 유사 패턴 `!ReplicaSetInitialized` 분기 (mongodb_controller.go:165) + `hasPrimary` 부분
 mitigation 만 보유 — RS member host *변경* 시 자동 reconfig 부재.

@@ -22,7 +22,6 @@
 | [ADR-0013](0013-conditions-last-transition-time-fix.md) | Conditions LastTransitionTime — K8s convention 정합 (upstream meta.SetStatusCondition 위임) | Accepted | 2026-05-07 |
 | [ADR-0014](0014-controller-create-pattern-boundary.md) | Controller Create 패턴 boundary — CreateOrUpdate vs intentional 수동 (bootstrap_lease + helpers 보존) | Accepted | 2026-05-07 |
 | [ADR-0015](0015-webhook-failure-policy-fail.md) | ValidatingWebhookConfiguration failurePolicy=Fail (가용성 vs validation 가치) | Accepted | 2026-05-07 |
-| [ADR-0016](0016-cross-cut-audit-pattern.md) | Cross-cut Audit Pattern — invariant 도입 시 3 operator 동시 점검 의무화 | Accepted | 2026-05-07 |
 | [ADR-0017](0017-crd-default-vs-webhook-invariant.md) | CRD default 가 있는 field 의 zero-value 거부 invariant 는 dead code (envtest 가 unreachable 발견) | Accepted | 2026-05-07 |
 | [ADR-0018](0018-monitoringspec-orphan-resolution.md) | MonitoringSpec orphan 의 단계적 해소 — Phase 1 deprecation, Phase 2/3 결정 보류 (Prometheus 도입 후) | Accepted | 2026-05-07 |
 | [ADR-0019](0019-operator-commons-v0.5-promotion.md) | operator-commons v0.5.0 helper 승격 — validateStorageSize + apiError 3-of-3 입증 후 통일 | Proposed | 2026-05-07 |
@@ -30,18 +29,10 @@
 | [ADR-0021](0021-rfc-0018-pkg-finalizer-migration.md) | RFC-0018 채택 — pkg/finalizer migration (controllerutil → commons, 4 controller, PR-A5 first cut, status 별도) | Accepted | 2026-05-09 |
 | [ADR-0022](0022-meta-set-status-condition-adoption.md) | meta.SetStatusCondition 전면 채택 — 6 site 마이그레이션 + ShardDraining 백오프 regression fix | Accepted | 2026-05-10 |
 | [ADR-0023](0023-operatorhub-bundle-scaffold.md) | OperatorHub.io bundle scaffold cross-cut — operator-sdk 1.42, 3 CRD owned, alm-examples 3 sample (PR-B9, valkey ADR-0037 + postgres ADR-0013 패턴 이식) | Accepted | 2026-05-10 |
-| [ADR-0024](0024-inc-0001-cross-cut-audit.md) | INC-0001 cross-cut audit — mongodb 의 ReplicaSetInitialized once-shot 패턴, milder anti-pattern (hasPrimary mitigation), Phase 2 auto reconfig 별 RFC | Accepted | 2026-05-10 |
-| [ADR-0025](0025-cycle-0-baseline-and-cross-verification.md) | Cycle 0 — baseline 검증 + Bitnami/CloudPirates 3-way cross-verification matrix + 12-cycle program 분해 + F-IMP-04 diagnosticMode sharded 확장 | Implemented | 2026-05-12 |
-| [ADR-0026](0026-cycle-0-through-12-program-retrospective.md) | Cycle 0~12 retrospective — ROADMAP 100% 도달 (105 [x]) + 4 신규 CRD + 5 e2e + 5 Grafana dashboard + 33 metric + 15 alert rule. Action items 5건 (실 시스템 통합) deferred | Implemented | 2026-05-12 |
-| [ADR-0027](0027-community-operators-sync-automation.md) | community-operators sync 자동화 — release.yml 후속 job 으로 fork PR 자동 생성 (RFC 0002 예외 ③ 확장) | Accepted | 2026-05-13 |
 | [ADR-0028](0028-olm-external-user-production-readiness.md) | OLM 번들 외부 사용자 운영 수준 — 5 결격 동시 해소, stable 채널 default 승격. (Phase C 의 Decision 부분 ADR-0029 가 supersede — 그 외 bundle/CSV 표준은 유효) | Accepted | 2026-05-14 |
 | [ADR-0029](0029-olm-v1-migration-from-v0.md) | OLM v1 (operator-controller v1.8) 채택 — v0.30 (legacy, 18개월 stale) → v1.8 (next-generation, ClusterCatalog + ClusterExtension) migration. 옵션 C 사용자 결정. Phase C 라이브 적용 완료 (KeiaiLab Cluster, 2026-05-15) | Accepted | 2026-05-15 |
 | [ADR-0030](0030-olm-v1-narrow-installer-rbac-and-network-policy.md) | OLM v1 narrow installer RBAC + olmv1-system NetworkPolicy — bundle CSV 의 13 clusterPermissions + 3 permissions derive (operator-controller `derive-service-account` 표준), cluster-admin 대체. olmv1-system NP 2종 (operator-controller + catalogd) 으로 zero-trust 정합 | Accepted | 2026-05-15 |
-| [ADR-0031](0031-gha-retention-for-public-oss.md) | GitHub Actions 보존 — Public OSS Operator 외부 신뢰 게이트 (S7 cycle 폐기, 본 문서는 history 보존 용) | Superseded by ADR-0032 | 2026-05-21 |
-| [ADR-0032](0032-gha-to-local-4-layer.md) | GHA 전면 제거 → 로컬 4계층 단일 운영 (RFC-0002 strict, 12 workflow 전면 제거 + scripts/helm-publish.sh + scripts/release.sh + 3종 보강) | Superseded by ADR-0033 | 2026-05-21 |
-| [ADR-0033](0033-gha-retention-for-public-oss.md) | GitHub Actions 유지 — operator family v2.0 통합 정합 (12 workflow 복원 + ADR-0032 phase 2/3 인프라 유지 + dual-track 운영) | Accepted | 2026-05-21 |
 | [ADR-0034](0034-sprint-1-commons-pvc-topology-adoption.md) | Sprint 1 — operator-commons pkg/pvc + pkg/topology 채택 (-327 LOC, mongodb callsite 1 + pvc 1 교체) | Accepted | 2026-05-21 |
-| [ADR-0035](0035-rfc-0002-gha-block-hook.md) | RFC-0002 GitHub Actions Block — lefthook pre-commit hook 자동 강제 (.github/workflows/ 신규 파일 추가 차단, modify 허용, ADR-0033 dual-track 정합, commons ADR-0012 + postgres ADR-0021 sister) | Accepted | 2026-05-21 |
 | [ADR-0036](0036-v3x-stable-baseline.md) | v3.x-stable baseline 인정 (audit ❌ 0 충족, CLAUDE.md §7 v3.x-stable 조건) | Accepted | 2026-05-21 |
 
 ## 작성 가이드
