@@ -1958,6 +1958,80 @@ func BuildBackupJob(backup *mongodbv1alpha1.MongoDBBackup, connectionString stri
 	}
 }
 
+// BuildBackupCronJob creates a CronJob that periodically creates MongoDBBackup CRs.
+func BuildBackupCronJob(clusterName, namespace, schedule, clusterKind string, backupSpec mongodbv1alpha1.BackupSpec) *batchv1.CronJob {
+	labels := buildLabels(clusterName, "backup-scheduler")
+	historyLimit := int32(3)
+	failedLimit := int32(1)
+
+	backupName := fmt.Sprintf("%s-scheduled-$(date +%%Y%%m%%d-%%H%%M%%S)", clusterName)
+	storageType := "pvc"
+	if backupSpec.Storage.Type != "" {
+		storageType = backupSpec.Storage.Type
+	}
+
+	script := fmt.Sprintf(`#!/bin/sh
+set -e
+BACKUP_NAME="%s-scheduled-$(date +%%Y%%m%%d-%%H%%M%%S)"
+cat <<MANIFEST | kubectl apply -f -
+apiVersion: mongodb.keiailab.com/v1alpha1
+kind: MongoDBBackup
+metadata:
+  name: ${BACKUP_NAME}
+  namespace: %s
+  labels:
+    app.kubernetes.io/managed-by: backup-scheduler
+    app.kubernetes.io/instance: %s
+spec:
+  clusterRef:
+    name: %s
+    kind: %s
+  type: full
+  compression: true
+  storage:
+    type: %s
+MANIFEST
+echo "Created backup ${BACKUP_NAME}"
+`, clusterName, namespace, clusterName, clusterName, clusterKind, storageType)
+
+	_ = backupName // used in script template above
+
+	return &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterName + "-backup-schedule",
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: batchv1.CronJobSpec{
+			Schedule:                   schedule,
+			SuccessfulJobsHistoryLimit: &historyLimit,
+			FailedJobsHistoryLimit:     &failedLimit,
+			ConcurrencyPolicy:          batchv1.ForbidConcurrent,
+			JobTemplate: batchv1.JobTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: batchv1.JobSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							RestartPolicy:      corev1.RestartPolicyOnFailure,
+							ServiceAccountName: clusterName + "-backup-scheduler",
+							Containers: []corev1.Container{
+								{
+									Name:    "scheduler",
+									Image:   "bitnami/kubectl:latest",
+									Command: []string{"/bin/sh", "-c"},
+									Args:    []string{script},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func buildBackupScript(backup *mongodbv1alpha1.MongoDBBackup) string {
 	compressionFlag := "--gzip"
 	if backup.Spec.CompressionType == "zstd" {
