@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] — 2026-05-25
+
+### Added
+
+- **Service-per-replica for mongos** (#24) — `ServicePerReplicaSpec` creates individual Services per mongos pod
+- **External config server support** (#25) — `ExternalConfigServerSpec` for pre-existing config server RS
+- **Leader election namespace flag** — `--leader-election-namespace` CLI flag for multi-instance isolation
+
+### Fixed
+
+- **Mongos probe hardening** — Startup probe window 5min→10min, readiness timeout 5s→10s, `--norc` flag
+
+### Changed
+
+- **Gap analysis: 0 remaining gaps** — All 32 Bitnami features at parity or better (29 equivalent, 3 partial)
+
 ## [1.6.0] — 2026-05-25
 
 ### Changed

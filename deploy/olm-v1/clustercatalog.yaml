@@ -17,5 +17,5 @@ spec:
   source:
     type: Image
     image:
-      ref: ghcr.io/keiailab/mongodb-operator-catalog:v1.6.0
+      ref: ghcr.io/keiailab/mongodb-operator-catalog:v1.7.0
       pollIntervalMinutes: 10
