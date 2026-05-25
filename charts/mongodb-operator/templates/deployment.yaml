@@ -60,6 +60,9 @@ spec:
           args:
             {{- if .Values.leaderElection.enabled }}
             - --leader-elect
+            {{- if .Values.leaderElection.namespace }}
+            - --leader-election-namespace={{ .Values.leaderElection.namespace }}
+            {{- end }}
             {{- end }}
             - --health-probe-bind-address=:{{ .Values.service.healthPort }}
             - --metrics-bind-address=:{{ .Values.service.metricsPort }}
