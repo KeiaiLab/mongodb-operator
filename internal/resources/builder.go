@@ -1640,7 +1640,7 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 				},
 				InitialDelaySeconds: 5,
 				PeriodSeconds:       10,
-				FailureThreshold:    30,
+				FailureThreshold:    60,
 			},
 			LivenessProbe: &corev1.Probe{
 				ProbeHandler: corev1.ProbeHandler{
@@ -1654,12 +1654,13 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 			ReadinessProbe: &corev1.Probe{
 				ProbeHandler: corev1.ProbeHandler{
 					Exec: &corev1.ExecAction{
-						Command: []string{"mongosh", "--quiet", "--eval", "db.adminCommand('ping')"},
+						Command: []string{"mongosh", "--norc", "--quiet", "--eval", "db.adminCommand('ping')"},
 					},
 				},
 				InitialDelaySeconds: 10,
 				PeriodSeconds:       10,
-				TimeoutSeconds:      5,
+				TimeoutSeconds:      10,
+				FailureThreshold:    6,
 			},
 		},
 	}
