@@ -40,8 +40,8 @@ Legend: ✅ Equivalent or better · ⚠️ Partial · ❌ Not supported · ⚪ N
 | 21 | Horizontal scale-out | Manual `helm upgrade` | Automatic via spec change + `sh.addShard()` | ✅ Better | Reconciler auto-registers shards |
 | 22 | Scale-in (shard removal) | Manual | `removeShard()` with ShardDraining condition | ⚠️ | Beta — long-polling 30s fixed |
 | 23 | Mongos StatefulSet option | `mongos.useStatefulSet` toggle | `MongosSpec.UseStatefulSet` + `BuildMongosStatefulSet()` | ✅ | `mongodbsharded_types.go:267`, `builder.go:1530` |
-| 24 | Mongos service-per-replica | `mongos.servicePerReplica.enabled` | Not supported | ❌ | |
-| 25 | External config servers | `configsvr.external.host` | Not supported (always in-cluster) | ❌ | |
+| 24 | Mongos service-per-replica | `mongos.servicePerReplica.enabled` | `ServicePerReplicaSpec` per-pod Services | ✅ | `mongodbsharded_types.go`, `builder.go` |
+| 25 | External config servers | `configsvr.external.host` | `ExternalConfigServerSpec` (replicaSetName + hosts) | ✅ | `mongodbsharded_types.go`, `builder.go` |
 | 26 | Volume permissions init | `volumePermissions.enabled` | `VolumePermissionsSpec` — PSA restricted PVC ownership | ✅ | `common_types.go:1016`, `builder.go:594` |
 | 27 | Resource presets | 8-level presets (nano~2xlarge) | 7-tier presets via `PodSpec.ResourcesPreset` | ✅ | `presets.go` + `common_types.go:1032` |
 | 28 | SessionAffinity | Per component | `MongosServiceSpec.SessionAffinity` | ✅ | `mongodbsharded_types.go:311` |
@@ -54,9 +54,9 @@ Legend: ✅ Equivalent or better · ⚠️ Partial · ❌ Not supported · ⚪ N
 
 | Category | Count |
 |---|---|
-| ✅ Equivalent or better | 27 |
+| ✅ Equivalent or better | 29 |
 | ⚠️ Partial | 3 |
-| ❌ Not supported | 2 |
+| ❌ Not supported | 0 |
 
 **Operator advantages** (features Bitnami lacks):
 1. Built-in `MongoDBBackup` CRD with S3/PVC support
@@ -68,9 +68,12 @@ Legend: ✅ Equivalent or better · ⚠️ Partial · ❌ Not supported · ⚪ N
 7. RS member removal via `replSetReconfig` (driver-level)
 8. Volume permissions init container for PSA restricted clusters
 
-**Remaining gaps** (2 items):
-1. Mongos service-per-replica (#24)
-2. External config server support (#25)
+**Remaining gaps**: None — all Bitnami features at parity or better.
+
+**Partial items** (3, acceptable trade-offs):
+1. Persistence accessModes/subPath/selector not exposed (#7)
+2. Custom MongoDB config inline not supported, ConfigMap ref only (#19)
+3. OpenShift compatibility not explicitly tested (#31)
 
 ## Migration Guide
 

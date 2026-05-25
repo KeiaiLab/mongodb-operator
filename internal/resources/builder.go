@@ -1465,15 +1465,21 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 //     admin user를 만든다. operator는 pods/exec을 호출하지 않는다. ReplicaSet의
 //     동일 패턴(BuildMongoDBConfigMap의 bootstrap-admin.sh)과 동일.
 func BuildMongosConfigMap(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.ConfigMap {
-	// Build config server connection string
-	// Config servers use port 27019
-	var configHosts string
-	for i := int32(0); i < mdbsh.Spec.ConfigServer.Members; i++ {
-		if i > 0 {
-			configHosts += ","
+	var configdbValue string
+	if mdbsh.Spec.ConfigServer.External != nil {
+		configdbValue = fmt.Sprintf("%s/%s",
+			mdbsh.Spec.ConfigServer.External.ReplicaSetName,
+			strings.Join(mdbsh.Spec.ConfigServer.External.Hosts, ","))
+	} else {
+		var configHosts string
+		for i := int32(0); i < mdbsh.Spec.ConfigServer.Members; i++ {
+			if i > 0 {
+				configHosts += ","
+			}
+			configHosts += fmt.Sprintf("%s-cfg-%d.%s-cfg-headless.%s.svc.cluster.local:27019",
+				mdbsh.Name, i, mdbsh.Name, mdbsh.Namespace)
 		}
-		configHosts += fmt.Sprintf("%s-cfg-%d.%s-cfg-headless.%s.svc.cluster.local:27019",
-			mdbsh.Name, i, mdbsh.Name, mdbsh.Namespace)
+		configdbValue = fmt.Sprintf("%s-cfg/%s", mdbsh.Name, configHosts)
 	}
 
 	return &corev1.ConfigMap{
@@ -1483,7 +1489,7 @@ func BuildMongosConfigMap(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.ConfigM
 			Labels:    buildLabels(mdbsh.Name, "mongos"),
 		},
 		Data: map[string]string{
-			"configdb":           fmt.Sprintf("%s-cfg/%s", mdbsh.Name, configHosts),
+			"configdb":           configdbValue,
 			"bootstrap-admin.sh": buildAdminBootstrapScript(mongoDBPort),
 		},
 	}
@@ -1600,18 +1606,25 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 	labels := buildLabels(mdbsh.Name, "mongos")
 
 	// Build config server connection string
-	// Config servers use port 27019
-	var configHosts string
-	for i := int32(0); i < mdbsh.Spec.ConfigServer.Members; i++ {
-		if i > 0 {
-			configHosts += ","
+	var configdbArg string
+	if mdbsh.Spec.ConfigServer.External != nil {
+		configdbArg = fmt.Sprintf("%s/%s",
+			mdbsh.Spec.ConfigServer.External.ReplicaSetName,
+			strings.Join(mdbsh.Spec.ConfigServer.External.Hosts, ","))
+	} else {
+		var configHosts string
+		for i := int32(0); i < mdbsh.Spec.ConfigServer.Members; i++ {
+			if i > 0 {
+				configHosts += ","
+			}
+			configHosts += fmt.Sprintf("%s-cfg-%d.%s-cfg-headless.%s.svc.cluster.local:27019",
+				mdbsh.Name, i, mdbsh.Name, mdbsh.Namespace)
 		}
-		configHosts += fmt.Sprintf("%s-cfg-%d.%s-cfg-headless.%s.svc.cluster.local:27019",
-			mdbsh.Name, i, mdbsh.Name, mdbsh.Namespace)
+		configdbArg = fmt.Sprintf("%s-cfg/%s", mdbsh.Name, configHosts)
 	}
 
 	args := []string{
-		"--configdb", fmt.Sprintf("%s-cfg/%s", mdbsh.Name, configHosts),
+		"--configdb", configdbArg,
 		"--bind_ip_all",
 		"--keyFile", "/etc/mongodb-keyfile/keyfile",
 	}

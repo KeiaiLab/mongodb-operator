@@ -120,6 +120,23 @@ type ConfigServerSpec struct {
 	// 또는 HPA의 scale 결정이 *적용되지 않고* Status.PendingScale에 보류된다.
 	// +optional
 	ScalePolicy *ScalePolicy `json:"scalePolicy,omitempty"`
+
+	// External configures an external (pre-existing) config server replica set.
+	// When set, the operator skips creating ConfigServer StatefulSet/Service
+	// and uses the provided connection string for mongos --configdb.
+	// Mutually exclusive with Members/Storage/Resources.
+	// +optional
+	External *ExternalConfigServerSpec `json:"external,omitempty"`
+}
+
+// ExternalConfigServerSpec references a pre-existing config server replica set.
+type ExternalConfigServerSpec struct {
+	// ReplicaSetName is the replica set name of the external config server.
+	ReplicaSetName string `json:"replicaSetName"`
+
+	// Hosts is a list of host:port addresses (e.g., ["cfg-0:27019", "cfg-1:27019", "cfg-2:27019"]).
+	// +kubebuilder:validation:MinItems=1
+	Hosts []string `json:"hosts"`
 }
 
 // ShardSpec defines shard configuration
