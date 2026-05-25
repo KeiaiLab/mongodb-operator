@@ -20,4 +20,5 @@ keywords:
   - replicaset
   - sharded
 license: Apache-2.0
-version: v1.4.19
+version: v1.8.0
+date-released: "2026-05-26"
