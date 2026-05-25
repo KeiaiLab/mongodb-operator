@@ -4,11 +4,11 @@
 
 # mongodb-operator
 
-> **Apache-2.0 MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+**
+> **Apache-2.0 MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 8.x**
 
 <p align="center">
   <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"/></a>
-  <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go" alt="Go Version"/></a>
+  <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go" alt="Go Version"/></a>
   <a href="https://www.mongodb.com/"><img src="https://img.shields.io/badge/MongoDB-7.0%2B-47A248?logo=mongodb" alt="MongoDB"/></a>
   <a href="https://kubernetes.io/"><img src="https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes" alt="Kubernetes"/></a>
   <a href="https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator"><img src="https://img.shields.io/badge/ghcr.io-keiailab%2Fmongodb--operator-blue?logo=github" alt="Container Image"/></a>
@@ -29,19 +29,6 @@
 
 A Kubernetes Operator for deploying and managing MongoDB ReplicaSets and Sharded Clusters.
 
-> ## ⚠️ 베타 출시 — v1.3.2-beta.x (carve-out)
->
-> 현재 최신 release는 **prerelease 베타**입니다 — 정식 1.4.0 GA 출시 전까지 *비프로덕션 데이터* 한정 사용을 권장합니다.
->
-> **베타 scope (기본 활성)**: MongoDB ReplicaSet
->
-> **베타 scope 밖 (기본 비활성, RBAC + reconciler feature gate로 차단)**:
-> - `MongoDBSharded` — ConfigServer init/HPA ordering 미해결 (`features.sharded.enabled=true`로 활성)
-> - `MongoDBBackup` — 자동 테스트 0건, connectionString 평문 노출 위험 (`features.backup.enabled=true`로 활성)
-> - HorizontalPodAutoscaler — RS/cfg drift mutex 부재 (`features.autoscaling.enabled=true`로 활성)
->
-> 자세한 잔여 위험은 [CHANGELOG](docs/changelog.md) 의 Known Issues 섹션 참조.
-
 ## Overview
 
 MongoDB Operator automates the deployment, scaling, and management of MongoDB clusters on Kubernetes. It provides a declarative way to manage MongoDB infrastructure using Custom Resource Definitions (CRDs).
@@ -49,12 +36,14 @@ MongoDB Operator automates the deployment, scaling, and management of MongoDB cl
 ### Features
 
 - **MongoDB ReplicaSet**: Deploy highly available 3+ member replica sets with automatic failover
-- **Sharded Cluster** *(베타 비활성)*: Deploy distributed clusters with config servers, shards, and mongos routers
+- **Sharded Cluster**: Deploy distributed clusters with config servers, shards, and mongos routers
 - **TLS Encryption**: Automatic TLS certificate management with cert-manager integration
-- **Authentication**: SCRAM-SHA-256 authentication with keyfile support for internal cluster communication
-- **Monitoring**: Prometheus metrics export with ServiceMonitor support
-- **Backup/Restore** *(베타 비활성)*: Automated backups to S3-compatible storage or PVC
+- **Authentication**: SCRAM-SHA-256, X.509, and LDAP authentication support
+- **Monitoring**: Prometheus metrics, ServiceMonitor, PrometheusRule, and Grafana dashboards
+- **Backup/Restore**: Automated backups to S3-compatible storage or PVC via `MongoDBBackup` CRD
 - **Auto-scaling**: Horizontal Pod Autoscaler support for Mongos routers
+- **Network Security**: NetworkPolicy automation with deny-by-default + PodDisruptionBudget
+- **Production Hardened**: Priority classes, topology spread, volume permissions, diagnostic mode
 
 ## Architecture
 
@@ -137,10 +126,10 @@ The operator automatically handles MongoDB cluster initialization:
 
 - Kubernetes cluster v1.26+
 - kubectl configured with cluster access
-- *Install method* 별 추가:
-  - **OLM v1** (recommended, modern): cert-manager 라이브 + cluster admin (1회 bootstrap)
+- Additional requirements per install method:
+  - **OLM v1** (recommended, modern): cert-manager + cluster admin (one-time bootstrap)
   - **Helm**: Helm v3.8+
-  - **OLM v0** (legacy): Helm 의 단순함과 OLM v1 의 단순함 사이의 중간 — *권장 안 함*
+  - **OLM v0** (legacy): Not recommended — use OLM v1 or Helm instead
 
 ### Installation — 3 paths (matrix)
 
@@ -150,19 +139,19 @@ The operator automatically handles MongoDB cluster initialization:
 | Helm chart | local dev, single-cluster simple deploy | stable | 1 command (`helm install`) |
 | OLM v0 | OpenShift legacy, OperatorHub.io community | maintenance mode (v0.42, 2026-04) | 4 manifests + InstallPlan approve |
 
-**상세 절차**: [Installation Guide](docs/install.md). 본 절은 *Quick Start*.
+See [Installation Guide](docs/install.md) for detailed instructions.
 
-#### Path 1 — OLM v1 (현대 표준, recommended)
+#### Path 1 — OLM v1 (recommended)
 
 ```bash
-# (1) OLM v1 cluster install — 1회 bootstrap
+# (1) OLM v1 cluster install — one-time bootstrap
 curl -L -s https://github.com/operator-framework/operator-controller/releases/latest/download/install.sh | bash -s
 
-# (2) ClusterCatalog + ClusterExtension 적용
+# (2) Apply ClusterCatalog + ClusterExtension
 kubectl apply -f https://raw.githubusercontent.com/keiailab/mongodb-operator/v1.5.0/deploy/olm-v1/clustercatalog.yaml
 kubectl apply -f https://raw.githubusercontent.com/keiailab/mongodb-operator/v1.5.0/deploy/olm-v1/clusterextension.yaml
 
-# (3) install 검증
+# (3) Verify installation
 kubectl wait --for=condition=Installed=True clusterextension/mongodb-operator --timeout=180s
 ```
 
@@ -179,7 +168,7 @@ helm install mongodb-operator mongodb-operator/mongodb-operator \
   --create-namespace
 ```
 
-<!-- Path 3 (OLM v0 legacy) removed — ADR-0028 Phase D, v1 only. helm 또는 OLM v1 사용. -->
+<!-- Path 3 (OLM v0 legacy) removed — ADR-0028 Phase D. Use OLM v1 or Helm. -->
 
 
 ### Deploy a MongoDB ReplicaSet
@@ -368,25 +357,25 @@ kubectl patch mongodbsharded my-cluster --type='merge' \
 
 ## Tested Features
 
-상태 표기 기준:
-- **✅ Stable**: envtest 회귀 + 단위 테스트 + 실제 mongod workload(testcontainers/kind/실 클러스터)에서 부하/내구 검증 완료. 증거(stress test 결과/incident 후처리) 보존.
-- **✅ Implemented**: 코드 + envtest 회귀 + 단위 테스트로 *기능적* 정확성 확인. *부하 검증은 운영자 책임*.
-- **⚠️ Beta**: 코드는 동작하나 단위 테스트만 일부, 실 환경 검증 없음 — 운영 환경에 적용 전 추가 검증 필요.
+Status legend:
+- **✅ Stable**: Regression tests + unit tests + real mongod workload verification (testcontainers/kind/production cluster). Stress test evidence preserved.
+- **✅ Implemented**: Code + envtest regression + unit tests confirm functional correctness. Load verification is operator responsibility.
+- **⚠️ Beta**: Code works but limited unit tests, no production environment verification — additional testing recommended before production use.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| ReplicaSet auto-initialization | ✅ Implemented | `rs.initiate()` automatic. envtest + driver 단위 테스트. |
-| Sharded cluster initialization | ✅ Implemented | Config server, shards, mongos. envtest 검증. |
+| ReplicaSet auto-initialization | ✅ Implemented | rs.initiate() automatic. envtest + driver unit tests. |
+| Sharded cluster initialization | ✅ Implemented | Config server, shards, mongos. envtest verified. |
 | Admin user creation | ✅ Implemented | Driver-based bootstrap with K8s Lease lock + post-bootstrap usersInfo verify. |
-| Shard scale out (2→5) | ⚠️ Beta | Automatic `sh.addShard()` — driver 호출 검증, *실 cluster 부하* 미검증. |
-| Shard scale in (5→2) | ⚠️ Beta | Automatic `removeShard()` + ShardDraining condition + resource cleanup (PVC retained). chunks 마이그레이션 long-running polling은 30s 고정(backoff 미적용). |
-| Mongos replica scaling | ✅ Implemented | Deployment replicas 변경 → rolling. |
-| Resource updates | ✅ Implemented | Rolling restart via STS UpdateStrategy. |
-| Data integrity during scaling | ⚠️ Beta | 코드 흐름상 데이터 손실 차단(PVC retain, removeShard drain wait) — *실 데이터 부하 검증* 미수행. |
-| Concurrent writes during scale | ⚠️ Beta | stress test 증거 없음. 향후 testcontainers-go 기반 부하 시험 예정. |
-| PodDisruptionBudget automation | ✅ Implemented | opt-in via `spec.podDisruptionBudget` (MongoDB + Sharded). builder 단위 테스트로 4 컴포넌트 생성 검증. |
-| NetworkPolicy automation | ✅ Implemented | opt-in via `spec.networkPolicy` (deny-by-default + additional peers). 단위 테스트로 cfg=27019/shard=27018/mongos=27017 포트 검증. *실 통신 차단 검증 미수행*. |
-| Admin bootstrap race-free | ✅ Implemented | K8s Lease distributed lock(30s TTL) + post-bootstrap `usersInfo` verify. fake-client 단위 테스트(busy/takeover/release). holder pod crash 시 30s까지 다른 reconcile은 backoff. |
+| Shard scale out (2→5) | ⚠️ Beta | Automatic sh.addShard() — driver-level verified, production load testing recommended. |
+| Shard scale in (5→2) | ⚠️ Beta | Automatic removeShard() + ShardDraining condition + resource cleanup (PVC retained). Chunk migration uses 30s fixed polling. |
+| Mongos replica scaling | ✅ Implemented | Deployment replicas change triggers rolling update. |
+| Resource updates | ✅ Implemented | Rolling restart via StatefulSet UpdateStrategy. |
+| Data integrity during scaling | ⚠️ Beta | Data loss prevention via PVC retain + removeShard drain wait — production load testing recommended. |
+| Concurrent writes during scale | ⚠️ Beta | Stress test coverage planned via testcontainers-go. |
+| PodDisruptionBudget automation | ✅ Implemented | opt-in via spec.podDisruptionBudget (MongoDB + Sharded). Builder unit tests verify 4-component creation. |
+| NetworkPolicy automation | ✅ Implemented | opt-in via spec.networkPolicy (deny-by-default + additional peers). Unit tests verify cfg=27019/shard=27018/mongos=27017 ports. |
+| Admin bootstrap race-free | ✅ Implemented | K8s Lease distributed lock (30s TTL) + post-bootstrap usersInfo verify. Fake-client unit tests (busy/takeover/release). |
 
 ## Limitations
 
