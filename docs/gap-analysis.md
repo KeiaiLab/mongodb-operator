@@ -24,7 +24,7 @@ Legend: ✅ Equivalent or better · ⚠️ Partial · ❌ Not supported · ⚪ N
 | 5 | LDAP authentication | Not supported | `AuthSpec.LDAP` — servers, bind credentials, TLS, DN mapping | ✅ Better | `api/v1alpha1/common_types.go:332` |
 | 6 | TLS / cert-manager | `tls.enabled`, auto-gen | `TLSSpec` with cert-manager Issuer integration | ✅ | `internal/resources/builder.go` TLS args |
 | 7 | Persistence (PVC) | storageClass, size, accessModes, subPath, selector | `StorageSpec.{size, storageClassName}` | ⚠️ | Missing accessModes/subPath/selector |
-| 8 | PVC retention policy | `persistentVolumeClaimRetentionPolicy` | Not exposed in CRD | ❌ | StatefulSet default only |
+| 8 | PVC retention policy | `persistentVolumeClaimRetentionPolicy` | `StorageSpec.PersistentVolumeClaimRetentionPolicy` | ✅ | `common_types.go:89`, 3 builders + test |
 | 9 | Prometheus exporter | Sidecar mongodb_exporter | Sidecar Percona exporter via `MonitoringSpec` | ✅ | `internal/resources/builder.go` |
 | 10 | ServiceMonitor | PodMonitor only | ServiceMonitor + **PrometheusRule** (alerts) | ✅ Better | `charts/mongodb-operator/templates/` |
 | 11 | Grafana dashboards | Not included | 4 built-in dashboards (overview, replicaset, sharded, operational) | ✅ Better | `charts/mongodb-operator/dashboards/` |
@@ -39,13 +39,13 @@ Legend: ✅ Equivalent or better · ⚠️ Partial · ❌ Not supported · ⚪ N
 | 20 | Diagnostic mode | `diagnosticMode.enabled` (sleep infinity) | `DiagnosticModeSpec` — replaces mongod with sleep | ✅ | `common_types.go:1061-1066` |
 | 21 | Horizontal scale-out | Manual `helm upgrade` | Automatic via spec change + `sh.addShard()` | ✅ Better | Reconciler auto-registers shards |
 | 22 | Scale-in (shard removal) | Manual | `removeShard()` with ShardDraining condition | ⚠️ | Beta — long-polling 30s fixed |
-| 23 | Mongos StatefulSet option | `mongos.useStatefulSet` toggle | Deployment only | ❌ | |
+| 23 | Mongos StatefulSet option | `mongos.useStatefulSet` toggle | `MongosSpec.UseStatefulSet` + `BuildMongosStatefulSet()` | ✅ | `mongodbsharded_types.go:267`, `builder.go:1530` |
 | 24 | Mongos service-per-replica | `mongos.servicePerReplica.enabled` | Not supported | ❌ | |
 | 25 | External config servers | `configsvr.external.host` | Not supported (always in-cluster) | ❌ | |
-| 26 | Volume permissions init | `volumePermissions.enabled` | Not supported | ❌ | |
+| 26 | Volume permissions init | `volumePermissions.enabled` | `VolumePermissionsSpec` — PSA restricted PVC ownership | ✅ | `common_types.go:1016`, `builder.go:594` |
 | 27 | Resource presets | 8-level presets (nano~2xlarge) | Direct requests/limits only | ❌ | Convenience gap |
 | 28 | SessionAffinity | Per component | `MongosServiceSpec.SessionAffinity` | ✅ | `mongodbsharded_types.go:311` |
-| 29 | RS member removal | User responsibility | Not implemented (`rs.remove()` not called) | ❌ | Known limitation |
+| 29 | RS member removal | User responsibility | `RemoveMember()` via `replSetReconfig` | ✅ | `replicaset.go:264` + test |
 | 30 | Password rotation | Manual | Not automated | ⚪ | Both manual |
 | 31 | OpenShift compatibility | `adaptSecurityContext` | Not explicitly tested | ⚠️ | |
 | 32 | License | Apache-2.0 | Apache-2.0 | ✅ | |
@@ -54,9 +54,9 @@ Legend: ✅ Equivalent or better · ⚠️ Partial · ❌ Not supported · ⚪ N
 
 | Category | Count |
 |---|---|
-| ✅ Equivalent or better | 22 |
-| ⚠️ Partial | 5 |
-| ❌ Not supported | 5 |
+| ✅ Equivalent or better | 26 |
+| ⚠️ Partial | 3 |
+| ❌ Not supported | 3 |
 
 **Operator advantages** (features Bitnami lacks):
 1. Built-in `MongoDBBackup` CRD with S3/PVC support
@@ -65,13 +65,13 @@ Legend: ✅ Equivalent or better · ⚠️ Partial · ❌ Not supported · ⚪ N
 4. LDAP authentication support
 5. mongo-go-driver v2 based (zero `pods/exec` permissions)
 6. First-class `MongoDB` ReplicaSet CRD
+7. RS member removal via `replSetReconfig` (driver-level)
+8. Volume permissions init container for PSA restricted clusters
 
-**Remaining gaps** (features to implement):
-1. PVC retention policy (`whenScaled`/`whenDeleted`)
-2. Mongos StatefulSet option
-3. Service-per-replica for mongos
-4. External config server support
-5. Volume permissions init container
+**Remaining gaps** (3 items):
+1. Mongos service-per-replica (#24)
+2. External config server support (#25)
+3. Resource presets convenience (#27)
 
 ## Migration Guide
 
