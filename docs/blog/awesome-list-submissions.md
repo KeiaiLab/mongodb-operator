@@ -5,14 +5,19 @@ Status as of v1.9.0 community launch:
 | List | Status | Notes |
 |---|---|---|
 | operator-framework/awesome-operators | ❌ Skip | Archived since 2021-08, no longer accepts PRs |
-| ramnes/awesome-mongodb | ⏳ Pending | Active (2642★). Blocked by transient GitHub fork throttle |
-| ramitsurana/awesome-kubernetes | ⏳ Pending | Active (15.9k★). Blocked by transient GitHub fork throttle |
+| ramnes/awesome-mongodb | ⛔ Blocked | Active (2642★). Blocked by account flag — see below |
+| ramitsurana/awesome-kubernetes | ⛔ Blocked | Active (15.9k★). Blocked by account flag — see below |
 | avelino/awesome-go | ⏳ Optional | Strict CI; lower relevance |
 
-> **GitHub fork throttle**: Creating multiple forks in a short window returns
-> `403 You cannot fork this repository at this time`. This is separate from the
-> API rate limit and clears within ~1 hour. Retry the commands below after the
-> throttle resets.
+> **Root cause (measured, not throttle)**: the `403 You cannot fork this
+> repository at this time` is caused by the `eightynine01` account being
+> **flagged** by GitHub abuse detection (core rate limit 60, graphql 0,
+> profile 404 to logged-out users). This is NOT a transient throttle — it
+> requires a GitHub Support appeal. Full RCA + fix:
+> [INC-0001](../kb/incident/INC-0001-github-account-flagged.md).
+>
+> **After the flag clears**, run `scripts/resume-after-unflag.sh` to submit
+> both PRs automatically (it pre-checks the flag status and aborts if still set).
 
 ## Entry Texts
 

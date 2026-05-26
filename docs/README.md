@@ -53,6 +53,7 @@ Complete documentation for deploying, managing, and contributing to MongoDB Oper
 ## Knowledge Base
 
 - **[ADR Index](kb/adr/INDEX.md)** — Architecture Decision Records
+- **[Incident Index](kb/incident/INDEX.md)** — Postmortem records
 - **[RFC-0001](kb/rfc/0001-auto-rs-reconfig.md)** — Auto RS reconfig on host change
 - **[Dependencies](kb/deps/2026-05.md)** — Dependency change log
 
