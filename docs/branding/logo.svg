@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 160" width="480" height="160" role="img" aria-label="MongoDB Operator">
+  <title>MongoDB Operator</title>
+  <!-- Leaf mark inside a Kubernetes-style hexagon -->
+  <g transform="translate(80,80)">
+    <!-- hexagon (Kubernetes helm) -->
+    <polygon points="0,-62 54,-31 54,31 0,62 -54,31 -54,-31"
+             fill="none" stroke="#326CE5" stroke-width="6" stroke-linejoin="round"/>
+    <!-- MongoDB leaf -->
+    <path d="M0,-42 C16,-20 16,18 2,40 C0,44 -2,44 -2,40 C-16,18 -16,-20 0,-42 Z"
+          fill="#47A248"/>
+    <path d="M0,-42 C8,-20 8,20 0,42 L0,-42 Z" fill="#3C8C3C"/>
+    <!-- root stem -->
+    <line x1="0" y1="40" x2="0" y2="52" stroke="#3C8C3C" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <!-- Wordmark -->
+  <g transform="translate(160,0)">
+    <text x="0" y="74" font-family="'Segoe UI',Helvetica,Arial,sans-serif" font-size="38" font-weight="700" fill="#1A1A1A">MongoDB</text>
+    <text x="0" y="116" font-family="'Segoe UI',Helvetica,Arial,sans-serif" font-size="38" font-weight="300" fill="#47A248" letter-spacing="2">Operator</text>
+  </g>
+</svg>

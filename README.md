@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/keiailab.png" alt="keiailab" width="120"/>
+  <img src="docs/branding/logo.png" alt="MongoDB Operator" width="360"/>
 </p>
 
 # mongodb-operator
