@@ -61,10 +61,39 @@ func MongodArgs(spec *mongodbv1alpha1.EncryptionSpec) []string {
 	return args
 }
 
+// countConfiguredProviders 는 KMSConfigSpec 에서 nil 이 아닌 provider 수를 반환.
+// #225: 상호 배타 검증 — 한 번에 하나의 provider 만 설정 가능.
+func countConfiguredProviders(cfg *mongodbv1alpha1.KMSConfigSpec) int {
+	if cfg == nil {
+		return 0
+	}
+	count := 0
+	if cfg.Secret != nil {
+		count++
+	}
+	if cfg.Vault != nil {
+		count++
+	}
+	if cfg.AWSKMS != nil {
+		count++
+	}
+	if cfg.GCPKMS != nil {
+		count++
+	}
+	if cfg.AzureKV != nil {
+		count++
+	}
+	return count
+}
+
 // ValidateEncryptionSpec — webhook 검증 hook.
 func ValidateEncryptionSpec(spec *mongodbv1alpha1.EncryptionSpec) error {
 	if spec == nil || !spec.Enabled {
 		return nil
+	}
+	// #225: KMS provider 상호 배타 검증 — 동시에 2개 이상 설정 시 reject.
+	if n := countConfiguredProviders(spec.KMSConfig); n > 1 {
+		return fmt.Errorf("encryption.kmsConfig: only one provider may be configured at a time (found %d)", n)
 	}
 	provider := spec.KeyProvider
 	if provider == "" {
