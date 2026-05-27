@@ -150,14 +150,21 @@ func buildTLSPEMMount() corev1.VolumeMount {
 // fail → sharding pool init 실패 → 27017 미 listen → kubelet liveness kill cascade.
 // cluster-internal CA chain + preferTLS 환경에서 hostname 검증은 의미 적음 (CA 로 ID
 // 검증 충분), short/long hostname mix 흡수 의무.
-func tlsArgs() []string {
-	return []string{
-		"--tlsMode", "preferTLS",
+func tlsArgs(tls *mongodbv1alpha1.TLSSpec) []string {
+	mode := "preferTLS"
+	if tls != nil && tls.Mode != "" {
+		mode = tls.Mode
+	}
+	args := []string{
+		"--tlsMode", mode,
 		"--tlsCertificateKeyFile", MongoTLSPEMPath + "/server.pem",
 		"--tlsCAFile", MongoTLSMountPath + "/ca.crt",
 		"--tlsAllowConnectionsWithoutCertificates",
-		"--tlsAllowInvalidHostnames",
 	}
+	if tls == nil || tls.AllowInvalidHostnames == nil || *tls.AllowInvalidHostnames {
+		args = append(args, "--tlsAllowInvalidHostnames")
+	}
+	return args
 }
 
 // buildTLSServerVolume 은 cert-manager 가 발급한 server cert Secret (<name>-tls)
@@ -549,7 +556,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			buildTLSServerMount(),
 			buildTLSPEMMount(),
 		)
-		args = append(args, tlsArgs()...)
+		args = append(args, tlsArgs(mdb.Spec.TLS)...)
 	}
 
 	// cycle 13 (실 통합): auth (LDAP/OIDC) + encryption (KMS) + audit args 를
@@ -1049,7 +1056,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 			buildTLSServerMount(),
 			buildTLSPEMMount(),
 		)
-		args = append(args, tlsArgs()...)
+		args = append(args, tlsArgs(mdbsh.Spec.TLS)...)
 	}
 
 	// cycle 14 sharded ConfigServer integration: auth / encryption / audit args.
@@ -1300,7 +1307,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 			buildTLSServerMount(),
 			buildTLSPEMMount(),
 		)
-		args = append(args, tlsArgs()...)
+		args = append(args, tlsArgs(mdbsh.Spec.TLS)...)
 	}
 
 	// cycle 14 sharded Shard integration.
@@ -1630,7 +1637,7 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 	}
 	// Pillar P7 Phase 3b — TLS args (mongos, preferTLS plaintext fallback).
 	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
-		args = append(args, tlsArgs()...)
+		args = append(args, tlsArgs(mdbsh.Spec.TLS)...)
 	}
 
 	// cycle 14 mongos integration: auth + audit args. mongos 는 데이터 저장 안 하므로

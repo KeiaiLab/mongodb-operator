@@ -266,6 +266,22 @@ type TLSSpec struct {
 	// +optional
 	CertManager *CertManagerSpec `json:"certManager,omitempty"`
 
+
+	// Mode sets the mongod --tlsMode value.
+	// Valid values: "preferTLS" (default, allows non-TLS connections),
+	// "requireTLS" (rejects non-TLS connections).
+	// +kubebuilder:default="preferTLS"
+	// +kubebuilder:validation:Enum=preferTLS;requireTLS
+	// +optional
+	Mode string `json:"mode,omitempty"`
+
+	// AllowInvalidHostnames skips hostname verification in TLS handshake.
+	// Needed when cert SANs use wildcard FQDNs but internal comms use short hostnames.
+	// Set to false when certs include proper per-pod SANs.
+	// +kubebuilder:default=true
+	// +optional
+	AllowInvalidHostnames *bool `json:"allowInvalidHostnames,omitempty"`
+
 	// CustomCert references a custom TLS secret
 	// +optional
 	CustomCert *CustomCertSpec `json:"customCert,omitempty"`
