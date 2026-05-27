@@ -1898,7 +1898,7 @@ func buildMongosVolumes(mdbsh *mongodbv1alpha1.MongoDBSharded) []corev1.Volume {
 }
 
 // BuildBackupJob creates a Job for MongoDB backup
-func BuildBackupJob(backup *mongodbv1alpha1.MongoDBBackup, connectionString string) *batchv1.Job {
+func BuildBackupJob(backup *mongodbv1alpha1.MongoDBBackup, authSecretName string) *batchv1.Job {
 	labels := buildLabels(backup.Name, "backup")
 
 	backoff := int32(3)
@@ -1906,8 +1906,15 @@ func BuildBackupJob(backup *mongodbv1alpha1.MongoDBBackup, connectionString stri
 
 	var envVars []corev1.EnvVar
 	envVars = append(envVars, corev1.EnvVar{
-		Name:  "MONGODB_URI",
-		Value: connectionString,
+		Name: "MONGODB_URI",
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: authSecretName,
+				},
+				Key: "connectionString",
+			},
+		},
 	})
 
 	// S3 storage configuration
@@ -2080,13 +2087,13 @@ func buildBackupScript(backup *mongodbv1alpha1.MongoDBBackup) string {
 //
 // 본 cycle 의 acceptance: Job 객체 생성 + controller 가 spawn. 실제 oplog
 // archive 의 S3 fetch + mongorestore 실행 정합은 cycle 16 운영 강화 시점.
-func BuildRestoreJob(backup *mongodbv1alpha1.MongoDBBackup, connectionString string) *batchv1.Job {
+func BuildRestoreJob(backup *mongodbv1alpha1.MongoDBBackup, authSecretName string) *batchv1.Job {
 	labels := buildLabels(backup.Name, "restore")
 	backoff := int32(3)
 	ttl := int32(86400)
 
 	envVars := []corev1.EnvVar{
-		{Name: "MONGODB_URI", Value: connectionString},
+		{Name: "MONGODB_URI", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: authSecretName}, Key: "connectionString"}}},
 		{Name: "SOURCE_BACKUP", Value: backup.Spec.Restore.SourceBackupName},
 	}
 	if backup.Spec.Restore.PointInTime != nil {

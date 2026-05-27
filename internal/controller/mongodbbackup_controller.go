@@ -23,7 +23,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -66,7 +66,7 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// Fetch MongoDBBackup instance
 	backup := &mongodbv1alpha1.MongoDBBackup{}
 	if err := r.Get(ctx, req.NamespacedName, backup); err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			logger.Info("MongoDBBackup resource not found, ignoring")
 			return ctrl.Result{}, nil
 		}
@@ -222,10 +222,28 @@ func (r *MongoDBBackupReconciler) getClusterConnectionString(ctx context.Context
 	// Build connection string with authentication
 	// Note: Don't include database path (/admin) - only authSource parameter
 	// Otherwise mongodump will only backup the specified database
-	connectionString := fmt.Sprintf("mongodb://%s:%s@%s/?authSource=admin",
+	connStr := fmt.Sprintf("mongodb://%s:%s@%s/?authSource=admin",
 		username, password, host)
 
-	return connectionString, nil
+	secretName := backup.Name + "-backup-uri"
+	uriSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: backup.Namespace,
+		},
+		Type: corev1.SecretTypeOpaque,
+		StringData: map[string]string{
+			"connectionString": connStr,
+		},
+	}
+	if err := controllerutil.SetControllerReference(backup, uriSecret, r.Scheme); err != nil {
+		return "", fmt.Errorf("failed to set owner reference on backup URI secret: %w", err)
+	}
+	if err := r.createOrUpdateSecret(ctx, uriSecret); err != nil {
+		return "", fmt.Errorf("failed to create backup URI secret: %w", err)
+	}
+
+	return secretName, nil
 }
 
 // createOrUpdate — race-tolerant Job/PVC apply (postgres iteration 35 패턴 차용).
@@ -244,6 +262,19 @@ func (r *MongoDBBackupReconciler) createOrUpdate(ctx context.Context, backup *mo
 		return controllerutil.SetControllerReference(backup, obj, r.Scheme)
 	})
 	return err
+}
+
+func (r *MongoDBBackupReconciler) createOrUpdateSecret(ctx context.Context, secret *corev1.Secret) error {
+	existing := &corev1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, existing)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return r.Create(ctx, secret)
+		}
+		return err
+	}
+	existing.StringData = secret.StringData
+	return r.Update(ctx, existing)
 }
 
 func (r *MongoDBBackupReconciler) updateBackupStatus(ctx context.Context, backup *mongodbv1alpha1.MongoDBBackup, jobName string) error {
