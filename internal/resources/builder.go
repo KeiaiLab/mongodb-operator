@@ -685,8 +685,15 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			},
 			Env: []corev1.EnvVar{
 				{
-					Name:  "MONGODB_URI",
-					Value: "mongodb://localhost:27017",
+					Name: "MONGODB_URI",
+					ValueFrom: &corev1.EnvVarSource{
+						SecretKeyRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: mdb.Name + "-exporter-uri",
+							},
+							Key: "uri",
+						},
+					},
 				},
 			},
 			Resources: corev1.ResourceRequirements{
@@ -1743,7 +1750,17 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 			},
 			Args: []string{"--collect-all", "--compatible-mode"},
 			Env: []corev1.EnvVar{
-				{Name: "MONGODB_URI", Value: "mongodb://localhost:27017"},
+				{
+					Name: "MONGODB_URI",
+					ValueFrom: &corev1.EnvVarSource{
+						SecretKeyRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: mdbsh.Name + "-exporter-uri",
+							},
+							Key: "uri",
+						},
+					},
+				},
 			},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
