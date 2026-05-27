@@ -26,6 +26,14 @@ type MongoDBInsightsSpec struct {
 	// ClusterRef references the target MongoDB or MongoDBSharded.
 	ClusterRef ClusterReference `json:"clusterRef"`
 
+	// TargetKind 는 분석 대상 CRD 종류. MongoDB 또는 MongoDBSharded.
+	// #226: MongoDBSharded 지원 — sharded cluster 의 각 shard + mongos 의
+	// system.profile 을 수집하여 통합 분석.
+	// +kubebuilder:validation:Enum=MongoDB;MongoDBSharded
+	// +kubebuilder:default="MongoDB"
+	// +optional
+	TargetKind string `json:"targetKind,omitempty"`
+
 	// ProfilingLevel = 0 (off) | 1 (slow only) | 2 (all). 기본 1.
 	// +kubebuilder:validation:Enum=0;1;2
 	// +kubebuilder:default=1
