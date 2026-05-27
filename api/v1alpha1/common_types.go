@@ -23,6 +23,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	commonsversion "github.com/keiailab/operator-commons/pkg/version"
@@ -92,6 +93,20 @@ type StorageSpec struct {
 	// 데이터 폐기를 선택하기 전까지 PVC를 보존하기 위함.
 	// +optional
 	PersistentVolumeClaimRetentionPolicy *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy `json:"persistentVolumeClaimRetentionPolicy,omitempty"`
+
+	// AccessModes contains the desired access modes for the PVC.
+	// Defaults to ReadWriteOnce if not specified.
+	// +optional
+	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
+
+	// SubPath within the volume to mount as the data directory.
+	// +optional
+	SubPath string `json:"subPath,omitempty"`
+
+	// Selector is a label query over PersistentVolumes to bind.
+	// +optional
+	Selector *metav1.LabelSelector `json:"selector,omitempty"`
+
 
 	// Encryption defines optional encryption-at-rest configuration (F-IMP-02 / F38 cycle 6).
 	// MongoDB Enterprise WiredTiger 의 encryption-at-rest 정합 — 본 cycle 의
