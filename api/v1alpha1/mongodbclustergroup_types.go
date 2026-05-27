@@ -21,6 +21,22 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// PolicyEnforcementType 은 ClusterGroup 정책 적용 방식을 정의하는 타입.
+// +kubebuilder:validation:Enum=Enforce;Audit;Disabled
+type PolicyEnforcementType string
+
+// #227: ClusterGroup 정책 적용 수준 상수.
+const (
+	// PolicyEnforce 는 정책 위반 시 webhook reject (강제 모드).
+	PolicyEnforce PolicyEnforcementType = "Enforce"
+
+	// PolicyAudit 는 정책 위반을 condition/event 로 기록만 (감사 모드).
+	PolicyAudit PolicyEnforcementType = "Audit"
+
+	// PolicyDisabled 는 정책 검증 비활성화.
+	PolicyDisabled PolicyEnforcementType = "Disabled"
+)
+
 // MongoDBClusterGroupSpec — F56 (cycle 8).
 type MongoDBClusterGroupSpec struct {
 	// Members lists the cluster targets controlled by this group.
