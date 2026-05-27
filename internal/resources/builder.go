@@ -150,6 +150,33 @@ func buildTLSPEMMount() corev1.VolumeMount {
 // fail → sharding pool init 실패 → 27017 미 listen → kubelet liveness kill cascade.
 // cluster-internal CA chain + preferTLS 환경에서 hostname 검증은 의미 적음 (CA 로 ID
 // 검증 충분), short/long hostname mix 흡수 의무.
+func buildDataVolumeClaimTemplate(storage mongodbv1alpha1.StorageSpec) corev1.PersistentVolumeClaim {
+	accessModes := storage.AccessModes
+	if len(accessModes) == 0 {
+		accessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
+	}
+	storageClassName := ptr.To(storage.StorageClassName)
+	if storage.StorageClassName == "" {
+		storageClassName = nil
+	}
+	pvc := corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "data"},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes:      accessModes,
+			StorageClassName: storageClassName,
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: storage.Size,
+				},
+			},
+		},
+	}
+	if storage.Selector != nil {
+		pvc.Spec.Selector = storage.Selector
+	}
+	return pvc
+}
+
 func tlsArgs(tls *mongodbv1alpha1.TLSSpec) []string {
 	mode := "preferTLS"
 	if tls != nil && tls.Mode != "" {
