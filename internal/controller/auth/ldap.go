@@ -77,11 +77,13 @@ func ValidateLDAPSpec(spec *mongodbv1alpha1.LDAPSpec) error {
 	if strings.TrimSpace(spec.Servers) == "" {
 		return fmt.Errorf("ldap.servers is required when ldap spec is set")
 	}
+	// #222: LDAP 설정 시 TLS 활성화 필수. 평문 LDAP 통신은 credential
+	// 탈취 위험이 있으므로 webhook 에서 강제 차단.
+	if !spec.TLS {
+		return fmt.Errorf("ldap.tls must be true when LDAP is configured — plaintext LDAP exposes credentials to network sniffing")
+	}
 	if spec.BindMethod != "" && spec.BindMethod != "simple" && spec.BindMethod != "sasl" {
 		return fmt.Errorf("ldap.bindMethod must be 'simple' or 'sasl' (got %q)", spec.BindMethod)
-	}
-	if !spec.TLS && spec.BindCredentialsSecretRef != nil {
-		return fmt.Errorf("ldap.tls=false with bindCredentials sends credentials in cleartext — explicit insecure annotation required")
 	}
 	return nil
 }
