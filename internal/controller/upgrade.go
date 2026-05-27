@@ -129,12 +129,16 @@ func (r *MongoDBReconciler) reconcileUpgradeBackup(ctx context.Context, mdb *mon
 func (r *MongoDBReconciler) reconcileUpgradeValidation(ctx context.Context, mdb *mongodbv1alpha1.MongoDB, desiredVersion string) (ctrl.Result, bool, error) {
 	logger := log.FromContext(ctx)
 	interval := parseValidationInterval(mdb.Spec.UpgradeStrategy)
+	validationTimeout := interval * 3
 
-	if mdb.Status.UpgradeStartTime != nil {
-		elapsed := time.Since(mdb.Status.UpgradeStartTime.Time)
-		if elapsed < interval {
-			return ctrl.Result{RequeueAfter: interval - elapsed}, true, nil
-		}
+	if mdb.Status.UpgradeStartTime == nil {
+		return ctrl.Result{RequeueAfter: upgradeRequeueInterval}, true, nil
+	}
+
+	elapsed := time.Since(mdb.Status.UpgradeStartTime.Time)
+
+	if elapsed < interval {
+		return ctrl.Result{RequeueAfter: interval - elapsed}, true, nil
 	}
 
 	ready := mdb.Status.ReadyMembers >= int32(mdb.Spec.Members)
@@ -151,9 +155,19 @@ func (r *MongoDBReconciler) reconcileUpgradeValidation(ctx context.Context, mdb 
 		return ctrl.Result{}, true, nil
 	}
 
+	if elapsed < validationTimeout {
+		logger.Info("upgrade validation pending, pods not ready yet",
+			"readyMembers", mdb.Status.ReadyMembers, "expected", mdb.Spec.Members,
+			"elapsed", elapsed.String(), "timeout", validationTimeout.String())
+		return ctrl.Result{RequeueAfter: upgradeRequeueInterval}, true, nil
+	}
+
+	logger.Info("upgrade validation timed out",
+		"readyMembers", mdb.Status.ReadyMembers, "expected", mdb.Spec.Members,
+		"elapsed", elapsed.String())
+
 	if mdb.Spec.UpgradeStrategy != nil && mdb.Spec.UpgradeStrategy.RollbackOnFailure {
-		logger.Info("upgrade validation failed, initiating rollback",
-			"readyMembers", mdb.Status.ReadyMembers, "expected", mdb.Spec.Members)
+		logger.Info("initiating rollback due to validation timeout")
 		mdb.Status.UpgradePhase = UpgradePhaseRollingBack
 		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
 			return ctrl.Result{}, false, err
@@ -161,11 +175,41 @@ func (r *MongoDBReconciler) reconcileUpgradeValidation(ctx context.Context, mdb 
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
 	}
 
-	return ctrl.Result{RequeueAfter: upgradeRequeueInterval}, true, nil
+	setUpgradeCondition(mdb, "UpgradeFailed", metav1.ConditionTrue,
+		"ValidationTimeout", fmt.Sprintf("Upgrade to %s timed out after %s, manual intervention required", desiredVersion, validationTimeout))
+	mdb.Status.UpgradePhase = ""
+	mdb.Status.UpgradeStartTime = nil
+	if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+		return ctrl.Result{}, false, err
+	}
+	return ctrl.Result{}, true, nil
 }
 
 func (r *MongoDBReconciler) reconcileUpgradeRollback(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (ctrl.Result, bool, error) {
 	logger := log.FromContext(ctx)
+
+	if mdb.Status.PreviousVersion == "" {
+		logger.Info("rollback requested but no previous version recorded, clearing upgrade state")
+		mdb.Status.UpgradePhase = ""
+		mdb.Status.UpgradeStartTime = nil
+		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+			return ctrl.Result{}, false, err
+		}
+		return ctrl.Result{}, true, nil
+	}
+
+	if mdb.Spec.UpgradeStrategy == nil || !mdb.Spec.UpgradeStrategy.RollbackOnFailure {
+		logger.Info("rollback phase reached but RollbackOnFailure is disabled, clearing upgrade state")
+		mdb.Status.UpgradePhase = ""
+		mdb.Status.UpgradeStartTime = nil
+		setUpgradeCondition(mdb, "UpgradeFailed", metav1.ConditionTrue,
+			"ValidationFailed", "Upgrade validation failed, manual intervention required")
+		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+			return ctrl.Result{}, false, err
+		}
+		return ctrl.Result{}, true, nil
+	}
+
 	logger.Info("rolling back to previous version", "version", mdb.Status.PreviousVersion)
 
 	mdb.Spec.Version.Version = mdb.Status.PreviousVersion
