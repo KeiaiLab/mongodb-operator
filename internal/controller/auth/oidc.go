@@ -63,6 +63,7 @@ func OIDCMongodSetParameter(spec *mongodbv1alpha1.OIDCSpec) (string, error) {
 }
 
 // ValidateOIDCSpec 은 webhook 검증 hook.
+// #223: OIDC issuerURL 형식 검증 강화 — https 스킴 필수 + URL 구조 검증.
 func ValidateOIDCSpec(spec *mongodbv1alpha1.OIDCSpec) error {
 	if spec == nil {
 		return nil
@@ -71,7 +72,11 @@ func ValidateOIDCSpec(spec *mongodbv1alpha1.OIDCSpec) error {
 		return fmt.Errorf("oidc.issuerURL is required")
 	}
 	if !strings.HasPrefix(spec.IssuerURL, "https://") {
-		return fmt.Errorf("oidc.issuerURL must use https:// (got %q)", spec.IssuerURL)
+		return fmt.Errorf("oidc.issuerURL must use https:// scheme (got %q) — OIDC discovery requires TLS", spec.IssuerURL)
+	}
+	// issuerURL 에 query string / fragment 가 포함되면 OIDC discovery 가 실패.
+	if strings.ContainsAny(spec.IssuerURL, "?#") {
+		return fmt.Errorf("oidc.issuerURL must not contain query parameters or fragments (got %q)", spec.IssuerURL)
 	}
 	if strings.TrimSpace(spec.ClientID) == "" {
 		return fmt.Errorf("oidc.clientID is required")
