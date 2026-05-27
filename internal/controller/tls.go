@@ -124,6 +124,109 @@ func buildCertificate(mdbsh *mongodbv1alpha1.MongoDBSharded) *unstructured.Unstr
 	return cert
 }
 
+// TLSCertSecretNameForRS returns the TLS cert Secret name for a MongoDB ReplicaSet.
+func TLSCertSecretNameForRS(mdb *mongodbv1alpha1.MongoDB) string {
+	if mdb.Spec.TLS != nil && mdb.Spec.TLS.CustomCert != nil &&
+		mdb.Spec.TLS.CustomCert.SecretName != "" {
+		return mdb.Spec.TLS.CustomCert.SecretName
+	}
+	return mdb.Name + "-tls"
+}
+
+func buildRSCertificate(mdb *mongodbv1alpha1.MongoDB) *unstructured.Unstructured {
+	if mdb.Spec.TLS == nil || !mdb.Spec.TLS.Enabled ||
+		mdb.Spec.TLS.CertManager == nil || mdb.Spec.TLS.CertManager.IssuerRef.Name == "" {
+		return nil
+	}
+	issuer := mdb.Spec.TLS.CertManager.IssuerRef
+	kind := issuer.Kind
+	if kind == "" {
+		kind = "Issuer"
+	}
+
+	dnsNames := []any{mdb.Name}
+	addSvc := func(svc string) {
+		dnsNames = append(dnsNames,
+			svc,
+			fmt.Sprintf("%s.%s", svc, mdb.Namespace),
+			fmt.Sprintf("%s.%s.svc", svc, mdb.Namespace),
+			fmt.Sprintf("%s.%s.svc.cluster.local", svc, mdb.Namespace),
+			fmt.Sprintf("*.%s.%s.svc.cluster.local", svc, mdb.Namespace),
+		)
+	}
+	addSvc(mdb.Name + "-headless")
+	addSvc(mdb.Name)
+
+	cert := &unstructured.Unstructured{}
+	cert.SetGroupVersionKind(CertificateGVK)
+	cert.SetName(mdb.Name + "-tls")
+	cert.SetNamespace(mdb.Namespace)
+	cert.SetLabels(map[string]string{
+		"app.kubernetes.io/name":       "mongodb",
+		"app.kubernetes.io/instance":   mdb.Name,
+		"app.kubernetes.io/managed-by": "keiailab-mongodb-operator",
+		"mongodb.keiailab.com/role":    "server-tls",
+	})
+
+	spec := map[string]any{
+		"secretName": TLSCertSecretNameForRS(mdb),
+		"commonName": mdb.Name,
+		"dnsNames":   dnsNames,
+		"issuerRef": map[string]any{
+			"name":  issuer.Name,
+			"kind":  kind,
+			"group": "cert-manager.io",
+		},
+		"usages": []any{"server auth", "client auth"},
+		"privateKey": map[string]any{
+			"algorithm":      "ECDSA",
+			"size":           int64(256),
+			"rotationPolicy": "Always",
+		},
+	}
+	if d := mdb.Spec.TLS.CertManager.Duration; d != "" {
+		spec["duration"] = d
+	}
+	if rb := mdb.Spec.TLS.CertManager.RenewBefore; rb != "" {
+		spec["renewBefore"] = rb
+	}
+	if err := unstructured.SetNestedField(cert.Object, spec, "spec"); err != nil {
+		return nil
+	}
+	return cert
+}
+
+func (r *MongoDBReconciler) reconcileTLS(
+	ctx context.Context,
+	mdb *mongodbv1alpha1.MongoDB,
+) error {
+	cert := buildRSCertificate(mdb)
+	if cert == nil {
+		return nil
+	}
+	logger := log.FromContext(ctx)
+
+	if err := controllerutil.SetControllerReference(mdb, cert, r.Scheme); err != nil {
+		return fmt.Errorf("set controller reference: %w", err)
+	}
+
+	desired := cert.DeepCopy()
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, cert, func() error {
+		if spec, found, _ := unstructured.NestedMap(desired.Object, "spec"); found {
+			_ = unstructured.SetNestedField(cert.Object, spec, "spec")
+		}
+		cert.SetLabels(desired.GetLabels())
+		return controllerutil.SetControllerReference(mdb, cert, r.Scheme)
+	})
+	if err != nil {
+		return fmt.Errorf("upsert tls Certificate: %w", err)
+	}
+	if op != controllerutil.OperationResultNone {
+		logger.Info("TLS Certificate reconciled", "operation", op, "name", cert.GetName())
+	}
+	return nil
+}
+
 // MongoTLSMountPath 는 mongod pod 가 server cert/key 를 읽는 경로.
 // Phase 3 의 mongod args (--tlsCertificateKeyFile) 가 본 경로 + PEM merge file 참조.
 const MongoTLSMountPath = "/etc/ssl/mongo"
