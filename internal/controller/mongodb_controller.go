@@ -135,6 +135,11 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 		return r.updateStatusError(ctx, mdb, "KeyfileSecret", err)
 	}
 
+	// 1.5. TLS Certificate (cert-manager)
+	if err := r.reconcileTLS(ctx, mdb); err != nil {
+		return r.updateStatusError(ctx, mdb, "TLS", err)
+	}
+
 	// 2. ConfigMap
 	if err := r.reconcileConfigMap(ctx, mdb); err != nil {
 		return r.updateStatusError(ctx, mdb, "ConfigMap", err)
