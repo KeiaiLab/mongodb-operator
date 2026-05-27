@@ -451,6 +451,24 @@ func BuildMongoDBConfigMap(mdb *mongodbv1alpha1.MongoDB) *corev1.ConfigMap {
 	}
 }
 
+// BuildCustomConfigMap generates a ConfigMap from spec.pod.customConfig.configInline.
+// Returns nil if customConfig is nil or configInline is empty.
+func BuildCustomConfigMap(name, namespace string, pod *mongodbv1alpha1.PodSpec) *corev1.ConfigMap {
+	if pod == nil || pod.CustomConfig == nil || pod.CustomConfig.ConfigInline == "" {
+		return nil
+	}
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + "-custom-config",
+			Namespace: namespace,
+			Labels:    buildLabels(name, "custom-config"),
+		},
+		Data: map[string]string{
+			"mongod.conf": pod.CustomConfig.ConfigInline,
+		},
+	}
+}
+
 // BuildConfigServerScriptsConfigMap는 Config Server StatefulSet에 마운트되는
 // scripts ConfigMap을 만든다. port=27019.
 func BuildConfigServerScriptsConfigMap(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.ConfigMap {

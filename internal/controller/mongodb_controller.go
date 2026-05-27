@@ -140,6 +140,13 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 		return r.updateStatusError(ctx, mdb, "ConfigMap", err)
 	}
 
+	// 2.1. Custom Config ConfigMap (spec.pod.customConfig.configInline)
+	if cm := resources.BuildCustomConfigMap(mdb.Name, mdb.Namespace, mdb.Spec.Pod); cm != nil {
+		if err := applyConfigMap(ctx, r.Client, r.Scheme, mdb, cm); err != nil {
+			return r.updateStatusError(ctx, mdb, "CustomConfigMap", err)
+		}
+	}
+
 	// 3. Headless Service
 	if err := r.reconcileHeadlessService(ctx, mdb); err != nil {
 		return r.updateStatusError(ctx, mdb, "HeadlessService", err)
