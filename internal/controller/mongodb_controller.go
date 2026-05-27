@@ -150,9 +150,27 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 		return r.updateStatusError(ctx, mdb, "ClientService", err)
 	}
 
+	// 4.5. Upgrade orchestration (pre-backup, validation, rollback)
+	if result, handled, err := r.reconcileUpgrade(ctx, mdb); err != nil {
+		return r.updateStatusError(ctx, mdb, "Upgrade", err)
+	} else if handled {
+		return result, nil
+	}
+
 	// 5. StatefulSet
 	if err := r.reconcileStatefulSet(ctx, mdb); err != nil {
 		return r.updateStatusError(ctx, mdb, "StatefulSet", err)
+	}
+
+	// 5.0.1. Transition to Validating after StatefulSet update
+	if mdb.Status.UpgradePhase == UpgradePhaseUpgrading {
+		mdb.Status.UpgradePhase = UpgradePhaseValidating
+		now := metav1.Now()
+		mdb.Status.UpgradeStartTime = &now
+		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: parseValidationInterval(mdb.Spec.UpgradeStrategy)}, nil
 	}
 
 	// 5.1. PVC online expansion — Spec.Storage.Size 증가 시 자동 expansion.
