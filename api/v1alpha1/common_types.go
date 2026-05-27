@@ -1061,6 +1061,14 @@ type PodSpec struct {
 	// +kubebuilder:validation:Enum=none;nano;micro;small;medium;large;xlarge;"2xlarge"
 	// +optional
 	ResourcesPreset string `json:"resourcesPreset,omitempty"`
+
+	// CustomConfig provides a custom mongod.conf.
+	// ConfigInline is a YAML string inlined in the CR spec.
+	// ConfigMapRef references an external ConfigMap.
+	// Mutually exclusive — webhook rejects if both are set.
+	// +optional
+	CustomConfig *CustomConfigSpec `json:"customConfig,omitempty"`
+
 }
 
 // VolumePermissionsSpec — F70 (cycle 10).
@@ -1076,6 +1084,19 @@ type VolumePermissionsSpec struct {
 	// Resources for the init container.
 	// +optional
 	Resources ResourcesSpec `json:"resources,omitempty"`
+}
+
+// CustomConfigSpec defines custom mongod.conf configuration.
+type CustomConfigSpec struct {
+	// ConfigInline is the content of mongod.conf as a YAML string.
+	// The operator generates a ConfigMap from this content automatically.
+	// +optional
+	ConfigInline string `json:"configInline,omitempty"`
+
+	// ConfigMapRef references an existing ConfigMap containing mongod.conf.
+	// The key must be "mongod.conf".
+	// +optional
+	ConfigMapRef *corev1.LocalObjectReference `json:"configMapRef,omitempty"`
 }
 
 // InitScriptsSpec — F71 (cycle 10).
