@@ -24,7 +24,7 @@ spec:
         {{- toYaml .Values.metrics.serviceMonitor.tlsConfig | nindent 8 }}
       {{- else if .Values.metrics.secure }}
       tlsConfig:
-        insecureSkipVerify: true
+        insecureSkipVerify: {{ .Values.metrics.serviceMonitor.insecureSkipVerify }}
       {{- end }}
       {{- with .Values.metrics.serviceMonitor.bearerTokenFile }}
       bearerTokenFile: {{ . | quote }}
