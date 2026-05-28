@@ -49,7 +49,7 @@ func PlanMissingIndexActions(recs []mongodbv1alpha1.Recommendation, spec *mongod
 	}
 	minSev := spec.MinSeverity
 	if minSev == "" {
-		minSev = "warning"
+		minSev = SevWarning
 	}
 	var actions []IndexAction
 	for _, r := range recs {
