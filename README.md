@@ -534,4 +534,4 @@ Contributions are welcome! Please read our [Contributing Guide](docs/contributin
 
 ---
 
-<p align="center">© 2026 keiailab · Apache-2.0 · <a href="https://keiailab.com">keiailab.com</a></p>
+<p align="center">© 2026 keiailab · Apache-2.0 · <a href="https://github.com/keiailab">keiailab.com</a></p>

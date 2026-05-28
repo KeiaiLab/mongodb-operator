@@ -956,7 +956,7 @@ func TestScaleDeliberateHelpers(t *testing.T) {
 }
 
 // TestPodSecurityRestrictedCompliance 는 PodSecurity "restricted" 정책 위반으로
-// argos-mongo-cfg StatefulSet pod 가 거부된 사고 (2026-05-07) 의 회귀 가드다.
+// keiailab-mongo-cfg StatefulSet pod 가 거부된 사고 (2026-05-07) 의 회귀 가드다.
 // MongoDB / MongoDBSharded 가 만드는 모든 StatefulSet 의 컨테이너 + init container 가
 // (1) capabilities.drop=[ALL] (2) seccompProfile.type=RuntimeDefault 둘 다 만족해야 한다.
 func TestPodSecurityRestrictedCompliance(t *testing.T) {
@@ -1139,7 +1139,7 @@ func TestDiagnosticMode_Sharded_ConfigServer_Shard_Mongos(t *testing.T) {
 // TestBuildPEMMergeInitContainer_SecurityContext 는 tls-pem-merge init container
 // 의 SecurityContext 가 *명시적 root + CHOWN cap + drop ALL* 임을 검증한다.
 //
-// 회귀 가드: 라이브 사고 (2026-05-16 KeiaiLab data/argos-mongo-cfg-1/2) 의
+// 회귀 가드: 라이브 사고 (2026-05-16 KeiaiLab data/keiailab-mongo-cfg-1/2) 의
 // `Permission denied` cascade 재발 차단. emptyDir `/tls-pem` 의 default ownership
 // (root) 에 UID 999 가 write 못 함을 회피.
 func TestBuildPEMMergeInitContainer_SecurityContext(t *testing.T) {

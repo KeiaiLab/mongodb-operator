@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# audit-cluster-state.sh — argos data plane cluster ops audit 자동 측정.
+# audit-cluster-state.sh — keiailab data plane cluster ops audit 자동 측정.
 #
 # docs/operations/cluster-audit.md 의 *KPI baseline* 측정 + Live verification
 # 갱신 후보 출력. 운영자 manual 갱신 baseline (자동 commit 안 함).
@@ -8,12 +8,12 @@
 #   ./scripts/audit-cluster-state.sh
 #   ./scripts/audit-cluster-state.sh --check    # KPI 충족 여부 exit code
 #
-# 의존성: kubectl (current-context=argos).
+# 의존성: kubectl (current-context=keiailab).
 
 set -euo pipefail
 
 DATE=$(date -u +%Y-%m-%d)
-EXPECTED_CONTEXT="argos"
+EXPECTED_CONTEXT="keiailab"
 TARGET_NS="data"
 
 pass() { printf "  ✅ %s\n" "$1"; }
@@ -39,9 +39,9 @@ else
 fi
 
 section "ArgoCD GitOps coverage (KPI)"
-# argos-platform-data umbrella + platform-data-* sub apps 모두 카운트.
-total_apps=$(kubectl get application -n argocd 2>/dev/null | grep -cE "^(platform-data-|argos-platform-data)" || true)
-synced_apps=$(kubectl get application -n argocd 2>/dev/null | awk '/^(platform-data-|argos-platform-data)/ && $2=="Synced" && $3=="Healthy"' | wc -l | tr -d ' ')
+# keiailab-platform-data umbrella + platform-data-* sub apps 모두 카운트.
+total_apps=$(kubectl get application -n argocd 2>/dev/null | grep -cE "^(platform-data-|keiailab-platform-data)" || true)
+synced_apps=$(kubectl get application -n argocd 2>/dev/null | awk '/^(platform-data-|keiailab-platform-data)/ && $2=="Synced" && $3=="Healthy"' | wc -l | tr -d ' ')
 echo "  data plane apps (umbrella + sub): $synced_apps/$total_apps Synced+Healthy"
 if [[ "$synced_apps" -eq "$total_apps" ]] && [[ "$total_apps" -gt 0 ]]; then
     pass "ArgoCD coverage 100%"

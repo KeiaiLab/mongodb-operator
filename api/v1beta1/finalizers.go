@@ -21,7 +21,7 @@ package v1beta1
 
 const (
 	// FinalizerMongoDB — MongoDB CR 삭제 시 controller cleanup 보장.
-	// argos-platform-data v1.4.5+ production CR 가 의존.
+	// keiailab-platform-data v1.4.5+ production CR 가 의존.
 	FinalizerMongoDB = "mongodb.keiailab.com/finalizer"
 
 	// FinalizerMongoDBSharded — MongoDBSharded CR 삭제 시 cleanup.

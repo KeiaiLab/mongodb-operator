@@ -85,7 +85,7 @@ const MongoTLSPEMPath = "/etc/ssl/mongo-pem"
 // SecurityContext = RunAsUser:0 — emptyDir `/tls-pem` 의 default ownership 이
 // root 이고 PodSecurityContext.FSGroup 이 emptyDir 에 *항상 적용되지 않을 수 있다*
 // (kubelet fsGroupChangePolicy / storage driver 변종). 라이브 사고 (2026-05-16
-// KeiaiLab data/argos-mongo-cfg-1/2): UID 999 로 run 시 `sh: can't create
+// KeiaiLab data/keiailab-mongo-cfg-1/2): UID 999 로 run 시 `sh: can't create
 // /tls-pem/server.pem: Permission denied` 로 init fail → mongos NotReady →
 // mailstory 서비스 cascade. 정합 sister 패턴 = data-permission-init (chown /data/db)
 // 가 이미 root + CHOWN cap drop ALL.
@@ -145,11 +145,13 @@ func buildTLSPEMMount() corev1.VolumeMount {
 //
 // tlsAllowInvalidHostnames (v1.4.17 fix, cycle 19 last): mongos 가 cfg replica set 에
 // outbound TLS connect 시 hostname verification 을 우회. mongos --configdb 의 connection
-// string 은 short hostname (argos-mongo-cfg-0:27017) 사용 — cert SAN 의 wildcard FQDN
-// (*.argos-mongo-cfg-headless.<ns>.svc.cluster.local) 와 직접 매치 안 됨 → TLS verify
+// string 은 short hostname (keiailab-mongo-cfg-0:27017) 사용 — cert SAN 의 wildcard FQDN
+// (*.keiailab-mongo-cfg-headless.<ns>.svc.cluster.local) 와 직접 매치 안 됨 → TLS verify
 // fail → sharding pool init 실패 → 27017 미 listen → kubelet liveness kill cascade.
 // cluster-internal CA chain + preferTLS 환경에서 hostname 검증은 의미 적음 (CA 로 ID
 // 검증 충분), short/long hostname mix 흡수 의무.
+//
+//nolint:unused // PVC template builder kept for future StatefulSet integration
 func buildDataVolumeClaimTemplate(storage mongodbv1alpha1.StorageSpec) corev1.PersistentVolumeClaim {
 	accessModes := storage.AccessModes
 	if len(accessModes) == 0 {
@@ -1425,7 +1427,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 							VolumeMounts:    mongodVolumeMounts,
 							Lifecycle:       mongodLifecycle,
 							// Layer 5 modern HA: hang detection. mongosh ping 단순 path
-							// (script 의존 0). argos cycle 21 stop hook 21차 동기.
+							// (script 의존 0). keiailab cycle 21 stop hook 21차 동기.
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
@@ -2602,10 +2604,10 @@ func BuildQueryableStatefulSet(backup *mongodbv1alpha1.MongoDBBackup, spec *mong
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Name:  "mongod",
-						Image: "mongo:8.0",
-						Args:  []string{"--bind_ip_all", "--noauth", "--dbpath", "/data/db"},
-						Ports: []corev1.ContainerPort{{Name: "mongodb", ContainerPort: 27017}},
+						Name:         "mongod",
+						Image:        "mongo:8.0",
+						Args:         []string{"--bind_ip_all", "--noauth", "--dbpath", "/data/db"},
+						Ports:        []corev1.ContainerPort{{Name: "mongodb", ContainerPort: 27017}},
 						VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/data/db"}},
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
