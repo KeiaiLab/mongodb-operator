@@ -24,7 +24,7 @@ CLAUDE.md §7: "본 규약은 **상용 제품 수준**의 다중 프로젝트 �
 - OP (운영): ✅ release.sh 자동화 / chart .tgz publish / OCI image multi-stage build / OLM v1 bundle
 - C (커뮤니티): ✅ ADOPTERS.md / CONTRIBUTING / CODE_OF_CONDUCT / SECURITY / GOVERNANCE (i18n 4-lang) 정합
 
-audit 시계열 기록: [`commons/docs/quality/audit-history.md`](https://github.com/keiailab/operator-commons/blob/main/docs/quality/audit-history.md) → "🎉 2026-05-21 15:30 — audit ❌ 0 달성" 섹션.
+audit 시계열 기록: `commons/docs/quality/audit-history.md` (commons 측 후속 작업으로 생성 예정) → "🎉 2026-05-21 15:30 — audit ❌ 0 달성" 섹션.
 
 ### 2. 거버넌스 baseline
 
@@ -72,7 +72,7 @@ audit 시계열 기록: [`commons/docs/quality/audit-history.md`](https://github
 ## 참조
 
 - commons-ADR/0013: `audit-production-grade.sh` 5 repo SSOT 측정 자동화
-- commons audit-history (시계열): https://github.com/keiailab/operator-commons/blob/main/docs/quality/audit-history.md
+- commons audit-history (시계열): `commons/docs/quality/audit-history.md` (commons 측 후속 ADR 로 추적)
 - CLAUDE.md §7 (v3.x-stable 정의): `keiailab/.codex` 글로벌 standards (private 저장소, 외부 URL 비공개)
 - mongodb-ADR/0033: GHA retention (dual-track)
 - mongodb-ADR/0034: Sprint 1 commons pkg/pvc + pkg/topology 채택

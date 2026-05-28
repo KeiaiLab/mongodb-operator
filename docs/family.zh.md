@@ -89,5 +89,5 @@ canonical 项目文档 (README、CONTRIBUTING、SECURITY、GOVERNANCE、MAINTAIN
 </p>
 
 <p align="center">
-  © 2026 keiailab · <a href="../LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+  © 2026 keiailab · <a href="../LICENSE">Apache-2.0</a> · <a href="https://github.com/keiailab">github.com/keiailab</a>
 </p>
