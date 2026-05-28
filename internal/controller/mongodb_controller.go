@@ -80,6 +80,7 @@ type MongoDBReconciler struct {
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 
+//nolint:gocyclo // Reconcile orchestrates multi-phase lifecycle; future refactor tracked separately
 func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rresult ctrl.Result, rerr error) {
 	logger := log.FromContext(ctx)
 	logger.Info("Reconciling MongoDB", "namespace", req.Namespace, "name", req.Name)

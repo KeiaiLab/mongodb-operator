@@ -17,6 +17,12 @@ import (
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
+// Recommendation Type 상수 (goconst — 5+ occurrences in package).
+const (
+	RecTypeMissingIndex     = "MissingIndex"
+	RecTypeSlowQueryPattern = "SlowQueryPattern"
+)
+
 // IndexAction describes a planned createIndex() operation.
 type IndexAction struct {
 	NS       string // "db.collection"
@@ -43,11 +49,11 @@ func PlanMissingIndexActions(recs []mongodbv1alpha1.Recommendation, spec *mongod
 	}
 	minSev := spec.MinSeverity
 	if minSev == "" {
-		minSev = "warning"
+		minSev = SevWarning
 	}
 	var actions []IndexAction
 	for _, r := range recs {
-		if r.Type != "MissingIndex" {
+		if r.Type != RecTypeMissingIndex {
 			continue
 		}
 		if !meetsSeverity(r.Severity, minSev) {
@@ -74,7 +80,7 @@ func PlanSlowQueryHints(recs []mongodbv1alpha1.Recommendation, spec *mongodbv1al
 	}
 	var actions []QueryHintAction
 	for _, r := range recs {
-		if r.Type != "SlowQueryPattern" {
+		if r.Type != RecTypeSlowQueryPattern {
 			continue
 		}
 		if r.AvgLatencyMs < spec.SlowQueryThresholdMs {

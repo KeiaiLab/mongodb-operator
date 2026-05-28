@@ -48,13 +48,13 @@ func (r *MongoDBBackupVerificationReconciler) Reconcile(ctx context.Context, req
 			}
 			return ctrl.Result{}, err
 		}
-		if backup.Status.Phase != "Completed" {
+		if backup.Status.Phase != backupPhaseCompleted {
 			logger.Info("backup not completed yet", "phase", backup.Status.Phase)
 			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 		}
 
 		now := metav1.Now()
-		v.Status.Phase = "Restoring"
+		v.Status.Phase = backupPhaseRestoring
 		v.Status.StartTime = &now
 		if err := r.Status().Update(ctx, v); err != nil {
 			return ctrl.Result{}, err
@@ -88,7 +88,7 @@ func (r *MongoDBBackupVerificationReconciler) Reconcile(ctx context.Context, req
 			}
 			if c.Type == batchv1.JobFailed && c.Status == corev1.ConditionTrue {
 				now := metav1.Now()
-				v.Status.Phase = "Failed"
+				v.Status.Phase = backupPhaseFailed
 				v.Status.CompletionTime = &now
 				v.Status.QueryResults = append(v.Status.QueryResults, mongodbv1alpha1.VerificationQueryResult{
 					DB: "restore", Collection: "job", DocCount: 0,
@@ -108,7 +108,7 @@ func (r *MongoDBBackupVerificationReconciler) Reconcile(ctx context.Context, req
 			result := mongodbv1alpha1.VerificationQueryResult{
 				DB: q.DB, Collection: q.Collection,
 				DocCount: q.MinExpectedDocs,
-				Passed:        true,
+				Passed:   true,
 			}
 			v.Status.QueryResults = append(v.Status.QueryResults, result)
 		}
@@ -122,7 +122,7 @@ func (r *MongoDBBackupVerificationReconciler) Reconcile(ctx context.Context, req
 		if allPassed {
 			v.Status.Phase = "Passed"
 		} else {
-			v.Status.Phase = "Failed"
+			v.Status.Phase = backupPhaseFailed
 		}
 		v.Status.CompletionTime = &now
 		if err := r.Status().Update(ctx, v); err != nil {

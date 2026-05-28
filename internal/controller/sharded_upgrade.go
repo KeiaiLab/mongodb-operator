@@ -214,6 +214,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeRollback(ctx context.C
 	return ctrl.Result{}, true, nil
 }
 
+//nolint:unparam // status param reserved for future ConditionFalse cases
 func setShardedUpgradeCondition(mdbsh *mongodbv1alpha1.MongoDBSharded, condType string, status metav1.ConditionStatus, reason, message string) {
 	now := metav1.Now()
 	for i, c := range mdbsh.Status.Conditions {

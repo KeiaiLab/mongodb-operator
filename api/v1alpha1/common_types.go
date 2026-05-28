@@ -107,7 +107,6 @@ type StorageSpec struct {
 	// +optional
 	Selector *metav1.LabelSelector `json:"selector,omitempty"`
 
-
 	// Encryption defines optional encryption-at-rest configuration (F-IMP-02 / F38 cycle 6).
 	// MongoDB Enterprise WiredTiger 의 encryption-at-rest 정합 — 본 cycle 의
 	// acceptance 는 *키 provider config 정합 + Secret/Vault/Cloud KMS 매핑*
@@ -280,7 +279,6 @@ type TLSSpec struct {
 	// CertManager enables cert-manager integration
 	// +optional
 	CertManager *CertManagerSpec `json:"certManager,omitempty"`
-
 
 	// Mode sets the mongod --tlsMode value.
 	// Valid values: "preferTLS" (default, allows non-TLS connections),
@@ -486,7 +484,7 @@ type MonitoringSpec struct {
 
 	// Exporter configures the MongoDB exporter sidecar
 	//
-	// Deprecated: ADR-0018 Phase 1 — controller 미구현. argos 운영의 mongodb
+	// Deprecated: ADR-0018 Phase 1 — controller 미구현. keiailab 운영의 mongodb
 	// exporter 는 chart values `mongodb.exporterImage` + sharded mongos pod 의
 	// sidecar 정적 정의로 cover.
 	// +optional
@@ -1163,7 +1161,6 @@ type PodSpec struct {
 	// Mutually exclusive — webhook rejects if both are set.
 	// +optional
 	CustomConfig *CustomConfigSpec `json:"customConfig,omitempty"`
-
 }
 
 // VolumePermissionsSpec — F70 (cycle 10).

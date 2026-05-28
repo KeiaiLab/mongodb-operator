@@ -118,6 +118,7 @@ type FederationRegionStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=mdbfed
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"

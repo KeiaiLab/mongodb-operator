@@ -22,9 +22,9 @@ type ShardDistribution struct {
 
 // ScaleDecision describes a planned scaling action.
 type ScaleDecision struct {
-	Reason    string
-	Action    string // "AddShard" | "AddSecondary" | "Noop"
-	Delta     int32  // positive count to add
+	Reason     string
+	Action     string // "AddShard" | "AddSecondary" | "Noop"
+	Delta      int32  // positive count to add
 	Confidence string // "high" | "medium" | "low"
 }
 
@@ -37,7 +37,7 @@ func DecideShardScaling(dist []ShardDistribution, spec *mongodbv1alpha1.AutoScal
 	if len(dist) < 2 {
 		return ScaleDecision{Action: "Noop", Reason: "insufficient shards to compare"}
 	}
-	var minC, maxC int32 = dist[0].Chunks, dist[0].Chunks
+	var minC, maxC = dist[0].Chunks, dist[0].Chunks
 	for _, d := range dist {
 		if d.Chunks < minC {
 			minC = d.Chunks
