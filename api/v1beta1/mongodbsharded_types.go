@@ -424,6 +424,23 @@ type MongoDBShardedStatus struct {
 
 	// AdminUserCreated indicates if the admin user has been created
 	AdminUserCreated bool `json:"adminUserCreated,omitempty"`
+
+	// Version is the current running MongoDB version.
+	// +optional
+	Version string `json:"version,omitempty"`
+
+	// PreviousVersion is the version before an in-progress upgrade.
+	// +optional
+	PreviousVersion string `json:"previousVersion,omitempty"`
+
+	// UpgradePhase tracks the current upgrade orchestration phase.
+	// +kubebuilder:validation:Enum="";BackingUp;Upgrading;Validating;RollingBack
+	// +optional
+	UpgradePhase string `json:"upgradePhase,omitempty"`
+
+	// UpgradeStartTime is when the current upgrade was initiated.
+	// +optional
+	UpgradeStartTime *metav1.Time `json:"upgradeStartTime,omitempty"`
 }
 
 // ComponentStatus represents the status of a cluster component
