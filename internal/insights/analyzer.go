@@ -23,6 +23,11 @@ import (
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
+// Severity constants.
+const (
+	SevWarning = "warning"
+)
+
 // planSummaryCollscan — mongo profile docs 의 plan summary "COLLSCAN" 문자열.
 // MissingIndex heuristic 의 1차 trigger (full collection scan).
 const planSummaryCollscan = "COLLSCAN"
@@ -163,7 +168,7 @@ func detectMissingIndexes(docs []ProfileDoc) []mongodbv1alpha1.Recommendation {
 			reason = "COLLSCAN 감지"
 		}
 		out = append(out, mongodbv1alpha1.Recommendation{
-			Type:            "MissingIndex",
+			Type:            RecTypeMissingIndex,
 			Severity:        severityFromLatency(avg),
 			DB:              db,
 			Collection:      coll,
@@ -225,7 +230,7 @@ func detectSlowQueryPatterns(docs []ProfileDoc, thresholdMs int32) []mongodbv1al
 		avg := int32(b.total / int64(b.count))
 		db, coll := splitNS(b.ns)
 		out = append(out, mongodbv1alpha1.Recommendation{
-			Type:         "SlowQueryPattern",
+			Type:         RecTypeSlowQueryPattern,
 			Severity:     severityFromLatency(avg),
 			DB:           db,
 			Collection:   coll,
@@ -348,7 +353,7 @@ func severityFromLatency(avg int32) string {
 	case avg >= 1000:
 		return "critical"
 	case avg >= 500:
-		return "warning"
+		return SevWarning
 	default:
 		return "info"
 	}

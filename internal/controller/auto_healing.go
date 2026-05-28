@@ -42,7 +42,7 @@ func DetectLaggingMembers(observations []MemberLag, spec *mongodbv1alpha1.AutoHe
 	var out []LaggingMember
 	for _, m := range observations {
 		if m.LagSecs > threshold {
-			out = append(out, LaggingMember{Name: m.Name, LagSecs: m.LagSecs})
+			out = append(out, LaggingMember(m))
 		}
 	}
 	return out

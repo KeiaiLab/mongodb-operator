@@ -141,7 +141,7 @@ func (r *MongoDBReconciler) reconcileUpgradeValidation(ctx context.Context, mdb 
 		return ctrl.Result{RequeueAfter: interval - elapsed}, true, nil
 	}
 
-	ready := mdb.Status.ReadyMembers >= int32(mdb.Spec.Members)
+	ready := mdb.Status.ReadyMembers >= mdb.Spec.Members
 	if ready {
 		logger.Info("upgrade validation passed", "version", desiredVersion)
 		mdb.Status.Version = desiredVersion
@@ -238,6 +238,7 @@ func parseValidationInterval(strategy *mongodbv1alpha1.UpgradeStrategySpec) time
 	return d
 }
 
+//nolint:unparam // status param reserved for future ConditionFalse cases
 func setUpgradeCondition(mdb *mongodbv1alpha1.MongoDB, condType string, status metav1.ConditionStatus, reason, message string) {
 	now := metav1.Now()
 	for i, c := range mdb.Status.Conditions {

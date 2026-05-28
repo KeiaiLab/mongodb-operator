@@ -83,7 +83,7 @@ func computeClusterGroupPhase(g *mongodbv1alpha1.MongoDBClusterGroup) string {
 		switch s.Phase {
 		case groupPhaseSynced:
 			syncedCount++
-		case "Failed":
+		case backupPhaseFailed:
 			failedCount++
 		}
 	}

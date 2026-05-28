@@ -286,7 +286,7 @@ func (r *MongoDBBackupReconciler) updateBackupStatus(ctx context.Context, backup
 	// Check job conditions
 	for _, condition := range job.Status.Conditions {
 		if condition.Type == batchv1.JobComplete && condition.Status == corev1.ConditionTrue {
-			backup.Status.Phase = "Completed"
+			backup.Status.Phase = backupPhaseCompleted
 			backup.Status.CompletionTime = condition.LastTransitionTime.DeepCopy()
 			break
 		}
