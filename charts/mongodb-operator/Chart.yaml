@@ -2,7 +2,7 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.10.0
+version: 1.10.1
 appVersion: "1.9.0"
 kubeVersion: ">=1.26.0-0"
 
@@ -133,7 +133,10 @@ annotations:
             endpoint: https://s3.amazonaws.com
             credentialsRef:
               name: s3-credentials
-  artifacthub.io/containsSecurityUpdates: "true"
+  # containsSecurityUpdates: 버전별 토글 정책 (artifacthub.io 공식 권장).
+  # v1.10.0/1.10.1: Auto Pilot feature only — 보안 수정 0건. "false".
+  # 향후 보안 fix PR 머지 시 해당 chart 버전에서만 "true"로 토글.
+  artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/images: |
     - name: mongodb-operator
       image: ghcr.io/keiailab/mongodb-operator:1.9.0
