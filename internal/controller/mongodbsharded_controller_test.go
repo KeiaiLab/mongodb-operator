@@ -262,14 +262,14 @@ var _ = Describe("MongoDBSharded Controller", func() {
 	// 미도달 → updateStatus 도달 안 함 → conditions 갱신 0.
 	//
 	// 본 conditions 의 정확성 검증은 *별 영역*:
-	//   1. Manual production verification: argos-mongo (운영) 의 kubectl get
+	//   1. Manual production verification: keiailab-mongo (운영) 의 kubectl get
 	//      mongodbsharded -o yaml 의 status.conditions 6 baseline 확인.
 	//   2. C37 4차 작업 cycle 에서 isolated unit test (updateStatus 함수 직접
 	//      호출, mock CR + ComponentStatus 주입) 영역.
 	Context("[Skipped C37 conditions test — envtest 한계]", func() {
 		It("Should report 6 baseline conditions (manual/production 검증 영역)", func() {
 			Skip("envtest 환경 한계: config server pod 가 실제 mongo 미실행 → updateStatus 도달 안 함. " +
-				"conditions 정확성은 production cluster 에서 검증 (argos-mongo).")
+				"conditions 정확성은 production cluster 에서 검증 (keiailab-mongo).")
 		})
 	})
 })

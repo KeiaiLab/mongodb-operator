@@ -102,7 +102,7 @@ make test                      # go test ./internal/... + envtest
 
 - envtest 는 `make test` 에 통합 — `internal/controller/*_test.go` 의 EnvTest 사용
 - 수동 smoke test: `scripts/release-smoke-test.sh` (image / sbom / trivy / chart index / smoke 6 단)
-- argos 클러스터 실측 — `kubectl get mongodbs,mongodbshardeds -n data` + `kubectl logs -l app.kubernetes.io/name=mongodb-operator -n data`
+- keiailab 클러스터 실측 — `kubectl get mongodbs,mongodbshardeds -n data` + `kubectl logs -l app.kubernetes.io/name=mongodb-operator -n data`
 
 ## 작업 순서 (글로벌 §workflow.md 준수)
 
@@ -148,7 +148,7 @@ git worktree list --porcelain | grep -c "^worktree "
 
 ## Cluster Ops Mode (운영자 / 인계 시)
 
-argos data plane 의 *상태 audit + 격차 추적 + sprint plan* 진입.
+keiailab data plane 의 *상태 audit + 격차 추적 + sprint plan* 진입.
 
 ```bash
 # 1. 자동 KPI 측정 (5 영역, 30초 이내)

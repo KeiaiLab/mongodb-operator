@@ -1,4 +1,4 @@
-# Cluster Ops Audit — argos data plane (2026-05-07)
+# Cluster Ops Audit — keiailab data plane (2026-05-07)
 
 > **Quick run**:
 > ```bash
@@ -6,19 +6,19 @@
 > ```
 > 5 영역 자동 측정 (kube-context / ns / ArgoCD coverage / operator errors / events / chart version / stale ratio). exit 0 = PASS / 1 = FAIL.
 
-본 문서는 argos 클러스터의 data plane (data ns) 운영 상태 + 상용제품 수준
+본 문서는 keiailab 클러스터의 data plane (data ns) 운영 상태 + 상용제품 수준
 도달 격차 audit 결과. cluster-ops mode iteration (it45-47 cycle) 누적.
 
 ## Live Verification (CLAUDE.md §7 게이트)
 
 ```bash
 $ kubectl config current-context
-argos
+keiailab
 $ kubectl get ns data
 NAME   STATUS   AGE
 data   Active   29h
 $ kubectl get application -n argocd | grep platform-data
-argos-platform-data                Synced   Healthy
+keiailab-platform-data                Synced   Healthy
 platform-data-clickhouse           Synced   Healthy
 platform-data-cnpg                 Synced   Healthy
 platform-data-gitlab-postgres      Synced   Healthy
@@ -37,9 +37,9 @@ platform-data-valkey               Synced   Healthy
 
 | 워크로드 | Type | Phase | Pods | 비고 |
 |---|---|---|---|---|
-| `mongodbsharded/argos-mongo` | keiailab/mongodb-operator | Running | 21 (5×3 + 3 cfg + 3 mongos) | 21h, 13h 전 shard-1/2/4-0 1회 restart |
+| `mongodbsharded/keiailab-mongo` | keiailab/mongodb-operator | Running | 21 (5×3 + 3 cfg + 3 mongos) | 21h, 13h 전 shard-1/2/4-0 1회 restart |
 | `valkeycluster/keiailab-valkey-prod` | keiailab/valkey-operator | Running ok | 6 (3 shards × 2) | 16384 slots, 6h42m |
-| `postgrescluster/argos-postgres` | keiailab/postgres-operator | Ready | 1 (shard-0-0) | 6h29m |
+| `postgrescluster/keiailab-postgres` | keiailab/postgres-operator | Ready | 1 (shard-0-0) | 6h29m |
 | mongodb-operator | controller-manager | Running 1.4.11 | 1 | 3h23m, webhook 비활성 |
 | valkey-operator-prod | controller-manager | Running 1.0.3 | 1 | 87m, webhook 비활성, helm-direct (C24 격차) |
 | postgres-operator | controller-manager | Running 0.3.0-alpha.4 | 1 | 118m, webhook 비활성 |
@@ -52,20 +52,20 @@ platform-data-valkey               Synced   Healthy
 
 | ID | 영역 | 상태 | 영향 | 외부 effect | 우선순위 |
 |---|---|---|---|---|---|
-| **C24** | data plane GitOps — valkey-operator chart helm-direct + ValkeyCluster CR manual apply | 발견 | drift detection 부재, DR 불가 | argos-platform-data 에 `valkey-operator/` umbrella 추가 | High |
+| **C24** | data plane GitOps — valkey-operator chart helm-direct + ValkeyCluster CR manual apply | 발견 | drift detection 부재, DR 불가 | keiailab-platform-data 에 `valkey-operator/` umbrella 추가 | High |
 | **C25** | observability — Prometheus Operator 부재 (monitoring.coreos.com group 부재), metrics scrape 0 | 발견 | 모든 metrics endpoint expose 만, Grafana 데이터 소스 부재 | platform-observability 에 kube-prometheus-stack 추가 ArgoCD app | High |
-| **T27** | mongodb 1.4.12 release pipeline (image push / GH release / gh-pages / argos-platform-data 0.1.13) | 발견 | webhook + 11 invariant 실 운영 미적용 (1.4.11 anchored) | `make release VERSION=v1.4.12` 4 외부 effect | Medium |
+| **T27** | mongodb 1.4.12 release pipeline (image push / GH release / gh-pages / keiailab-platform-data 0.1.13) | 발견 | webhook + 11 invariant 실 운영 미적용 (1.4.11 anchored) | `make release VERSION=v1.4.12` 4 외부 effect | Medium |
 | **I26** | MonitoringSpec orphan (mongodb) — Phase 1 deprecation marker | **완료 100%** | UX 함정 해소 | — (코드 only) | — |
 | **I28** | MonitoringSpec orphan Phase 2 trigger — C25 + 30일 사용 측정 | 차단 (C25) | I26 후속 결정 | C25 해소 후 trigger | Low (차단) |
 | **F23** | webhook server 도입 (mongodb 11 + valkey 4 + postgres 1 invariant + 18 envtest specs) | **완료 100%** | spec 검증 dual-layer | — (코드 only) | — |
 | **C29** | dead RBAC — `valkey-operator` ClusterRole/Binding (helm chart 0.1.0-alpha.2 잔존) | 발견 | cluster pollution, 보안 risk 0 (SA 부재로 권한 행사 불가) | `kubectl delete clusterrole/clusterrolebinding valkey-operator valkey-operator-metrics-auth` | Low |
-| **C30** | NetworkPolicy 비대칭 — mongodb/valkey 인스턴스에 NP 부재 (operator 코드 보유 but spec opt-in 미설정) | 발견 | zero-trust 미충족, lateral movement 위험 (security defense in depth 영역) | argos-mongo + keiailab-valkey-prod CR 에 `spec.networkPolicy.enabled=true` 설정 (외부 effect, GitOps 통해) | Medium |
-| **C31** | data ns ResourceQuota / LimitRange 0건 — runaway resource consumption 잠재 | 발견 | 단일 워크로드 OOM cluster-wide 영향 가능 | `data` ns 에 ResourceQuota + LimitRange 추가 (argos-platform-data 의 ns manifest, 외부 effect) | Medium |
-| **C32** | TLS encryption in transit 부재 — mongodb (27017/27018/27019) + valkey (6379) 평문 | 발견 | data plane 내부 통신 보안 표면 | argos-mongo + keiailab-valkey-prod CR 에 `spec.tls.{enabled,certManager.issuerRef}` 설정. cert-manager 의 letsencrypt-prod 또는 별도 internal CA ClusterIssuer 사용. operator 코드 + webhook invariant 모두 보유 (it46) — chart values 만 활성화. | Medium |
+| **C30** | NetworkPolicy 비대칭 — mongodb/valkey 인스턴스에 NP 부재 (operator 코드 보유 but spec opt-in 미설정) | 발견 | zero-trust 미충족, lateral movement 위험 (security defense in depth 영역) | keiailab-mongo + keiailab-valkey-prod CR 에 `spec.networkPolicy.enabled=true` 설정 (외부 effect, GitOps 통해) | Medium |
+| **C31** | data ns ResourceQuota / LimitRange 0건 — runaway resource consumption 잠재 | 발견 | 단일 워크로드 OOM cluster-wide 영향 가능 | `data` ns 에 ResourceQuota + LimitRange 추가 (keiailab-platform-data 의 ns manifest, 외부 effect) | Medium |
+| **C32** | TLS encryption in transit 부재 — mongodb (27017/27018/27019) + valkey (6379) 평문 | 발견 | data plane 내부 통신 보안 표면 | keiailab-mongo + keiailab-valkey-prod CR 에 `spec.tls.{enabled,certManager.issuerRef}` 설정. cert-manager 의 letsencrypt-prod 또는 별도 internal CA ClusterIssuer 사용. operator 코드 + webhook invariant 모두 보유 (it46) — chart values 만 활성화. | Medium |
 | **C33** | Service mesh 부재 — Istio/Linkerd/Envoy 0건. e2e mTLS / observability sidecar 영역 | 발견 | application-level TLS (C32) 와 별개의 *infrastructure-level mTLS* 부재 | platform stack 결정 (별 RFC). 단일 DC onprem-seoul 환경에서 mesh ROI 검토 후 진행. | Low (장기) |
-| **C34** | data plane Backup CronJob 0건 — mongodb pitr / postgres backup spec 미활성 | 발견 | DR 시점 데이터 손실 가능 (현재 oplog tailer 만 보유) | argos-mongo + argos-postgres CR 에 `spec.backup.{enabled,schedule,storage.s3}` 설정. mongodb-operator webhook backup invariant (it46 step 9) 즉시 가드. | High |
-| **C35** | keiailab-valkey-prod anti-affinity 부재 — 우연 7-node spread, scheduler 의존 | 발견 | node failure 시 *동일 노드 다중 pod* 위험 (현재 e121/e122 각 2 pods) | keiailab-valkey-prod CR 에 affinity 추가 또는 chart values 의 `affinity.podAntiAffinity` 활성. argos-mongo 의 preferredDuringScheduling weight=100 + hostname topologyKey 패턴 차용. | Medium |
-| **C36** | application-level PriorityClass 부재 — data ns 54 pods 모두 priority 0 (default) | 발견 | preemption 시 critical workload (argos-mongo, gitlab-postgres) 와 secondary (gitlab-redis, postgres-default) 동등 우선순위 | argos-platform-data 의 ns manifest 또는 platform-base-namespaces 에 PriorityClass 정의 (`argos-data-critical=10000`, `argos-data-default=1000`) + 워크로드 spec 에 priorityClassName 적용. | Low |
+| **C34** | data plane Backup CronJob 0건 — mongodb pitr / postgres backup spec 미활성 | 발견 | DR 시점 데이터 손실 가능 (현재 oplog tailer 만 보유) | keiailab-mongo + keiailab-postgres CR 에 `spec.backup.{enabled,schedule,storage.s3}` 설정. mongodb-operator webhook backup invariant (it46 step 9) 즉시 가드. | High |
+| **C35** | keiailab-valkey-prod anti-affinity 부재 — 우연 7-node spread, scheduler 의존 | 발견 | node failure 시 *동일 노드 다중 pod* 위험 (현재 e121/e122 각 2 pods) | keiailab-valkey-prod CR 에 affinity 추가 또는 chart values 의 `affinity.podAntiAffinity` 활성. keiailab-mongo 의 preferredDuringScheduling weight=100 + hostname topologyKey 패턴 차용. | Medium |
+| **C36** | application-level PriorityClass 부재 — data ns 54 pods 모두 priority 0 (default) | 발견 | preemption 시 critical workload (keiailab-mongo, gitlab-postgres) 와 secondary (gitlab-redis, postgres-default) 동등 우선순위 | keiailab-platform-data 의 ns manifest 또는 platform-base-namespaces 에 PriorityClass 정의 (`keiailab-data-critical=10000`, `keiailab-data-default=1000`) + 워크로드 spec 에 priorityClassName 적용. | Low |
 | **C37** | MongoDBSharded CR status conditions 빈약 (RS 는 정상) | **완료 100%** | operational visibility 격차 해소 — sharded 1 → 8 conditions (활성 시), valkey/postgres 대폭 초과 | 1차 `c12d20e`: Ready / Progressing (3). 2차 `e3d6923`: ConfigServerReady / ShardsReady / MongosReady (6). 3차 `57139f0`: TLSReady / BackupReady 조건부 (max 8). 4차 `0c7b3a5`: envtest 한계 명시. **5차 `b7ae65c`: evaluateShardedConditions pure function 추출 + 4 isolated unit tests (0.88s, envtest 의존성 0)**. test pyramid 확립 (unit / envtest / manual production). | — |
 <!-- live-verified: 2026-05-09 -->
 
@@ -76,7 +76,7 @@ platform-data-valkey               Synced   Healthy
 | PodSecurity Standards | data ns `pod-security.kubernetes.io/enforce=restricted` (latest) — B17/F12 회귀 가드 정합 |
 | RBAC least privilege | 3 operator ClusterRole 의 *wildcard verbs/resources 0건* — `kubectl get clusterrole <op> -o yaml \| grep '\*'` 결과 empty |
 | ImagePullSecrets governance | 모든 SA imagePullSecrets 비어있음 — public ghcr 사용 (인증 secret leak risk 0) |
-| ArgoCD GitOps (mongodb / postgres-operator) | argos-platform-data umbrella + platform-data-mongodb / platform-data-postgres-operator app Synced/Healthy. **Drift 0 검증** (2026-05-07): git values vs live spec 비교 — mongodb (version 8.2 / shards 5×3 / cfg 3 / mongos 3 일치) + postgres (PG 18 / initialCount 1 / replicas 0 의도된 dev) |
+| ArgoCD GitOps (mongodb / postgres-operator) | keiailab-platform-data umbrella + platform-data-mongodb / platform-data-postgres-operator app Synced/Healthy. **Drift 0 검증** (2026-05-07): git values vs live spec 비교 — mongodb (version 8.2 / shards 5×3 / cfg 3 / mongos 3 일치) + postgres (PG 18 / initialCount 1 / replicas 0 의도된 dev) |
 | controller-runtime + envtest dual-layer | 3 operator 통일 (mongodb / valkey 95.1% / 클린, postgres 94.3% coverage) |
 | webhook ADR 7건 (0013-0018) | 결정 추적성 + cross-cut audit pattern 자동화 candidate |
 | 운영 안정 | 3 operator log errors 0 (5min), data ns events 0 (1h+) |
@@ -84,14 +84,14 @@ platform-data-valkey               Synced   Healthy
 | Ingress data ns | 0건 (의도된 cluster-internal only — 외부 노출 부재) |
 | ServiceAccount tokens | 모든 SA `secrets` 비어있음 (K8s 1.24+ BoundServiceAccountTokenVolume 사용 — legacy long-lived token 부재) |
 | Node disk pressure | DiskPressure=False (sample 5 nodes) |
-| cert-manager infrastructure | platform-system 의 argos-wildcard-tls / trust-manager + 2 ClusterIssuer (letsencrypt-prod/staging) 보유. 우리 operator 는 미활용 (C32 격차) |
+| cert-manager infrastructure | platform-system 의 keiailab-wildcard-tls / trust-manager + 2 ClusterIssuer (letsencrypt-prod/staging) 보유. 우리 operator 는 미활용 (C32 격차) |
 | ImagePullPolicy 일관성 | 3 operator 모두 `IfNotPresent` (production 권장). image bump 시 tag 변경으로 강제 재pull (latest tag 미사용) |
 | Liveness/Readiness probes | 3 operator controller-runtime 표준 `/healthz` + `/readyz` 구비 — kubelet 자동 health check |
 | Resource requests/limits | 3 operator 동일 (`requests: cpu=100m memory=128Mi`, `limits: cpu=500m memory=512Mi`) — cross-cut consistency. 모든 data ns pods 자체 명시 (C31 ns Quota 부재 환경에서 best practice) |
 | Pod restart rate | data ns 54 pods 합산 6 restart (avg 0.11/pod) — low restart frequency, stable workload |
 | OOMKilled events | 0건 (cluster-wide) — resource pressure 부재, limit 정의 정합 |
 | Pod uptime distribution | 35/54 pods uptime ≥ 4h (65%), 14 pods ≥ 14h. 최근 24h 내 큰 restart 사고 없음 |
-| Leader election leases | 3 operator (mongodb 30h / valkey 7h40m / postgres 7h20m) + cnpg (30h) + argos-postgres-shard-0-primary (7h9m) — pod restart 후 reconcile 정지 창 최소화 |
+| Leader election leases | 3 operator (mongodb 30h / valkey 7h40m / postgres 7h20m) + cnpg (30h) + keiailab-postgres-shard-0-primary (7h9m) — pod restart 후 reconcile 정지 창 최소화 |
 | PV provisioning | 43 PVCs 662Gi total (~15Gi 평균), ceph-rbd RWO + Retain reclaim — DR-friendly distribution |
 | CSI driver stability | rook-ceph (cephfs + rbd) 13d age, ATTACHREQUIRED=true. PV provisioning + attach 안정 |
 | StatefulSet READY 일치 | 모든 STS (cfg 3/3, shard-0~4 3/3, postgres 1/1, clickhouse) desired = ready. scaling lag 0 |
@@ -104,19 +104,19 @@ platform-data-valkey               Synced   Healthy
 | HPA cluster capability | platform-system 의 gitlab-* 영역 HPA 4건 활성 (cpu/memory targeting) — cluster *기술 capability 보유* + data ns *의도된 미활용* (mongodb-operator features.autoscaling=false default) |
 | Services data ns | 38 ClusterIP (cluster-internal only, Ingress 0 정합) |
 | Endpoints binding | 모든 service endpoint binding 정상, empty endpoints 0건 — pod selector 정합 |
-| Cert validity (cert-manager) | platform-system/argos-wildcard-tls + trust-manager + services/mailstory-tls 모두 *2026-08-04~05* (~3 months 후) 만료, cert-manager 자동 갱신 영역 |
+| Cert validity (cert-manager) | platform-system/keiailab-wildcard-tls + trust-manager + services/mailstory-tls 모두 *2026-08-04~05* (~3 months 후) 만료, cert-manager 자동 갱신 영역 |
 | Admission denial events | cluster-wide 1h FailedCreate 0건 — webhook + CRD validation 통과율 100% |
 | Pod failure modes | data ns Pending / CrashLoopBackOff 0건 — 모든 pods Running |
-| PVC claim retention policy (STS) | argos-mongo-cfg / shard STS 의 `whenDeleted=Retain, whenScaled=Retain` — STS 삭제 / scale-down 시 PVC 보존, *데이터 손실 방지* |
+| PVC claim retention policy (STS) | keiailab-mongo-cfg / shard STS 의 `whenDeleted=Retain, whenScaled=Retain` — STS 삭제 / scale-down 시 PVC 보존, *데이터 손실 방지* |
 | Image registry diversity | ghcr.io (8) + clickhouse / altinity / natsio / dockerhub mixed — single registry SPOF 부재 |
 | SA permission 직접 검증 | `kubectl auth can-i --as=...mongodb-operator '*' '*'` = no, `delete clusterrole` = no — least privilege 직접 입증 (RBAC wildcards 부재 + 직접 시뮬레이션) |
 | ArgoCD tracking-id | `argocd.argoproj.io/tracking-id` annotation 보유 — GitOps source 명시화 (mongodb-operator deploy) |
 | Deployment revision history | `deployment.kubernetes.io/revision: 7` — 7 revisions 누적, rollout history 추적 가능 |
 | Probe timing 통일 | 3 operator 동일 (liveness 15s/20s, readiness 5s/10s) — kubebuilder scaffold + chart values 정합 cross-cut |
-| StatefulSet podManagementPolicy | argos-mongo-cfg / shard-0 / keiailab-valkey-prod 모두 `Parallel` — startup 가속 (ordered vs parallel 의 production 권장 적용) |
+| StatefulSet podManagementPolicy | keiailab-mongo-cfg / shard-0 / keiailab-valkey-prod 모두 `Parallel` — startup 가속 (ordered vs parallel 의 production 권장 적용) |
 | app.kubernetes.io/component label 정합 | mongodb 의 configsvr / mongos / shard-N 정확 분류, 우리 operator (controller-manager) component 명시 — Prometheus / Grafana selector 표준 |
 | Distroless image (operator) | mongodb-operator pod 에 wget / sh 부재 (`exec wget: executable file not found`) — kubebuilder scaffold 의 distroless base, *minimum attack surface* |
-| Pod readiness stability | argos-mongo-cfg-0 Ready=True since 2026-05-07T09:34:09Z (12h+ 안정), probe transition 부재 |
+| Pod readiness stability | keiailab-mongo-cfg-0 Ready=True since 2026-05-07T09:34:09Z (12h+ 안정), probe transition 부재 |
 | Volume mounts minimum | mongodb-operator pod = `kube-api-access-w46lj` 만 (BoundServiceAccountTokenVolume) — webhook 비활성 시 cert volume 부재 정합, no excess |
 | Operator pod node spread | mongodb e121 / valkey e122 / postgres 별 node — 서로 다른 노드 분산, single node failure 시 *모든 operator 동시 영향* 부재 |
 
@@ -236,7 +236,7 @@ git 추적 0 인 CR spec 의 disaster recovery snapshot 저장 정책. 자세한
 참조.
 
 **2026-05-21 cleanup**: `2026-05-07/keiailab-valkey-prod.yaml` (ValkeyCluster,
-data ns) — argos-platform-data 의 `valkey-operator/templates/valkeycluster.yaml`
+data ns) — keiailab-platform-data 의 `valkey-operator/templates/valkeycluster.yaml`
 로 마이그레이션 완료 (production-grade-sprint Phase B7) 후 제거.
 
 ## ADR Cross-Reference (it45-47)
@@ -257,19 +257,19 @@ mongodb-operator/main (1.4.12)          ⏳ T27 release pending
   ↓ ghcr 미푸시
 mongodb-operator stable (1.4.11)        ✅ keiailab.github.io/mongodb-operator
   ↓ helm chart 1.4.11
-argos-platform-data/mongodb stable      ✅ Chart.yaml dependency 1.4.11
+keiailab-platform-data/mongodb stable      ✅ Chart.yaml dependency 1.4.11
   ↓ ArgoCD platform-data-mongodb (Synced/Healthy)
 data ns / mongodb-operator 1.4.11       ✅ Running 3h23m
   ↓ MongoDBSharded reconcile
-argos-mongo (5 shards × 3 + 3 cfg + 3 mongos)  ✅ Running 21h
+keiailab-mongo (5 shards × 3 + 3 cfg + 3 mongos)  ✅ Running 21h
 ```
 
-valkey 영역은 C24 격차로 *chain 단절* — argos-platform-data 부재.
+valkey 영역은 C24 격차로 *chain 단절* — keiailab-platform-data 부재.
 
 ## 후속 cycle 진입점
 
 - **C24 통합 작업** (외부 effect, 사용자 명시 승인):
-  1. argos-platform-data 에 `valkey-operator/` 디렉토리 + Chart.yaml + values.yaml.
+  1. keiailab-platform-data 에 `valkey-operator/` 디렉토리 + Chart.yaml + values.yaml.
   2. ValkeyCluster manifest (DR snapshot 기반) templates 흡수.
   3. helm release adoption (`helm.sh/release.v1.valkey-operator-prod` 라벨 인계).
   4. `cluster-snapshots/` 에서 keiailab-valkey-prod.yaml 제거.

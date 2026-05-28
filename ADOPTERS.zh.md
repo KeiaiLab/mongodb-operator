@@ -17,7 +17,7 @@
 
 | 采用者 | 组件 | 使用模式 | 起始版本 | 当前版本 | 登记日期 |
 |---|---|---|---|---|---|
-| **argos-platform-data** ([keiailab](https://github.com/keiailab)) | MongoDB 8.3 ReplicaSet + Sharded (Config Server + Shard + Mongos) | argos 的元数据存储。ArgoCD GitOps 自动同步。PodSecurity restricted、KEYFILE auth、ServiceMonitor active。 | v1.4.5 | v1.4.11 | 2026-05-07 |
+| **keiailab-platform-data** ([keiailab](https://github.com/keiailab)) | MongoDB 8.3 ReplicaSet + Sharded (Config Server + Shard + Mongos) | keiailab 的元数据存储。ArgoCD GitOps 自动同步。PodSecurity restricted、KEYFILE auth、ServiceMonitor active。 | v1.4.5 | v1.4.11 | 2026-05-07 |
 
 ## Evaluators
 

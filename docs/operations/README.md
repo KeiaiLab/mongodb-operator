@@ -1,4 +1,4 @@
-# Operations Docs — argos data plane
+# Operations Docs — keiailab data plane
 
 운영자 진입점. mongodb-operator + valkey-operator + postgres-operator 의
 *cluster ops audit* + *sprint plan* + *DR snapshot* 통합.

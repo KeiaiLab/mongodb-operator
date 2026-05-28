@@ -53,7 +53,7 @@ Welcome to the MongoDB Operator documentation. This guide helps you deploy, mana
 
 ## Operations Documentation
 
-- **[Operations README](operations/README.md)** - argos data plane cluster ops 통합 entry
+- **[Operations README](operations/README.md)** - keiailab data plane cluster ops 통합 entry
   - **[Cluster Audit](operations/cluster-audit.md)** - 현재 상태 (격차 11건 / clean 15건, ratio 57.7%)
   - **[Production-grade Sprint Plan](operations/production-grade-sprint.md)** - 7 phase step-by-step
   - **[DR Cluster Snapshots](operations/cluster-snapshots/README.md)** - 임시 보관소

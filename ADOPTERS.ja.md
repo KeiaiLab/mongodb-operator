@@ -17,7 +17,7 @@
 
 | 採用者 | コンポーネント | 利用パターン | 導入バージョン | 現行バージョン | 登録日 |
 |---|---|---|---|---|---|
-| **argos-platform-data** ([keiailab](https://github.com/keiailab)) | MongoDB 8.3 ReplicaSet + Sharded (Config Server + Shard + Mongos) | argos のメタデータストレージ。ArgoCD GitOps による自動同期。PodSecurity restricted、KEYFILE auth、ServiceMonitor active。 | v1.4.5 | v1.4.11 | 2026-05-07 |
+| **keiailab-platform-data** ([keiailab](https://github.com/keiailab)) | MongoDB 8.3 ReplicaSet + Sharded (Config Server + Shard + Mongos) | keiailab のメタデータストレージ。ArgoCD GitOps による自動同期。PodSecurity restricted、KEYFILE auth、ServiceMonitor active。 | v1.4.5 | v1.4.11 | 2026-05-07 |
 
 ## Evaluators
 

@@ -455,7 +455,7 @@ type MonitoringSpec struct {
 
 	// Exporter configures the MongoDB exporter sidecar
 	//
-	// Deprecated: ADR-0018 Phase 1 — controller 미구현. argos 운영의 mongodb
+	// Deprecated: ADR-0018 Phase 1 — controller 미구현. keiailab 운영의 mongodb
 	// exporter 는 chart values `mongodb.exporterImage` + sharded mongos pod 의
 	// sidecar 정적 정의로 cover.
 	// +optional

@@ -27,7 +27,7 @@ controller 도 reconcile 안 함* — UX 함정 (silent ignore).
 
 ### 환경 제약 (C25 cluster-ops audit 발견)
 
-argos 클러스터 *Prometheus Operator 부재* (commit `14ff831`). monitoring.coreos.com
+keiailab 클러스터 *Prometheus Operator 부재* (commit `14ff831`). monitoring.coreos.com
 group CRD 부재 → ServiceMonitor / PrometheusRule reconcile *불가능*.
 
 영향:
@@ -49,7 +49,7 @@ group CRD 부재 → ServiceMonitor / PrometheusRule reconcile *불가능*.
 
 ### Phase 2 (보류, C25 해소 후 trigger)
 
-argos 클러스터에 Prometheus Operator 도입 (C25) 완료 후:
+keiailab 클러스터에 Prometheus Operator 도입 (C25) 완료 후:
 - 사용자 사용 빈도 measurement (controller log grep + recent 30 days
   reconcile event audit).
 - 사용 0건이면 옵션 a 진행 (v2alpha1 spec 삭제).

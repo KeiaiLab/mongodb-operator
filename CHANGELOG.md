@@ -95,7 +95,7 @@ Plan: `~/.claude/plans/olm-v1-only-lucky-sloth.md`. Refs: ADR-0028 Phase D, ADR-
 
 ### Added
 
-- Pillar P7 Phase 2 — internal/controller/tls.go 신설. cert-manager Certificate CR 자동 emit (unstructured, cert-manager Go SDK 의존 0). spec.tls.enabled=true + certManager.issuerRef 명시 시 reconciler 가 <cluster>-tls Secret 자동 발급 위임. SAN = cluster name + mongos service + cfg headless + 모든 shard headless service 4 도메인 form. ECDSA P-256 + rotationPolicy=Always. argos cluster 의 argos-mongo (5 shard) 가 첫 라이브 사용자.
+- Pillar P7 Phase 2 — internal/controller/tls.go 신설. cert-manager Certificate CR 자동 emit (unstructured, cert-manager Go SDK 의존 0). spec.tls.enabled=true + certManager.issuerRef 명시 시 reconciler 가 <cluster>-tls Secret 자동 발급 위임. SAN = cluster name + mongos service + cfg headless + 모든 shard headless service 4 도메인 form. ECDSA P-256 + rotationPolicy=Always. keiailab cluster 의 keiailab-mongo (5 shard) 가 첫 라이브 사용자.
 
 ### Notes
 
@@ -157,7 +157,7 @@ Plan: `~/.claude/plans/olm-v1-only-lucky-sloth.md`. Refs: ADR-0028 Phase D, ADR-
 - **Sharded P0 — Deployment metadata annotation generation loop** (`internal/controller/resources_apply.go`):
   `applyDeployment`가 운영 중 Deployment의 `deployment.kubernetes.io/revision` annotation을
   desired metadata로 덮어 지웠고, Kubernetes Deployment controller가 즉시 다시 붙이며
-  `argos-mongo-mongos` Deployment generation이 계속 증가했다. desired가 해당 annotation을
+  `keiailab-mongo-mongos` Deployment generation이 계속 증가했다. desired가 해당 annotation을
   명시하지 않은 경우 기존 live revision annotation을 보존하도록 수정했다.
 
 ### Added
@@ -170,7 +170,7 @@ Plan: `~/.claude/plans/olm-v1-only-lucky-sloth.md`. Refs: ADR-0028 Phase D, ADR-
 
 - **Sharded P0 — 남은 PodTemplate server-default generation loop** (`internal/controller/resources_apply.go`):
   `imagePullPolicy`/probe 등 알려진 기본값 보존 후에도 `EnableServiceLinks`처럼
-  builder가 명시하지 않는 server-default 필드가 남아 `argos-mongo-mongos` Deployment
+  builder가 명시하지 않는 server-default 필드가 남아 `keiailab-mongo-mongos` Deployment
   generation 증가가 계속됐다. 기존 PodTemplate을 기준으로 operator가 실제로 소유하는
   필드만 overlay하는 방식으로 변경해 미명시 server-default 전체를 보존한다.
 
@@ -201,7 +201,7 @@ Plan: `~/.claude/plans/olm-v1-only-lucky-sloth.md`. Refs: ADR-0028 Phase D, ADR-
   `applyDeployment`가 `RevisionHistoryLimit`/`ProgressDeadlineSeconds`만 보존하고
   PodTemplate 내부 K8s 기본값(`imagePullPolicy`, probe threshold, port protocol,
   `restartPolicy`, `dnsPolicy`, `schedulerName`, `terminationMessage*`)은 빈 desired 값으로
-  되돌리려 했다. 결과적으로 `argos-mongo-mongos` Deployment generation 이 180k+까지
+  되돌리려 했다. 결과적으로 `keiailab-mongo-mongos` Deployment generation 이 180k+까지
   증가하고 `object has been modified` update conflict가 반복되어
   `MongoDBSharded.status.conditions[ReconcileError=True]`가 남았다. v1.4.8은 기존
   Deployment의 server-defaulted PodTemplate 값을 보존해 reconcile을 멱등화한다.
@@ -225,11 +225,11 @@ Plan: `~/.claude/plans/olm-v1-only-lucky-sloth.md`. Refs: ADR-0028 Phase D, ADR-
 
 ## [1.4.6] - 2026-05-07
 
-PodSecurity restricted 정책 위반으로 `argos-mongo-cfg` StatefulSet pod 가 생성 거부되던 결함 fix.
+PodSecurity restricted 정책 위반으로 `keiailab-mongo-cfg` StatefulSet pod 가 생성 거부되던 결함 fix.
 
 ### Fixed
 - **PodSecurity P0 — `copy-keyfile` init container 가 capabilities.drop / seccompProfile 누락** (`internal/resources/builder.go`):
-  4 곳 (replicaset / config server / shard / mongos) 에 인라인 중복된 init container 정의가 모두 PodSecurity restricted 정책 (`capabilities.drop=[ALL]` + `seccompProfile.type=RuntimeDefault`) 위반. mongodb 컨테이너용 `buildDefaultContainerSecurityContext()` 도 동일 위반에 노출. `argos` 클러스터 운영 중 PSA admission 거부로 StatefulSet pod 0 개 생성 → 데이터 가용성 영향. 신규 helper `buildKeyfileInitContainerSecurityContext()` 도입 + 4 곳 인라인 SC → helper 호출로 통일 (DRY 회복). `buildDefaultContainerSecurityContext()` 에 SeccompProfile 추가.
+  4 곳 (replicaset / config server / shard / mongos) 에 인라인 중복된 init container 정의가 모두 PodSecurity restricted 정책 (`capabilities.drop=[ALL]` + `seccompProfile.type=RuntimeDefault`) 위반. mongodb 컨테이너용 `buildDefaultContainerSecurityContext()` 도 동일 위반에 노출. `keiailab` 클러스터 운영 중 PSA admission 거부로 StatefulSet pod 0 개 생성 → 데이터 가용성 영향. 신규 helper `buildKeyfileInitContainerSecurityContext()` 도입 + 4 곳 인라인 SC → helper 호출로 통일 (DRY 회복). `buildDefaultContainerSecurityContext()` 에 SeccompProfile 추가.
 
 ### Added
 - **회귀 가드 1 케이스** (`internal/resources/builder_test.go`):
@@ -248,7 +248,7 @@ ConfigServer / Shard ordinal-0 pod 의 영구 CrashLoopBackOff (FailedPostStartH
 
 ### Fixed
 - **Sharded P0 — `bootstrap-admin.sh` 비-멱등 createUser** (`internal/assets/scripts/bootstrap-admin.sh.tpl`):
-  v1.4.4 까지 `if [ "$RS_OK" = "init" ]` 가드는 *오직 `rs.initiate` 만* 감쌌고, `isWritablePrimary` 대기 + `createUser` 는 가드 *밖* 에서 매 컨테이너 재시작마다 실행됐음. ordinal-0 pod 가 재기동되어 PRIMARY 가 cfg-1/cfg-2 등으로 이미 fail-over 된 상태 → ordinal-0 가 SECONDARY 로 부팅 → WP 대기 120 초 timeout → SECONDARY 에 `createUser` 호출 → MongoDB 가 `NotWritablePrimary(10107)` 또는 `Unauthorized(13)` 반환 → catch 의 idempotent skip 코드 (`11000/51003/'already exists'`) 미매치 → `quit(3)` → kubelet `FailedPostStartHook` → 영구 CrashLoopBackOff. `argos` 클러스터 cfg-0 가 300 회 재시작으로 40h+ 소요 (mongod 본체는 무결, RS quorum 2/3 으로 운영 지속). v1.4.5 는 RS init 분기를 *early-exit 가드* 로 평탄화 — `RS_OK != "init"` 이면 즉시 `exit 0` 으로 스크립트 종료. WP 대기 + createUser 는 first-init 에서만 실행. **운영 영향**: 기존 v1.4.0~v1.4.4 클러스터에서 ordinal-0 가 재시작되면 본 결함 노출 (RS quorum 1/3 이상 살아있으면 운영 지속, fault-tolerance 0 으로 저하). v1.4.5 부터 정상 멱등.
+  v1.4.4 까지 `if [ "$RS_OK" = "init" ]` 가드는 *오직 `rs.initiate` 만* 감쌌고, `isWritablePrimary` 대기 + `createUser` 는 가드 *밖* 에서 매 컨테이너 재시작마다 실행됐음. ordinal-0 pod 가 재기동되어 PRIMARY 가 cfg-1/cfg-2 등으로 이미 fail-over 된 상태 → ordinal-0 가 SECONDARY 로 부팅 → WP 대기 120 초 timeout → SECONDARY 에 `createUser` 호출 → MongoDB 가 `NotWritablePrimary(10107)` 또는 `Unauthorized(13)` 반환 → catch 의 idempotent skip 코드 (`11000/51003/'already exists'`) 미매치 → `quit(3)` → kubelet `FailedPostStartHook` → 영구 CrashLoopBackOff. `keiailab` 클러스터 cfg-0 가 300 회 재시작으로 40h+ 소요 (mongod 본체는 무결, RS quorum 2/3 으로 운영 지속). v1.4.5 는 RS init 분기를 *early-exit 가드* 로 평탄화 — `RS_OK != "init"` 이면 즉시 `exit 0` 으로 스크립트 종료. WP 대기 + createUser 는 first-init 에서만 실행. **운영 영향**: 기존 v1.4.0~v1.4.4 클러스터에서 ordinal-0 가 재시작되면 본 결함 노출 (RS quorum 1/3 이상 살아있으면 운영 지속, fault-tolerance 0 으로 저하). v1.4.5 부터 정상 멱등.
 
 ### Added
 - **회귀 테스트 1 케이스** (`internal/resources/builder_test.go`):
@@ -260,7 +260,7 @@ Sharded scale-back-out (scale-in 후 다시 scale-out) cycle 영구 stuck 결함
 
 ### Fixed
 - **Sharded P0 — `cleanupShardResources` 가 stale PVC 보존 + Status flag 미리셋** (`internal/controller/mongodbsharded_controller.go`):
-  v1.4.3 까지 `cleanupShardResources` 가 STS/Service/PDB/NetworkPolicy/CM 만 삭제하고 PVC 와 `Status.ShardsAdded[i]`/`ShardsInitialized[i]` 플래그는 유지. scale-back-out 시 (a) STS 가 retained PVC 의 stale RS config 와 cluster config DB 의 shard 미등록 사이 모순 → mongod 가 `ShardNotFound: Shard argos-mongo-shard-N not found` 영구 CrashLoopBackOff, (b) operator 가 `ShardsAdded[i]=true` 상태 유지로 `sh.addShard()` 재호출 skip → cluster 등록 영구 미완료. argos 5→3→5 사이클 재현. v1.4.4 는 cleanup 시 ① 라벨 매칭 PVC 모두 삭제 (drain 완료된 데이터는 살아있는 샤드의 redundant copy 이므로 무손실) ② 두 status slice 의 해당 인덱스 false 리셋 → 다음 reconcile 의 `reconcileShard` 가 fresh STS+PVC 프로비저닝, `reconcileShardsInit` 가 IsInitialized=false 로 RS init, `reconcileAddShards` 가 sh.addShard 등록.
+  v1.4.3 까지 `cleanupShardResources` 가 STS/Service/PDB/NetworkPolicy/CM 만 삭제하고 PVC 와 `Status.ShardsAdded[i]`/`ShardsInitialized[i]` 플래그는 유지. scale-back-out 시 (a) STS 가 retained PVC 의 stale RS config 와 cluster config DB 의 shard 미등록 사이 모순 → mongod 가 `ShardNotFound: Shard keiailab-mongo-shard-N not found` 영구 CrashLoopBackOff, (b) operator 가 `ShardsAdded[i]=true` 상태 유지로 `sh.addShard()` 재호출 skip → cluster 등록 영구 미완료. keiailab 5→3→5 사이클 재현. v1.4.4 는 cleanup 시 ① 라벨 매칭 PVC 모두 삭제 (drain 완료된 데이터는 살아있는 샤드의 redundant copy 이므로 무손실) ② 두 status slice 의 해당 인덱스 false 리셋 → 다음 reconcile 의 `reconcileShard` 가 fresh STS+PVC 프로비저닝, `reconcileShardsInit` 가 IsInitialized=false 로 RS init, `reconcileAddShards` 가 sh.addShard 등록.
 
 ### Changed
 - **PVC 보존 정책 supersession**: 이전 (`cleanupShardResources` 본문 주석) 의 "PVC 는 보존(데이터 손실 방지)" → drain 이 이미 살아있는 샤드로 데이터 마이그레이션 *완료* 했으므로 cleanup 대상 PVC 는 redundant copy. scale-back-out 시 stale data 재사용 결함을 제거하기 위해 PVC 도 cleanup. **운영 영향**: scale-in 후 scale-back-out 시 새 샤드는 fresh PVC 사용 (storage class 의 dynamic provisioning).
@@ -284,7 +284,7 @@ Sharded mongos Deployment 무한 reconcile fight P0 fix.
 
 ### Fixed
 - **Sharded P0 — applyDeployment server-default ping-pong** (`internal/controller/resources_apply.go`):
-  `BuildMongosDeployment` 가 `RevisionHistoryLimit` / `ProgressDeadlineSeconds` 를 nil 로 두지만 `applyDeployment` 가 매 reconcile 마다 desired (=nil) 를 운영 객체에 그대로 덮어씌움 → K8s Deployment 컨트롤러가 즉시 server default (10/600) 를 재주입 → 다음 reconcile 에서 또 nil 화. `argos` 클러스터에서 mongos Deployment generation 이 4시간 23분 만에 **116,128** 까지 증가하면서 `MongoDBSharded.status.phase=Failed` 영속화, `sh.addShard()` 자동 호출 단계까지 도달 못함을 재현. v1.4.2 는 `desired.Spec.RevisionHistoryLimit != nil` / `desired.Spec.ProgressDeadlineSeconds != nil` 가드를 추가해 server-defaulted 필드를 운영 중 객체에 보존. STS 6 개는 generation=1 로 안정 — `applyStatefulSet` 가 동일 패턴을 가지지 않아 본 결함은 mongos Deployment 단독.
+  `BuildMongosDeployment` 가 `RevisionHistoryLimit` / `ProgressDeadlineSeconds` 를 nil 로 두지만 `applyDeployment` 가 매 reconcile 마다 desired (=nil) 를 운영 객체에 그대로 덮어씌움 → K8s Deployment 컨트롤러가 즉시 server default (10/600) 를 재주입 → 다음 reconcile 에서 또 nil 화. `keiailab` 클러스터에서 mongos Deployment generation 이 4시간 23분 만에 **116,128** 까지 증가하면서 `MongoDBSharded.status.phase=Failed` 영속화, `sh.addShard()` 자동 호출 단계까지 도달 못함을 재현. v1.4.2 는 `desired.Spec.RevisionHistoryLimit != nil` / `desired.Spec.ProgressDeadlineSeconds != nil` 가드를 추가해 server-defaulted 필드를 운영 중 객체에 보존. STS 6 개는 generation=1 로 안정 — `applyStatefulSet` 가 동일 패턴을 가지지 않아 본 결함은 mongos Deployment 단독.
 
 ### Added
 - **회귀 테스트 1 케이스** (`internal/controller/resources_apply_unit_test.go`):

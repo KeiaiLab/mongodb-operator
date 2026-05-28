@@ -15,7 +15,7 @@
 - 두 reference Helm chart 대비 cross-verification 갭: Bitnami 9건 + CloudPirates 추가 3건 = *최소 12 신규 갭 후보*
 
 **조건**:
-- 사용자 환경 = public github-only repo. 사설 GitLab/argos 라이브 게이트 부적용.
+- 사용자 환경 = public github-only repo. 사설 GitLab/keiailab 라이브 게이트 부적용.
 - 단일 세션 토큰 예산 ~500K (T3) 으로는 81+12 항목 모두 처리 불가능.
 
 ## Decision
@@ -54,7 +54,7 @@
 1. **단일 세션에 81+ 항목 완료 불가** — 사용자가 "모든 기능 테스트 통과까지" 요구. 12-cycle 분해는 *수개월 단위 program*. 사용자 expectation alignment 의무.
 2. **F-IMP-01/02/03 cycle 0 미처리** — 원 plan 의 4건 [~] 모두 cycle 0 처리 의도는 simplicity-first (`standards/principles.md §2`) 위배. F-IMP-04 1건으로 축소.
 3. **e2e shell runner stale** — `test/e2e/run-all-tests.sh` 가 reference 하는 `0[1-9]-*.sh` 부재. cycle 1 진입 시 정리 (Go `//go:build e2e` 5 파일이 진정한 e2e SSOT).
-4. **argos cluster 라이브 게이트 N/A** — public github-only repo 정책 (사용자 명시). RFC-0004 §3 라이브 게이트는 본 program 의 어느 cycle 에도 적용 안 됨.
+4. **keiailab cluster 라이브 게이트 N/A** — public github-only repo 정책 (사용자 명시). RFC-0004 §3 라이브 게이트는 본 program 의 어느 cycle 에도 적용 안 됨.
 
 ### 후속 작업 (action items)
 
@@ -76,7 +76,7 @@
 - 단: CLAUDE.md §9 noise anti-pattern — *진본 작업 0인 closure 자기 적분*. cycle 0 의 *진본 변경 1건 의무*.
 - Rejected
 
-### C. argos 클러스터 강제 사용 (rejected)
+### C. keiailab 클러스터 강제 사용 (rejected)
 
 - 장: 라이브 검증 정합 (RFC-0004 §3)
 - 단: 사용자 명시 "public 은 오픈소스 github 만 사용". 사설 GitLab 의존 부정.

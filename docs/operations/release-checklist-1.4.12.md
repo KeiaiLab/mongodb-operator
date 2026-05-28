@@ -52,8 +52,8 @@ make release VERSION=v1.4.12
 #   4) gh release create v1.4.12 + helm package upload
 #   5) make helm-publish (gh-pages branch chart .tgz publish)
 
-# Step D3: argos-platform-data umbrella bump (별 PR)
-cd ../argos-platform-data
+# Step D3: keiailab-platform-data umbrella bump (별 PR)
+cd ../keiailab-platform-data
 sed -i '' 's/version: "1.4.11"/version: "1.4.12"/' mongodb/Chart.yaml
 sed -i '' 's/appVersion: "1.4.11"/appVersion: "1.4.12"/' mongodb/Chart.yaml
 sed -i '' 's/^version: 0.1.12/version: 0.1.13/' mongodb/Chart.yaml
@@ -73,7 +73,7 @@ kubectl get deploy -n data -l app.kubernetes.io/name=mongodb-operator \
 
 # Step D6: 운영 영향 0 확인
 ./scripts/audit-cluster-state.sh            # All checks PASS
-kubectl get mongodbsharded -n data argos-mongo -o jsonpath='{.status.phase}'
+kubectl get mongodbsharded -n data keiailab-mongo -o jsonpath='{.status.phase}'
 # Running.
 
 # Step D7: smoke test
@@ -86,8 +86,8 @@ kubectl get mongodbsharded -n data argos-mongo -o jsonpath='{.status.phase}'
 D2 의 `make release` 가 *비가역* 이지만 *deployment rollback* 은 가능:
 
 ```bash
-# argos-platform-data revert
-cd ../argos-platform-data
+# keiailab-platform-data revert
+cd ../keiailab-platform-data
 git revert <bump-commit>
 git push origin stable
 # ArgoCD auto-sync → 1.4.11 image 회복.

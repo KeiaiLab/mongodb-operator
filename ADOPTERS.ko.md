@@ -19,7 +19,7 @@
 
 | 사용자 | 컴포넌트 | 사용 패턴 | 시작 버전 | 현재 버전 | 등재 일자 |
 |---|---|---|---|---|---|
-| **argos-platform-data** ([keiailab](https://github.com/keiailab)) | MongoDB 8.3 ReplicaSet + Sharded (Config Server + Shard + Mongos) | argos 의 메타데이터 스토리지. ArgoCD GitOps 자동 sync. PodSecurity restricted, KEYFILE auth, ServiceMonitor active. | v1.4.5 | v1.4.11 | 2026-05-07 |
+| **keiailab-platform-data** ([keiailab](https://github.com/keiailab)) | MongoDB 8.3 ReplicaSet + Sharded (Config Server + Shard + Mongos) | keiailab 의 메타데이터 스토리지. ArgoCD GitOps 자동 sync. PodSecurity restricted, KEYFILE auth, ServiceMonitor active. | v1.4.5 | v1.4.11 | 2026-05-07 |
 
 ## Evaluators
 

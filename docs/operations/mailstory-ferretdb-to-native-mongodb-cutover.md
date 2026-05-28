@@ -16,7 +16,7 @@
 | 항목 | 사실 |
 |---|---|
 | mailstory MongoDB API | FerretDB v2 (mailstory-ferretdb deployment, `--handler=pg`) |
-| 실 storage backend | PostgreSQL (서비스 inventory 별, memory `argos-infrastructure`) |
+| 실 storage backend | PostgreSQL (서비스 inventory 별, memory `keiailab-infrastructure`) |
 | mailstory app 의 MongoDB driver | (확인 필요) — Pydantic settings `DATABASE__URL` 이 mongodb:// scheme? FerretDB 만 노출? |
 | mongodb-operator 도입 시 native MongoDB | StatefulSet replica set, BSON storage, 별도 PVC |
 | 데이터 양 | (확인 필요) — mongodump 로 측정 |
