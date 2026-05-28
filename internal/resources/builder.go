@@ -2578,3 +2578,53 @@ func buildHPAMetrics(metrics []mongodbv1alpha1.AutoScalingMetric) []autoscalingv
 	}
 	return out
 }
+
+// BuildQueryableStatefulSet creates a single-member read-only StatefulSet
+// for queryable backup access.
+func BuildQueryableStatefulSet(backup *mongodbv1alpha1.MongoDBBackup, spec *mongodbv1alpha1.QueryableBackupSpec) *appsv1.StatefulSet {
+	if spec == nil || !spec.Enabled {
+		return nil
+	}
+	name := backup.Name + "-queryable"
+	labels := buildLabels(name, "queryable-backup")
+	replicas := int32(1)
+
+	return &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: backup.Namespace,
+			Labels:    labels,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{MatchLabels: labels},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:  "mongod",
+						Image: "mongo:8.0",
+						Args:  []string{"--bind_ip_all", "--noauth", "--dbpath", "/data/db"},
+						Ports: []corev1.ContainerPort{{Name: "mongodb", ContainerPort: 27017}},
+						VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/data/db"}},
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("250m"),
+								corev1.ResourceMemory: resource.MustParse("256Mi"),
+							},
+						},
+					}},
+				},
+			},
+			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{{
+				ObjectMeta: metav1.ObjectMeta{Name: "data"},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					Resources: corev1.VolumeResourceRequirements{
+						Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("5Gi")},
+					},
+				},
+			}},
+		},
+	}
+}

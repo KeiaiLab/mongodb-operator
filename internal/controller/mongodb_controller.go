@@ -275,6 +275,11 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 		}
 	}
 
+	// 9.05. Password rotation detection
+	if err := r.reconcilePasswordRotation(ctx, mdb); err != nil {
+		log.FromContext(ctx).Error(err, "password rotation check failed (best-effort)")
+	}
+
 	// 9.1. Exporter URI Secret (monitoring sidecar 인증용)
 	if mdb.Spec.Monitoring != nil && mdb.Spec.Monitoring.Enabled {
 		if err := r.reconcileExporterSecret(ctx, mdb); err != nil {
