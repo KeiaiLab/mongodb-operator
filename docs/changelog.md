@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.1] — 2026-05-28
+
+### Fixed
+
+- **artifacthub.io/containsSecurityUpdates annotation 정정**: `"true"` → `"false"`. v1.10.0(Auto Pilot feature only)은 보안 수정 0건이므로 ArtifactHub UI에 잘못된 "Contains security updates" 배지 표시 차단. 향후 보안 fix PR 머지 시점의 chart 버전에서만 `"true"`로 토글하는 정책 채택 (artifacthub.io 공식 권장).
+
 ## [1.10.0] — 2026-05-28
 
 ### Added
