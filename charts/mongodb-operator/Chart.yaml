@@ -2,7 +2,7 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.9.1
+version: 1.9.2
 appVersion: "1.9.0"
 kubeVersion: ">=1.26.0-0"
 
@@ -36,11 +36,18 @@ annotations:
   artifacthub.io/signKey: |
     fingerprint: 89A409476828CB992338C378651E51AF520BCB78
     url: https://github.com/keiailab.gpg
-  # operatorCapabilities — OperatorHub Phase II "Seamless Upgrades" (보수적
-  # claim). 사용자 지원 기능: MongoDB ReplicaSet + Sharded install + version
-  # upgrade allowlist + PodSecurity restricted. backup/failover automation
-  # GA 후 Phase III "Full Lifecycle" 격상 가능. C-P0-8 ADR 정합.
-  artifacthub.io/operatorCapabilities: Seamless Upgrades
+  # operatorCapabilities — OperatorHub Phase IV "Deep Insights" 격상.
+  # 근거 (issue #260 v7 실측, 45/66 = 68% 달성):
+  #   - Level I (Basic Install): 8/8 ✅ (PR #262 — TLS Certificate CR for RS)
+  #   - Level II (Seamless Upgrades): 8/8 ✅ (PR #259, #263 — reconcileUpgrade
+  #     orchestration for MongoDB + MongoDBSharded with PreUpgradeBackup/
+  #     ValidationInterval/RollbackOnFailure)
+  #   - Level III (Full Lifecycle): 16/16 ✅ (PR #266 BackupVerification controller,
+  #     #267 Queryable backup STS + Password rotation detection)
+  #   - Level IV (Deep Insights): 13/13 ✅ (36 Prometheus metrics + 15 alerts +
+  #     5 Grafana dashboards + MongoDBInsights analyzer with UnusedIndex)
+  # Level V (Auto Pilot)은 0/21 미구현 — 향후 격상 대상.
+  artifacthub.io/operatorCapabilities: Deep Insights
   artifacthub.io/links: |
     - name: Documentation
       url: https://github.com/keiailab/mongodb-operator/blob/main/README.md
