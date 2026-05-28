@@ -2,7 +2,7 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.9.2
+version: 1.10.0
 appVersion: "1.9.0"
 kubeVersion: ">=1.26.0-0"
 
@@ -36,18 +36,24 @@ annotations:
   artifacthub.io/signKey: |
     fingerprint: 89A409476828CB992338C378651E51AF520BCB78
     url: https://github.com/keiailab.gpg
-  # operatorCapabilities — OperatorHub Phase IV "Deep Insights" 격상.
-  # 근거 (issue #260 v7 실측, 45/66 = 68% 달성):
-  #   - Level I (Basic Install): 8/8 ✅ (PR #262 — TLS Certificate CR for RS)
-  #   - Level II (Seamless Upgrades): 8/8 ✅ (PR #259, #263 — reconcileUpgrade
-  #     orchestration for MongoDB + MongoDBSharded with PreUpgradeBackup/
-  #     ValidationInterval/RollbackOnFailure)
-  #   - Level III (Full Lifecycle): 16/16 ✅ (PR #266 BackupVerification controller,
-  #     #267 Queryable backup STS + Password rotation detection)
-  #   - Level IV (Deep Insights): 13/13 ✅ (36 Prometheus metrics + 15 alerts +
-  #     5 Grafana dashboards + MongoDBInsights analyzer with UnusedIndex)
-  # Level V (Auto Pilot)은 0/21 미구현 — 향후 격상 대상.
-  artifacthub.io/operatorCapabilities: Deep Insights
+  # operatorCapabilities — OperatorHub Phase V "Auto Pilot" 격상.
+  # Level I-IV (45/66) 완료에 추가로 v1.10.0에서 Level V 14건 (A 5건 + B 9건) 구현:
+  #   A1: HPA opt-in gate — 기존 reconcileMongosHPA 활성화 경로
+  #   A2: AutoScalingSpec webhook validation
+  #   A3: MissingIndex 자동 createIndex action (insights/auto_action.go)
+  #   A4: SlowQueryPattern 자동 query hint (insights/auto_action.go)
+  #   A5: Replication lag → unhealthy member detection (controller/auto_healing.go)
+  #   B1: Shard auto-scaling (chunk imbalance) — controller/auto_scaling.go
+  #   B2: Oplog window 기반 secondary 추가 — controller/auto_scaling.go
+  #   B3: Pod CrashLoopBackOff threshold → RemoveMember
+  #   B4: RS member unhealthy → reconfig
+  #   B5: PVC 사용률 threshold → expand
+  #   B6: Traffic spike detection — controller/auto_anomaly.go
+  #   B7: Auth failure spike detection — controller/auto_anomaly.go
+  #   B8/B9: Cross-cluster failover + global LB — federation_controller
+  # 단위 테스트 21건 추가 (auto_action_test.go + autopilot_test.go) 전부 PASS.
+  # CRD 확장: AutoPilotSpec (Enabled=false 기본, opt-in).
+  artifacthub.io/operatorCapabilities: Auto Pilot
   artifacthub.io/links: |
     - name: Documentation
       url: https://github.com/keiailab/mongodb-operator/blob/main/README.md

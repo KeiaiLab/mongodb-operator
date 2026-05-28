@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] — 2026-05-28
+
+### Added
+
+- **Level V Auto Pilot 구현** (14건 = A 5건 + B 9건):
+  - **AutoPilotSpec CRD** — `AutoIndexSpec`, `AutoQueryHintSpec`, `AutoHealingSpec`, `AnomalyDetectionSpec` 묶음 (opt-in, 기본 `Enabled=false`)
+  - **A3 Auto Index 생성**: `insights/auto_action.go` `PlanMissingIndexActions()` — MongoDBInsights MissingIndex 추천을 createIndex 액션으로 변환
+  - **A4 Auto Query Hint**: `PlanSlowQueryHints()` — SlowQueryPattern 추천 → query hint 액션
+  - **A5 Replication Lag 감지**: `controller/auto_healing.go` `DetectLaggingMembers()` — threshold 초과 member 식별
+  - **B1 Shard Auto-Scaling**: `controller/auto_scaling.go` `DecideShardScaling()` — chunk distribution 1.5배 불균형 시 AddShard
+  - **B2 Oplog Window Scaling**: `DecideOplogWindowScaling()` — 1h 미만 시 AddSecondary
+  - **B3-B5 자가 복구**: `FilterCrashLoopPods()`, `PlanPVCExpansion()` — pod 재시작/PVC 자동 확장 계획
+  - **B6-B7 이상 감지**: `controller/auto_anomaly.go` `DetectTrafficSpike()`, `DetectAuthFailureSpike()` — 트래픽/인증 이상 alert 생성
+  - **단위 테스트 21건 추가**: auto_action_test.go (8건) + autopilot_test.go (13건) 전부 PASS
+
+### Changed
+
+- **artifacthub.io/operatorCapabilities 격상**: `Deep Insights` (Level IV) → `Auto Pilot` (Level V). Level V 14/21 구현 + 7건 외부 인프라 의존(VPA/setParameter) 스켈레톤.
+
 ## [1.9.2] — 2026-05-28
 
 ### Changed
