@@ -867,6 +867,101 @@ type PVCStorageSpec struct {
 	Size resource.Quantity `json:"size"`
 }
 
+// AutoPilotSpec — Level V Auto Pilot 기능 묶음 (opt-in).
+// MongoDBInsights 추천 자동 적용, 자가 복구, 이상 감지 등 자동화 기능.
+type AutoPilotSpec struct {
+	// Enabled toggles the auto-pilot feature. Default false (opt-in for safety).
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// AutoIndex automatically creates indexes from MongoDBInsights MissingIndex recommendations.
+	// +optional
+	AutoIndex *AutoIndexSpec `json:"autoIndex,omitempty"`
+
+	// AutoQueryHint automatically applies query hints from SlowQueryPattern recommendations.
+	// +optional
+	AutoQueryHint *AutoQueryHintSpec `json:"autoQueryHint,omitempty"`
+
+	// AutoHealing automatically recovers unhealthy members and expands storage.
+	// +optional
+	AutoHealing *AutoHealingSpec `json:"autoHealing,omitempty"`
+
+	// AnomalyDetection automatically detects traffic and security anomalies.
+	// +optional
+	AnomalyDetection *AnomalyDetectionSpec `json:"anomalyDetection,omitempty"`
+}
+
+// AutoIndexSpec controls automatic index creation from MongoDBInsights recommendations.
+type AutoIndexSpec struct {
+	// Enabled toggles automatic index creation.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// MinSeverity is the minimum recommendation severity to act on (info|warning|critical).
+	// +kubebuilder:default="warning"
+	// +kubebuilder:validation:Enum=info;warning;critical
+	MinSeverity string `json:"minSeverity,omitempty"`
+
+	// DryRun reports recommendations as conditions without creating indexes.
+	// +kubebuilder:default=true
+	DryRun bool `json:"dryRun,omitempty"`
+}
+
+// AutoQueryHintSpec controls automatic query hint application.
+type AutoQueryHintSpec struct {
+	// Enabled toggles automatic query hint.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// SlowQueryThresholdMs queries above this latency trigger hint suggestion.
+	// +kubebuilder:default=1000
+	SlowQueryThresholdMs int32 `json:"slowQueryThresholdMs,omitempty"`
+
+	// DryRun reports without applying hints.
+	// +kubebuilder:default=true
+	DryRun bool `json:"dryRun,omitempty"`
+}
+
+// AutoHealingSpec controls automatic recovery actions.
+type AutoHealingSpec struct {
+	// Enabled toggles all auto-healing actions.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// LagThresholdSeconds — replication lag above this triggers lagging-member detection.
+	// +kubebuilder:default=30
+	LagThresholdSeconds int32 `json:"lagThresholdSeconds,omitempty"`
+
+	// PodCrashLoopThreshold — CrashLoopBackOff count above this triggers RemoveMember.
+	// +kubebuilder:default=5
+	PodCrashLoopThreshold int32 `json:"podCrashLoopThreshold,omitempty"`
+
+	// PVCExpansionUsagePercent — PVC usage above this triggers expansion (0-100).
+	// +kubebuilder:default=85
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=100
+	PVCExpansionUsagePercent int32 `json:"pvcExpansionUsagePercent,omitempty"`
+
+	// PVCExpansionIncrementGi — bytes to add when expanding (default 10Gi).
+	// +kubebuilder:default=10
+	PVCExpansionIncrementGi int32 `json:"pvcExpansionIncrementGi,omitempty"`
+}
+
+// AnomalyDetectionSpec controls anomaly detection thresholds and responses.
+type AnomalyDetectionSpec struct {
+	// Enabled toggles all anomaly detection.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// ConnectionSpikeMultiplier — connections above (baseline * this) trigger spike alert.
+	// +kubebuilder:default=3
+	ConnectionSpikeMultiplier int32 `json:"connectionSpikeMultiplier,omitempty"`
+
+	// AuthFailureRatePerMin — auth failures per minute above this trigger security alert.
+	// +kubebuilder:default=10
+	AuthFailureRatePerMin int32 `json:"authFailureRatePerMin,omitempty"`
+}
+
 // AutoScalingSpec defines auto-scaling configuration
 type AutoScalingSpec struct {
 	// Enabled enables auto-scaling

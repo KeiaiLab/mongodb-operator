@@ -867,6 +867,63 @@ type PVCStorageSpec struct {
 	Size resource.Quantity `json:"size"`
 }
 
+// AutoPilotSpec — Level V Auto Pilot 기능 묶음 (opt-in).
+type AutoPilotSpec struct {
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+	// +optional
+	AutoIndex *AutoIndexSpec `json:"autoIndex,omitempty"`
+	// +optional
+	AutoQueryHint *AutoQueryHintSpec `json:"autoQueryHint,omitempty"`
+	// +optional
+	AutoHealing *AutoHealingSpec `json:"autoHealing,omitempty"`
+	// +optional
+	AnomalyDetection *AnomalyDetectionSpec `json:"anomalyDetection,omitempty"`
+}
+
+type AutoIndexSpec struct {
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+	// +kubebuilder:default="warning"
+	// +kubebuilder:validation:Enum=info;warning;critical
+	MinSeverity string `json:"minSeverity,omitempty"`
+	// +kubebuilder:default=true
+	DryRun bool `json:"dryRun,omitempty"`
+}
+
+type AutoQueryHintSpec struct {
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+	// +kubebuilder:default=1000
+	SlowQueryThresholdMs int32 `json:"slowQueryThresholdMs,omitempty"`
+	// +kubebuilder:default=true
+	DryRun bool `json:"dryRun,omitempty"`
+}
+
+type AutoHealingSpec struct {
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+	// +kubebuilder:default=30
+	LagThresholdSeconds int32 `json:"lagThresholdSeconds,omitempty"`
+	// +kubebuilder:default=5
+	PodCrashLoopThreshold int32 `json:"podCrashLoopThreshold,omitempty"`
+	// +kubebuilder:default=85
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=100
+	PVCExpansionUsagePercent int32 `json:"pvcExpansionUsagePercent,omitempty"`
+	// +kubebuilder:default=10
+	PVCExpansionIncrementGi int32 `json:"pvcExpansionIncrementGi,omitempty"`
+}
+
+type AnomalyDetectionSpec struct {
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+	// +kubebuilder:default=3
+	ConnectionSpikeMultiplier int32 `json:"connectionSpikeMultiplier,omitempty"`
+	// +kubebuilder:default=10
+	AuthFailureRatePerMin int32 `json:"authFailureRatePerMin,omitempty"`
+}
+
 // AutoScalingSpec defines auto-scaling configuration
 type AutoScalingSpec struct {
 	// Enabled enables auto-scaling
