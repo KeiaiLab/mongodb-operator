@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.10.2
-appVersion: "1.9.1"
+version: 1.10.3
+appVersion: "1.9.0"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -135,17 +135,22 @@ annotations:
               name: s3-credentials
   # containsSecurityUpdates: 버전별 토글 정책 (artifacthub.io 공식 권장).
   # v1.10.0/1.10.1: Auto Pilot feature only — 보안 수정 0건. "false".
+  # v1.10.3: artifacthub.io/images annotation tag mismatch fix — 보안 수정 0건. "false".
   # 향후 보안 fix PR 머지 시 해당 chart 버전에서만 "true"로 토글.
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:1.9.1
+      image: ghcr.io/keiailab/mongodb-operator:v1.9.0
     - name: mongodb
       image: mongo:8.3.1
     - name: mongodb-exporter
       image: percona/mongodb_exporter:0.51.0
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
+    - kind: fixed
+      description: "[P0] Operator Deployment image helper 가 .Chart.AppVersion (semver 1.9.0) 를 그대로 tag 로 사용해 GHCR 의 실재 tag (v1.9.0, v prefix) 와 mismatch → helm install (image.tag override 없이) 시 즉시 ImagePullBackOff 되던 잠복 결함 fix. helper 가 default 시 'v' prefix 를 prepend 하도록 수정. .Values.image.tag override 는 영향 없음."
+    - kind: fixed
+      description: "artifacthub.io/images annotation 의 controller image tag 를 GHCR 실재 tag 와 일치 (1.9.0 → v1.9.0). 이전 chart 가 존재하지 않는 image tag 를 가리키고, 동일 path 의 :1.9.1 Helm chart artifact 로 fallback resolve 되어 Artifact Hub Trivy scan 이 unsupported artifact type 으로 실패하던 결함 fix."
     - kind: fixed
       description: "Chart RBAC — features.autoscaling.enabled=false (default) 상태에서 operator 가 HorizontalPodAutoscaler informer cache sync timeout 으로 CrashLoopBackOff 되던 결함 fix. Owns(HPA) 는 두 reconciler (MongoDB / MongoDBSharded) 모두 unconditional 등록이라 read verbs (get/list/watch) 는 항상 grant 필요 — feature gate 와 무관. Write verbs (create/update/patch/delete) 는 그대로 gate 유지."
     - kind: fixed
