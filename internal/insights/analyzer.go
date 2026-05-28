@@ -73,6 +73,35 @@ func Analyze(docs []ProfileDoc, slowThresholdMs int32) []mongodbv1alpha1.Recomme
 	return recs
 }
 
+// IndexStat represents a single index usage statistic from $indexStats.
+type IndexStat struct {
+	NS        string
+	IndexName string
+	Accesses  int64
+}
+
+// AnalyzeIndexUsage detects unused indexes (0 accesses) and returns recommendations.
+// Skips _id_ index which is always maintained by MongoDB.
+func AnalyzeIndexUsage(stats []IndexStat) []mongodbv1alpha1.Recommendation {
+	var recs []mongodbv1alpha1.Recommendation
+	for _, s := range stats {
+		if s.IndexName == "_id_" {
+			continue
+		}
+		if s.Accesses == 0 {
+			recs = append(recs, mongodbv1alpha1.Recommendation{
+				Type:     "UnusedIndex",
+				Severity: "warning",
+				Detail:   fmt.Sprintf("Index %q on %s has 0 accesses — consider dropping", s.IndexName, s.NS),
+			})
+		}
+	}
+	sort.Slice(recs, func(i, j int) bool {
+		return recs[i].Detail < recs[j].Detail
+	})
+	return recs
+}
+
 // detectMissingIndexes — COLLSCAN 또는 examined/returned 비율이 높은 query.
 //
 // 동일 (ns, filterShape) 는 한 번만 emit — sample query 3건까지 첨부.

@@ -271,3 +271,52 @@ func TestSeverityFromLatency(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalyzeIndexUsage_DetectsUnused(t *testing.T) {
+	stats := []IndexStat{
+		{NS: "db.users", IndexName: "_id_", Accesses: 100},
+		{NS: "db.users", IndexName: "email_1", Accesses: 50},
+		{NS: "db.users", IndexName: "old_field_1", Accesses: 0},
+		{NS: "db.orders", IndexName: "status_1", Accesses: 0},
+	}
+	recs := AnalyzeIndexUsage(stats)
+	if len(recs) != 2 {
+		t.Fatalf("expected 2 unused index recommendations, got %d", len(recs))
+	}
+	for _, r := range recs {
+		if r.Type != "UnusedIndex" {
+			t.Errorf("expected type UnusedIndex, got %s", r.Type)
+		}
+		if r.Severity != "warning" {
+			t.Errorf("expected severity warning, got %s", r.Severity)
+		}
+	}
+}
+
+func TestAnalyzeIndexUsage_SkipsIdIndex(t *testing.T) {
+	stats := []IndexStat{
+		{NS: "db.x", IndexName: "_id_", Accesses: 0},
+	}
+	recs := AnalyzeIndexUsage(stats)
+	if len(recs) != 0 {
+		t.Fatalf("_id_ index should be skipped, got %d recommendations", len(recs))
+	}
+}
+
+func TestAnalyzeIndexUsage_EmptyInput(t *testing.T) {
+	recs := AnalyzeIndexUsage(nil)
+	if recs != nil {
+		t.Fatalf("expected nil for empty input, got %v", recs)
+	}
+}
+
+func TestAnalyzeIndexUsage_AllUsed(t *testing.T) {
+	stats := []IndexStat{
+		{NS: "db.x", IndexName: "a_1", Accesses: 10},
+		{NS: "db.x", IndexName: "b_1", Accesses: 1},
+	}
+	recs := AnalyzeIndexUsage(stats)
+	if len(recs) != 0 {
+		t.Fatalf("all indexes used, expected 0 recommendations, got %d", len(recs))
+	}
+}
