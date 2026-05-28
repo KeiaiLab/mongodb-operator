@@ -96,5 +96,5 @@ CVE 报告、密钥 / 认证模型变更按照 [SECURITY.md](SECURITY.md) 的流
 </p>
 
 <p align="center">
-  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://github.com/keiailab">keiailab.com</a>
 </p>

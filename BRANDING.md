@@ -13,7 +13,7 @@ This document is the canonical reference for `mongodb-operator` branding decisio
 
 ## 1. Identity
 
-**Organization**: [keiailab](https://keiailab.com) — Kubernetes-native data platform operators (Apache-2.0, license-clean, vanilla-upstream compatible).
+**Organization**: [keiailab](https://github.com/keiailab) — Kubernetes-native data platform operators (Apache-2.0, license-clean, vanilla-upstream compatible).
 
 **Project**: `mongodb-operator` — Apache-2.0 MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+.
 
@@ -35,7 +35,7 @@ This document is the canonical reference for `mongodb-operator` branding decisio
 | Mono mark (planned) | `https://keiailab.com/assets/mark.svg` *(not yet published)* | Favicon, social cards |
 | Wordmark (planned) | `https://keiailab.com/assets/wordmark.svg` *(not yet published)* | Footer, dark backgrounds |
 
-**Logo placement**: Top-center of README, width 120px. Always link to https://keiailab.com.
+**Logo placement**: Top-center of README, width 120px. Always link to https://github.com/keiailab.
 
 **Migration note (2026-05-21)**: until `keiailab.com/assets/*.svg` is published, all repos in the family use the GitHub avatar (`https://github.com/keiailab.png`) as canonical primary logo. The SVG row is reserved for the future migration.
 
@@ -125,7 +125,7 @@ GitHub README 의 shield.io badge 는 위 hex 사용 권장.
 </p>
 
 <p align="center">
-  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://github.com/keiailab">keiailab.com</a>
 </p>
 ```
 
@@ -150,7 +150,7 @@ README 의 shield.io badge 순서 (좌→우):
 
 ## 10. Social & External
 
-- **Website**: https://keiailab.com
+- **Website**: https://github.com/keiailab
 - **GitHub Org**: https://github.com/keiailab
 - **Artifact Hub** (Helm): https://artifacthub.io/packages/search?repo=keiailab-mongodb-operator
 - **GHCR** (Container): https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator
@@ -172,5 +172,5 @@ README 의 shield.io badge 순서 (좌→우):
 </p>
 
 <p align="center">
-  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://github.com/keiailab">keiailab.com</a>
 </p>

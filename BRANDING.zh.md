@@ -13,7 +13,7 @@
 
 ## 1. 身份标识
 
-**Organization**: [keiailab](https://keiailab.com) — Kubernetes-native 数据平台 operator (Apache-2.0、license-clean、vanilla-upstream 兼容)。
+**Organization**: [keiailab](https://github.com/keiailab) — Kubernetes-native 数据平台 operator (Apache-2.0、license-clean、vanilla-upstream 兼容)。
 
 **Project**: `mongodb-operator` — Kubernetes 的 Apache-2.0 MongoDB Operator — ReplicaSet + Sharded Cluster + Backup,原生 MongoDB 7.0+。
 
@@ -35,7 +35,7 @@
 | Mono mark (计划) | `https://keiailab.com/assets/mark.svg` *(尚未发布)* | Favicon、社交卡片 |
 | Wordmark (计划) | `https://keiailab.com/assets/wordmark.svg` *(尚未发布)* | 页脚、深色背景 |
 
-**Logo placement**: README 顶部居中,宽度 120px。始终链接到 https://keiailab.com。
+**Logo placement**: README 顶部居中,宽度 120px。始终链接到 https://github.com/keiailab。
 
 **Migration note (2026-05-21)**: 在 `keiailab.com/assets/*.svg` 发布之前,family 全部仓库均使用 GitHub avatar (`https://github.com/keiailab.png`) 作为 canonical primary logo。SVG 行为未来迁移预留。
 
@@ -125,7 +125,7 @@ GitHub README 的 shield.io badge 建议使用上述 hex。
 </p>
 
 <p align="center">
-  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://github.com/keiailab">keiailab.com</a>
 </p>
 ```
 
@@ -150,7 +150,7 @@ README 中 shield.io badge 的顺序 (左→右):
 
 ## 10. 社交与外部链接
 
-- **Website**: https://keiailab.com
+- **Website**: https://github.com/keiailab
 - **GitHub Org**: https://github.com/keiailab
 - **Artifact Hub** (Helm): https://artifacthub.io/packages/search?repo=keiailab-mongodb-operator
 - **GHCR** (Container): https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator
@@ -172,5 +172,5 @@ README 中 shield.io badge 的顺序 (左→右):
 </p>
 
 <p align="center">
-  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://github.com/keiailab">keiailab.com</a>
 </p>

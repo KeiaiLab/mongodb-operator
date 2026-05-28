@@ -13,7 +13,7 @@
 
 ## 1. アイデンティティ
 
-**Organization**: [keiailab](https://keiailab.com) — Kubernetes-native なデータプラットフォーム operator (Apache-2.0、license-clean、vanilla-upstream 互換)。
+**Organization**: [keiailab](https://github.com/keiailab) — Kubernetes-native なデータプラットフォーム operator (Apache-2.0、license-clean、vanilla-upstream 互換)。
 
 **Project**: `mongodb-operator` — Kubernetes 向け Apache-2.0 MongoDB Operator — ReplicaSet + Sharded Cluster + Backup、vanilla MongoDB 7.0+。
 
@@ -35,7 +35,7 @@
 | Mono mark (予定) | `https://keiailab.com/assets/mark.svg` *(未公開)* | Favicon、ソーシャルカード |
 | Wordmark (予定) | `https://keiailab.com/assets/wordmark.svg` *(未公開)* | フッター、暗い背景 |
 
-**Logo placement**: README の上部中央、幅 120px。常に https://keiailab.com へリンクします。
+**Logo placement**: README の上部中央、幅 120px。常に https://github.com/keiailab へリンクします。
 
 **Migration note (2026-05-21)**: `keiailab.com/assets/*.svg` が公開されるまで、family の全リポは GitHub avatar (`https://github.com/keiailab.png`) を canonical primary logo として使用します。SVG 行は今後のマイグレーション用に予約。
 
@@ -125,7 +125,7 @@ GitHub README の shield.io badge には上記 hex の利用を推奨します�
 </p>
 
 <p align="center">
-  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://github.com/keiailab">keiailab.com</a>
 </p>
 ```
 
@@ -150,7 +150,7 @@ README の shield.io badge の順序 (左→右):
 
 ## 10. ソーシャルおよび外部リンク
 
-- **Website**: https://keiailab.com
+- **Website**: https://github.com/keiailab
 - **GitHub Org**: https://github.com/keiailab
 - **Artifact Hub** (Helm): https://artifacthub.io/packages/search?repo=keiailab-mongodb-operator
 - **GHCR** (Container): https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator
@@ -172,5 +172,5 @@ README の shield.io badge の順序 (左→右):
 </p>
 
 <p align="center">
-  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://github.com/keiailab">keiailab.com</a>
 </p>

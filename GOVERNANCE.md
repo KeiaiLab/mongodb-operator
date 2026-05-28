@@ -96,5 +96,5 @@ CVE 보고, 시크릿/인증 모델 변경은 [SECURITY.md](SECURITY.md) 절차�
 </p>
 
 <p align="center">
-  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://keiailab.com">keiailab.com</a>
+  © 2026 keiailab · <a href="LICENSE">Apache-2.0</a> · <a href="https://github.com/keiailab">keiailab.com</a>
 </p>
