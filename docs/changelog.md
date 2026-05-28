@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.2] — 2026-05-28
+
+### Fixed
+
+- **Operator image tag 정정**: `appVersion: "1.9.0"` → `"1.9.1"`. ghcr.io에 `mongodb-operator:1.9.0` 태그가 존재하지 않아 (실제 태그는 `v1.9.0` 또는 `1.9.1`) 실 배포 시 `ImagePullBackOff` 가능성 + ArtifactHub vulnerability scanner "image not found" 에러 발생. helm template은 `appVersion`을 image tag로 사용하므로 실존 태그 `1.9.1`로 정정. `artifacthub.io/images` annotation도 동기.
+
 ## [1.10.1] — 2026-05-28
 
 ### Fixed
