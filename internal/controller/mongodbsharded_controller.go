@@ -128,6 +128,13 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.updateStatusError(ctx, mdbsh, "KeyfileSecret", err)
 	}
 
+	// 1.5. Upgrade orchestration
+	if result, handled, err := r.reconcileShardedUpgrade(ctx, mdbsh); err != nil {
+		return r.updateStatusError(ctx, mdbsh, "Upgrade", err)
+	} else if handled {
+		return result, nil
+	}
+
 	// 2. Config Server
 	if err := r.reconcileConfigServer(ctx, mdbsh); err != nil {
 		return r.updateStatusError(ctx, mdbsh, "ConfigServer", err)
@@ -155,6 +162,17 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// 6. Mongos
 	if err := r.reconcileMongos(ctx, mdbsh); err != nil {
 		return r.updateStatusError(ctx, mdbsh, "Mongos", err)
+	}
+
+	// 6.1. Transition to Validating after all components updated
+	if mdbsh.Status.UpgradePhase == UpgradePhaseUpgrading {
+		mdbsh.Status.UpgradePhase = UpgradePhaseValidating
+		now := metav1.Now()
+		mdbsh.Status.UpgradeStartTime = &now
+		if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: parseValidationInterval(mdbsh.Spec.UpgradeStrategy)}, nil
 	}
 
 	// 6.5. PodDisruptionBudgets (opt-in, 모든 컴포넌트 cfg/shards/mongos)
