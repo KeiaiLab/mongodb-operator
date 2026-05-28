@@ -76,6 +76,7 @@ type MongoDBReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 
@@ -283,6 +284,16 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 	// 9.6. PendingScale 가드 — Spec.Members 변경이 deliberate=false 때문에 보류
 	// 됐다면 status에 노출 + Event 발행.
 	r.recordPendingScale(ctx, mdb)
+
+	// 9.7. Backup CronJob (spec.backup.schedule 설정 시 자동 생성)
+	if mdb.Spec.Backup != nil && mdb.Spec.Backup.Schedule != "" {
+		cronJob := resources.BuildBackupCronJob(mdb.Name, mdb.Namespace, mdb.Spec.Backup.Schedule, "MongoDB", *mdb.Spec.Backup)
+		if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, cronJob, func() error {
+			return controllerutil.SetControllerReference(mdb, cronJob, r.Scheme)
+		}); err != nil {
+			return r.updateStatusError(ctx, mdb, "BackupCronJob", err)
+		}
+	}
 
 	// 10. Update status
 	if err := r.updateStatus(ctx, mdb); err != nil {
