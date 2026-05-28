@@ -275,6 +275,13 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 		}
 	}
 
+	// 9.1. Exporter URI Secret (monitoring sidecar 인증용)
+	if mdb.Spec.Monitoring != nil && mdb.Spec.Monitoring.Enabled {
+		if err := r.reconcileExporterSecret(ctx, mdb); err != nil {
+			log.FromContext(ctx).Error(err, "exporter secret reconcile failed (best-effort)")
+		}
+	}
+
 	// 9.5. RS HPA (opt-in via Spec.AutoScaling.Enabled + ScalePolicy.Deliberate
 	// 이중 가드 — ADR-0008). 가드 통과 시에만 HPA 생성.
 	if err := r.reconcileRSHPA(ctx, mdb); err != nil {
@@ -744,6 +751,33 @@ func (r *MongoDBReconciler) recordPrimaryUnreachable(mdb *mongodbv1alpha1.MongoD
 		Reason:             reason,
 		Message:            firstLine(err.Error()),
 	})
+}
+
+func (r *MongoDBReconciler) reconcileExporterSecret(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
+	secretName := mdb.Name + "-exporter-uri"
+	host := fmt.Sprintf("%s-headless.%s.svc.cluster.local:27017", mdb.Name, mdb.Namespace)
+
+	adminSecret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Name: mdb.Spec.Auth.AdminCredentialsSecretRef.Name, Namespace: mdb.Namespace,
+	}, adminSecret); err != nil {
+		return err
+	}
+	user := string(adminSecret.Data["username"])
+	pass := string(adminSecret.Data["password"])
+
+	uri := fmt.Sprintf("mongodb://%s:%s@%s/?authSource=admin", user, pass, host)
+
+	desired := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: mdb.Namespace},
+		Type:       corev1.SecretTypeOpaque,
+		StringData: map[string]string{"uri": uri},
+	}
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, desired, func() error {
+		desired.StringData = map[string]string{"uri": uri}
+		return controllerutil.SetControllerReference(mdb, desired, r.Scheme)
+	})
+	return err
 }
 
 // firstLine은 multiline 에러 message에서 첫 줄만 잘라 반환한다.
