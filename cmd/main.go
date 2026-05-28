@@ -203,6 +203,14 @@ func main() {
 			setupLog.Error(err, "unable to create controller", "controller", "OplogUploader")
 			os.Exit(1)
 		}
+		// F48-F50 (cycle 9): BackupVerification controller.
+		if err = (&controller.MongoDBBackupVerificationReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MongoDBBackupVerification")
+			os.Exit(1)
+		}
 	} else {
 		setupLog.Info("MongoDBBackup controller disabled by feature gate (--enable-backup-controller=false)")
 	}
