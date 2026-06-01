@@ -1,27 +1,127 @@
-# B2C 대안 — GitLab CI scheduled pipeline 으로 GitHub → GitLab pull mirror (CE 호환)
+# RFC-0043 L5 GitLab CI shadow phase — mongodb-operator (Go operator, 2026-06-01)
 #
-# 적용 대상: 5 project (각 project main 에 .gitlab-ci.yml 로 추가)
-#   - keiailab/upstream/mongodb-operator
-#   - keiailab/upstream/valkey-operator
-#   - keiailab/upstream/postgres-operator
-#   - keiailab/upstream/operator-commons
-#   - keiailab/tools/keiailab-gitlab-mcp
+# 본 file = SSOT include + Go job 4종 (operator-commons 검증 패턴 복제) + 기존 mirror 잡 보존.
+# 목적: RFC-0058 자동머지 게이트가 검증할 *진짜* lint/test/validate pipeline 도입.
+#       기존 .gitlab-ci.yml 은 GitHub→GitLab mirror 전용 (schedule 0 → 미실행, 게이트 부재).
 #
-# 사용자 1회 액션:
-#   1. 본 파일을 각 project 의 .gitlab-ci.yml 로 추가 (MR + merge)
-#   2. Settings → CI/CD → Variables:
-#      GITHUB_REPO_URL = https://github.com/keiailab/<project-name>.git  (per-project)
-#      MIRROR_PUSH_TOKEN = <Project Access Token, scope=write_repository, role=Maintainer>
-#   3. Settings → Repository → Protected branches → main → Allowed to push:
-#      "Maintainers" 추가 (Project Access Token 이 main 에 push 할 수 있도록)
-#   4. Build → Pipeline schedules → New schedule → Cron `0 * * * *` (매시간)
+# SSOT include 형태 (ref=stable) + Go job 4종 = operator-commons (.gitlab-ci.yml) 그대로 따름.
+# operator-commons 와 동일하게, SSOT stage matrix 는 Go job 부재 → STACK_TAGS 는 빈 envelope,
+# Go job 4종을 repo-local 로 직접 정의 (생산자 격, cross-repo benefit).
 #
-# 안전 장치:
-#   - mongodb/valkey/postgres-operator 는 diverged → fetch 후 push 시 non-fast-forward → halt (정상)
-#   - operator-commons + keiailab-gitlab-mcp 는 FF-safe → 즉시 동기
+# stages 병합 주의: SSOT include 의 stages (lint/typecheck/test/validate/audit/governance/deploy)
+# 와 기존 mirror 잡의 stage(mirror) 가 공존해야 함. main .gitlab-ci.yml 의 stages 는 include 를
+# *override* 하므로 (GitLab merge semantics, context7 /websites/gitlab_ci 확인), 양쪽을 포함한
+# *superset* stages 를 local 에 선언. 미선언 시 한쪽 stage 가 undefined → 파이프라인 lint 실패.
 
+include:
+  - project: 'keiailab/services/ai-dev'
+    file: '/templates/gitlab/.gitlab-ci.yml'
+    ref: stable
+
+variables:
+  STACK_TAGS: "go,helm"
+
+# SSOT(lint/typecheck/test/validate/audit/governance/deploy) + 기존 mirror 잡 stage 의 superset.
+# include override 보정 — 양쪽 잡 모두 valid stage 보장.
 stages:
+  - lint
+  - typecheck
+  - test
+  - validate
+  - audit
+  - governance
+  - deploy
   - mirror
+
+# ─── Go stack-specific job 4종 (operator-commons 검증 패턴 복제) ──────────────
+# 모두 RFC-0043 shadow phase 정합: `allow_failure: true` (typecheck/test 제외 — 진본 결함).
+# enforcing 전환 후 `allow_failure: true` 제거.
+
+go-lint:
+  stage: lint
+  image: golangci/golangci-lint:latest-alpine
+  allow_failure: true  # RFC-0043 shadow phase: info only
+  rules:
+    - exists:
+        - go.mod
+  script:
+    - golangci-lint run --timeout=5m
+    - |
+      unformatted=$(gofmt -l .)
+      if [ -n "$unformatted" ]; then
+        echo "::ERROR:: gofmt 위반 발견:"
+        echo "$unformatted"
+        exit 1
+      fi
+
+go-vet:
+  stage: typecheck
+  image: golang:1.25.7-alpine
+  rules:
+    - exists:
+        - go.mod
+  cache:
+    key: "go-mod-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .go/pkg/mod/
+  variables:
+    GOMODCACHE: ${CI_PROJECT_DIR}/.go/pkg/mod
+  before_script:
+    - apk add --no-cache git
+  script:
+    - go vet ./...
+
+go-test:
+  stage: test
+  image: golang:1.25.7-alpine
+  rules:
+    - exists:
+        - go.mod
+  cache:
+    key: "go-mod-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .go/pkg/mod/
+      - .gocache/
+  variables:
+    GOMODCACHE: ${CI_PROJECT_DIR}/.go/pkg/mod
+    GOCACHE: ${CI_PROJECT_DIR}/.gocache
+  before_script:
+    - apk add --no-cache git gcc musl-dev
+  script:
+    - go test ./... -race -cover -coverprofile=coverage.out -timeout=15m
+    - go tool cover -func=coverage.out | tail -3
+  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
+  artifacts:
+    when: always
+    paths:
+      - coverage.out
+    expire_in: 1 week
+
+go-vulncheck:
+  stage: audit
+  image: golang:1.25.7-alpine
+  allow_failure: true  # RFC-0043 shadow phase + transitive CVE 가 release 차단 회피
+  rules:
+    - exists:
+        - go.mod
+  cache:
+    key: "go-mod-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .go/pkg/mod/
+  variables:
+    GOMODCACHE: ${CI_PROJECT_DIR}/.go/pkg/mod
+  before_script:
+    - apk add --no-cache git
+    - go install golang.org/x/vuln/cmd/govulncheck@latest
+  script:
+    - $(go env GOPATH)/bin/govulncheck ./...
+
+# =============================================================================
+# 기존 mirror 잡 — 보존 (GitHub → GitLab pull mirror, CE 호환 scheduled pipeline)
+# 현 상태: schedule 0건 + CI/CD var (GITHUB_REPO_URL/MIRROR_PUSH_TOKEN) 0건 = 비활성.
+# SSOT workflow.rules (MR event / release tag / default branch) 상속 → schedule/web
+# source 는 트리거 안 됨 → 본 잡은 현 상태 그대로 dormant. 잡 정의는 보존 (삭제 X).
+# =============================================================================
 
 mirror:github-to-gitlab:
   stage: mirror
