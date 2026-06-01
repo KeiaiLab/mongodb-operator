@@ -38,7 +38,7 @@ go-lint:
 
 go-vet:
   stage: typecheck
-  image: golang:1.25.7-alpine
+  image: golang:1.25-alpine
   rules:
     - exists:
         - go.mod
@@ -55,7 +55,7 @@ go-vet:
 
 go-test:
   stage: test
-  image: golang:1.25.7-alpine
+  image: golang:1.25-alpine
   rules:
     - exists:
         - go.mod
@@ -81,7 +81,7 @@ go-test:
 
 go-vulncheck:
   stage: audit
-  image: golang:1.25.7-alpine
+  image: golang:1.25-alpine
   allow_failure: true  # RFC-0043 shadow phase + transitive CVE 가 release 차단 회피
   rules:
     - exists:
