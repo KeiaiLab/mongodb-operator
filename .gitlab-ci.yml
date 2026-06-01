@@ -1,17 +1,11 @@
 # RFC-0043 L5 GitLab CI shadow phase — mongodb-operator (Go operator, 2026-06-01)
 #
-# 본 file = SSOT include + Go job 4종 (operator-commons 검증 패턴 복제) + 기존 mirror 잡 보존.
+# 본 file = SSOT include + Go job 4종 (operator-commons 검증 패턴 복제).
 # 목적: RFC-0058 자동머지 게이트가 검증할 *진짜* lint/test/validate pipeline 도입.
-#       기존 .gitlab-ci.yml 은 GitHub→GitLab mirror 전용 (schedule 0 → 미실행, 게이트 부재).
 #
-# SSOT include 형태 (ref=stable) + Go job 4종 = operator-commons (.gitlab-ci.yml) 그대로 따름.
 # operator-commons 와 동일하게, SSOT stage matrix 는 Go job 부재 → STACK_TAGS 는 빈 envelope,
-# Go job 4종을 repo-local 로 직접 정의 (생산자 격, cross-repo benefit).
-#
-# stages 병합 주의: SSOT include 의 stages (lint/typecheck/test/validate/audit/governance/deploy)
-# 와 기존 mirror 잡의 stage(mirror) 가 공존해야 함. main .gitlab-ci.yml 의 stages 는 include 를
-# *override* 하므로 (GitLab merge semantics, context7 /websites/gitlab_ci 확인), 양쪽을 포함한
-# *superset* stages 를 local 에 선언. 미선언 시 한쪽 stage 가 undefined → 파이프라인 lint 실패.
+# Go job 4종을 repo-local 로 직접 정의 (생산자 격, cross-repo benefit). stage/workflow 는
+# SSOT include 를 그대로 상속 (로컬 override 없음 → harness drift 회피, principles.md §1.2).
 
 include:
   - project: 'keiailab/services/ai-dev'
@@ -20,18 +14,6 @@ include:
 
 variables:
   STACK_TAGS: "go,helm"
-
-# SSOT(lint/typecheck/test/validate/audit/governance/deploy) + 기존 mirror 잡 stage 의 superset.
-# include override 보정 — 양쪽 잡 모두 valid stage 보장.
-stages:
-  - lint
-  - typecheck
-  - test
-  - validate
-  - audit
-  - governance
-  - deploy
-  - mirror
 
 # ─── Go stack-specific job 4종 (operator-commons 검증 패턴 복제) ──────────────
 # 모두 RFC-0043 shadow phase 정합: `allow_failure: true` (typecheck/test 제외 — 진본 결함).
@@ -115,35 +97,3 @@ go-vulncheck:
     - go install golang.org/x/vuln/cmd/govulncheck@latest
   script:
     - $(go env GOPATH)/bin/govulncheck ./...
-
-# =============================================================================
-# 기존 mirror 잡 — 보존 (GitHub → GitLab pull mirror, CE 호환 scheduled pipeline)
-# 현 상태: schedule 0건 + CI/CD var (GITHUB_REPO_URL/MIRROR_PUSH_TOKEN) 0건 = 비활성.
-# SSOT workflow.rules (MR event / release tag / default branch) 상속 → schedule/web
-# source 는 트리거 안 됨 → 본 잡은 현 상태 그대로 dormant. 잡 정의는 보존 (삭제 X).
-# =============================================================================
-
-mirror:github-to-gitlab:
-  stage: mirror
-  image: alpine/git:latest
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-    - if: $CI_PIPELINE_SOURCE == "web"  # 수동 트리거 허용
-  script:
-    - apk add --no-cache curl
-    - git config --global user.email "ci-mirror@gitlab.keiailab.com"
-    - git config --global user.name "GitLab CI Mirror"
-    - |
-      # 임시 작업 dir 에 GitHub bare clone
-      cd /tmp
-      git clone --bare "$GITHUB_REPO_URL" repo.git
-      cd repo.git
-    - |
-      # GitLab 으로 push (Project Access Token 인증)
-      GITLAB_PUSH_URL="https://oauth2:${MIRROR_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
-      # main + 모든 tag fast-forward only — diverged 시 자연 halt
-      git push "$GITLAB_PUSH_URL" 'refs/heads/main:refs/heads/main' || \
-        echo "main diverged — halt (정상, diverged commit 보호)"
-      git push "$GITLAB_PUSH_URL" --tags || true
-  variables:
-    GIT_STRATEGY: none  # CI runner 가 본 project 를 clone 하지 않음 (불필요)
