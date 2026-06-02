@@ -1,5 +1,7 @@
 # examples/gitops/ — ArgoCD/GitOps 예시
 
+> GitOps overlay는 deploy/overlays/prod로 이전됨
+
 > **Status: experimental / 예시 (operator 운영자가 직접 적용하기 위한 *예비* 경로)**
 >
 > 실 운영(keiailab 내부)은 `your-platform` umbrella helm chart 를 사용하며, 이 디렉터리는 그 chart 와 동일 cluster state 를 산출하는지 *parity 미검증* 상태다. 동일 환경에 helm release 와 이 매니페스트를 동시에 적용하면 충돌한다.
