@@ -1,20 +1,31 @@
 name: Helm chart publish
 
+# Chart 릴리스 시 두 곳에 동시 publish:
+#   1. gh-pages   → HTTP helm repo (https://keiailab.github.io/mongodb-operator)
+#   2. ghcr.io OCI → oci://ghcr.io/keiailab/charts/mongodb-operator  ← ArtifactHub 추적 소스
+#
+# 트리거 3종 — 어느 릴리스 방식이든 작동:
+#   - release: published   → `gh release create vX.Y.Z` (GitHub UI/API/CLI)
+#   - push:    tags ['v*'] → `git push origin vX.Y.Z`
+#   - workflow_dispatch    → 수동 재실행 / 백필
 on:
+  release:
+    types: [published]
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag ref to publish (must already exist, e.g. v1.4.21)"
+        description: "Tag ref to publish (must already exist, e.g. v1.10.3)"
         required: true
 
 permissions:
   contents: write   # push to gh-pages + create per-chart Release
+  packages: write   # push helm chart to ghcr.io OCI registry
   pages: read
 
 concurrency:
-  group: helm-publish-${{ github.ref }}
+  group: helm-publish-${{ github.event.release.tag_name || github.event.inputs.tag || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -24,11 +35,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ github.event.release.tag_name || github.event.inputs.tag || github.ref }}
 
       - name: Chart.yaml ↔ tag parity check
         env:
-          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          TAG: ${{ github.event.release.tag_name || github.event.inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
           VERSION="${TAG#v}"
@@ -47,6 +58,8 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      # 1) gh-pages HTTP helm repo publish
+      #    이미 존재하는 버전(재실행/백필)은 skip 하여 멱등 보장
       - uses: helm/chart-releaser-action@v1.7.0
         with:
           charts_dir: charts
@@ -55,3 +68,20 @@ jobs:
           pages_branch: gh-pages
         env:
           CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CR_SKIP_EXISTING: "true"
+
+      # 2) ghcr.io OCI helm chart publish — ArtifactHub 가 추적하는 소스
+      #    이 단계 부재가 ArtifactHub stale (1.10.2 정체) 의 근본 원인이었음.
+      - name: Push chart to ghcr.io OCI registry
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION=$(grep '^version:' charts/mongodb-operator/Chart.yaml | awk '{print $2}' | tr -d '"')
+          echo "$GHCR_TOKEN" | helm registry login ghcr.io -u "$GHCR_USER" --password-stdin
+          mkdir -p out
+          helm package charts/mongodb-operator -d out/
+          helm push "out/mongodb-operator-${VERSION}.tgz" oci://ghcr.io/keiailab/charts
+          helm registry logout ghcr.io || true
+          echo "✓ pushed chart ${VERSION} to oci://ghcr.io/keiailab/charts/mongodb-operator"
