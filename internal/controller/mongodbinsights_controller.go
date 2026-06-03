@@ -116,6 +116,9 @@ func (r *MongoDBInsightsReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		in.Status.LastAnalysisTime = &now
 		in.Status.Recommendations = recs
 		in.Status.SlowQueriesSampled = sampled
+		// Auto Pilot advisory (ROADMAP §3.2 / Level V): 권장 기반 조치 계획을
+		// 표면화 (DryRun 기본 — 비가역 운영 자동 실행 없음).
+		in.Status.AutoPilotActions = buildAutoPilotActions(recs, in.Spec.AutoIndex, in.Spec.AutoQueryHint)
 		setInsightsCondition(&in.Status.Conditions, metav1.Condition{
 			Type:               "AnalysisHealthy",
 			Status:             metav1.ConditionTrue,
