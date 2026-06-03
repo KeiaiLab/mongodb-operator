@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.10.3
-appVersion: "1.9.0"
+version: 1.11.0
+appVersion: "1.11.0"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -136,65 +136,34 @@ annotations:
   # containsSecurityUpdates: 버전별 토글 정책 (artifacthub.io 공식 권장).
   # v1.10.0/1.10.1: Auto Pilot feature only — 보안 수정 0건. "false".
   # v1.10.3: artifacthub.io/images annotation tag mismatch fix — 보안 수정 0건. "false".
-  # 향후 보안 fix PR 머지 시 해당 chart 버전에서만 "true"로 토글.
-  artifacthub.io/containsSecurityUpdates: "false"
+  # v1.11.0: 보안 결함 다수 fix (PSA restricted / exporter secret URL 인코딩 /
+  #          webhook S3 검증 / audit YAML 이스케이프 / bitnami 이미지 제거) → "true".
+  artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:v1.9.0
+      image: ghcr.io/keiailab/mongodb-operator:v1.11.0
     - name: mongodb
       image: mongo:8.3.1
     - name: mongodb-exporter
       image: percona/mongodb_exporter:0.51.0
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
+    - kind: added
+      description: "백업 검증(MongoDBBackupVerification) Verifying 단계 실 구현 — 복원 대상에 실제 연결하여 SampleQueries 의 문서 수가 MinExpectedDocs 이상인지 검증(기존 STUB: 쿼리 미실행 + 항상 통과). NewClientFromURI + docCounter 인터페이스로 단위 테스트 가능."
     - kind: fixed
-      description: "[P0] Operator Deployment image helper 가 .Chart.AppVersion (semver 1.9.0) 를 그대로 tag 로 사용해 GHCR 의 실재 tag (v1.9.0, v prefix) 와 mismatch → helm install (image.tag override 없이) 시 즉시 ImagePullBackOff 되던 잠복 결함 fix. helper 가 default 시 'v' prefix 를 prepend 하도록 수정. .Values.image.tag override 는 영향 없음."
+      description: "[CRITICAL] BuildRestoreJob 이 backup.Spec.Restore 를 nil 가드 없이 역참조해 일반 백업 verify 시 controller panic/CrashLoop 되던 결함 fix(시그니처 (*Job,error) + nil 가드 + 호출처 에러 처리)."
     - kind: fixed
-      description: "artifacthub.io/images annotation 의 controller image tag 를 GHCR 실재 tag 와 일치 (1.9.0 → v1.9.0). 이전 chart 가 존재하지 않는 image tag 를 가리키고, 동일 path 의 :1.9.1 Helm chart artifact 로 fallback resolve 되어 Artifact Hub Trivy scan 이 unsupported artifact type 으로 실패하던 결함 fix."
+      description: "updateStatusWithRetry 가 conflict 시 refetch 로 호출자 status mutation 을 silent 유실하던 결함 fix(variadic mutate 재적용, 호출처 42곳 마이그레이션)."
     - kind: fixed
-      description: "Chart RBAC — features.autoscaling.enabled=false (default) 상태에서 operator 가 HorizontalPodAutoscaler informer cache sync timeout 으로 CrashLoopBackOff 되던 결함 fix. Owns(HPA) 는 두 reconciler (MongoDB / MongoDBSharded) 모두 unconditional 등록이라 read verbs (get/list/watch) 는 항상 grant 필요 — feature gate 와 무관. Write verbs (create/update/patch/delete) 는 그대로 gate 유지."
-    - kind: fixed
-      description: "Sharded P0 — PodTemplate merge 를 current template 기반 overlay 로 전환해 EnableServiceLinks 등 미명시 server-default 전체를 보존. mongos Deployment generation 증가 루프를 차단."
-    - kind: fixed
-      description: "ReconcileError=True condition 이 성공 reconcile 후에도 남는 status clear 결함 fix. 성공 상태 업데이트 시 기존 ReconcileError 를 False/ReconcileSucceeded 로 전환."
-    - kind: fixed
-      description: "Sharded P0 — mongos Deployment PodTemplate server-default ping-pong (imagePullPolicy/probe defaults/DNS/restart/scheduler 등) 으로 generation 180k+ 증가 + update conflict 반복. applyDeployment가 기존 server-defaulted PodTemplate 값을 보존하도록 확장."
-    - kind: fixed
-      description: "Sharded P0 — Helm chart bundled CRD drift (5,272 줄 격차) → status 신규 필드 (adminUserCreated/configServerInitialized/shardsInitialized/shardsAdded) 가 K8s API server 에 의해 silently drop 되어 reconcile flag 영구 empty + addShards index-out-of-range panic. CRD 자동 sync (manifests → sync-crds) + reconcileAddShards length 가드 추가."
-    - kind: fixed
-      description: "Sharded P0 — applyDeployment server-default ping-pong (mongos Deployment generation 116k+ 무한 fight 해소; RevisionHistoryLimit/ProgressDeadlineSeconds nil-guard) [v1.4.2]"
-    - kind: fixed
-      description: "Sharded P1 #3 — HPA informer cache timeout fix (SetupWithManager Owns에 HorizontalPodAutoscaler 추가, RS controller와 동일하게 정렬)"
-    - kind: fixed
-      description: "Sharded P1 #1 — HPA reconcile은 ConfigServer/Shards rs.initiate 완료 후 실행 (HPA가 crashloop pod metric을 sample하던 결함)"
-    - kind: fixed
-      description: "Sharded P1 #2 — Status.Mongos/ConfigServer Total은 HPA active 시 obj.Spec.Replicas, inactive 시 CR.Spec을 source-of-truth로 분기 (24h soak divergence 해소)"
+      description: "reconcile 정확성 14건 — Get 에러 NotFound 미구분, Spec→Status update 순서, UpgradeStartTime 덮어쓰기, IsValidUpgradePath 정렬 미보장, JWKS 비-EOF 오류 무시, federation status update silent 무시, insights Gauge 오용, sharding compound key 순서 등."
+    - kind: security
+      description: "exporter secret URI 의 username 무검증 + 패스워드 URL 미인코딩 fix(ok-idiom + url.UserPassword). PSA restricted 위반(volume permissions init RunAsUser=0+CHOWN / queryable StatefulSet SecurityContext 누락) → restricted helper 적용."
+    - kind: security
+      description: "webhook backup type=s3 인데 S3 config nil 일 때 검증 통과하던 결함 fix(field.Required). audit 의 사용자 CRD 필드 YAML 비이스케이프 삽입 → sigs.k8s.io/yaml Marshal 안전 인코딩."
+    - kind: security
+      description: "bitnami/kubectl:latest 이미지 제거 → registry.k8s.io/kubectl:v1.31.0(불변 태그 + 공급망 정책 정합)."
     - kind: changed
-      description: "features.sharded.enabled 기본값 false → true (베타 carve-out 종료)"
-    - kind: fixed
-      description: Helm repository URL과 GHCR image owner를 keiailab로 정정 (이전 publish 경로 복구)
-    - kind: added
-      description: HorizontalPodAutoscaler 자동화 — RS/cfg/mongos 이중 가드 + drift 방지 + status 노출
-    - kind: added
-      description: PodDisruptionBudget automation for MongoDB ReplicaSet and MongoDBSharded (opt-in)
-    - kind: added
-      description: NetworkPolicy automation with deny-by-default + additional ingress peers (opt-in)
-    - kind: added
-      description: MongoDBSharded Scale-in via removeShard with ShardDraining condition + resource cleanup
-    - kind: added
-      description: envtest-based controller integration regression suite
-    - kind: changed
-      description: Bootstrap admin user is race-free via Kubernetes Lease distributed lock + post-bootstrap usersInfo verify
-    - kind: changed
-      description: Auth error detection migrated to typed mongo.ServerError (HasErrorCode 13/18/11000/51003) with message fallback
-    - kind: changed
-      description: Self-managed createOrUpdate replaced with controllerutil.CreateOrUpdate(mutateFn) — eliminates Spec drift on partial mutations
-    - kind: fixed
-      description: ReconcileError condition no longer accumulates on repeated failures
-    - kind: fixed
-      description: updateStatus no longer silently skips primary probe errors — surfaces PrimaryUnreachable condition
-    - kind: fixed
-      description: isClusterReady rejects partial-status and zero-spec configurations
+      description: "운영 로그 기본값 production(JSON, zap Development:false), 죽은 코드 제거(okFloat/hasRegionStatus), HTTP transport 유휴연결 누수 정리."
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager

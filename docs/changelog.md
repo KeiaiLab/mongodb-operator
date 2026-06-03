@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] — 2026-06-03
+
+클린코드 점검(8개 모듈 적대적 검증, golangci-lint 0 issues 상태)에서 확정한 결함 29건 전체 적용 + 백업 검증 실 구현. 5개 스택 PR(#296~#300) 머지.
+
+### Added
+
+- **백업 검증 실 구현** (#3): `MongoDBBackupVerification` 의 `Verifying` 단계가 복원 대상(`<backupRef>-backup-uri` connectionString)에 실제 연결하여 `SampleQueries` 의 문서 수가 `MinExpectedDocs` 이상인지 검증. 기존 STUB(쿼리 미실행, `allPassed` 항상 true)에서 실 `CountDocuments` 기반 판정으로 전환. `internal/mongodb.NewClientFromURI` 추가, `docCounter` 인터페이스로 단위 테스트 4건 추가.
+
+### Fixed
+
+- **[CRITICAL] BuildRestoreJob nil panic**: `backup.Spec.Restore` 를 nil 가드 없이 역참조해 일반 백업 verify 시 controller panic/CrashLoop. 시그니처 `(*batchv1.Job, error)` + nil 가드 + 호출처 2곳 에러 처리.
+- **updateStatusWithRetry status 유실**: conflict 시 `c.Get` refetch 가 호출자 status mutation 을 덮어써 silent 유실. variadic `mutate ...func()` 재적용 패턴, 호출처 42곳 마이그레이션.
+- **reconcile 정확성 14건**: Get 에러 NotFound 미구분(sharded backup), Spec→Status update 순서(rollback), `UpgradeStartTime` 덮어쓰기, `IsValidUpgradePath` 정렬 미보장, JWKS 비-EOF 오류 무시, federation `Status().Update` silent 무시, insights `GaugeVec` 에 `Inc()` 오용, `ShardCollection` compound key 순서 비결정, `FetchShardedProfiles` 부분실패 `(nil,nil)`, `detectSchemaHints` DB+Collection 연결충돌, `extractNS` Detail 파싱 실패(→ 구조화 필드), `probeTLSEndpoint` transport 누수, `areAllPodsReady` Members=0 오판, configdb 연결문자열 중복.
+
+### Security
+
+- **exporter secret**: URI 의 username 무검증 + 패스워드 URL 미인코딩 → ok-idiom + `url.UserPassword`.
+- **PSA restricted 위반**: volume permissions init container(RunAsUser=0+CHOWN) / queryable StatefulSet SecurityContext 누락 → restricted helper 적용 + fsGroup 위임.
+- **webhook**: backup `type=s3` 인데 S3 config nil 일 때 검증 통과 → `field.Required`.
+- **audit**: 사용자 CRD 필드 YAML 비이스케이프 삽입 → `sigs.k8s.io/yaml` Marshal.
+- **공급망**: `bitnami/kubectl:latest` → `registry.k8s.io/kubectl:v1.31.0` (불변 태그, ADR-0136 정합).
+
+### Changed
+
+- 운영 로그 기본값 production(JSON, zap `Development:false`).
+- 죽은 코드 제거(`okFloat`, `hasRegionStatus`), HTTP transport 유휴연결 누수 정리(`ProbeOIDC`).
+
 ## [1.10.2] — 2026-05-28
 
 ### Fixed
