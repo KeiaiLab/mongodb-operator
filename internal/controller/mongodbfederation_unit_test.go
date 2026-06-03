@@ -35,16 +35,16 @@ func TestComputeFederationPhase(t *testing.T) {
 	}
 }
 
-func TestHasRegionStatus(t *testing.T) {
+func TestIndexOfRegion(t *testing.T) {
 	t.Parallel()
 	statuses := []mongodbv1alpha1.FederationRegionStatus{
 		{Name: "us-west", Phase: "Synced"},
 		{Name: "eu-central", Phase: "Pending"},
 	}
-	if !hasRegionStatus(statuses, "us-west") {
-		t.Errorf("us-west must be found")
+	if indexOfRegion(statuses, "us-west") != 0 {
+		t.Errorf("us-west must be at index 0")
 	}
-	if hasRegionStatus(statuses, "ap-south") {
+	if indexOfRegion(statuses, "ap-south") >= 0 {
 		t.Errorf("ap-south must not be found")
 	}
 }

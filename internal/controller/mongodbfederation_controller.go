@@ -56,8 +56,7 @@ func (r *MongoDBFederationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	// 신규 region 은 Pending 상태로 status 에 ensure + cycle 17 cross-cluster
 	// propagation 실행. propagateRegionMongoDB 가 *remote K8s API 에 실제* GET 호출.
-	for i, region := range fed.Spec.Regions {
-		_ = i
+	for _, region := range fed.Spec.Regions {
 		idx := indexOfRegion(fed.Status.RegionStatuses, region.Name)
 		if idx < 0 {
 			fed.Status.RegionStatuses = append(fed.Status.RegionStatuses, mongodbv1alpha1.FederationRegionStatus{
@@ -93,10 +92,6 @@ func (r *MongoDBFederationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		"regions", len(fed.Spec.Regions),
 		"phase", fed.Status.Phase)
 	return ctrl.Result{}, nil
-}
-
-func hasRegionStatus(statuses []mongodbv1alpha1.FederationRegionStatus, name string) bool {
-	return indexOfRegion(statuses, name) >= 0
 }
 
 // indexOfRegion — region name 의 index 또는 -1.

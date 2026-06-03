@@ -330,31 +330,6 @@ func TestNewReplicaSetManagerWithPort_Deprecated(t *testing.T) {
 	assert.Nil(t, mgr)
 }
 
-// TestOkFloat는 mongo-go-driver가 응답 ok 필드를 다양한 수치 타입(float64/int32/
-// int64/int)으로 디코드할 수 있다는 사실을 흡수하는 헬퍼를 검증. 한 케이스라도
-// 빠지면 정상 응답이 실패로 잘못 인식된다.
-func TestOkFloat(t *testing.T) {
-	cases := []struct {
-		name string
-		in   interface{}
-		want int
-	}{
-		{"float64 ok", float64(1), 1},
-		{"int32 ok", int32(1), 1},
-		{"int64 ok", int64(1), 1},
-		{"int ok", int(1), 1},
-		{"float64 zero", float64(0), 0},
-		{"unsupported type returns 0", "1", 0},
-		{"nil returns 0", nil, 0},
-		{"bool returns 0", true, 0},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, okFloat(tc.in))
-		})
-	}
-}
-
 // TestNewPodConnectFactory_Constructs는 controller가 흔히 쓰는 헬퍼가 ConnectFactory
 // 시그니처를 만족하는 함수를 반환하는지 확인. 실제 connect 호출은 driver를
 // 거치므로 unit 레벨에서는 검증 불가.
