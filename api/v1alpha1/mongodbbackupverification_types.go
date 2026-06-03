@@ -32,6 +32,13 @@ type MongoDBBackupVerificationSpec struct {
 	// false 시 사용자가 수동 inspect 가능.
 	// +kubebuilder:default=true
 	CleanupOnSuccess bool `json:"cleanupOnSuccess,omitempty"`
+
+	// Queryable — 활성 시 검증과 함께 *장기 read-only mongod instance* 를 생성하여
+	// 백업을 ad-hoc 조회 가능하게 한다 (ROADMAP §3.1.1). Enabled 기본 false (opt-in)
+	// 이므로 명시 활성 시에만 instance 가 생성된다. instance 데이터 복원 drill 은
+	// 후속 운영 강화 (ROADMAP §3.1.1 deferred) — 본 단계는 구조적 instance 생성.
+	// +optional
+	Queryable *QueryableBackupSpec `json:"queryable,omitempty"`
 }
 
 // VerificationQuery — 한 sanity check.
@@ -70,6 +77,11 @@ type MongoDBBackupVerificationStatus struct {
 	// QueryResults 각 SampleQueries 의 row count + pass/fail.
 	// +optional
 	QueryResults []VerificationQueryResult `json:"queryResults,omitempty"`
+
+	// QueryableInstance — Spec.Queryable 활성 시 생성된 read-only mongod
+	// StatefulSet 이름. 데이터 복원 drill 은 후속 (ROADMAP §3.1.1 deferred).
+	// +optional
+	QueryableInstance string `json:"queryableInstance,omitempty"`
 
 	// Error 실패 사유.
 	// +optional

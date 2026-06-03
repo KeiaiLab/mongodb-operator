@@ -148,7 +148,7 @@
 
 ### 3.1 고급 백업 기능
 #### 3.1.1 쿼리 가능한 백업
-- [~] 백업 → 읽기 전용 MongoDB 인스턴스 복원 controller — `BackupSpec.Queryable` 필드 + `BuildQueryableStatefulSet` (`internal/resources/builder.go`) 정의 완료. 단 verification reconcile loop 에서 미호출 (실측 2026-06-03) — read-only StatefulSet 자동 생성 통합 후속. cycle 9 F46
+- [x] 백업 → 읽기 전용 MongoDB 인스턴스 복원 controller — `MongoDBBackupVerification.Spec.Queryable` (`QueryableBackupSpec`) 활성 시 verification controller 가 `BuildQueryableStatefulSet` 으로 read-only mongod (1 member) 자동 생성 + `Status.QueryableInstance` 표면화 (owner-ref → CR GC, opt-in `Enabled` 기본 false) — cycle 9 F46 (실측 2026-06-03). *데이터 복원 drill (mongorestore → instance) 은 후속 운영 강화.*
 - [x] 백업 데이터 검증 + 쿼리 API — `MongoDBBackupVerification` CRD `Spec.SampleQueries` + `Status.QueryResults` — cycle 9 F47
 - [x] e2e (`test/e2e/queryable_backup_test.go` 신규) — verification API path stub — cycle 9 (실 mongod restore drill 은 cycle 11+ 운영 보강)
 
@@ -307,6 +307,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 | Date | Change | Refs |
 |---|---|---|
+| 2026-06-03 | §3.1.1 QueryableBackup [~]→[x] — verification controller 가 Spec.Queryable 활성 시 BuildQueryableStatefulSet 으로 read-only mongod 자동 생성 + Status.QueryableInstance. 데이터 복원 drill 후속. | (queryable-backup-wiring) |
 | 2026-06-03 | dead-code 통합 — §3.2 UnusedIndex [~]→[x] (fetcher $indexStats 수집 + runAnalysis 통합) + Level V Auto Pilot A등급(PlanMissingIndexActions/PlanSlowQueryHints) → MongoDBInsights Status.AutoPilotActions advisory(DryRun) 배선. generated deepcopy/RBAC 동기화 동반. | #281 #282 #283 |
 | 2026-06-03 | ROADMAP drift 8건 정정 — 코드 실측 검증(workflow 7-agent) 후: §3.2 프로파일링(MongoDB kind)·MissingIndex [~]→[x], §3.2 UnusedIndex 분리 + MongoDBSharded 프로파일링 [ ] 분해, §3.1.1 QueryableBackup [x]→[~] (builder 미통합), §5.4(a) KMS [x] + 경로정정(`internal/controller/encryption/`), §5.6 i18n·ArtifactHub·RBAC cleanup [x], Level V Auto Pilot(#269) 등재. i18n {ko,ja,zh} 재동기는 후속. | drift-correction workflow |
 | 2026-05-17 | OLM v1 only 전환 ([x]) — v0 cluster path (`deploy/olm/`) + community-operators sync 자동화 영구 폐기. INSTALL 3-path → 2-path matrix. FBC catalog `deploy/olm/catalog/` → `deploy/catalog/` 이동. bundle/ 유지 (v1 ClusterCatalog backing). | ADR-0028 Phase D, PR #173 |
