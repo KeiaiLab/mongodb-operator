@@ -120,6 +120,38 @@ func NewClient(ctx context.Context, opts ConnectOpts) (*mongo.Client, error) {
 	return client, nil
 }
 
+// NewClientFromURI는 이미 조립된 완전한 mongodb:// URI(자격증명 포함)로 client를
+// 만들고 ping까지 검증한다. backup connectionString 처럼 secret에 저장된 URI를
+// 그대로 사용하는 경로(백업 검증 등)에서 쓴다. 호출자는 defer client.Disconnect.
+func NewClientFromURI(ctx context.Context, uri string, timeout time.Duration) (*mongo.Client, error) {
+	if uri == "" {
+		return nil, fmt.Errorf("mongodb URI 비어있음")
+	}
+	if timeout == 0 {
+		timeout = 10 * time.Second
+	}
+
+	clientOpts := options.Client().
+		ApplyURI(uri).
+		SetConnectTimeout(timeout).
+		SetServerSelectionTimeout(timeout).
+		SetRetryReads(true)
+
+	client, err := mongo.Connect(clientOpts)
+	if err != nil {
+		return nil, fmt.Errorf("mongo.Connect(URI) 실패: %w", err)
+	}
+
+	pingCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	if err := client.Ping(pingCtx, readpref.Primary()); err != nil {
+		_ = client.Disconnect(context.Background())
+		return nil, fmt.Errorf("mongo Ping 실패: %w", err)
+	}
+
+	return client, nil
+}
+
 // GetPodFQDN returns the fully qualified domain name for a pod within a
 // StatefulSet headless service.
 func GetPodFQDN(podName, serviceName, namespace string, port int) string {
