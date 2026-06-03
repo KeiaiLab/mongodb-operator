@@ -87,11 +87,11 @@ spec:
 	}
 
 	for _, r := range rules {
-		sb.WriteString(fmt.Sprintf("    - alert: %s\n", r.alert))
-		sb.WriteString(fmt.Sprintf("      expr: %s\n", r.expr))
+		fmt.Fprintf(&sb, "    - alert: %s\n", r.alert)
+		fmt.Fprintf(&sb, "      expr: %s\n", r.expr)
 		sb.WriteString("      for: 5m\n")
-		sb.WriteString(fmt.Sprintf("      labels:\n        severity: %s\n", r.severity))
-		sb.WriteString(fmt.Sprintf("      annotations:\n        summary: \"%s\"\n", r.summary))
+		fmt.Fprintf(&sb, "      labels:\n        severity: %s\n", r.severity)
+		fmt.Fprintf(&sb, "      annotations:\n        summary: \"%s\"\n", r.summary)
 	}
 	return sb.String()
 }

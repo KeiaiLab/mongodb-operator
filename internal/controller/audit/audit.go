@@ -103,7 +103,7 @@ func PrometheusRulesYAML(specName string, spec *mongodbv1alpha1.AuditLogSpec) st
 	}
 	var sb strings.Builder
 	sb.WriteString("apiVersion: monitoring.coreos.com/v1\nkind: PrometheusRule\n")
-	sb.WriteString(fmt.Sprintf("metadata:\n  name: %s-audit\nspec:\n  groups:\n  - name: audit\n    rules:\n", specName))
+	fmt.Fprintf(&sb, "metadata:\n  name: %s-audit\nspec:\n  groups:\n  - name: audit\n    rules:\n", specName)
 	for _, rule := range spec.AlertRules {
 		severity := rule.Severity
 		if severity == "" {
@@ -113,10 +113,10 @@ func PrometheusRulesYAML(specName string, spec *mongodbv1alpha1.AuditLogSpec) st
 		if threshold <= 0 {
 			threshold = 10
 		}
-		sb.WriteString(fmt.Sprintf("    - alert: %s\n", rule.Name))
-		sb.WriteString(fmt.Sprintf("      expr: rate(mongodb_audit_events_total{atype=%q}[5m]) > %d\n", rule.EventType, threshold))
-		sb.WriteString(fmt.Sprintf("      labels:\n        severity: %s\n", severity))
-		sb.WriteString(fmt.Sprintf("      annotations:\n        summary: \"%s threshold exceeded\"\n", rule.EventType))
+		fmt.Fprintf(&sb, "    - alert: %s\n", rule.Name)
+		fmt.Fprintf(&sb, "      expr: rate(mongodb_audit_events_total{atype=%q}[5m]) > %d\n", rule.EventType, threshold)
+		fmt.Fprintf(&sb, "      labels:\n        severity: %s\n", severity)
+		fmt.Fprintf(&sb, "      annotations:\n        summary: \"%s threshold exceeded\"\n", rule.EventType)
 	}
 	return sb.String()
 }
