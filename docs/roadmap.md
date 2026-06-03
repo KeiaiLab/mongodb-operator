@@ -32,7 +32,7 @@
 - [x] PVC online resize — `internal/controller/pvc_resize.go`
 - [x] Bootstrap race-free (K8s Lease 분산락) — `internal/controller/bootstrap_lease.go`
 - [x] PodDisruptionBudget 자동화 — `internal/controller/resources_apply.go` (PDB 분기)
-- [x] Level V Auto Pilot — A등급 5건 (HPA gate / webhook validation / PlanMissingIndexActions / PlanSlowQueryHints / DetectLaggingMembers) 구현 + 21 unit test (#269, 실측 2026-06-03). *B등급 9건 (DecideShardScaling / DecideOplogWindowScaling / FilterCrashLoopPods / PlanPVCExpansion / DetectTrafficSpike / DetectAuthFailureSpike 등) 은 순수 함수 + 테스트 완성, reconcile loop 연결은 후속 (Phase 5 — Auto Pilot 통합).*
+- [x] Level V Auto Pilot — A등급 5건 (HPA gate / webhook validation / PlanMissingIndexActions / PlanSlowQueryHints / DetectLaggingMembers) 구현 + 21 unit test (#269). `PlanMissingIndexActions`/`PlanSlowQueryHints` 는 MongoDBInsights `Status.AutoPilotActions` 로 advisory(DryRun 기본=표면화만) reconcile 통합 — #283 (실측 2026-06-03). *B등급 9건 (DecideShardScaling / DecideOplogWindowScaling / FilterCrashLoopPods / PlanPVCExpansion / DetectTrafficSpike / DetectAuthFailureSpike) 은 순수 함수 + 테스트 완성, 입력 수집(shard dist / oplog / connections / pod state) + reconcile 연결은 후속.*
 
 ### 강점 (재확인용)
 - Kubernetes 네이티브 (CRD + Operator 패턴)
@@ -166,7 +166,7 @@
 - [x] 쿼리 프로파일링 자동 분석 (MongoDB kind) — `ProfilingLevel` + `SlowQueryThresholdMs` + `SampleSize` + `AnalysisInterval` 필드 + reconciler 가 `internal/insights/ProfileFetcher` 경유 system.profile 수집 → `insights.Analyze` 호출. `applyProfilingLevel` (`fetcher.go`) listDatabases→per-DB profile command 동적 설정 + `runAnalysis` 통합 완료 — cycle 7 F52 / cycle 9 P1 (실측 2026-06-03).
 - [ ] MongoDBSharded per-shard 프로파일링 — 현재 `fetcher.go` 에서 sharded skip. mongos 아닌 config + 각 shard RS 로 profile command fan-out 필요.
 - [x] MissingIndex 추천 엔진 — `internal/insights/analyzer.go` `detectMissingIndexes` (COLLSCAN + examined/returned ratio + ESR 힌트) + 다수 unit test + reconciler `runAnalysis` 통합 (`mongodbinsights_controller.go`) — cycle 7 F53 / cycle 9 P1 (실측 2026-06-03).
-- [~] UnusedIndex 추천 — `AnalyzeIndexUsage` (`$indexStats` 기반, `analyzer.go`) + 4 unit test 완성. 단 fetcher 의 `$indexStats` 수집 + `runAnalysis` 호출 + `auto_action` 처리 미연결 (dead code, 실측 2026-06-03) — reconcile 통합 후속.
+- [x] UnusedIndex 추천 — `AnalyzeIndexUsage` (`$indexStats` 기반, `analyzer.go`) + 4 unit test + fetcher `collectIndexStats`/`FetchIndexStats` ($indexStats 수집) + `runAnalysis` 통합 (index stats 실패는 비치명) — #281 (실측 2026-06-03).
 - [x] 느린 쿼리 감지 + 경고 — `Recommendation.Type=SlowQueryPattern` + `Severity` + `AvgLatencyMs` + `QuerySamples[]` — cycle 7 F54
 - [x] 스키마 디자인 제안 — `Recommendation.Type=SchemaHint` + `Detail` 자유 텍스트 — cycle 7 F55
 - Verify: `kubectl get mongodbinsights <name> -o yaml` 의 `.status.recommendations` 비어있지 않음 — cycle 9 분석 엔진 후
@@ -307,6 +307,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 | Date | Change | Refs |
 |---|---|---|
+| 2026-06-03 | dead-code 통합 — §3.2 UnusedIndex [~]→[x] (fetcher $indexStats 수집 + runAnalysis 통합) + Level V Auto Pilot A등급(PlanMissingIndexActions/PlanSlowQueryHints) → MongoDBInsights Status.AutoPilotActions advisory(DryRun) 배선. generated deepcopy/RBAC 동기화 동반. | #281 #282 #283 |
 | 2026-06-03 | ROADMAP drift 8건 정정 — 코드 실측 검증(workflow 7-agent) 후: §3.2 프로파일링(MongoDB kind)·MissingIndex [~]→[x], §3.2 UnusedIndex 분리 + MongoDBSharded 프로파일링 [ ] 분해, §3.1.1 QueryableBackup [x]→[~] (builder 미통합), §5.4(a) KMS [x] + 경로정정(`internal/controller/encryption/`), §5.6 i18n·ArtifactHub·RBAC cleanup [x], Level V Auto Pilot(#269) 등재. i18n {ko,ja,zh} 재동기는 후속. | drift-correction workflow |
 | 2026-05-17 | OLM v1 only 전환 ([x]) — v0 cluster path (`deploy/olm/`) + community-operators sync 자동화 영구 폐기. INSTALL 3-path → 2-path matrix. FBC catalog `deploy/olm/catalog/` → `deploy/catalog/` 이동. bundle/ 유지 (v1 ClusterCatalog backing). | ADR-0028 Phase D, PR #173 |
 | 2026-05-17 | 사실 정정 — §3.2 (MongoDBInsights cycle 9 P1 적용 완료, [x]→[~]) + §4.3 (builder merge cycle 14 적용 완료) + §4.5 (VolumePermissions cycle 13 적용 완료). 코드-문서 정합. | dev cycle C — Goal-Driven 자율 |
