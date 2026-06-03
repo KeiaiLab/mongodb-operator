@@ -13,6 +13,12 @@ import (
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
+// Severity 등급 상수 (goconst — "warning"/"critical" 다중 등장 통일).
+const (
+	severityWarning  = "warning"
+	severityCritical = "critical"
+)
+
 // AnomalyAlert describes a detected anomaly.
 type AnomalyAlert struct {
 	Type     string // "TrafficSpike" | "AuthFailureSpike"
@@ -40,9 +46,9 @@ func DetectTrafficSpike(currentConns, baselineConns float64, spec *mongodbv1alph
 	if currentConns <= threshold {
 		return nil
 	}
-	severity := "warning"
+	severity := severityWarning
 	if currentConns > threshold*2 {
-		severity = "critical"
+		severity = severityCritical
 	}
 	return &AnomalyAlert{
 		Type:     "TrafficSpike",
@@ -66,9 +72,9 @@ func DetectAuthFailureSpike(failuresPerMin float64, spec *mongodbv1alpha1.Anomal
 	if failuresPerMin <= float64(thresh) {
 		return nil
 	}
-	severity := "warning"
+	severity := severityWarning
 	if failuresPerMin > float64(thresh)*5 {
-		severity = "critical"
+		severity = severityCritical
 	}
 	return &AnomalyAlert{
 		Type:     "AuthFailureSpike",

@@ -27,9 +27,11 @@ jobs:
         with:
           version: latest
           args: --timeout=10m
-          # Legacy code in main has ~20 `goconst` violations.
-          # only-new-issues=true makes PRs gate on *new* violations only;
-          # a follow-up PR will clean up the historical ones.
+          # 2026-06-03: historical lint debt cleared — `golangci-lint run ./...`
+          # reports 0 violations (last `goconst` resolved via severity constants).
+          # only-new-issues kept as deliberate policy: with version=latest, a linter
+          # upgrade could flag pre-existing code; gating only on *new* issues keeps
+          # contributor PRs from breaking on unrelated legacy findings.
           only-new-issues: true
 
   test:
