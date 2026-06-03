@@ -126,19 +126,24 @@ func applyErrorCondition(
 			"Failed to reconcile %s- %v", component, reconcileErr)
 	}
 
-	obj.SetPhase("Failed")
 	// iteration 33 (ADR-0013): K8s convention 정합 — upstream meta.SetStatusCondition
 	// 이 LastTransitionTime 을 *Status 변경 시만* 갱신. 이전 인라인 filter+append +
 	// LastTransitionTime=Now 패턴은 *매 reconcile cycle 마다 false transition* 유발 —
 	// Prometheus / Grafana 의 condition_age 메트릭 부정확. upstream 위임으로 정합.
-	meta.SetStatusCondition(obj.GetConditions(), metav1.Condition{
-		Type:    conditionTypeReconcileError,
-		Status:  metav1.ConditionTrue,
-		Reason:  mongodbv1alpha1.ReasonReconcileFailed,
-		Message: fmt.Sprintf("Failed to reconcile %s- %v", component, reconcileErr),
-	})
+	//
+	// PR-2: status mutation 을 클로저로 감싸 conflict 재시도 시 Get 후 재실행되도록 한다.
+	applyStatus := func() {
+		obj.SetPhase("Failed")
+		meta.SetStatusCondition(obj.GetConditions(), metav1.Condition{
+			Type:    conditionTypeReconcileError,
+			Status:  metav1.ConditionTrue,
+			Reason:  mongodbv1alpha1.ReasonReconcileFailed,
+			Message: fmt.Sprintf("Failed to reconcile %s- %v", component, reconcileErr),
+		})
+	}
+	applyStatus()
 
-	if statusErr := updateStatusWithRetry(ctx, c, obj); statusErr != nil {
+	if statusErr := updateStatusWithRetry(ctx, c, obj, applyStatus); statusErr != nil {
 		logger.Error(statusErr, "Failed to update status")
 	}
 	return ctrl.Result{RequeueAfter: requeueSteady}, reconcileErr

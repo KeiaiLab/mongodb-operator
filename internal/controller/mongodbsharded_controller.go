@@ -108,8 +108,11 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Update status phase to Initializing if pending
 	if mdbsh.Status.Phase == "" || mdbsh.Status.Phase == mongodbv1alpha1.ShardedPhasePending {
-		mdbsh.Status.Phase = mongodbv1alpha1.ShardedPhaseInitializing
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
+		setInitializing := func() {
+			mdbsh.Status.Phase = mongodbv1alpha1.ShardedPhaseInitializing
+		}
+		setInitializing()
+		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, setInitializing); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -166,10 +169,13 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// 6.1. Transition to Validating after all components updated
 	if mdbsh.Status.UpgradePhase == UpgradePhaseUpgrading {
-		mdbsh.Status.UpgradePhase = UpgradePhaseValidating
-		now := metav1.Now()
-		mdbsh.Status.UpgradeStartTime = &now
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
+		setValidating := func() {
+			mdbsh.Status.UpgradePhase = UpgradePhaseValidating
+			now := metav1.Now()
+			mdbsh.Status.UpgradeStartTime = &now
+		}
+		setValidating()
+		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, setValidating); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{RequeueAfter: parseValidationInterval(mdbsh.Spec.UpgradeStrategy)}, nil
@@ -423,8 +429,11 @@ func (r *MongoDBShardedReconciler) reconcileConfigServerInit(ctx context.Context
 
 	if initialized {
 		logger.Info("Config server replica set already initialized")
-		mdbsh.Status.ConfigServerInitialized = true
-		return updateStatusWithRetry(ctx, r.Client, mdbsh)
+		setConfigServerInitialized := func() {
+			mdbsh.Status.ConfigServerInitialized = true
+		}
+		setConfigServerInitialized()
+		return updateStatusWithRetry(ctx, r.Client, mdbsh, setConfigServerInitialized)
 	}
 
 	// Build config server replica set configuration
@@ -445,8 +454,11 @@ func (r *MongoDBShardedReconciler) reconcileConfigServerInit(ctx context.Context
 	}
 
 	logger.Info("Config server replica set initialized successfully")
-	mdbsh.Status.ConfigServerInitialized = true
-	return updateStatusWithRetry(ctx, r.Client, mdbsh)
+	markConfigServerInitialized := func() {
+		mdbsh.Status.ConfigServerInitialized = true
+	}
+	markConfigServerInitialized()
+	return updateStatusWithRetry(ctx, r.Client, mdbsh, markConfigServerInitialized)
 }
 
 func (r *MongoDBShardedReconciler) reconcileShardsInit(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
@@ -522,7 +534,11 @@ func (r *MongoDBShardedReconciler) reconcileShardsInit(ctx context.Context, mdbs
 
 	// 부분 진행 상태(Initialized 슬라이스)는 항상 status에 반영. status update 자체가
 	// 실패해도 shard 실패가 우선이므로 errors.Join으로 묶어 호출자에게 전달.
-	statusErr := updateStatusWithRetry(ctx, r.Client, mdbsh)
+	// conflict refetch 가 누적 슬라이스를 덮어쓰지 않도록 스냅샷을 재적용한다.
+	initializedSnapshot := append([]bool(nil), mdbsh.Status.ShardsInitialized...)
+	statusErr := updateStatusWithRetry(ctx, r.Client, mdbsh, func() {
+		mdbsh.Status.ShardsInitialized = initializedSnapshot
+	})
 	if len(shardErrs) > 0 {
 		return stderrors.Join(append(shardErrs, statusErr)...)
 	}
@@ -560,8 +576,11 @@ func (r *MongoDBShardedReconciler) reconcileShardedAdminUser(ctx context.Context
 	}
 
 	logger.Info("Admin user verified (created by mongos pod bootstrap)")
-	mdbsh.Status.AdminUserCreated = true
-	return updateStatusWithRetry(ctx, r.Client, mdbsh)
+	setAdminUserCreated := func() {
+		mdbsh.Status.AdminUserCreated = true
+	}
+	setAdminUserCreated()
+	return updateStatusWithRetry(ctx, r.Client, mdbsh, setAdminUserCreated)
 }
 
 func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
@@ -634,7 +653,11 @@ func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh
 		mdbsh.Status.ShardsAdded[i] = true
 	}
 
-	statusErr := updateStatusWithRetry(ctx, r.Client, mdbsh)
+	// conflict refetch 가 누적 슬라이스를 덮어쓰지 않도록 스냅샷을 재적용한다.
+	addedSnapshot := append([]bool(nil), mdbsh.Status.ShardsAdded...)
+	statusErr := updateStatusWithRetry(ctx, r.Client, mdbsh, func() {
+		mdbsh.Status.ShardsAdded = addedSnapshot
+	})
 	if len(addErrs) > 0 {
 		return stderrors.Join(append(addErrs, statusErr)...)
 	}
@@ -742,19 +765,23 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 	}
 
 	// Set connection string
-	mdbsh.Status.ConnectionString = fmt.Sprintf("mongodb://%s-mongos.%s.svc.cluster.local:27017",
-		mdbsh.Name, mdbsh.Namespace)
+	// status 계산을 클로저로 묶어 conflict refetch 후에도 재적용한다.
+	applyStatus := func() {
+		mdbsh.Status.ConnectionString = fmt.Sprintf("mongodb://%s-mongos.%s.svc.cluster.local:27017",
+			mdbsh.Name, mdbsh.Namespace)
 
-	mdbsh.Status.ObservedGeneration = mdbsh.Generation
-	mdbsh.Status.Conditions = clearReconcileErrorCondition(mdbsh.Status.Conditions, mdbsh.Generation)
+		mdbsh.Status.ObservedGeneration = mdbsh.Generation
+		mdbsh.Status.Conditions = clearReconcileErrorCondition(mdbsh.Status.Conditions, mdbsh.Generation)
 
-	// C37 (ADR-0013 helpers.go SetStatusCondition 활용): operational visibility
-	// 격차 해소 — valkey/postgres 의 풍부한 conditions 패턴 차용.
-	// evaluateShardedConditions pure function 추출로 isolated unit test 가능.
-	for _, c := range evaluateShardedConditions(mdbsh, ready) {
-		meta.SetStatusCondition(&mdbsh.Status.Conditions, c)
+		// C37 (ADR-0013 helpers.go SetStatusCondition 활용): operational visibility
+		// 격차 해소 — valkey/postgres 의 풍부한 conditions 패턴 차용.
+		// evaluateShardedConditions pure function 추출로 isolated unit test 가능.
+		for _, c := range evaluateShardedConditions(mdbsh, ready) {
+			meta.SetStatusCondition(&mdbsh.Status.Conditions, c)
+		}
 	}
-	return updateStatusWithRetry(ctx, r.Client, mdbsh)
+	applyStatus()
+	return updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus)
 }
 
 // evaluateShardedConditions — pure function. *side effect 0*. updateStatus 가

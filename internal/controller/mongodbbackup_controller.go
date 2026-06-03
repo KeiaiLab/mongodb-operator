@@ -101,9 +101,12 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// Restoring 유지.
 	if backup.Spec.Restore != nil {
 		if backup.Status.Phase == "" || backup.Status.Phase == backupPhasePending {
-			backup.Status.Phase = backupPhaseRestoring
-			backup.Status.StartTime = &metav1.Time{Time: time.Now()}
-			if err := updateStatusWithRetry(ctx, r.Client, backup); err != nil {
+			applyRestoringStatus := func() {
+				backup.Status.Phase = backupPhaseRestoring
+				backup.Status.StartTime = &metav1.Time{Time: time.Now()}
+			}
+			applyRestoringStatus()
+			if err := updateStatusWithRetry(ctx, r.Client, backup, applyRestoringStatus); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -132,9 +135,12 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Update status to Running if not set
 	if backup.Status.Phase == "" {
-		backup.Status.Phase = backupPhasePending
-		backup.Status.StartTime = &metav1.Time{Time: time.Now()}
-		if err := updateStatusWithRetry(ctx, r.Client, backup); err != nil {
+		applyPendingStatus := func() {
+			backup.Status.Phase = backupPhasePending
+			backup.Status.StartTime = &metav1.Time{Time: time.Now()}
+		}
+		applyPendingStatus()
+		if err := updateStatusWithRetry(ctx, r.Client, backup, applyPendingStatus); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -286,46 +292,54 @@ func (r *MongoDBBackupReconciler) updateBackupStatus(ctx context.Context, backup
 		return err
 	}
 
-	// Check job conditions
-	for _, condition := range job.Status.Conditions {
-		if condition.Type == batchv1.JobComplete && condition.Status == corev1.ConditionTrue {
-			backup.Status.Phase = backupPhaseCompleted
-			backup.Status.CompletionTime = condition.LastTransitionTime.DeepCopy()
-			break
+	// 직전 status mutation 들을 클로저로 묶어 conflict 재시도 시에도 동일 적용 보장.
+	// job 은 위에서 한 번 Get 한 값을 그대로 사용한다 (job 상태 자체는 재조회 불필요).
+	applyJobStatus := func() {
+		// Check job conditions
+		for _, condition := range job.Status.Conditions {
+			if condition.Type == batchv1.JobComplete && condition.Status == corev1.ConditionTrue {
+				backup.Status.Phase = backupPhaseCompleted
+				backup.Status.CompletionTime = condition.LastTransitionTime.DeepCopy()
+				break
+			}
+			if condition.Type == batchv1.JobFailed && condition.Status == corev1.ConditionTrue {
+				backup.Status.Phase = backupPhaseFailed
+				backup.Status.Error = condition.Message
+				backup.Status.CompletionTime = condition.LastTransitionTime.DeepCopy()
+				break
+			}
 		}
-		if condition.Type == batchv1.JobFailed && condition.Status == corev1.ConditionTrue {
-			backup.Status.Phase = backupPhaseFailed
-			backup.Status.Error = condition.Message
-			backup.Status.CompletionTime = condition.LastTransitionTime.DeepCopy()
-			break
+
+		// If job is running
+		if job.Status.Active > 0 {
+			backup.Status.Phase = "Running"
+		}
+
+		// Set location based on storage type
+		if backup.Spec.Storage.Type == "s3" && backup.Spec.Storage.S3 != nil {
+			backup.Status.Location = fmt.Sprintf("s3://%s/%s%s",
+				backup.Spec.Storage.S3.Bucket,
+				backup.Spec.Storage.S3.Prefix,
+				backup.Name)
 		}
 	}
+	applyJobStatus()
 
-	// If job is running
-	if job.Status.Active > 0 {
-		backup.Status.Phase = "Running"
-	}
-
-	// Set location based on storage type
-	if backup.Spec.Storage.Type == "s3" && backup.Spec.Storage.S3 != nil {
-		backup.Status.Location = fmt.Sprintf("s3://%s/%s%s",
-			backup.Spec.Storage.S3.Bucket,
-			backup.Spec.Storage.S3.Prefix,
-			backup.Name)
-	}
-
-	return updateStatusWithRetry(ctx, r.Client, backup)
+	return updateStatusWithRetry(ctx, r.Client, backup, applyJobStatus)
 }
 
 func (r *MongoDBBackupReconciler) updateStatusError(ctx context.Context, backup *mongodbv1alpha1.MongoDBBackup, err error) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Error(err, "Backup failed")
 
-	backup.Status.Phase = backupPhaseFailed
-	backup.Status.Error = err.Error()
-	backup.Status.CompletionTime = &metav1.Time{Time: time.Now()}
+	applyFailedStatus := func() {
+		backup.Status.Phase = backupPhaseFailed
+		backup.Status.Error = err.Error()
+		backup.Status.CompletionTime = &metav1.Time{Time: time.Now()}
+	}
+	applyFailedStatus()
 
-	if statusErr := updateStatusWithRetry(ctx, r.Client, backup); statusErr != nil {
+	if statusErr := updateStatusWithRetry(ctx, r.Client, backup, applyFailedStatus); statusErr != nil {
 		logger.Error(statusErr, "Failed to update status")
 	}
 

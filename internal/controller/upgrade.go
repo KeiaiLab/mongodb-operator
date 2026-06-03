@@ -33,9 +33,12 @@ func (r *MongoDBReconciler) reconcileUpgrade(ctx context.Context, mdb *mongodbv1
 
 	if currentVersion == "" || currentVersion == desiredVersion {
 		if mdb.Status.UpgradePhase != "" {
-			mdb.Status.UpgradePhase = ""
-			mdb.Status.UpgradeStartTime = nil
-			if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+			clearUpgrade := func() {
+				mdb.Status.UpgradePhase = ""
+				mdb.Status.UpgradeStartTime = nil
+			}
+			clearUpgrade()
+			if err := updateStatusWithRetry(ctx, r.Client, mdb, clearUpgrade); err != nil {
 				return ctrl.Result{}, false, err
 			}
 		}
@@ -45,17 +48,20 @@ func (r *MongoDBReconciler) reconcileUpgrade(ctx context.Context, mdb *mongodbv1
 	switch mdb.Status.UpgradePhase {
 	case "":
 		logger.Info("upgrade detected", "from", currentVersion, "to", desiredVersion)
-		mdb.Status.PreviousVersion = currentVersion
-		now := metav1.Now()
-		mdb.Status.UpgradeStartTime = &now
+		initUpgrade := func() {
+			mdb.Status.PreviousVersion = currentVersion
+			now := metav1.Now()
+			mdb.Status.UpgradeStartTime = &now
 
-		if mdb.Spec.UpgradeStrategy != nil && mdb.Spec.UpgradeStrategy.PreUpgradeBackup {
-			mdb.Status.UpgradePhase = UpgradePhaseBackingUp
-		} else {
-			mdb.Status.UpgradePhase = UpgradePhaseUpgrading
+			if mdb.Spec.UpgradeStrategy != nil && mdb.Spec.UpgradeStrategy.PreUpgradeBackup {
+				mdb.Status.UpgradePhase = UpgradePhaseBackingUp
+			} else {
+				mdb.Status.UpgradePhase = UpgradePhaseUpgrading
+			}
 		}
+		initUpgrade()
 
-		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+		if err := updateStatusWithRetry(ctx, r.Client, mdb, initUpgrade); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
@@ -106,18 +112,24 @@ func (r *MongoDBReconciler) reconcileUpgradeBackup(ctx context.Context, mdb *mon
 	switch backup.Status.Phase {
 	case "Completed":
 		logger.Info("pre-upgrade backup completed, proceeding to upgrade")
-		mdb.Status.UpgradePhase = UpgradePhaseUpgrading
-		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+		setUpgrading := func() {
+			mdb.Status.UpgradePhase = UpgradePhaseUpgrading
+		}
+		setUpgrading()
+		if err := updateStatusWithRetry(ctx, r.Client, mdb, setUpgrading); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
 	case "Failed":
 		logger.Info("pre-upgrade backup failed, aborting upgrade")
-		mdb.Status.UpgradePhase = ""
-		mdb.Status.UpgradeStartTime = nil
-		setUpgradeCondition(mdb, "UpgradeFailed", metav1.ConditionTrue,
-			"BackupFailed", "Pre-upgrade backup failed, upgrade aborted")
-		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+		abortUpgrade := func() {
+			mdb.Status.UpgradePhase = ""
+			mdb.Status.UpgradeStartTime = nil
+			setUpgradeCondition(mdb, "UpgradeFailed", metav1.ConditionTrue,
+				"BackupFailed", "Pre-upgrade backup failed, upgrade aborted")
+		}
+		abortUpgrade()
+		if err := updateStatusWithRetry(ctx, r.Client, mdb, abortUpgrade); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -144,12 +156,15 @@ func (r *MongoDBReconciler) reconcileUpgradeValidation(ctx context.Context, mdb 
 	ready := mdb.Status.ReadyMembers >= mdb.Spec.Members
 	if ready {
 		logger.Info("upgrade validation passed", "version", desiredVersion)
-		mdb.Status.Version = desiredVersion
-		mdb.Status.UpgradePhase = ""
-		mdb.Status.UpgradeStartTime = nil
-		setUpgradeCondition(mdb, "UpgradeComplete", metav1.ConditionTrue,
-			"Upgraded", fmt.Sprintf("Successfully upgraded to %s", desiredVersion))
-		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+		completeUpgrade := func() {
+			mdb.Status.Version = desiredVersion
+			mdb.Status.UpgradePhase = ""
+			mdb.Status.UpgradeStartTime = nil
+			setUpgradeCondition(mdb, "UpgradeComplete", metav1.ConditionTrue,
+				"Upgraded", fmt.Sprintf("Successfully upgraded to %s", desiredVersion))
+		}
+		completeUpgrade()
+		if err := updateStatusWithRetry(ctx, r.Client, mdb, completeUpgrade); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -168,18 +183,24 @@ func (r *MongoDBReconciler) reconcileUpgradeValidation(ctx context.Context, mdb 
 
 	if mdb.Spec.UpgradeStrategy != nil && mdb.Spec.UpgradeStrategy.RollbackOnFailure {
 		logger.Info("initiating rollback due to validation timeout")
-		mdb.Status.UpgradePhase = UpgradePhaseRollingBack
-		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+		setRollingBack := func() {
+			mdb.Status.UpgradePhase = UpgradePhaseRollingBack
+		}
+		setRollingBack()
+		if err := updateStatusWithRetry(ctx, r.Client, mdb, setRollingBack); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
 	}
 
-	setUpgradeCondition(mdb, "UpgradeFailed", metav1.ConditionTrue,
-		"ValidationTimeout", fmt.Sprintf("Upgrade to %s timed out after %s, manual intervention required", desiredVersion, validationTimeout))
-	mdb.Status.UpgradePhase = ""
-	mdb.Status.UpgradeStartTime = nil
-	if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+	failUpgrade := func() {
+		setUpgradeCondition(mdb, "UpgradeFailed", metav1.ConditionTrue,
+			"ValidationTimeout", fmt.Sprintf("Upgrade to %s timed out after %s, manual intervention required", desiredVersion, validationTimeout))
+		mdb.Status.UpgradePhase = ""
+		mdb.Status.UpgradeStartTime = nil
+	}
+	failUpgrade()
+	if err := updateStatusWithRetry(ctx, r.Client, mdb, failUpgrade); err != nil {
 		return ctrl.Result{}, false, err
 	}
 	return ctrl.Result{}, true, nil
@@ -190,9 +211,12 @@ func (r *MongoDBReconciler) reconcileUpgradeRollback(ctx context.Context, mdb *m
 
 	if mdb.Status.PreviousVersion == "" {
 		logger.Info("rollback requested but no previous version recorded, clearing upgrade state")
-		mdb.Status.UpgradePhase = ""
-		mdb.Status.UpgradeStartTime = nil
-		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+		clearUpgrade := func() {
+			mdb.Status.UpgradePhase = ""
+			mdb.Status.UpgradeStartTime = nil
+		}
+		clearUpgrade()
+		if err := updateStatusWithRetry(ctx, r.Client, mdb, clearUpgrade); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -200,11 +224,14 @@ func (r *MongoDBReconciler) reconcileUpgradeRollback(ctx context.Context, mdb *m
 
 	if mdb.Spec.UpgradeStrategy == nil || !mdb.Spec.UpgradeStrategy.RollbackOnFailure {
 		logger.Info("rollback phase reached but RollbackOnFailure is disabled, clearing upgrade state")
-		mdb.Status.UpgradePhase = ""
-		mdb.Status.UpgradeStartTime = nil
-		setUpgradeCondition(mdb, "UpgradeFailed", metav1.ConditionTrue,
-			"ValidationFailed", "Upgrade validation failed, manual intervention required")
-		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+		failUpgrade := func() {
+			mdb.Status.UpgradePhase = ""
+			mdb.Status.UpgradeStartTime = nil
+			setUpgradeCondition(mdb, "UpgradeFailed", metav1.ConditionTrue,
+				"ValidationFailed", "Upgrade validation failed, manual intervention required")
+		}
+		failUpgrade()
+		if err := updateStatusWithRetry(ctx, r.Client, mdb, failUpgrade); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -217,11 +244,14 @@ func (r *MongoDBReconciler) reconcileUpgradeRollback(ctx context.Context, mdb *m
 		return ctrl.Result{}, false, err
 	}
 
-	mdb.Status.UpgradePhase = ""
-	mdb.Status.UpgradeStartTime = nil
-	setUpgradeCondition(mdb, "UpgradeRolledBack", metav1.ConditionTrue,
-		"RolledBack", fmt.Sprintf("Rolled back to %s", mdb.Status.PreviousVersion))
-	if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+	finishRollback := func() {
+		mdb.Status.UpgradePhase = ""
+		mdb.Status.UpgradeStartTime = nil
+		setUpgradeCondition(mdb, "UpgradeRolledBack", metav1.ConditionTrue,
+			"RolledBack", fmt.Sprintf("Rolled back to %s", mdb.Status.PreviousVersion))
+	}
+	finishRollback()
+	if err := updateStatusWithRetry(ctx, r.Client, mdb, finishRollback); err != nil {
 		return ctrl.Result{}, false, err
 	}
 	return ctrl.Result{}, true, nil
