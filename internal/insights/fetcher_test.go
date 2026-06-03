@@ -150,3 +150,63 @@ func TestMongoProfileFetcher_FetchIndexStats_NilGuards(t *testing.T) {
 		t.Errorf("K8sClient nil error 기대, got %v", err)
 	}
 }
+
+// --- sharded per-shard 프로파일링 (ROADMAP §3.2) ---
+
+func TestShardConnectTargets(t *testing.T) {
+	targets := shardConnectTargets("mdb", "data", "mdb-admin", 3)
+	if len(targets) != 3 {
+		t.Fatalf("3 shard targets 기대, got %d", len(targets))
+	}
+	if targets[0].Host != "mdb-shard-0-headless.data.svc.cluster.local:27017" {
+		t.Errorf("shard-0 host 불일치: %s", targets[0].Host)
+	}
+	if targets[0].ReplicaSet != "mdb-shard-0" {
+		t.Errorf("shard-0 RS 불일치: %s", targets[0].ReplicaSet)
+	}
+	if targets[0].AdminSecretName != "mdb-admin" || targets[0].Namespace != "data" {
+		t.Errorf("shard-0 secret/ns 불일치: %+v", targets[0])
+	}
+	if targets[2].ReplicaSet != "mdb-shard-2" {
+		t.Errorf("shard-2 RS 불일치: %s", targets[2].ReplicaSet)
+	}
+}
+
+func TestShardConnectTargets_ZeroCount(t *testing.T) {
+	if got := shardConnectTargets("x", "ns", "s", 0); len(got) != 0 {
+		t.Errorf("count=0 → 빈 목록 기대, got %d", len(got))
+	}
+}
+
+func TestMongoProfileFetcher_FetchShardedProfiles_Guards(t *testing.T) {
+	// Insights nil → error.
+	if _, err := (&MongoProfileFetcher{}).FetchShardedProfiles(context.Background(), 100); err == nil {
+		t.Errorf("Insights nil 시 error 기대")
+	}
+
+	// MongoDB kind (sharded 아님) → 전용 error.
+	fMongo := &MongoProfileFetcher{
+		Insights: &mongodbv1alpha1.MongoDBInsights{
+			ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "ns"},
+			Spec: mongodbv1alpha1.MongoDBInsightsSpec{
+				ClusterRef: mongodbv1alpha1.ClusterReference{Name: "c", Kind: "MongoDB"},
+			},
+		},
+	}
+	if _, err := fMongo.FetchShardedProfiles(context.Background(), 100); err == nil || !strings.Contains(err.Error(), "MongoDBSharded kind 전용") {
+		t.Errorf("MongoDB kind → 'MongoDBSharded kind 전용' error 기대, got %v", err)
+	}
+
+	// Sharded kind + K8sClient nil → K8sClient nil error.
+	fSharded := &MongoProfileFetcher{
+		Insights: &mongodbv1alpha1.MongoDBInsights{
+			ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "ns"},
+			Spec: mongodbv1alpha1.MongoDBInsightsSpec{
+				ClusterRef: mongodbv1alpha1.ClusterReference{Name: "c", Kind: "MongoDBSharded"},
+			},
+		},
+	}
+	if _, err := fSharded.FetchShardedProfiles(context.Background(), 100); err == nil || !strings.Contains(err.Error(), "K8sClient nil") {
+		t.Errorf("K8sClient nil error 기대, got %v", err)
+	}
+}

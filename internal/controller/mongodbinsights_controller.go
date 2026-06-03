@@ -153,7 +153,15 @@ func (r *MongoDBInsightsReconciler) runAnalysis(ctx context.Context, in *mongodb
 	if sampleSize <= 0 {
 		sampleSize = 500
 	}
-	docs, err := fetcher.Fetch(ctx, sampleSize)
+	// MongoDBSharded 는 mongos 가 system.profile 을 보유하지 않아 per-shard RS 에
+	// 직접 연결해 수집한다 (ROADMAP §3.2). 그 외 kind 는 단일 Fetch.
+	var docs []insights.ProfileDoc
+	var err error
+	if insights.IsShardedKind(in.Spec.ClusterRef.Kind) {
+		docs, err = fetcher.FetchShardedProfiles(ctx, sampleSize)
+	} else {
+		docs, err = fetcher.Fetch(ctx, sampleSize)
+	}
 	if err != nil {
 		return nil, 0, err
 	}

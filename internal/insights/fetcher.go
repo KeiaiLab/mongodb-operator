@@ -58,6 +58,12 @@ const (
 	defaultConnectTimeout = 10 * time.Second
 )
 
+// IsShardedKind — ClusterRef.Kind 가 MongoDBSharded 인지 판정 (controller 분기용
+// exported helper — kind 리터럴 중복 회피 + 단일 SSOT).
+func IsShardedKind(kind string) bool {
+	return kind == clusterKindSharded
+}
+
 // ProfileFetcher — system.profile 수집 단일 책임 좁은 interface.
 // 호출자는 sampleSize 만 알면 됨. ClusterRef / Secret / mongo connect 는
 // 구현체 내부 책임.
@@ -133,6 +139,12 @@ func (f *MongoProfileFetcher) connect(ctx context.Context) (*mongo.Client, func(
 		return nil, nil, err
 	}
 
+	return f.connectTo(ctx, target)
+}
+
+// connectTo — 주어진 connectTarget 에 자격증명 로드 + mongo connect. connect (단일)
+// 와 FetchShardedProfiles (per-shard) 가 공유. cleanup 은 호출자가 defer 실행.
+func (f *MongoProfileFetcher) connectTo(ctx context.Context, target connectTarget) (*mongo.Client, func(), error) {
 	creds, err := f.loadCredentialsFromSecret(ctx, target.AdminSecretName, target.Namespace)
 	if err != nil {
 		return nil, nil, err
@@ -155,6 +167,92 @@ func (f *MongoProfileFetcher) connect(ctx context.Context) (*mongo.Client, func(
 		_ = cli.Disconnect(disconnectCtx)
 	}
 	return cli, cleanup, nil
+}
+
+// shardConnectTargets — MongoDBSharded 의 각 shard RS connectTarget 목록 (순수).
+// shard RS = <name>-shard-<i>, headless service <name>-shard-<i>-headless,
+// i in 0..count-1 (builder.go shard StatefulSet 명명 + 라이브 실측 정합).
+func shardConnectTargets(name, ns, adminSecret string, count int) []connectTarget {
+	targets := make([]connectTarget, 0, count)
+	for i := 0; i < count; i++ {
+		targets = append(targets, connectTarget{
+			Host:            fmt.Sprintf("%s-shard-%d-headless.%s.svc.cluster.local:27017", name, i, ns),
+			ReplicaSet:      fmt.Sprintf("%s-shard-%d", name, i),
+			AdminSecretName: adminSecret,
+			Namespace:       ns,
+		})
+	}
+	return targets
+}
+
+// resolveShardTargets — MongoDBSharded CR 조회 → shardConnectTargets.
+func (f *MongoProfileFetcher) resolveShardTargets(ctx context.Context) ([]connectTarget, error) {
+	ns := f.Insights.Namespace
+	name := f.Insights.Spec.ClusterRef.Name
+	mdbsh := &mongodbv1alpha1.MongoDBSharded{}
+	if err := f.K8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: ns}, mdbsh); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("ClusterRef MongoDBSharded/%s not found", name)
+		}
+		return nil, fmt.Errorf("get MongoDBSharded: %w", err)
+	}
+	count := int(mdbsh.Spec.Shards.Count)
+	if count <= 0 {
+		return nil, fmt.Errorf("MongoDBSharded/%s shards.count=%d (>=1 필요)", name, count)
+	}
+	return shardConnectTargets(mdbsh.Name, mdbsh.Namespace, mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name, count), nil
+}
+
+// FetchShardedProfiles — MongoDBSharded 의 각 shard RS 에 직접 연결하여
+// applyProfilingLevel + collectProfileDocs 후 merge (ROADMAP §3.2 per-shard).
+// mongos 는 system.profile 비보유 + profiler enable 불가라 per-shard 가 정합.
+// sampleSize 는 shard 수로 분배. 일부 shard 실패는 비치명 — 다른 shard 유지하되,
+// 전 shard 연결 실패 시 error surface (silent empty 방지).
+func (f *MongoProfileFetcher) FetchShardedProfiles(ctx context.Context, sampleSize int32) ([]ProfileDoc, error) {
+	if f.Insights == nil {
+		return nil, fmt.Errorf("MongoProfileFetcher.Insights nil")
+	}
+	if f.Insights.Spec.ClusterRef.Kind != clusterKindSharded {
+		return nil, fmt.Errorf("FetchShardedProfiles 는 MongoDBSharded kind 전용 (got %q)", f.Insights.Spec.ClusterRef.Kind)
+	}
+	if f.K8sClient == nil {
+		return nil, fmt.Errorf("MongoProfileFetcher.K8sClient nil")
+	}
+	if sampleSize <= 0 {
+		sampleSize = 500
+	}
+	targets, err := f.resolveShardTargets(ctx)
+	if err != nil {
+		return nil, err
+	}
+	perShard := sampleSize / int32(len(targets))
+	if perShard < 10 {
+		perShard = 10
+	}
+
+	var all []ProfileDoc
+	var lastErr error
+	okCount := 0
+	for _, target := range targets {
+		cli, cleanup, cerr := f.connectTo(ctx, target)
+		if cerr != nil {
+			lastErr = cerr
+			continue
+		}
+		okCount++
+		if perr := f.applyProfilingLevel(ctx, cli); perr != nil {
+			lastErr = perr
+		} else if docs, derr := collectProfileDocs(ctx, cli, perShard); derr != nil {
+			lastErr = derr
+		} else {
+			all = append(all, docs...)
+		}
+		cleanup()
+	}
+	if okCount == 0 && lastErr != nil {
+		return nil, fmt.Errorf("all %d shards unreachable: %w", len(targets), lastErr)
+	}
+	return all, nil
 }
 
 // FetchIndexStats — 분석 대상 DB 의 모든 collection 에 대해 $indexStats 수집

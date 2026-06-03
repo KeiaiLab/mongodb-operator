@@ -164,7 +164,7 @@
 ### 3.2 성능 분석 도구 (`MongoDBInsights`)
 - [x] 신규 CRD `MongoDBInsights` — `api/v1alpha1/mongodbinsights_types.go` (Spec + Status + Recommendation type) — cycle 7 F51
 - [x] 쿼리 프로파일링 자동 분석 (MongoDB kind) — `ProfilingLevel` + `SlowQueryThresholdMs` + `SampleSize` + `AnalysisInterval` 필드 + reconciler 가 `internal/insights/ProfileFetcher` 경유 system.profile 수집 → `insights.Analyze` 호출. `applyProfilingLevel` (`fetcher.go`) listDatabases→per-DB profile command 동적 설정 + `runAnalysis` 통합 완료 — cycle 7 F52 / cycle 9 P1 (실측 2026-06-03).
-- [ ] MongoDBSharded per-shard 프로파일링 — 현재 `fetcher.go` 에서 sharded skip. mongos 아닌 config + 각 shard RS 로 profile command fan-out 필요.
+- [x] MongoDBSharded per-shard 프로파일링 — `FetchShardedProfiles` (`fetcher.go`) 가 각 shard RS (`<name>-shard-<i>-headless`, ReplicaSet `<name>-shard-<i>`) 직접 연결 + `applyProfilingLevel` + `collectProfileDocs` merge (일부 shard 실패 비치명, 전 shard 실패 시 surface). controller `runAnalysis` 가 `insights.IsShardedKind` 시 호출 — cycle 9 P5 (실측 2026-06-03). 다중 shard 라이브 round-trip 은 후속.
 - [x] MissingIndex 추천 엔진 — `internal/insights/analyzer.go` `detectMissingIndexes` (COLLSCAN + examined/returned ratio + ESR 힌트) + 다수 unit test + reconciler `runAnalysis` 통합 (`mongodbinsights_controller.go`) — cycle 7 F53 / cycle 9 P1 (실측 2026-06-03).
 - [x] UnusedIndex 추천 — `AnalyzeIndexUsage` (`$indexStats` 기반, `analyzer.go`) + 4 unit test + fetcher `collectIndexStats`/`FetchIndexStats` ($indexStats 수집) + `runAnalysis` 통합 (index stats 실패는 비치명) — #281 (실측 2026-06-03).
 - [x] 느린 쿼리 감지 + 경고 — `Recommendation.Type=SlowQueryPattern` + `Severity` + `AvgLatencyMs` + `QuerySamples[]` — cycle 7 F54
@@ -307,6 +307,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 | Date | Change | Refs |
 |---|---|---|
+| 2026-06-03 | §3.2 MongoDBSharded per-shard 프로파일링 [ ]→[x] — `FetchShardedProfiles` (각 shard RS 직접 연결 + applyProfilingLevel + collectProfileDocs merge) + controller `IsShardedKind` 분기. mongos system.profile 부재 해소. | (sharded-profiling) |
 | 2026-06-03 | Phase 5 brainstorm gate 명시 — heading ⛔ BRAINSTORM GATE 배너 + 해소 절차 3-step (superpowers:brainstorming → 확정/교체/통합 → 입자도 분해). 합의 없는 autonomous 구현 차단 (§1 Think Before Coding). | (phase5-brainstorm-gate) |
 | 2026-06-03 | §3.1.1 QueryableBackup [~]→[x] — verification controller 가 Spec.Queryable 활성 시 BuildQueryableStatefulSet 으로 read-only mongod 자동 생성 + Status.QueryableInstance. 데이터 복원 drill 후속. | (queryable-backup-wiring) |
 | 2026-06-03 | dead-code 통합 — §3.2 UnusedIndex [~]→[x] (fetcher $indexStats 수집 + runAnalysis 통합) + Level V Auto Pilot A등급(PlanMissingIndexActions/PlanSlowQueryHints) → MongoDBInsights Status.AutoPilotActions advisory(DryRun) 배선. generated deepcopy/RBAC 동기화 동반. | #281 #282 #283 |
