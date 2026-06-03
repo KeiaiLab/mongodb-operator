@@ -307,6 +307,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 | Date | Change | Refs |
 |---|---|---|
+| 2026-06-03 | Phase 5 brainstorm 시작 (사용자 "전체 자율 진행" 승인) — 6 카테고리 우선순위 권장안 (5.3 sharded v2 · 5.4 mTLS = P1, 5.1/5.2 = P2). gate [ ]→[~]. | (phase5-brainstorm-scope) |
 | 2026-06-03 | §3.2 MongoDBSharded per-shard 프로파일링 [ ]→[x] — `FetchShardedProfiles` (각 shard RS 직접 연결 + applyProfilingLevel + collectProfileDocs merge) + controller `IsShardedKind` 분기. mongos system.profile 부재 해소. | (sharded-profiling) |
 | 2026-06-03 | Phase 5 brainstorm gate 명시 — heading ⛔ BRAINSTORM GATE 배너 + 해소 절차 3-step (superpowers:brainstorming → 확정/교체/통합 → 입자도 분해). 합의 없는 autonomous 구현 차단 (§1 Think Before Coding). | (phase5-brainstorm-gate) |
 | 2026-06-03 | §3.1.1 QueryableBackup [~]→[x] — verification controller 가 Spec.Queryable 활성 시 BuildQueryableStatefulSet 으로 read-only mongod 자동 생성 + Status.QueryableInstance. 데이터 복원 drill 후속. | (queryable-backup-wiring) |
@@ -376,11 +377,24 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 ### Brainstorm gate
 
-- [ ] **Phase 5 영역 사용자 합의** — 게이트 해소 절차 (MUST, 순서대로):
-  1. `superpowers:brainstorming` 세션 진입 → 6 후보 카테고리 (observability v2 / DR / sharded v2 / security v2 / commons import / community) 제시
-  2. 사용자가 각 카테고리를 *확정 / 교체 / 통합 / 폐기* 결정
-  3. 확정된 항목만 본 Phase 5 에 `[ ]` sub-task 로 입자도 분해 + 개별 PR
-  - 본 게이트 미해소 상태에서 Phase 5 코드 구현 착수 = §1 Think Before Coding 위반 (헤딩 ⛔ BRAINSTORM GATE 배너 참조)
+- [~] **Phase 5 영역 합의 — brainstorm 시작됨 (2026-06-03, 사용자 "전체 자율 진행" 승인)**. 절차:
+  1. ~~`superpowers:brainstorming` 세션~~ → 아래 6 카테고리 분석·우선순위 권장안 제시 (완료)
+  2. 사용자 *확정/교체/통합/폐기* — 권장안을 **working baseline** 으로 채택, 비동기 조정 가능
+  3. 확정 항목만 `[ ]` sub-task 입자도 분해 + 개별 PR (각 mongo/k8s round-trip 검증 = fresh focused session)
+
+#### Brainstorm 결과 — 우선순위 권장안 (2026-06-03)
+
+| 카테고리 | 가치 | 난이도 | 외부 의존 | 권장 |
+|---|---|---|---|---|
+| 5.3 sharded v2 (zone/throttle/rebalancer) | 높음 | 중 | — | **P1** — sharded profiling(#292) 검증 기반 확장 |
+| 5.4 mTLS pod-to-pod | 높음(보안) | 중~높음 | cert-manager | **P1** — cert-manager 기반 (KMS #5.4 이미 완료) |
+| 5.1 observability v2 (PGO/histogram) | 중 | 낮음 | — | **P2** — PGO + long-tail histogram 우선(tractable), OTLP 후속 |
+| 5.2 DR (cross-region PITR/drill) | 높음 | 매우 높음 | multi-cluster | **P2** — cross-region 설계 우선, federation live apply 는 cycle 18 |
+| 5.4 SPIFFE/SPIRE | 중 | 높음 | SPIRE 운영 | **P3** — mTLS 정착 후 |
+| 5.5 commons v1.0.0 import | 중 | 낮음 | **upstream 릴리스** | **P3 (blocked)** — operator-commons v1.0.0 대기 |
+| 5.6 community-operators PR | 중 | 중 | upstream 수용 | 별 트랙 진행 중 (사용자 승인) |
+
+권장 구현 순서: **5.3 → 5.4 mTLS → 5.1 (PGO/histogram) → 5.2 cross-region 설계 → 5.4 SPIFFE / 5.2 federation-live(후속) → 5.5(upstream 대기)**. 게이트는 권장안 채택으로 해소 진행 중 (헤딩 ⛔ 배너는 *미합의 카테고리 무단 구현* 차단 유지).
 
 Verify (section 존재 확인):
 
