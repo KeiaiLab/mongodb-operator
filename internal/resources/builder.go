@@ -80,17 +80,18 @@ const MongoTLSPEMPath = "/etc/ssl/mongo-pem"
 
 // BuildPEMMergeInitContainer 는 cert-manager Secret 의 tls.crt + tls.key 를
 // 단일 PEM file 로 합치는 init container 를 반환한다 (mongod 의 --tlsCertificateKeyFile
-// 호환). PSA restricted 정합 (busybox + drop ALL except CHOWN).
+// 호환). PSA restricted 정합 (busybox + RunAsUser 999 + drop ALL + seccomp RuntimeDefault).
 //
-// SecurityContext = RunAsUser:0 — emptyDir `/tls-pem` 의 default ownership 이
-// root 이고 PodSecurityContext.FSGroup 이 emptyDir 에 *항상 적용되지 않을 수 있다*
-// (kubelet fsGroupChangePolicy / storage driver 변종). 라이브 사고 (2026-05-16
-// KeiaiLab data/keiailab-mongo-cfg-1/2): UID 999 로 run 시 `sh: can't create
-// /tls-pem/server.pem: Permission denied` 로 init fail → mongos NotReady →
-// mailstory 서비스 cascade. 정합 sister 패턴 = data-permission-init (chown /data/db)
-// 가 이미 root + CHOWN cap drop ALL.
+// Ownership 은 root chown 이 아니라 PodSecurityContext.FSGroup (=999,
+// buildDefaultSecurityContext) 에 위임한다. fsGroup 이 emptyDir `/tls-pem` 을
+// gid 999 로 group-writable 하게 만들어 UID 999 init container 가 server.pem 을
+// 직접 write → file owner 999:999 → mongod (UID 999) read 가능. copy-keyfile init
+// 과 동일 패턴 (buildKeyfileInitContainerSecurityContext).
 //
-// merge 후 chown 999:999 으로 mongod (UID 999) 가 read 가능.
+// 회귀 주의: 과거 RunAsUser:0 + CHOWN cap 구현 (2026-05-16 chown race 오진) 은
+// PSA restricted enforce namespace 에서 pod 생성 거부 (CHOWN cap / runAsUser=0 /
+// seccomp 누락) → StatefulSet rollout 영구 차단 (2026-05-30 KeiaiLab data ns 사고).
+// fsGroup 기반이 정합 (라이브 검증: data ns restricted enforce + cfg/shard/mongos 3/3).
 //
 // Exported — caller (cfg/shard/mongos reconciler) 가 STS build 후 conditional append.
 func BuildPEMMergeInitContainer() corev1.Container {
@@ -100,18 +101,9 @@ func BuildPEMMergeInitContainer() corev1.Container {
 		Command: []string{
 			"sh", "-c",
 			"cat /tls-input/tls.crt /tls-input/tls.key > /tls-pem/server.pem && " +
-				"chown 999:999 /tls-pem/server.pem && " +
 				"chmod 0400 /tls-pem/server.pem",
 		},
-		SecurityContext: &corev1.SecurityContext{
-			RunAsUser:                ptr.To[int64](0),
-			RunAsNonRoot:             ptr.To(false),
-			AllowPrivilegeEscalation: ptr.To(false),
-			Capabilities: &corev1.Capabilities{
-				Add:  []corev1.Capability{"CHOWN"},
-				Drop: []corev1.Capability{"ALL"},
-			},
-		},
+		SecurityContext: buildKeyfileInitContainerSecurityContext(),
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "tls-server", MountPath: "/tls-input", ReadOnly: true},
 			{Name: "tls-server-pem", MountPath: "/tls-pem"},
