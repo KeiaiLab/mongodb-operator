@@ -34,6 +34,7 @@
 | [ADR-0030](0030-olm-v1-narrow-installer-rbac-and-network-policy.md) | OLM v1 narrow installer RBAC + olmv1-system NetworkPolicy — bundle CSV 의 13 clusterPermissions + 3 permissions derive (operator-controller `derive-service-account` 표준), cluster-admin 대체. olmv1-system NP 2종 (operator-controller + catalogd) 으로 zero-trust 정합 | Accepted | 2026-05-15 |
 | [ADR-0034](0034-sprint-1-commons-pvc-topology-adoption.md) | Sprint 1 — operator-commons pkg/pvc + pkg/topology 채택 (-327 LOC, mongodb callsite 1 + pvc 1 교체) | Accepted | 2026-05-21 |
 | [ADR-0036](0036-v3x-stable-baseline.md) | v3.x-stable baseline 인정 (audit ❌ 0 충족, CLAUDE.md §7 v3.x-stable 조건) | Accepted | 2026-05-21 |
+| [ADR-0037](0037-gitops-artifacthub-standardization.md) | GitOps overlay + ArtifactHub 검증 파이프라인 표준화 (operator 4종 2-layer 표준, examples/gitops → deploy/overlays/prod 이전, signingKey, GH Actions OSS 정당화) | Accepted | 2026-06-02 |
 
 ## 작성 가이드
 
