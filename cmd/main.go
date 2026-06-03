@@ -101,8 +101,10 @@ func main() {
 	flag.BoolVar(&enableClusterGroupController, "enable-clustergroup-controller", false,
 		"Enable MongoDBClusterGroup reconciler (cycle 8, skeleton). Default false — cross-cluster propagation cycle 9+ 강화 후.")
 
+	// 운영 기본값은 production 모드(JSON 구조화 로그 + sampling). 개발 시에는
+	// --zap-devel flag 로 console encoder 를 활성화할 수 있다(BindFlags 로 노출).
 	opts := zap.Options{
-		Development: true,
+		Development: false,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()

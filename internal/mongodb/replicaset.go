@@ -328,22 +328,6 @@ func disconnectQuiet(c *mongo.Client) {
 	_ = c.Disconnect(context.Background())
 }
 
-// okFloat는 bson 응답의 "ok" 필드가 float64/int32/int64 등 다양한 타입으로
-// 디코드될 수 있는 점을 흡수해 정수로 정규화한다.
-func okFloat(v interface{}) int {
-	switch x := v.(type) {
-	case float64:
-		return int(x)
-	case int32:
-		return int(x)
-	case int64:
-		return int(x)
-	case int:
-		return x
-	}
-	return 0
-}
-
 // BuildReplicaSetConfig builds a replica set configuration for initialization.
 func BuildReplicaSetConfig(rsName, baseName, serviceName, namespace string, members int, port int) ReplicaSetConfig {
 	config := ReplicaSetConfig{

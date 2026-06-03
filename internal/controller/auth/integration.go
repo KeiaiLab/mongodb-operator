@@ -98,11 +98,14 @@ func ProbeOIDC(ctx context.Context, spec *mongodbv1alpha1.OIDCSpec) error {
 		return fmt.Errorf("oidc issuer must be https (got %s)", parsedURL.Scheme)
 	}
 
+	// 일회성 probe 이므로 transport 의 유휴 연결을 함수 종료 시 정리해 누수를 막는다.
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+	}
+	defer transport.CloseIdleConnections()
 	client := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12},
-		},
+		Timeout:   10 * time.Second,
+		Transport: transport,
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, discoveryURL, nil)
 	if err != nil {
