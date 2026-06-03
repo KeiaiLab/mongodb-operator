@@ -74,6 +74,36 @@ spec:
                   CleanupOnSuccess — 검증 PASS 시 임시 mongod instance 자동 폐기.
                   false 시 사용자가 수동 inspect 가능.
                 type: boolean
+              queryable:
+                description: |-
+                  Queryable — 활성 시 검증과 함께 *장기 read-only mongod instance* 를 생성하여
+                  백업을 ad-hoc 조회 가능하게 한다 (ROADMAP §3.1.1). Enabled 기본 false (opt-in)
+                  이므로 명시 활성 시에만 instance 가 생성된다. instance 데이터 복원 drill 은
+                  후속 운영 강화 (ROADMAP §3.1.1 deferred) — 본 단계는 구조적 instance 생성.
+                properties:
+                  enabled:
+                    default: false
+                    description: |-
+                      Enabled toggles queryable backup. backup CR phase=Completed 이후
+                      별 read-only StatefulSet (1 member) 으로 자동 복원.
+                    type: boolean
+                  resourcesPreset:
+                    default: small
+                    description: ResourcesPreset — queryable instance 의 리소스 size hint.
+                    enum:
+                    - nano
+                    - micro
+                    - small
+                    - medium
+                    - large
+                    type: string
+                  ttl:
+                    default: 168h
+                    description: TTL — queryable instance 의 자동 폐기 시간. 비어있으면 7일.
+                    type: string
+                required:
+                - enabled
+                type: object
               sampleQueries:
                 description: |-
                   SampleQueries — 복원 후 sanity check 으로 실행할 query 목록.
@@ -204,6 +234,11 @@ spec:
                   - passed
                   type: object
                 type: array
+              queryableInstance:
+                description: |-
+                  QueryableInstance — Spec.Queryable 활성 시 생성된 read-only mongod
+                  StatefulSet 이름. 데이터 복원 drill 은 후속 (ROADMAP §3.1.1 deferred).
+                type: string
               startTime:
                 description: StartTime when verification began.
                 format: date-time

@@ -56,6 +56,21 @@ func (r *MongoDBBackupVerificationReconciler) Reconcile(ctx context.Context, req
 		now := metav1.Now()
 		v.Status.Phase = backupPhaseRestoring
 		v.Status.StartTime = &now
+
+		// Queryable backup (ROADMAP §3.1.1): Spec.Queryable 활성 시 장기 read-only
+		// mongod StatefulSet 을 생성하여 백업을 ad-hoc 조회 가능하게 한다. owner-ref
+		// → verification CR GC. BuildQueryableStatefulSet 은 nil/disabled 시 nil 반환.
+		// 데이터 복원 drill (mongorestore → instance) 은 후속 운영 강화 (deferred).
+		if sts := resources.BuildQueryableStatefulSet(backup, v.Spec.Queryable); sts != nil {
+			if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, sts, func() error {
+				return controllerutil.SetControllerReference(v, sts, r.Scheme)
+			}); err != nil {
+				return ctrl.Result{}, fmt.Errorf("create queryable statefulset: %w", err)
+			}
+			v.Status.QueryableInstance = sts.Name
+			logger.Info("queryable read-only instance 생성 (복원 drill deferred)", "statefulset", sts.Name)
+		}
+
 		if err := r.Status().Update(ctx, v); err != nil {
 			return ctrl.Result{}, err
 		}
