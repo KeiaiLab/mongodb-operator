@@ -2,6 +2,8 @@ module github.com/keiailab/mongodb-operator
 
 go 1.26.0
 
+toolchain go1.26.4
+
 require (
 	// TODO(#236): operator-commons v1.0.0 안정 릴리스 시 업그레이드 예정.
 	// 현재 v0.9.0 — API 변경 가능성 잔존.
@@ -90,10 +92,10 @@ require (
 	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/mod v0.36.0 // indirect
-	golang.org/x/net v0.54.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
