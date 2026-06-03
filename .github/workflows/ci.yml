@@ -27,11 +27,13 @@ jobs:
         with:
           version: latest
           args: --timeout=10m
-          # 2026-06-03: historical lint debt cleared — `golangci-lint run ./...`
-          # reports 0 violations (last `goconst` resolved via severity constants).
-          # only-new-issues kept as deliberate policy: with version=latest, a linter
-          # upgrade could flag pre-existing code; gating only on *new* issues keeps
-          # contributor PRs from breaking on unrelated legacy findings.
+          # Historical lint debt (legacy code, cache-clean count ~53): mostly
+          # goconst (repeated string literals) + a few staticcheck QF style fixes.
+          # All cosmetic — no correctness/security impact. (Correction: an earlier
+          # comment claimed "0 violations"; that was a stale golangci-lint cache —
+          # a cache-clean `golangci-lint run ./...` reports ~53.) only-new-issues
+          # gates PRs on *new* findings only, so contributor PRs don't break on
+          # pre-existing cosmetic debt; full cleanup is a low-priority follow-up.
           only-new-issues: true
 
   test:
