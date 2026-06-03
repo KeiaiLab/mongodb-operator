@@ -43,10 +43,13 @@ func (r *MongoDBReconciler) reconcilePasswordRotation(ctx context.Context, mdb *
 	if stored != currentHash {
 		logger.Info("auth Secret changed, password rotation needed",
 			"secret", mdb.Spec.Auth.AdminCredentialsSecretRef.Name)
-		setUpgradeCondition(mdb, "PasswordRotationPending", metav1.ConditionTrue,
-			"SecretChanged", "Admin credentials Secret has changed, password rotation pending")
+		applyStatus := func() {
+			setUpgradeCondition(mdb, "PasswordRotationPending", metav1.ConditionTrue,
+				"SecretChanged", "Admin credentials Secret has changed, password rotation pending")
+		}
+		applyStatus()
 		setAnnotation(mdb, "mongodb.keiailab.com/auth-secret-hash", currentHash)
-		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+		if err := updateStatusWithRetry(ctx, r.Client, mdb, applyStatus); err != nil {
 			return err
 		}
 		if err := r.Update(ctx, mdb); err != nil {

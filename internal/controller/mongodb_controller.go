@@ -125,8 +125,11 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 
 	// Update status phase to Initializing if pending
 	if mdb.Status.Phase == "" || mdb.Status.Phase == mongodbv1alpha1.PhasePending {
-		mdb.Status.Phase = mongodbv1alpha1.PhaseInitializing
-		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+		setInitializing := func() {
+			mdb.Status.Phase = mongodbv1alpha1.PhaseInitializing
+		}
+		setInitializing()
+		if err := updateStatusWithRetry(ctx, r.Client, mdb, setInitializing); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -179,10 +182,13 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 
 	// 5.0.1. Transition to Validating after StatefulSet update
 	if mdb.Status.UpgradePhase == UpgradePhaseUpgrading {
-		mdb.Status.UpgradePhase = UpgradePhaseValidating
-		now := metav1.Now()
-		mdb.Status.UpgradeStartTime = &now
-		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+		setValidating := func() {
+			mdb.Status.UpgradePhase = UpgradePhaseValidating
+			now := metav1.Now()
+			mdb.Status.UpgradeStartTime = &now
+		}
+		setValidating()
+		if err := updateStatusWithRetry(ctx, r.Client, mdb, setValidating); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{RequeueAfter: parseValidationInterval(mdb.Spec.UpgradeStrategy)}, nil
@@ -444,8 +450,11 @@ func (r *MongoDBReconciler) reconcileReplicaSetInitialization(ctx context.Contex
 
 	if initialized {
 		logger.Info("Replica set already initialized")
-		mdb.Status.ReplicaSetInitialized = true
-		return updateStatusWithRetry(ctx, r.Client, mdb)
+		setRSInitialized := func() {
+			mdb.Status.ReplicaSetInitialized = true
+		}
+		setRSInitialized()
+		return updateStatusWithRetry(ctx, r.Client, mdb, setRSInitialized)
 	}
 
 	// Build replica set configuration
@@ -465,8 +474,11 @@ func (r *MongoDBReconciler) reconcileReplicaSetInitialization(ctx context.Contex
 	}
 
 	logger.Info("Replica set initialized successfully")
-	mdb.Status.ReplicaSetInitialized = true
-	return updateStatusWithRetry(ctx, r.Client, mdb)
+	setRSInitialized := func() {
+		mdb.Status.ReplicaSetInitialized = true
+	}
+	setRSInitialized()
+	return updateStatusWithRetry(ctx, r.Client, mdb, setRSInitialized)
 }
 
 func (r *MongoDBReconciler) hasPrimary(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (bool, error) {
@@ -523,8 +535,11 @@ func (r *MongoDBReconciler) reconcileAdminUser(ctx context.Context, mdb *mongodb
 	}
 
 	logger.Info("Admin user bootstrap complete and verified")
-	mdb.Status.AdminUserCreated = true
-	return updateStatusWithRetry(ctx, r.Client, mdb)
+	setAdminCreated := func() {
+		mdb.Status.AdminUserCreated = true
+	}
+	setAdminCreated()
+	return updateStatusWithRetry(ctx, r.Client, mdb, setAdminCreated)
 }
 
 // verifyAdminUser는 bootstrap 직후 인증된 매니저로 admin user 존재를 ping한다.
@@ -613,18 +628,21 @@ func (r *MongoDBReconciler) updateStatus(ctx context.Context, mdb *mongodbv1alph
 		}
 	}
 
-	// Set connection string
-	mdb.Status.ConnectionString = fmt.Sprintf("mongodb://%s-headless.%s.svc.cluster.local:27017/?replicaSet=%s",
-		mdb.Name, mdb.Namespace, mdb.Spec.ReplicaSetName)
+	applyStatus := func() {
+		// Set connection string
+		mdb.Status.ConnectionString = fmt.Sprintf("mongodb://%s-headless.%s.svc.cluster.local:27017/?replicaSet=%s",
+			mdb.Name, mdb.Namespace, mdb.Spec.ReplicaSetName)
 
-	mdb.Status.Version = mdb.Spec.Version.Version
-	mdb.Status.ObservedGeneration = mdb.Generation
+		mdb.Status.Version = mdb.Spec.Version.Version
+		mdb.Status.ObservedGeneration = mdb.Generation
 
-	// Update conditions
-	mdb.Status.Conditions = clearReconcileErrorCondition(mdb.Status.Conditions, mdb.Generation)
-	mdb.Status.Conditions = r.buildConditions(mdb)
+		// Update conditions
+		mdb.Status.Conditions = clearReconcileErrorCondition(mdb.Status.Conditions, mdb.Generation)
+		mdb.Status.Conditions = r.buildConditions(mdb)
+	}
+	applyStatus()
 
-	return updateStatusWithRetry(ctx, r.Client, mdb)
+	return updateStatusWithRetry(ctx, r.Client, mdb, applyStatus)
 }
 
 func (r *MongoDBReconciler) buildConditions(mdb *mongodbv1alpha1.MongoDB) []metav1.Condition {
@@ -713,14 +731,17 @@ func (r *MongoDBReconciler) setPrimaryUnreachableCondition(ctx context.Context, 
 	// ADR-0013 정합: meta.SetStatusCondition 위임 — Status 전이 시에만
 	// LastTransitionTime 갱신 (K8s convention). 매 reconcile Now() 갱신은 backoff
 	// 로직 (scaleInPollInterval) 의 elapsed 측정을 무력화하므로 회피.
-	meta.SetStatusCondition(&mdb.Status.Conditions, metav1.Condition{
-		Type:               conditionTypePrimaryUnreachable,
-		Status:             metav1.ConditionTrue,
-		ObservedGeneration: mdb.Generation,
-		Reason:             mongodbv1alpha1.ReasonConnectError,
-		Message:            fmt.Sprintf("hasPrimary check failed: %s", msg),
-	})
-	if statusErr := updateStatusWithRetry(ctx, r.Client, mdb); statusErr != nil {
+	setUnreachable := func() {
+		meta.SetStatusCondition(&mdb.Status.Conditions, metav1.Condition{
+			Type:               conditionTypePrimaryUnreachable,
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: mdb.Generation,
+			Reason:             mongodbv1alpha1.ReasonConnectError,
+			Message:            fmt.Sprintf("hasPrimary check failed: %s", msg),
+		})
+	}
+	setUnreachable()
+	if statusErr := updateStatusWithRetry(ctx, r.Client, mdb, setUnreachable); statusErr != nil {
 		logger.Error(statusErr, "Failed to update PrimaryUnreachable condition")
 	}
 }
@@ -740,14 +761,17 @@ func (r *MongoDBReconciler) clearPrimaryUnreachableCondition(ctx context.Context
 	if !hasIt {
 		return
 	}
-	meta.SetStatusCondition(&mdb.Status.Conditions, metav1.Condition{
-		Type:               conditionTypePrimaryUnreachable,
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: mdb.Generation,
-		Reason:             mongodbv1alpha1.ReasonReachable,
-		Message:            "Primary check succeeded",
-	})
-	if statusErr := updateStatusWithRetry(ctx, r.Client, mdb); statusErr != nil {
+	clearUnreachable := func() {
+		meta.SetStatusCondition(&mdb.Status.Conditions, metav1.Condition{
+			Type:               conditionTypePrimaryUnreachable,
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: mdb.Generation,
+			Reason:             mongodbv1alpha1.ReasonReachable,
+			Message:            "Primary check succeeded",
+		})
+	}
+	clearUnreachable()
+	if statusErr := updateStatusWithRetry(ctx, r.Client, mdb, clearUnreachable); statusErr != nil {
 		logger.Error(statusErr, "Failed to clear PrimaryUnreachable condition")
 	}
 }

@@ -21,9 +21,12 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgrade(ctx context.Context, 
 
 	if currentVersion == "" || currentVersion == desiredVersion {
 		if mdbsh.Status.UpgradePhase != "" {
-			mdbsh.Status.UpgradePhase = ""
-			mdbsh.Status.UpgradeStartTime = nil
-			if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
+			applyStatus := func() {
+				mdbsh.Status.UpgradePhase = ""
+				mdbsh.Status.UpgradeStartTime = nil
+			}
+			applyStatus()
+			if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 				return ctrl.Result{}, false, err
 			}
 		}
@@ -33,17 +36,20 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgrade(ctx context.Context, 
 	switch mdbsh.Status.UpgradePhase {
 	case "":
 		logger.Info("sharded upgrade detected", "from", currentVersion, "to", desiredVersion)
-		mdbsh.Status.PreviousVersion = currentVersion
-		now := metav1.Now()
-		mdbsh.Status.UpgradeStartTime = &now
+		applyStatus := func() {
+			mdbsh.Status.PreviousVersion = currentVersion
+			now := metav1.Now()
+			mdbsh.Status.UpgradeStartTime = &now
 
-		if mdbsh.Spec.UpgradeStrategy != nil && mdbsh.Spec.UpgradeStrategy.PreUpgradeBackup {
-			mdbsh.Status.UpgradePhase = UpgradePhaseBackingUp
-		} else {
-			mdbsh.Status.UpgradePhase = UpgradePhaseUpgrading
+			if mdbsh.Spec.UpgradeStrategy != nil && mdbsh.Spec.UpgradeStrategy.PreUpgradeBackup {
+				mdbsh.Status.UpgradePhase = UpgradePhaseBackingUp
+			} else {
+				mdbsh.Status.UpgradePhase = UpgradePhaseUpgrading
+			}
 		}
+		applyStatus()
 
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
+		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
@@ -94,18 +100,24 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeBackup(ctx context.Con
 	switch backup.Status.Phase {
 	case "Completed":
 		logger.Info("pre-upgrade backup completed, proceeding to upgrade")
-		mdbsh.Status.UpgradePhase = UpgradePhaseUpgrading
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
+		applyStatus := func() {
+			mdbsh.Status.UpgradePhase = UpgradePhaseUpgrading
+		}
+		applyStatus()
+		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
 	case "Failed":
 		logger.Info("pre-upgrade backup failed, aborting upgrade")
-		mdbsh.Status.UpgradePhase = ""
-		mdbsh.Status.UpgradeStartTime = nil
-		setShardedUpgradeCondition(mdbsh, "UpgradeFailed", metav1.ConditionTrue,
-			"BackupFailed", "Pre-upgrade backup failed, upgrade aborted")
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
+		applyStatus := func() {
+			mdbsh.Status.UpgradePhase = ""
+			mdbsh.Status.UpgradeStartTime = nil
+			setShardedUpgradeCondition(mdbsh, "UpgradeFailed", metav1.ConditionTrue,
+				"BackupFailed", "Pre-upgrade backup failed, upgrade aborted")
+		}
+		applyStatus()
+		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -139,12 +151,15 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeValidation(ctx context
 
 	if allReady {
 		logger.Info("sharded upgrade validation passed", "version", desiredVersion)
-		mdbsh.Status.Version = desiredVersion
-		mdbsh.Status.UpgradePhase = ""
-		mdbsh.Status.UpgradeStartTime = nil
-		setShardedUpgradeCondition(mdbsh, "UpgradeComplete", metav1.ConditionTrue,
-			"Upgraded", fmt.Sprintf("Successfully upgraded to %s", desiredVersion))
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
+		applyStatus := func() {
+			mdbsh.Status.Version = desiredVersion
+			mdbsh.Status.UpgradePhase = ""
+			mdbsh.Status.UpgradeStartTime = nil
+			setShardedUpgradeCondition(mdbsh, "UpgradeComplete", metav1.ConditionTrue,
+				"Upgraded", fmt.Sprintf("Successfully upgraded to %s", desiredVersion))
+		}
+		applyStatus()
+		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -158,18 +173,24 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeValidation(ctx context
 
 	if mdbsh.Spec.UpgradeStrategy != nil && mdbsh.Spec.UpgradeStrategy.RollbackOnFailure {
 		logger.Info("sharded upgrade validation timed out, initiating rollback")
-		mdbsh.Status.UpgradePhase = UpgradePhaseRollingBack
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
+		applyStatus := func() {
+			mdbsh.Status.UpgradePhase = UpgradePhaseRollingBack
+		}
+		applyStatus()
+		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
 	}
 
-	setShardedUpgradeCondition(mdbsh, "UpgradeFailed", metav1.ConditionTrue,
-		"ValidationTimeout", fmt.Sprintf("Upgrade to %s timed out, manual intervention required", desiredVersion))
-	mdbsh.Status.UpgradePhase = ""
-	mdbsh.Status.UpgradeStartTime = nil
-	if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
+	applyStatus := func() {
+		setShardedUpgradeCondition(mdbsh, "UpgradeFailed", metav1.ConditionTrue,
+			"ValidationTimeout", fmt.Sprintf("Upgrade to %s timed out, manual intervention required", desiredVersion))
+		mdbsh.Status.UpgradePhase = ""
+		mdbsh.Status.UpgradeStartTime = nil
+	}
+	applyStatus()
+	if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 		return ctrl.Result{}, false, err
 	}
 	return ctrl.Result{}, true, nil
@@ -179,20 +200,26 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeRollback(ctx context.C
 	logger := log.FromContext(ctx)
 
 	if mdbsh.Status.PreviousVersion == "" {
-		mdbsh.Status.UpgradePhase = ""
-		mdbsh.Status.UpgradeStartTime = nil
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
+		applyStatus := func() {
+			mdbsh.Status.UpgradePhase = ""
+			mdbsh.Status.UpgradeStartTime = nil
+		}
+		applyStatus()
+		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
 	}
 
 	if mdbsh.Spec.UpgradeStrategy == nil || !mdbsh.Spec.UpgradeStrategy.RollbackOnFailure {
-		mdbsh.Status.UpgradePhase = ""
-		mdbsh.Status.UpgradeStartTime = nil
-		setShardedUpgradeCondition(mdbsh, "UpgradeFailed", metav1.ConditionTrue,
-			"ValidationFailed", "Upgrade validation failed, manual intervention required")
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
+		applyStatus := func() {
+			mdbsh.Status.UpgradePhase = ""
+			mdbsh.Status.UpgradeStartTime = nil
+			setShardedUpgradeCondition(mdbsh, "UpgradeFailed", metav1.ConditionTrue,
+				"ValidationFailed", "Upgrade validation failed, manual intervention required")
+		}
+		applyStatus()
+		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -204,11 +231,14 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeRollback(ctx context.C
 		return ctrl.Result{}, false, err
 	}
 
-	mdbsh.Status.UpgradePhase = ""
-	mdbsh.Status.UpgradeStartTime = nil
-	setShardedUpgradeCondition(mdbsh, "UpgradeRolledBack", metav1.ConditionTrue,
-		"RolledBack", fmt.Sprintf("Rolled back to %s", mdbsh.Status.PreviousVersion))
-	if err := updateStatusWithRetry(ctx, r.Client, mdbsh); err != nil {
+	applyStatus := func() {
+		mdbsh.Status.UpgradePhase = ""
+		mdbsh.Status.UpgradeStartTime = nil
+		setShardedUpgradeCondition(mdbsh, "UpgradeRolledBack", metav1.ConditionTrue,
+			"RolledBack", fmt.Sprintf("Rolled back to %s", mdbsh.Status.PreviousVersion))
+	}
+	applyStatus()
+	if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 		return ctrl.Result{}, false, err
 	}
 	return ctrl.Result{}, true, nil

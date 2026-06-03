@@ -24,32 +24,34 @@ import (
 //  1. 한 reconcile 내에서 같은 객체를 여러 번 mutate한 뒤 마지막에 한 번만 업데이트하므로,
 //     도중에 외부(다른 컨트롤러나 사용자)가 객체를 수정하면 Update가 conflict로 실패하고
 //     reconcile이 처음부터 다시 시작된다. 무한 requeue 루프 가능.
-//  2. mutate 함수 없이 호출하면 latest 상태를 fetch하지 않으므로, status field 외에
-//     spec/metadata 변경이 손실될 위험이 있다.
+//  2. conflict 시 latest를 refetch하면 호출자가 obj에 설정해 둔 status mutation이
+//     서버 상태로 덮어쓰여 silent하게 유실된다 (mutate-after-get 부재).
 //
-// 이 헬퍼는 retry.RetryOnConflict로 conflict를 흡수한다. spec/metadata는 호출자의
-// in-memory 사본을 신뢰(reconcile 컨텍스트의 source of truth가 보통 그것)하되,
-// conflict 시 controller-runtime의 client.Status().Update가 ResourceVersion 충돌을
-// 자동 감지하고 retry 콜백 안에서 다시 시도하도록 한다.
+// 이 헬퍼는 retry.RetryOnConflict로 conflict를 흡수한다. 정상 경로(conflict 없음)는
+// 호출자의 in-memory 사본을 그대로 영속화한다. conflict 발생 시에는 최신 ResourceVersion으로
+// refetch한 뒤, 가변 인자로 받은 mutate 콜백을 다시 적용해 호출자의 status 변경을 잃지 않고
+// 재Update한다. mutate 콜백을 넘기지 않은 기존 호출자는 종전 동작(refetch 후 단순 재시도)을
+// 그대로 유지하므로 점진 마이그레이션이 가능하다.
 //
 // 본 헬퍼는 status subresource만 다루므로 spec field 손실을 일으키지 않는다.
-func updateStatusWithRetry(ctx context.Context, c client.Client, obj client.Object) error {
+func updateStatusWithRetry(ctx context.Context, c client.Client, obj client.Object, mutate ...func()) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		err := c.Status().Update(ctx, obj)
-		if err == nil {
+		if err := c.Status().Update(ctx, obj); err == nil {
 			return nil
-		}
-		// conflict가 아닌 에러는 즉시 반환 (NotFound 등은 retry 의미 없음).
-		if !apierrors.IsConflict(err) {
+		} else if !apierrors.IsConflict(err) {
+			// conflict가 아닌 에러는 즉시 반환 (NotFound 등은 retry 의미 없음).
 			return err
 		}
-		// conflict면 호출자가 보유한 ResourceVersion이 stale이므로 latest를 가져온다.
-		// 이후 retry 콜백이 다시 호출될 때 Update가 새 ResourceVersion으로 시도된다.
-		key := client.ObjectKeyFromObject(obj)
-		if getErr := c.Get(ctx, key, obj); getErr != nil {
-			// fetch 자체가 실패하면 원래 conflict 에러를 그대로 전파.
-			return err
+		// conflict: 호출자가 보유한 ResourceVersion이 stale이므로 최신본으로 refetch한다.
+		if getErr := c.Get(ctx, client.ObjectKeyFromObject(obj), obj); getErr != nil {
+			// fetch 자체가 실패하면 해당 에러를 전파.
+			return getErr
 		}
-		return err
+		// refetch가 호출자의 status 변경을 덮어썼으므로 mutate 콜백으로 재적용 후 다시 Update한다.
+		// 콜백이 없으면(기존 호출자) 갱신된 ResourceVersion으로 한 번 더 재시도한다.
+		for _, m := range mutate {
+			m()
+		}
+		return c.Status().Update(ctx, obj)
 	})
 }
