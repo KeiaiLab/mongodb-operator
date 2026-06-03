@@ -307,6 +307,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 | Date | Change | Refs |
 |---|---|---|
+| 2026-06-03 | Phase 5 brainstorm gate 명시 — heading ⛔ BRAINSTORM GATE 배너 + 해소 절차 3-step (superpowers:brainstorming → 확정/교체/통합 → 입자도 분해). 합의 없는 autonomous 구현 차단 (§1 Think Before Coding). | (phase5-brainstorm-gate) |
 | 2026-06-03 | §3.1.1 QueryableBackup [~]→[x] — verification controller 가 Spec.Queryable 활성 시 BuildQueryableStatefulSet 으로 read-only mongod 자동 생성 + Status.QueryableInstance. 데이터 복원 drill 후속. | (queryable-backup-wiring) |
 | 2026-06-03 | dead-code 통합 — §3.2 UnusedIndex [~]→[x] (fetcher $indexStats 수집 + runAnalysis 통합) + Level V Auto Pilot A등급(PlanMissingIndexActions/PlanSlowQueryHints) → MongoDBInsights Status.AutoPilotActions advisory(DryRun) 배선. generated deepcopy/RBAC 동기화 동반. | #281 #282 #283 |
 | 2026-06-03 | ROADMAP drift 8건 정정 — 코드 실측 검증(workflow 7-agent) 후: §3.2 프로파일링(MongoDB kind)·MissingIndex [~]→[x], §3.2 UnusedIndex 분리 + MongoDBSharded 프로파일링 [ ] 분해, §3.1.1 QueryableBackup [x]→[~] (builder 미통합), §5.4(a) KMS [x] + 경로정정(`internal/controller/encryption/`), §5.6 i18n·ArtifactHub·RBAC cleanup [x], Level V Auto Pilot(#269) 등재. i18n {ko,ja,zh} 재동기는 후속. | drift-correction workflow |
@@ -323,6 +324,12 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 ---
 
 ## Phase 5 — Post-v1.5.0 (candidate baseline, brainstorm pending)
+
+> ⛔ **BRAINSTORM GATE** — 본 Phase 5 전 항목은 사용자 brainstorm 합의 *전까지 구현 착수 금지*.
+> 아래 6 카테고리 (observability v2 / DR / sharded v2 / security v2 / commons import / community) 는
+> *후보 baseline* 이며, `superpowers:brainstorming` 세션에서 *확정 / 교체 / 통합* 결정 후 개별 진행한다.
+> 합의 없는 autonomous 구현은 §1 Think Before Coding (글로벌 `standards/principles.md`) + 본 gate 위반.
+> 게이트 해소 절차: §"Brainstorm gate" sub-section 참조.
 
 > Phase 1-4 100% (93/93) 마감 후 *후속 가치 영역*. 본 section 은 `~/.claude/plans/2026-05-14-4-operators-100pct/P-E.md` 의 후보 6 카테고리 (observability v2 / DR / sharded v2 / security v2 / commons import / community) 를 *기준 baseline* 으로 등재. 사용자 brainstorm session 합의 후 확정 / 교체 / 통합.
 
@@ -368,7 +375,11 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 ### Brainstorm gate
 
-- [ ] Phase 5 영역 사용자 합의 — `superpowers:brainstorming` skill 후 본 6 카테고리 *확정 / 교체 / 통합* 결정
+- [ ] **Phase 5 영역 사용자 합의** — 게이트 해소 절차 (MUST, 순서대로):
+  1. `superpowers:brainstorming` 세션 진입 → 6 후보 카테고리 (observability v2 / DR / sharded v2 / security v2 / commons import / community) 제시
+  2. 사용자가 각 카테고리를 *확정 / 교체 / 통합 / 폐기* 결정
+  3. 확정된 항목만 본 Phase 5 에 `[ ]` sub-task 로 입자도 분해 + 개별 PR
+  - 본 게이트 미해소 상태에서 Phase 5 코드 구현 착수 = §1 Think Before Coding 위반 (헤딩 ⛔ BRAINSTORM GATE 배너 참조)
 
 Verify (section 존재 확인):
 
