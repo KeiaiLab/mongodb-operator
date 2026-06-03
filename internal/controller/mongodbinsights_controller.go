@@ -155,6 +155,15 @@ func (r *MongoDBInsightsReconciler) runAnalysis(ctx context.Context, in *mongodb
 		return nil, 0, err
 	}
 	recs := insights.Analyze(docs, in.Spec.SlowQueryThresholdMs)
+
+	// UnusedIndex 분석 (ROADMAP §3.2). index stats 수집 실패는 *비치명* —
+	// profile 기반 recommendation 은 유지 ($indexStats 권한 부족 / 부분 실패 흡수).
+	if stats, statsErr := fetcher.FetchIndexStats(ctx); statsErr != nil {
+		log.FromContext(ctx).V(1).Info("index stats fetch 실패 (비치명, profile 분석 유지)", "err", statsErr)
+	} else {
+		recs = append(recs, insights.AnalyzeIndexUsage(stats)...)
+	}
+
 	return recs, int32(len(docs)), nil
 }
 

@@ -11,6 +11,7 @@ Licensed under the Apache License, Version 2.0.
 package insights
 
 import (
+	"strings"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -163,5 +164,53 @@ func TestReadInt64Any(t *testing.T) {
 		if got := ReadInt64Any(c.in); got != c.want {
 			t.Errorf("ReadInt64Any(%v) = %d, want %d", c.in, got, c.want)
 		}
+	}
+}
+
+// --- $indexStats 변환 (UnusedIndex 통합, ROADMAP §3.2) ---
+
+func TestConvertIndexStat_NameAndAccesses(t *testing.T) {
+	m := bson.M{"name": "email_1", "accesses": bson.M{"ops": int64(42)}}
+	got := ConvertIndexStat("shop.users", m)
+	if got.NS != "shop.users" || got.IndexName != "email_1" || got.Accesses != 42 {
+		t.Errorf("ConvertIndexStat 기본 추출 실패, got %+v", got)
+	}
+}
+
+func TestConvertIndexStat_ZeroAccessesWhenMissing(t *testing.T) {
+	// accesses 필드 부재 → 0 (UnusedIndex 후보).
+	m := bson.M{"name": "stale_idx"}
+	got := ConvertIndexStat("shop.users", m)
+	if got.IndexName != "stale_idx" || got.Accesses != 0 {
+		t.Errorf("accesses 부재 시 0 기대, got %+v", got)
+	}
+}
+
+func TestConvertIndexStat_BSON_D_Accesses(t *testing.T) {
+	// decode 모드별 accesses 가 bson.D 변종 → NormalizeMap 흡수.
+	m := bson.M{"name": "compound_1", "accesses": bson.D{{Key: "ops", Value: int32(7)}}}
+	got := ConvertIndexStat("db.coll", m)
+	if got.Accesses != 7 {
+		t.Errorf("bson.D accesses 추출 실패, got %+v", got)
+	}
+}
+
+func TestConvertIndexStat_ComposesWithAnalyzeIndexUsage(t *testing.T) {
+	// $indexStats row → ConvertIndexStat → AnalyzeIndexUsage end-to-end (순수).
+	// _id_ skip + 0-access unused 검출 검증.
+	stats := []IndexStat{
+		ConvertIndexStat("app.users", bson.M{"name": "_id_", "accesses": bson.M{"ops": int64(0)}}),
+		ConvertIndexStat("app.users", bson.M{"name": "unused_1", "accesses": bson.M{"ops": int64(0)}}),
+		ConvertIndexStat("app.users", bson.M{"name": "hot_1", "accesses": bson.M{"ops": int64(999)}}),
+	}
+	recs := AnalyzeIndexUsage(stats)
+	if len(recs) != 1 {
+		t.Fatalf("UnusedIndex 1건 기대 (_id_ + hot 제외), got %d: %+v", len(recs), recs)
+	}
+	if recs[0].Type != RecTypeUnusedIndex {
+		t.Errorf("Type RecTypeUnusedIndex 기대, got %q", recs[0].Type)
+	}
+	if !strings.Contains(recs[0].Detail, "unused_1") {
+		t.Errorf("Detail 에 unused_1 기대, got %q", recs[0].Detail)
 	}
 }

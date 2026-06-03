@@ -95,8 +95,8 @@ func AnalyzeIndexUsage(stats []IndexStat) []mongodbv1alpha1.Recommendation {
 		}
 		if s.Accesses == 0 {
 			recs = append(recs, mongodbv1alpha1.Recommendation{
-				Type:     "UnusedIndex",
-				Severity: "warning",
+				Type:     RecTypeUnusedIndex,
+				Severity: SevWarning,
 				Detail:   fmt.Sprintf("Index %q on %s has 0 accesses — consider dropping", s.IndexName, s.NS),
 			})
 		}

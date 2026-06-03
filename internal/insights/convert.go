@@ -75,6 +75,22 @@ func ConvertProfile(m bson.M) ProfileDoc {
 	return d
 }
 
+// ConvertIndexStat — bson.M ($indexStats row) → IndexStat (UnusedIndex 분석 입력).
+//
+// $indexStats row 는 name + accesses.ops (인덱스 접근 카운터) 를 가지며, ops 가
+// 0 이면 미사용 인덱스 후보다. accesses 는 decode 모드별 bson.M | bson.D 변종이라
+// NormalizeMap 으로 흡수한다 (ConvertProfile 의 BSON variance 패턴 정합).
+func ConvertIndexStat(ns string, m bson.M) IndexStat {
+	st := IndexStat{NS: ns}
+	if v, ok := m["name"].(string); ok {
+		st.IndexName = v
+	}
+	if acc := NormalizeMap(m["accesses"]); acc != nil {
+		st.Accesses = ReadInt64Any(acc["ops"])
+	}
+	return st
+}
+
 // NormalizeMap — bson.M | bson.D | map[string]any → map[string]any.
 // nil 또는 인식 불가 시 nil 반환.
 func NormalizeMap(v any) map[string]any {

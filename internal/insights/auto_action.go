@@ -21,6 +21,7 @@ import (
 const (
 	RecTypeMissingIndex     = "MissingIndex"
 	RecTypeSlowQueryPattern = "SlowQueryPattern"
+	RecTypeUnusedIndex      = "UnusedIndex"
 )
 
 // IndexAction describes a planned createIndex() operation.
