@@ -1012,6 +1012,96 @@ func TestPodSecurityRestrictedCompliance(t *testing.T) {
 			assertRestricted(t, "container/"+c.Name, c.SecurityContext)
 		}
 	})
+
+	// PR-1 결함 #3: buildVolumePermissionsInit 가 RunAsUser=0 + CHOWN cap +
+	// seccompProfile 누락으로 PSA restricted 위반이던 것을 회귀 가드한다.
+	t.Run("VolumePermissions init container", func(t *testing.T) {
+		c := buildVolumePermissionsInit(&mongodbv1alpha1.VolumePermissionsSpec{Enabled: true})
+		assertRestricted(t, "init/"+c.Name, c.SecurityContext)
+		// root chown 금지 — fsGroup=999 위임 + 비특권 chown (자기 uid 999).
+		require.NotNil(t, c.SecurityContext.RunAsUser)
+		assert.Equal(t, int64(999), *c.SecurityContext.RunAsUser,
+			"non-root 999 — root chown 금지")
+		require.NotNil(t, c.SecurityContext.RunAsNonRoot)
+		assert.True(t, *c.SecurityContext.RunAsNonRoot, "runAsNonRoot=true")
+		assert.NotContains(t, c.SecurityContext.Capabilities.Add, corev1.Capability("CHOWN"),
+			"CHOWN cap 금지 — PSA restricted 는 cap add 불허")
+	})
+
+	// PR-1 결함 #4: BuildQueryableStatefulSet 의 mongod 컨테이너 + pod-level
+	// SecurityContext 완전 누락이던 것을 회귀 가드한다.
+	t.Run("BuildQueryableStatefulSet mongod", func(t *testing.T) {
+		spec := &mongodbv1alpha1.QueryableBackupSpec{Enabled: true, TTL: "168h"}
+		sts := BuildQueryableStatefulSet(queryableTestBackup(), spec)
+		require.NotNil(t, sts)
+		require.NotNil(t, sts.Spec.Template.Spec.SecurityContext,
+			"pod-level SecurityContext 필수")
+		for _, c := range sts.Spec.Template.Spec.Containers {
+			assertRestricted(t, "container/"+c.Name, c.SecurityContext)
+		}
+	})
+
+	// PR-1 결함 #2 sister: BuildBackupCronJob 의 scheduler 컨테이너도 restricted.
+	t.Run("BuildBackupCronJob scheduler", func(t *testing.T) {
+		cj := BuildBackupCronJob("c1", "data", "0 2 * * *", "MongoDB",
+			mongodbv1alpha1.BackupSpec{})
+		for _, c := range cj.Spec.JobTemplate.Spec.Template.Spec.Containers {
+			assertRestricted(t, "container/"+c.Name, c.SecurityContext)
+		}
+	})
+}
+
+// TestBuildRestoreJob 는 PR-1 결함 #1 (Spec.Restore nil 역참조 → panic) 의
+// 회귀 가드다. nil 가드 도입 후 시그니처가 (*batchv1.Job, error) 로 변경됨.
+func TestBuildRestoreJob(t *testing.T) {
+	t.Run("Spec.Restore nil → 에러 반환 + no-panic", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("BuildRestoreJob panicked on nil Restore: %v", r)
+			}
+		}()
+		backup := &mongodbv1alpha1.MongoDBBackup{
+			ObjectMeta: metav1.ObjectMeta{Name: "plain", Namespace: "data"},
+			Spec:       mongodbv1alpha1.MongoDBBackupSpec{Restore: nil},
+		}
+		job, err := BuildRestoreJob(backup, "plain-backup-uri")
+		require.Error(t, err, "Spec.Restore nil 이면 에러")
+		assert.Nil(t, job, "에러 시 Job 은 nil")
+		assert.Contains(t, err.Error(), "Spec.Restore is nil")
+	})
+
+	t.Run("정상 restore → Job 생성 + ClaimName 설정", func(t *testing.T) {
+		backup := &mongodbv1alpha1.MongoDBBackup{
+			ObjectMeta: metav1.ObjectMeta{Name: "r1", Namespace: "data"},
+			Spec: mongodbv1alpha1.MongoDBBackupSpec{
+				Restore: &mongodbv1alpha1.RestoreSpec{SourceBackupName: "src-backup"},
+			},
+		}
+		job, err := BuildRestoreJob(backup, "r1-backup-uri")
+		require.NoError(t, err)
+		require.NotNil(t, job)
+		assert.Equal(t, "r1-restore", job.Name)
+
+		require.Len(t, job.Spec.Template.Spec.Volumes, 1)
+		pvc := job.Spec.Template.Spec.Volumes[0].PersistentVolumeClaim
+		require.NotNil(t, pvc, "source volume 은 PVC")
+		assert.Equal(t, "src-backup", pvc.ClaimName,
+			"ClaimName = Spec.Restore.SourceBackupName")
+	})
+}
+
+// TestBuildBackupCronJob_ImageNotBitnamiNorLatest 는 PR-1 결함 #2 의 회귀
+// 가드다. scheduler 이미지가 Bitnami (ADR-0136 영구금지) 도, :latest
+// (불변성 위반) 도 아니어야 한다.
+func TestBuildBackupCronJob_ImageNotBitnamiNorLatest(t *testing.T) {
+	cj := BuildBackupCronJob("c1", "data", "0 2 * * *", "MongoDB",
+		mongodbv1alpha1.BackupSpec{})
+	require.Len(t, cj.Spec.JobTemplate.Spec.Template.Spec.Containers, 1)
+	img := cj.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image
+	assert.NotContains(t, img, "bitnami/",
+		"Bitnami 이미지 금지 — ADR-0136")
+	assert.NotContains(t, img, ":latest",
+		":latest 태그 금지 — 이미지 불변성")
 }
 
 // TestPVCRetentionPolicyPropagation은 StorageSpec.PersistentVolumeClaimRetentionPolicy

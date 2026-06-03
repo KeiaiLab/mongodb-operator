@@ -116,7 +116,10 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			logger.V(1).Info("connection string unavailable yet; will retry", "err", err)
 			return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
 		}
-		restoreJob := resources.BuildRestoreJob(backup, connectionString)
+		restoreJob, err := resources.BuildRestoreJob(backup, connectionString)
+		if err != nil {
+			return r.updateStatusError(ctx, backup, err)
+		}
 		if err := r.createOrUpdate(ctx, backup, restoreJob); err != nil {
 			return r.updateStatusError(ctx, backup, err)
 		}

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -385,6 +386,12 @@ func (r *MongoDBReconciler) reconcilePDB(ctx context.Context, mdb *mongodbv1alph
 }
 
 func (r *MongoDBReconciler) areAllPodsReady(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (bool, error) {
+	// Members=0은 미구성 상태이므로 ready로 오판하지 않는다(B-MEDIUM).
+	// 가드가 없으면 ReadyReplicas(0)==Members(0)이 true가 되어버린다.
+	if mdb.Spec.Members == 0 {
+		return false, nil
+	}
+
 	sts := &appsv1.StatefulSet{}
 	if err := r.Get(ctx, types.NamespacedName{Name: mdb.Name, Namespace: mdb.Namespace}, sts); err != nil {
 		return false, err
@@ -769,21 +776,40 @@ func (r *MongoDBReconciler) reconcileExporterSecret(ctx context.Context, mdb *mo
 	}, adminSecret); err != nil {
 		return err
 	}
-	user := string(adminSecret.Data["username"])
-	pass := string(adminSecret.Data["password"])
 
-	uri := fmt.Sprintf("mongodb://%s:%s@%s/?authSource=admin", user, pass, host)
+	uri, err := buildExporterURI(adminSecret, host)
+	if err != nil {
+		return err
+	}
 
 	desired := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: mdb.Namespace},
 		Type:       corev1.SecretTypeOpaque,
 		StringData: map[string]string{"uri": uri},
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, desired, func() error {
+	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, desired, func() error {
 		desired.StringData = map[string]string{"uri": uri}
 		return controllerutil.SetControllerReference(mdb, desired, r.Scheme)
 	})
 	return err
+}
+
+// buildExporterURI는 admin Secret과 host로부터 exporter 접속 URI를 조립한다.
+// username/password 키는 ok-idiom으로 강제 검증하며(부재 시 빈 값 삽입 대신
+// 에러 반환), 자격증명은 url.UserPassword로 인코딩해 예약문자(@ : / 등)가
+// 들어가도 URI 구조가 깨지지 않게 한다(B-HIGH 보안 fix).
+func buildExporterURI(adminSecret *corev1.Secret, host string) (string, error) {
+	user, ok := adminSecret.Data["username"]
+	if !ok {
+		return "", fmt.Errorf("username key not found in admin credentials secret %s", adminSecret.Name)
+	}
+	pass, ok := adminSecret.Data["password"]
+	if !ok {
+		return "", fmt.Errorf("password key not found in admin credentials secret %s", adminSecret.Name)
+	}
+
+	userinfo := url.UserPassword(string(user), string(pass))
+	return fmt.Sprintf("mongodb://%s@%s/?authSource=admin", userinfo.String(), host), nil
 }
 
 // firstLine은 multiline 에러 message에서 첫 줄만 잘라 반환한다.

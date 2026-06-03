@@ -18,6 +18,8 @@ package controller
 
 import (
 	"context"
+	"strings"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -28,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
@@ -209,4 +212,137 @@ func secretExists(ctx context.Context, name, namespace string) bool {
 	secret := &corev1.Secret{}
 	err := k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, secret)
 	return err == nil
+}
+
+// TestBuildExporterURI_EncodesSpecialPassword는 패스워드에 URI 예약문자
+// (@ : / 등)가 들어가도 net/url로 안전하게 인코딩되어 URI 구조가 깨지지
+// 않는지 회귀 가드한다(B-HIGH 보안: fmt.Sprintf 원시 조립 금지).
+func TestBuildExporterURI_EncodesSpecialPassword(t *testing.T) {
+	host := "rs-headless.ns.svc.cluster.local:27017"
+	secret := &corev1.Secret{
+		Data: map[string][]byte{
+			"username": []byte("admin"),
+			// @ : / 는 userinfo 구분자라 미인코딩 시 URI가 깨진다.
+			"password": []byte("p@ss:w/rd"),
+		},
+	}
+
+	uri, err := buildExporterURI(secret, host)
+	if err != nil {
+		t.Fatalf("기대 err=nil, got %v", err)
+	}
+
+	// 인코딩되면 raw 예약문자가 userinfo 영역에 그대로 남지 않는다.
+	if strings.Contains(uri, "p@ss:w/rd") {
+		t.Fatalf("패스워드가 미인코딩 상태로 URI에 노출됨: %q", uri)
+	}
+	want := "mongodb://admin:p%40ss%3Aw%2Frd@" + host + "/?authSource=admin"
+	if uri != want {
+		t.Fatalf("URI 불일치\n기대: %q\n실제: %q", want, uri)
+	}
+}
+
+// TestBuildExporterURI_PlainPassword는 예약문자가 없는 일반 패스워드의
+// 정상 경로(기존 동작 보존)를 검증한다.
+func TestBuildExporterURI_PlainPassword(t *testing.T) {
+	host := "rs-headless.ns.svc.cluster.local:27017"
+	secret := &corev1.Secret{
+		Data: map[string][]byte{
+			"username": []byte("admin"),
+			"password": []byte("secret123"),
+		},
+	}
+
+	uri, err := buildExporterURI(secret, host)
+	if err != nil {
+		t.Fatalf("기대 err=nil, got %v", err)
+	}
+	want := "mongodb://admin:secret123@" + host + "/?authSource=admin"
+	if uri != want {
+		t.Fatalf("URI 불일치\n기대: %q\n실제: %q", want, uri)
+	}
+}
+
+// TestBuildExporterURI_MissingUsername은 username 키 부재 시 빈 문자열을
+// URI에 삽입하지 않고 에러를 반환하는지 검증한다(B-HIGH: ok-idiom 강제).
+func TestBuildExporterURI_MissingUsername(t *testing.T) {
+	host := "rs-headless.ns.svc.cluster.local:27017"
+	secret := &corev1.Secret{
+		Data: map[string][]byte{
+			"password": []byte("secret123"),
+		},
+	}
+
+	_, err := buildExporterURI(secret, host)
+	if err == nil {
+		t.Fatalf("username 부재 시 에러를 기대했으나 nil")
+	}
+	if !strings.Contains(err.Error(), "username") {
+		t.Fatalf("에러 메시지에 username 누락 사유 기대, got %q", err.Error())
+	}
+}
+
+// TestBuildExporterURI_MissingPassword은 password 키 부재 시 에러를
+// 반환하는지 검증한다(getAdminPassword ok-idiom 패턴과 정합).
+func TestBuildExporterURI_MissingPassword(t *testing.T) {
+	host := "rs-headless.ns.svc.cluster.local:27017"
+	secret := &corev1.Secret{
+		Data: map[string][]byte{
+			"username": []byte("admin"),
+		},
+	}
+
+	_, err := buildExporterURI(secret, host)
+	if err == nil {
+		t.Fatalf("password 부재 시 에러를 기대했으나 nil")
+	}
+	if !strings.Contains(err.Error(), "password") {
+		t.Fatalf("에러 메시지에 password 누락 사유 기대, got %q", err.Error())
+	}
+}
+
+// TestAreAllPodsReady_ZeroMembersReturnsFalse는 Spec.Members=0 일 때
+// ReadyReplicas(0)==Members(0)로 인한 true 오판을 가드한다(B-MEDIUM).
+// Members=0은 ready가 아니라 미구성 상태이므로 false여야 한다.
+func TestAreAllPodsReady_ZeroMembersReturnsFalse(t *testing.T) {
+	s := newTestScheme(t)
+	mdb := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "ns"},
+		Spec:       mongodbv1alpha1.MongoDBSpec{Members: 0},
+	}
+	// Members=0 가드는 STS Get 이전에 동작해야 하므로 STS는 일부러 생성하지 않는다.
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(mdb).Build()
+	r := &MongoDBReconciler{Client: cl, Scheme: s}
+
+	ready, err := r.areAllPodsReady(context.Background(), mdb)
+	if err != nil {
+		t.Fatalf("기대 err=nil(STS Get 전 단락), got %v", err)
+	}
+	if ready {
+		t.Fatalf("Members=0 시 ready=false를 기대했으나 true")
+	}
+}
+
+// TestAreAllPodsReady_MatchesReadyReplicas는 정상 경로(Members>0)에서
+// ReadyReplicas==Members 일 때 true를 반환하는지 보존 검증한다.
+func TestAreAllPodsReady_MatchesReadyReplicas(t *testing.T) {
+	s := newTestScheme(t)
+	mdb := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "ns"},
+		Spec:       mongodbv1alpha1.MongoDBSpec{Members: 3},
+	}
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "ns"},
+		Status:     appsv1.StatefulSetStatus{ReadyReplicas: 3},
+	}
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(mdb, sts).Build()
+	r := &MongoDBReconciler{Client: cl, Scheme: s}
+
+	ready, err := r.areAllPodsReady(context.Background(), mdb)
+	if err != nil {
+		t.Fatalf("기대 err=nil, got %v", err)
+	}
+	if !ready {
+		t.Fatalf("ReadyReplicas==Members 시 ready=true를 기대했으나 false")
+	}
 }
