@@ -244,6 +244,33 @@ func TestValidateBackupSpec_OmitEmptyTrap(t *testing.T) {
 			t.Error("empty s3.credentialsRef.name should reject")
 		}
 	})
+	// [HIGH] type=s3 인데 S3 block 자체가 nil — 기존 검증이 묵묵히 통과하던
+	// 결함. controller 가 bucket/credentialsRef 없이 backup job 시작 → silent
+	// failure. type=s3 면 S3 block 존재를 *required* 로 강제해야 함.
+	t.Run("type=s3 + S3 block nil → reject", func(t *testing.T) {
+		t.Parallel()
+		b := &mongodbv1alpha1.BackupSpec{
+			Enabled:  true,
+			Schedule: "0 2 * * *",
+			Storage: mongodbv1alpha1.BackupStorageSpec{
+				Type: "s3",
+				S3:   nil, // type=s3 인데 block 누락
+			},
+		}
+		errs := validateBackupSpec(nil, b)
+		if len(errs) == 0 {
+			t.Fatal("type=s3 + S3==nil should produce a non-empty ErrorList")
+		}
+		var hasS3Err bool
+		for _, e := range errs {
+			if strings.Contains(e.Error(), "storage.s3") {
+				hasS3Err = true
+			}
+		}
+		if !hasS3Err {
+			t.Errorf("type=s3 + S3==nil should reject with storage.s3 required error, got %v", errs)
+		}
+	})
 }
 
 func TestValidateMongoDBSpec_AuthSecretRef_Required(t *testing.T) {

@@ -75,7 +75,10 @@ func (r *MongoDBBackupVerificationReconciler) Reconcile(ctx context.Context, req
 			return ctrl.Result{}, err
 		}
 
-		restoreJob := resources.BuildRestoreJob(backup, backup.Name+"-backup-uri")
+		restoreJob, err := resources.BuildRestoreJob(backup, backup.Name+"-backup-uri")
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("build restore job: %w", err)
+		}
 		restoreJob.Name = v.Name + "-verify-restore"
 		if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, restoreJob, func() error {
 			return controllerutil.SetControllerReference(v, restoreJob, r.Scheme)

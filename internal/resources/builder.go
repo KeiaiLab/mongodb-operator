@@ -963,23 +963,19 @@ func buildVolumePermissionsInit(spec *mongodbv1alpha1.VolumePermissionsSpec) cor
 	return corev1.Container{
 		Name:  "volume-permissions",
 		Image: img,
+		// 결함 #3: root chown (RunAsUser=0 + CHOWN cap) 은 PSA restricted 위반.
+		// pod-level fsGroup=999 (buildDefaultSecurityContext) 가 PVC ownership 을
+		// 이미 999 로 정합시키므로, 비특권 uid 999 로 자기 소유 파일에 chown 하면
+		// CAP_CHOWN 없이 성공한다. 이미 정합된 경우 no-op success — chmod 만 실효.
 		Command: []string{
 			"sh", "-c",
-			"chown -R 999:999 /data/db && chmod -R 0755 /data/db",
+			"chown -R 999:999 /data/db 2>/dev/null || true; chmod -R 0755 /data/db",
 		},
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "data", MountPath: "/data/db"},
 		},
-		Resources: buildResourceRequirements(spec.Resources),
-		SecurityContext: &corev1.SecurityContext{
-			RunAsUser:                ptr.To[int64](0),
-			RunAsNonRoot:             ptr.To(false),
-			AllowPrivilegeEscalation: ptr.To(false),
-			Capabilities: &corev1.Capabilities{
-				Add:  []corev1.Capability{"CHOWN"},
-				Drop: []corev1.Capability{"ALL"},
-			},
-		},
+		Resources:       buildResourceRequirements(spec.Resources),
+		SecurityContext: buildKeyfileInitContainerSecurityContext(),
 	}
 }
 
@@ -1517,23 +1513,30 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 //   - bootstrap-admin.sh: mongos pod 자체가 자기 mongos에 localhost 연결로 첫
 //     admin user를 만든다. operator는 pods/exec을 호출하지 않는다. ReplicaSet의
 //     동일 패턴(BuildMongoDBConfigMap의 bootstrap-admin.sh)과 동일.
-func BuildMongosConfigMap(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.ConfigMap {
-	var configdbValue string
+//
+// buildMongosConfigDB 는 mongos --configdb 인자로 쓰이는 config server
+// connection string 을 만든다. 결함 #5: BuildMongosConfigMap 과
+// BuildMongosDeployment 양쪽에 동일 로직이 인라인 중복이던 것을 단일 진실원으로
+// 추출. External 지정 시 외부 RS, 미지정 시 in-cluster cfg STS host 목록.
+func buildMongosConfigDB(mdbsh *mongodbv1alpha1.MongoDBSharded) string {
 	if mdbsh.Spec.ConfigServer.External != nil {
-		configdbValue = fmt.Sprintf("%s/%s",
+		return fmt.Sprintf("%s/%s",
 			mdbsh.Spec.ConfigServer.External.ReplicaSetName,
 			strings.Join(mdbsh.Spec.ConfigServer.External.Hosts, ","))
-	} else {
-		var configHosts string
-		for i := int32(0); i < mdbsh.Spec.ConfigServer.Members; i++ {
-			if i > 0 {
-				configHosts += ","
-			}
-			configHosts += fmt.Sprintf("%s-cfg-%d.%s-cfg-headless.%s.svc.cluster.local:27019",
-				mdbsh.Name, i, mdbsh.Name, mdbsh.Namespace)
-		}
-		configdbValue = fmt.Sprintf("%s-cfg/%s", mdbsh.Name, configHosts)
 	}
+	var configHosts string
+	for i := int32(0); i < mdbsh.Spec.ConfigServer.Members; i++ {
+		if i > 0 {
+			configHosts += ","
+		}
+		configHosts += fmt.Sprintf("%s-cfg-%d.%s-cfg-headless.%s.svc.cluster.local:27019",
+			mdbsh.Name, i, mdbsh.Name, mdbsh.Namespace)
+	}
+	return fmt.Sprintf("%s-cfg/%s", mdbsh.Name, configHosts)
+}
+
+func BuildMongosConfigMap(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.ConfigMap {
+	configdbValue := buildMongosConfigDB(mdbsh)
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1658,23 +1661,8 @@ func BuildMongosStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.State
 func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deployment {
 	labels := buildLabels(mdbsh.Name, "mongos")
 
-	// Build config server connection string
-	var configdbArg string
-	if mdbsh.Spec.ConfigServer.External != nil {
-		configdbArg = fmt.Sprintf("%s/%s",
-			mdbsh.Spec.ConfigServer.External.ReplicaSetName,
-			strings.Join(mdbsh.Spec.ConfigServer.External.Hosts, ","))
-	} else {
-		var configHosts string
-		for i := int32(0); i < mdbsh.Spec.ConfigServer.Members; i++ {
-			if i > 0 {
-				configHosts += ","
-			}
-			configHosts += fmt.Sprintf("%s-cfg-%d.%s-cfg-headless.%s.svc.cluster.local:27019",
-				mdbsh.Name, i, mdbsh.Name, mdbsh.Namespace)
-		}
-		configdbArg = fmt.Sprintf("%s-cfg/%s", mdbsh.Name, configHosts)
-	}
+	// Build config server connection string (결함 #5: 공통 헬퍼 위임).
+	configdbArg := buildMongosConfigDB(mdbsh)
 
 	args := []string{
 		"--configdb", configdbArg,
@@ -2089,11 +2077,15 @@ echo "Created backup ${BACKUP_NAME}"
 							Containers: []corev1.Container{
 								{
 									Name:    "scheduler",
-									Image:   "bitnami/kubectl:latest",
+									Image:   "registry.k8s.io/kubectl:v1.31.0",
 									Command: []string{"/bin/sh", "-c"},
 									Args:    []string{script},
+									// 결함 #2 sister / 결함 #4: scheduler 컨테이너도
+									// PSA restricted 충족 (Bitnami 이미지 교체와 함께).
+									SecurityContext: buildDefaultContainerSecurityContext(),
 								},
 							},
+							SecurityContext: buildDefaultSecurityContext(),
 						},
 					},
 				},
@@ -2126,7 +2118,12 @@ func buildBackupScript(backup *mongodbv1alpha1.MongoDBBackup) string {
 //
 // 본 cycle 의 acceptance: Job 객체 생성 + controller 가 spawn. 실제 oplog
 // archive 의 S3 fetch + mongorestore 실행 정합은 cycle 16 운영 강화 시점.
-func BuildRestoreJob(backup *mongodbv1alpha1.MongoDBBackup, authSecretName string) *batchv1.Job {
+func BuildRestoreJob(backup *mongodbv1alpha1.MongoDBBackup, authSecretName string) (*batchv1.Job, error) {
+	// 결함 #1: 일반 백업 (Spec.Restore=nil) verify 시 nil 역참조 panic 차단.
+	// 본 함수는 restore 작업 (Spec.Restore != nil) 에 대해서만 호출되어야 한다.
+	if backup.Spec.Restore == nil {
+		return nil, fmt.Errorf("backup %s: Spec.Restore is nil", backup.Name)
+	}
 	labels := buildLabels(backup.Name, "restore")
 	backoff := int32(3)
 	ttl := int32(86400)
@@ -2193,7 +2190,7 @@ echo "[restore] completed"
 				},
 			},
 		},
-	}
+	}, nil
 }
 
 // BuildMongoDBPDB는 MongoDB ReplicaSet workload를 위한 PodDisruptionBudget을 생성한다.
@@ -2607,7 +2604,12 @@ func BuildQueryableStatefulSet(backup *mongodbv1alpha1.MongoDBBackup, spec *mong
 								corev1.ResourceMemory: resource.MustParse("256Mi"),
 							},
 						},
+						// 결함 #4: SecurityContext 완전 누락이던 read-only mongod 에
+						// PSA restricted 충족 컨텍스트 추가. --noauth read-only 라도
+						// 비특권 999 로 기동 가능 (다른 STS 빌더와 동일).
+						SecurityContext: buildDefaultContainerSecurityContext(),
 					}},
+					SecurityContext: buildDefaultSecurityContext(),
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{{

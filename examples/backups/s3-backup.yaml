@@ -134,7 +134,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: backup-creator
-              image: bitnami/kubectl:latest
+              image: registry.k8s.io/kubectl:v1.31.0
               command:
                 - /bin/sh
                 - -c

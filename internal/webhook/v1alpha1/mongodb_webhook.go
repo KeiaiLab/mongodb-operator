@@ -202,19 +202,29 @@ func validateBackupSpec(path *field.Path, b *mongodbv1alpha1.BackupSpec) field.E
 			"backup.schedule must be non-empty cron expression when backup.enabled=true (e.g. \"0 2 * * *\")",
 		))
 	}
-	if b.Storage.Type == "s3" && b.Storage.S3 != nil {
-		s3 := b.Storage.S3
-		if s3.Bucket == "" {
-			errs = append(errs, field.Invalid(
-				path.Child("storage", "s3", "bucket"), "",
-				"backup.storage.s3.bucket must be non-empty when type=s3",
+	if b.Storage.Type == "s3" {
+		// type=s3 인데 S3 block 자체가 nil 이면 bucket/credentialsRef 를 검증할
+		// 대상조차 없음 → controller 가 backup job 을 silent skip 또는 즉시 실패.
+		// block 존재를 required 로 강제.
+		if b.Storage.S3 == nil {
+			errs = append(errs, field.Required(
+				path.Child("storage", "s3"),
+				"backup.storage.s3 must be set when type=s3",
 			))
-		}
-		if s3.CredentialsRef.Name == "" {
-			errs = append(errs, field.Invalid(
-				path.Child("storage", "s3", "credentialsRef", "name"), "",
-				"backup.storage.s3.credentialsRef.name must be non-empty when type=s3",
-			))
+		} else {
+			s3 := b.Storage.S3
+			if s3.Bucket == "" {
+				errs = append(errs, field.Invalid(
+					path.Child("storage", "s3", "bucket"), "",
+					"backup.storage.s3.bucket must be non-empty when type=s3",
+				))
+			}
+			if s3.CredentialsRef.Name == "" {
+				errs = append(errs, field.Invalid(
+					path.Child("storage", "s3", "credentialsRef", "name"), "",
+					"backup.storage.s3.credentialsRef.name must be non-empty when type=s3",
+				))
+			}
 		}
 	}
 	return errs
