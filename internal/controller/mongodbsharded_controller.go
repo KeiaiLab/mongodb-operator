@@ -63,6 +63,16 @@ type MongoDBShardedReconciler struct {
 	Recorder events.EventRecorder
 }
 
+// ensureShardedUpgradeStartTime은 업그레이드 시작 시각이 아직 없을 때만 현재
+// 시각으로 설정한다(결함 #12). 이미 기록돼 있으면 보존 — conflict 후 refetch 나
+// 재시도 시 서버의 기존 값을 덮어쓰지 않아 업그레이드 소요시간 계산이 안정적이다.
+func ensureShardedUpgradeStartTime(mdbsh *mongodbv1alpha1.MongoDBSharded) {
+	if mdbsh.Status.UpgradeStartTime == nil {
+		now := metav1.Now()
+		mdbsh.Status.UpgradeStartTime = &now
+	}
+}
+
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbshardeds,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbshardeds/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbshardeds/finalizers,verbs=update
@@ -171,8 +181,8 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if mdbsh.Status.UpgradePhase == UpgradePhaseUpgrading {
 		setValidating := func() {
 			mdbsh.Status.UpgradePhase = UpgradePhaseValidating
-			now := metav1.Now()
-			mdbsh.Status.UpgradeStartTime = &now
+			// 기존 시작 시각 보존 — 이미 기록돼 있으면 덮어쓰지 않는다(결함 #12).
+			ensureShardedUpgradeStartTime(mdbsh)
 		}
 		setValidating()
 		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, setValidating); err != nil {

@@ -93,7 +93,12 @@ func (r *MongoDBBackupVerificationReconciler) Reconcile(ctx context.Context, req
 		jobName := v.Name + "-verify-restore"
 		job := &batchv1.Job{}
 		if err := r.Get(ctx, types.NamespacedName{Name: jobName, Namespace: v.Namespace}, job); err != nil {
-			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			// Job 부재(NotFound)는 아직 생성 전파 중일 수 있으므로 재큐만,
+			// 그 외 일시적 API 오류는 error 를 반환해 backoff/관찰 가능하게 한다.
+			if apierrors.IsNotFound(err) {
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			}
+			return ctrl.Result{}, err
 		}
 
 		for _, c := range job.Status.Conditions {

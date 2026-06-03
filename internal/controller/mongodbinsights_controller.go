@@ -104,13 +104,19 @@ func (r *MongoDBInsightsReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		MetricInsightsAnalysisTotal.WithLabelValues(in.Namespace, in.Name, "success").Inc()
 		MetricInsightsSampledTotal.WithLabelValues(in.Namespace, in.Name).Add(float64(sampled))
 		// 이전 cycle 의 active recommendations 카운트 reset 후 재기록 (gauge semantics).
+		// Gauge 는 누적이 아닌 현재 값이므로 (type, severity) 별 개수를 집계해 Set 한다
+		// (.Inc() 는 Counter 의미라 reconcile 마다 잘못 누적됨).
 		MetricInsightsRecommendations.DeletePartialMatch(prometheus.Labels{
 			"namespace": in.Namespace, "name": in.Name,
 		})
+		recCounts := make(map[[2]string]int, len(recs))
 		for _, rec := range recs {
+			recCounts[[2]string{rec.Type, rec.Severity}]++
+		}
+		for key, count := range recCounts {
 			MetricInsightsRecommendations.WithLabelValues(
-				in.Namespace, in.Name, rec.Type, rec.Severity,
-			).Inc()
+				in.Namespace, in.Name, key[0], key[1],
+			).Set(float64(count))
 		}
 		in.Status.Phase = insightsPhaseReady
 		in.Status.LastAnalysisTime = &now

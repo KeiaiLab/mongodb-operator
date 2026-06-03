@@ -18,10 +18,11 @@ func TestPlanMissingIndexActions_DisabledSpec(t *testing.T) {
 }
 
 func TestPlanMissingIndexActions_FiltersByType(t *testing.T) {
+	// analyzer 는 NS 를 구조화 필드(DB/Collection)로 채운다 — joinNS 가 이를 사용.
 	recs := []mongodbv1alpha1.Recommendation{
-		{Type: "MissingIndex", Severity: "warning", Detail: "create index on db.users keys: [email]"},
-		{Type: "UnusedIndex", Severity: "warning", Detail: "drop index on db.users"},
-		{Type: "SlowQueryPattern", Severity: "warning", Detail: "slow query on db.orders"},
+		{Type: "MissingIndex", Severity: "warning", DB: "db", Collection: "users", Detail: "create index on db.users keys: [email]"},
+		{Type: "UnusedIndex", Severity: "warning", DB: "db", Collection: "users", Detail: "drop index on db.users"},
+		{Type: "SlowQueryPattern", Severity: "warning", DB: "db", Collection: "orders", Detail: "slow query on db.orders"},
 	}
 	actions := PlanMissingIndexActions(recs, &mongodbv1alpha1.AutoIndexSpec{Enabled: true, MinSeverity: "warning"})
 	if len(actions) != 1 {
@@ -94,19 +95,21 @@ func TestMeetsSeverity(t *testing.T) {
 	}
 }
 
-func TestExtractNS(t *testing.T) {
+func TestJoinNS(t *testing.T) {
 	cases := []struct {
-		detail string
-		want   string
+		db   string
+		coll string
+		want string
 	}{
-		{"create index on db.users for query", "db.users"},
-		{"db.orders.items has missing index", "db.orders.items"}, // 2 dots — won't match strictly
-		{"no namespace here", ""},
+		{"db", "users", "db.users"},
+		{"mydb", "orders.items", "mydb.orders.items"}, // collection 에 점이 있어도 정확
+		{"", "users", ""},                             // db 누락 → schema-level hint
+		{"db", "", ""},                                // collection 누락
+		{"", "", ""},
 	}
 	for _, c := range cases {
-		got := extractNS(c.detail)
-		if c.want != "db.orders.items" && got != c.want {
-			t.Errorf("extractNS(%q) = %q, want %q", c.detail, got, c.want)
+		if got := joinNS(c.db, c.coll); got != c.want {
+			t.Errorf("joinNS(%q,%q) = %q, want %q", c.db, c.coll, got, c.want)
 		}
 	}
 }
