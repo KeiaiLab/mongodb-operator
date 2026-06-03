@@ -71,6 +71,54 @@ spec:
                 default: 15m
                 description: AnalysisInterval — reconcile 간격.
                 type: string
+              autoIndex:
+                description: |-
+                  AutoIndex — MissingIndex 권장에 대한 Auto Pilot 인덱스 조치 정책.
+                  기본 dry-run (표면화만, 실행 없음 — DryRun 기본 true). nil 이면 비활성.
+                properties:
+                  dryRun:
+                    default: true
+                    description: DryRun reports recommendations as conditions without
+                      creating indexes.
+                    type: boolean
+                  enabled:
+                    default: false
+                    description: Enabled toggles automatic index creation.
+                    type: boolean
+                  minSeverity:
+                    default: warning
+                    description: MinSeverity is the minimum recommendation severity
+                      to act on (info|warning|critical).
+                    enum:
+                    - info
+                    - warning
+                    - critical
+                    type: string
+                required:
+                - enabled
+                type: object
+              autoQueryHint:
+                description: |-
+                  AutoQueryHint — SlowQueryPattern 권장에 대한 Auto Pilot hint 정책.
+                  기본 dry-run. nil 이면 비활성.
+                properties:
+                  dryRun:
+                    default: true
+                    description: DryRun reports without applying hints.
+                    type: boolean
+                  enabled:
+                    default: false
+                    description: Enabled toggles automatic query hint.
+                    type: boolean
+                  slowQueryThresholdMs:
+                    default: 1000
+                    description: SlowQueryThresholdMs queries above this latency trigger
+                      hint suggestion.
+                    format: int32
+                    type: integer
+                required:
+                - enabled
+                type: object
               clusterRef:
                 description: ClusterRef references the target MongoDB or MongoDBSharded.
                 properties:
@@ -128,6 +176,42 @@ spec:
           status:
             description: MongoDBInsightsStatus — 분석 결과.
             properties:
+              autoPilotActions:
+                description: |-
+                  AutoPilotActions — Auto Pilot 가 Recommendations 기반으로 계획한 조치.
+                  기본 DryRun=true (표면화만 — 비가역 운영 자동 실행 방지). Spec.AutoIndex /
+                  AutoQueryHint 활성 시에만 채워짐.
+                items:
+                  description: |-
+                    AutoPilotAction — Auto Pilot 가 Recommendation 으로부터 계획한 자동 조치 1건.
+                    DryRun=true (기본) 면 표면화만 하고 실행하지 않는다 — 비가역 운영 안전 기본값
+                    (AutoIndexSpec/AutoQueryHintSpec 의 DryRun 기본 true 정합).
+                  properties:
+                    detail:
+                      description: Detail human-readable 조치 근거.
+                      type: string
+                    dryRun:
+                      description: DryRun true 면 표면화만 (실행 안 함). 기본 정책.
+                      type: boolean
+                    ns:
+                      description: NS = "db.collection" 대상 (파싱 가능 시).
+                      type: string
+                    severity:
+                      description: Severity = info | warning | critical
+                      type: string
+                    type:
+                      description: Type = MissingIndex (인덱스 생성 계획) | SlowQueryHint
+                        (쿼리 hint 계획)
+                      enum:
+                      - MissingIndex
+                      - SlowQueryHint
+                      type: string
+                  required:
+                  - detail
+                  - dryRun
+                  - type
+                  type: object
+                type: array
               conditions:
                 description: Conditions follow standard k8s convention.
                 items:
