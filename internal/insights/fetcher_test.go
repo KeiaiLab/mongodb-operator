@@ -126,3 +126,27 @@ func TestMongoProfileFetcher_RejectsUnknownKind(t *testing.T) {
 		t.Errorf("error 가 unsupported kind 표시 기대, got %q", err.Error())
 	}
 }
+
+// FetchIndexStats (UnusedIndex 통합) 도 Fetch 와 동일한 connect nil-guard 계약을
+// 공유함을 검증 — shared connect() helper 가 양 진입점에 wiring 됐는지 회귀 가드.
+func TestMongoProfileFetcher_FetchIndexStats_NilGuards(t *testing.T) {
+	// Insights nil → error.
+	f := &MongoProfileFetcher{}
+	if _, err := f.FetchIndexStats(context.Background()); err == nil {
+		t.Errorf("Insights nil 시 error 기대")
+	}
+
+	// 유효 kind + K8sClient nil → "K8sClient nil" error (kind 검증 통과 후).
+	f2 := &MongoProfileFetcher{
+		Insights: &mongodbv1alpha1.MongoDBInsights{
+			ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "ns"},
+			Spec: mongodbv1alpha1.MongoDBInsightsSpec{
+				ClusterRef: mongodbv1alpha1.ClusterReference{Name: "c", Kind: "MongoDB"},
+			},
+		},
+	}
+	_, err := f2.FetchIndexStats(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "K8sClient nil") {
+		t.Errorf("K8sClient nil error 기대, got %v", err)
+	}
+}

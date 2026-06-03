@@ -186,9 +186,12 @@ metrics:
     #       name: prometheus-bearer
     #       key: token
     authorization: {}
-    # -- TLS config for secure endpoints. Empty = chart default (insecureSkipVerify when metrics.secure=true)
-    # Override to pin a CA, ServerName, or disable insecureSkipVerify.
+    # -- TLS config for secure endpoints. Empty = chart default (insecureSkipVerify controlled below).
+    # Override to pin a CA or ServerName.
     tlsConfig: {}
+    # -- Skip TLS verification for metrics endpoint when metrics.secure=true and tlsConfig is empty.
+    # Set to false and provide tlsConfig.ca for production.
+    insecureSkipVerify: true
 
 # Monitoring configuration (PR #162 PrometheusRule, bitnami mongodb-sharded parity)
 # 별도 top-level 블록 — metrics.serviceMonitor 와 의도적으로 분리:
@@ -279,6 +282,7 @@ features:
     enabled: false
 
 # Network Policy configuration
+# ⚠ Production: set enabled=true for deny-by-default network isolation
 networkPolicy:
   # -- Enable network policy
   enabled: false
@@ -289,12 +293,21 @@ networkPolicy:
 
 # Pod Disruption Budget configuration
 podDisruptionBudget:
-  # -- Enable PodDisruptionBudget
-  enabled: false
+  # -- Enable PodDisruptionBudget (recommended for production)
+  enabled: true
   # -- Minimum available pods
   minAvailable: 1
   # -- Maximum unavailable pods
   maxUnavailable: ""
+
+
+
+
+
+
+
+
+
 
 # F10 (cycle 2): Grafana dashboards — operator + cluster + replicaset +
 # sharded + operational + backup 5종. ConfigMap 으로 노출, Grafana

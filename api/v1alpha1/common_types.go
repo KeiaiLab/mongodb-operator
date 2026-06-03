@@ -23,6 +23,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	commonsversion "github.com/keiailab/operator-commons/pkg/version"
@@ -92,6 +93,19 @@ type StorageSpec struct {
 	// 데이터 폐기를 선택하기 전까지 PVC를 보존하기 위함.
 	// +optional
 	PersistentVolumeClaimRetentionPolicy *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy `json:"persistentVolumeClaimRetentionPolicy,omitempty"`
+
+	// AccessModes contains the desired access modes for the PVC.
+	// Defaults to ReadWriteOnce if not specified.
+	// +optional
+	AccessModes []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
+
+	// SubPath within the volume to mount as the data directory.
+	// +optional
+	SubPath string `json:"subPath,omitempty"`
+
+	// Selector is a label query over PersistentVolumes to bind.
+	// +optional
+	Selector *metav1.LabelSelector `json:"selector,omitempty"`
 
 	// Encryption defines optional encryption-at-rest configuration (F-IMP-02 / F38 cycle 6).
 	// MongoDB Enterprise WiredTiger 의 encryption-at-rest 정합 — 본 cycle 의
@@ -265,6 +279,21 @@ type TLSSpec struct {
 	// CertManager enables cert-manager integration
 	// +optional
 	CertManager *CertManagerSpec `json:"certManager,omitempty"`
+
+	// Mode sets the mongod --tlsMode value.
+	// Valid values: "preferTLS" (default, allows non-TLS connections),
+	// "requireTLS" (rejects non-TLS connections).
+	// +kubebuilder:default="preferTLS"
+	// +kubebuilder:validation:Enum=preferTLS;requireTLS
+	// +optional
+	Mode string `json:"mode,omitempty"`
+
+	// AllowInvalidHostnames skips hostname verification in TLS handshake.
+	// Needed when cert SANs use wildcard FQDNs but internal comms use short hostnames.
+	// Set to false when certs include proper per-pod SANs.
+	// +kubebuilder:default=true
+	// +optional
+	AllowInvalidHostnames *bool `json:"allowInvalidHostnames,omitempty"`
 
 	// CustomCert references a custom TLS secret
 	// +optional
@@ -455,7 +484,7 @@ type MonitoringSpec struct {
 
 	// Exporter configures the MongoDB exporter sidecar
 	//
-	// Deprecated: ADR-0018 Phase 1 — controller 미구현. argos 운영의 mongodb
+	// Deprecated: ADR-0018 Phase 1 — controller 미구현. keiailab 운영의 mongodb
 	// exporter 는 chart values `mongodb.exporterImage` + sharded mongos pod 의
 	// sidecar 정적 정의로 cover.
 	// +optional
@@ -836,6 +865,101 @@ type PVCStorageSpec struct {
 	Size resource.Quantity `json:"size"`
 }
 
+// AutoPilotSpec — Level V Auto Pilot 기능 묶음 (opt-in).
+// MongoDBInsights 추천 자동 적용, 자가 복구, 이상 감지 등 자동화 기능.
+type AutoPilotSpec struct {
+	// Enabled toggles the auto-pilot feature. Default false (opt-in for safety).
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// AutoIndex automatically creates indexes from MongoDBInsights MissingIndex recommendations.
+	// +optional
+	AutoIndex *AutoIndexSpec `json:"autoIndex,omitempty"`
+
+	// AutoQueryHint automatically applies query hints from SlowQueryPattern recommendations.
+	// +optional
+	AutoQueryHint *AutoQueryHintSpec `json:"autoQueryHint,omitempty"`
+
+	// AutoHealing automatically recovers unhealthy members and expands storage.
+	// +optional
+	AutoHealing *AutoHealingSpec `json:"autoHealing,omitempty"`
+
+	// AnomalyDetection automatically detects traffic and security anomalies.
+	// +optional
+	AnomalyDetection *AnomalyDetectionSpec `json:"anomalyDetection,omitempty"`
+}
+
+// AutoIndexSpec controls automatic index creation from MongoDBInsights recommendations.
+type AutoIndexSpec struct {
+	// Enabled toggles automatic index creation.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// MinSeverity is the minimum recommendation severity to act on (info|warning|critical).
+	// +kubebuilder:default="warning"
+	// +kubebuilder:validation:Enum=info;warning;critical
+	MinSeverity string `json:"minSeverity,omitempty"`
+
+	// DryRun reports recommendations as conditions without creating indexes.
+	// +kubebuilder:default=true
+	DryRun bool `json:"dryRun,omitempty"`
+}
+
+// AutoQueryHintSpec controls automatic query hint application.
+type AutoQueryHintSpec struct {
+	// Enabled toggles automatic query hint.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// SlowQueryThresholdMs queries above this latency trigger hint suggestion.
+	// +kubebuilder:default=1000
+	SlowQueryThresholdMs int32 `json:"slowQueryThresholdMs,omitempty"`
+
+	// DryRun reports without applying hints.
+	// +kubebuilder:default=true
+	DryRun bool `json:"dryRun,omitempty"`
+}
+
+// AutoHealingSpec controls automatic recovery actions.
+type AutoHealingSpec struct {
+	// Enabled toggles all auto-healing actions.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// LagThresholdSeconds — replication lag above this triggers lagging-member detection.
+	// +kubebuilder:default=30
+	LagThresholdSeconds int32 `json:"lagThresholdSeconds,omitempty"`
+
+	// PodCrashLoopThreshold — CrashLoopBackOff count above this triggers RemoveMember.
+	// +kubebuilder:default=5
+	PodCrashLoopThreshold int32 `json:"podCrashLoopThreshold,omitempty"`
+
+	// PVCExpansionUsagePercent — PVC usage above this triggers expansion (0-100).
+	// +kubebuilder:default=85
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=100
+	PVCExpansionUsagePercent int32 `json:"pvcExpansionUsagePercent,omitempty"`
+
+	// PVCExpansionIncrementGi — bytes to add when expanding (default 10Gi).
+	// +kubebuilder:default=10
+	PVCExpansionIncrementGi int32 `json:"pvcExpansionIncrementGi,omitempty"`
+}
+
+// AnomalyDetectionSpec controls anomaly detection thresholds and responses.
+type AnomalyDetectionSpec struct {
+	// Enabled toggles all anomaly detection.
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled"`
+
+	// ConnectionSpikeMultiplier — connections above (baseline * this) trigger spike alert.
+	// +kubebuilder:default=3
+	ConnectionSpikeMultiplier int32 `json:"connectionSpikeMultiplier,omitempty"`
+
+	// AuthFailureRatePerMin — auth failures per minute above this trigger security alert.
+	// +kubebuilder:default=10
+	AuthFailureRatePerMin int32 `json:"authFailureRatePerMin,omitempty"`
+}
+
 // AutoScalingSpec defines auto-scaling configuration
 type AutoScalingSpec struct {
 	// Enabled enables auto-scaling
@@ -1030,6 +1154,13 @@ type PodSpec struct {
 	// +kubebuilder:validation:Enum=none;nano;micro;small;medium;large;xlarge;"2xlarge"
 	// +optional
 	ResourcesPreset string `json:"resourcesPreset,omitempty"`
+
+	// CustomConfig provides a custom mongod.conf.
+	// ConfigInline is a YAML string inlined in the CR spec.
+	// ConfigMapRef references an external ConfigMap.
+	// Mutually exclusive — webhook rejects if both are set.
+	// +optional
+	CustomConfig *CustomConfigSpec `json:"customConfig,omitempty"`
 }
 
 // VolumePermissionsSpec — F70 (cycle 10).
@@ -1045,6 +1176,19 @@ type VolumePermissionsSpec struct {
 	// Resources for the init container.
 	// +optional
 	Resources ResourcesSpec `json:"resources,omitempty"`
+}
+
+// CustomConfigSpec defines custom mongod.conf configuration.
+type CustomConfigSpec struct {
+	// ConfigInline is the content of mongod.conf as a YAML string.
+	// The operator generates a ConfigMap from this content automatically.
+	// +optional
+	ConfigInline string `json:"configInline,omitempty"`
+
+	// ConfigMapRef references an existing ConfigMap containing mongod.conf.
+	// The key must be "mongod.conf".
+	// +optional
+	ConfigMapRef *corev1.LocalObjectReference `json:"configMapRef,omitempty"`
 }
 
 // InitScriptsSpec — F71 (cycle 10).

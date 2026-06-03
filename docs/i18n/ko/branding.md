@@ -15,7 +15,7 @@
 
 ## 1. Identity (정체성)
 
-**Organization**: [keiailab](https://keiailab.com) — Kubernetes-native 데이터 플랫폼 operator (Apache-2.0, license-clean, vanilla-upstream 호환).
+**Organization**: [keiailab](https://github.com/keiailab) — Kubernetes-native 데이터 플랫폼 operator (Apache-2.0, license-clean, vanilla-upstream 호환).
 
 **Project**: `mongodb-operator` — Kubernetes 용 Apache-2.0 MongoDB Operator — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+.
 
@@ -35,7 +35,7 @@
 | Mono mark (예정) | `https://keiailab.com/assets/mark.svg` *(아직 미공개)* | Favicon, 소셜 카드 |
 | Wordmark (예정) | `https://keiailab.com/assets/wordmark.svg` *(아직 미공개)* | Footer, 어두운 배경 |
 
-**Logo placement**: README 의 상단 중앙, 너비 120px. 항상 https://keiailab.com 으로 링크.
+**Logo placement**: README 의 상단 중앙, 너비 120px. 항상 https://github.com/keiailab 으로 링크.
 
 **Migration note (2026-05-21)**: `keiailab.com/assets/*.svg` 가 게시되기 전까지, family 전 리포는 GitHub avatar (`https://github.com/keiailab.png`) 를 canonical primary logo 로 사용. SVG 행은 향후 마이그레이션용 예약.
 
@@ -137,7 +137,7 @@ README 의 shield.io badge 순서 (좌→우):
 
 ## 10. Social & External (소셜 및 외부)
 
-- **Website**: https://keiailab.com
+- **Website**: https://github.com/keiailab
 - **GitHub Org**: https://github.com/keiailab
 - **Artifact Hub** (Helm): https://artifacthub.io/packages/search?repo=keiailab-mongodb-operator
 - **GHCR** (Container): https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator

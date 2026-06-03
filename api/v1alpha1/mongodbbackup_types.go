@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Deprecated: v1alpha1 types are scheduled for deduplication. See #231.
+
 package v1alpha1
 
 import (

@@ -109,9 +109,29 @@ rules:
       - watch
   {{- end }}
 
+  # Autoscaling (HPA) read verbs — ALWAYS granted, regardless of
+  # features.autoscaling.enabled. MongoDBReconciler / MongoDBShardedReconciler
+  # call ctrl.NewControllerManagedBy(mgr).Owns(&autoscalingv2.HorizontalPodAutoscaler{})
+  # unconditionally (enforced by TestSetupWithManager_RegistersHPAOwns), so the
+  # cached informer must be able to list/watch HPAs at startup. Without these
+  # verbs the manager fails cache sync (`failed to wait for caches to sync kind
+  # source: *v2.HorizontalPodAutoscaler`) and CrashLoopBackOff's. Reconcile-time
+  # writes are still gated below by features.autoscaling.enabled.
+  - apiGroups:
+      - autoscaling
+    resources:
+      - horizontalpodautoscalers
+    verbs:
+      - get
+      - list
+      - watch
+
   {{- if .Values.features.autoscaling.enabled }}
 
-  # Autoscaling (for HPA) — gated by features.autoscaling.enabled
+  # Autoscaling (HPA) write verbs — gated by features.autoscaling.enabled.
+  # Only the autoscaling reconcile path (reconcileRSHPA / reconcileMongosHPA /
+  # reconcileConfigServerHPA) creates/updates HPAs; with the gate off those
+  # paths are no-ops, so write verbs are unnecessary.
   - apiGroups:
       - autoscaling
     resources:
@@ -119,11 +139,8 @@ rules:
     verbs:
       - create
       - delete
-      - get
-      - list
       - patch
       - update
-      - watch
   {{- end }}
 
   # Policy (for PDB)

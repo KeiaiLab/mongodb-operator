@@ -69,7 +69,7 @@ K8s `apierrors.NewInvalid` 표준 형식 — 사용자 시점:
 
 ```
 Error from server (Invalid): admission webhook "vmongodb-v1alpha1.kb.io"
-denied the request: MongoDB.mongodb.keiailab.com "argos-mongo" is invalid:
+denied the request: MongoDB.mongodb.keiailab.com "keiailab-mongo" is invalid:
 [spec.members: Invalid value: 4: members must be 1 (single-instance) or
 odd >= 3 (quorum) — even count risks split-brain,
 spec.storage.size: Invalid value: "512Mi": storage.size must be >= 1Gi —

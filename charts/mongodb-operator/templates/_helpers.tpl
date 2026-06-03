@@ -82,9 +82,10 @@ Create the leader election namespace
 {{- end }}
 
 {{/*
-Operator image
+Operator image — appVersion 은 semver ("1.9.0"), GHCR controller image tag 는 "v" prefix
+("v1.9.0") 이므로 default 시 "v" 를 prepend 한다. .Values.image.tag override 는 그대로 사용.
 */}}
 {{- define "mongodb-operator.image" -}}
-{{- $tag := default .Chart.AppVersion .Values.image.tag }}
+{{- $tag := default (printf "v%s" .Chart.AppVersion) .Values.image.tag }}
 {{- printf "%s:%s" .Values.image.repository $tag }}
 {{- end }}

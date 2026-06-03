@@ -197,6 +197,14 @@ type ShardSpec struct {
 	// 본 webhook 검증에서 강제.
 	// +optional
 	Arbiter *ShardArbiterSpec `json:"arbiter,omitempty"`
+
+	// DrainTimeoutSeconds 는 scale-in 시 shard 의 chunk drain 완료 대기 시간(초).
+	// 지정하지 않으면 기본 30초. removeShard 이후 chunk migration 이 이 시간 내
+	// 완료되지 않으면 controller 가 drain 실패로 판단한다.
+	// +kubebuilder:default=30
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	DrainTimeoutSeconds *int32 `json:"drainTimeoutSeconds,omitempty"`
 }
 
 // ShardHiddenMembersSpec — F67/F75 (cycle 10).
@@ -416,6 +424,23 @@ type MongoDBShardedStatus struct {
 
 	// AdminUserCreated indicates if the admin user has been created
 	AdminUserCreated bool `json:"adminUserCreated,omitempty"`
+
+	// Version is the current running MongoDB version.
+	// +optional
+	Version string `json:"version,omitempty"`
+
+	// PreviousVersion is the version before an in-progress upgrade.
+	// +optional
+	PreviousVersion string `json:"previousVersion,omitempty"`
+
+	// UpgradePhase tracks the current upgrade orchestration phase.
+	// +kubebuilder:validation:Enum="";BackingUp;Upgrading;Validating;RollingBack
+	// +optional
+	UpgradePhase string `json:"upgradePhase,omitempty"`
+
+	// UpgradeStartTime is when the current upgrade was initiated.
+	// +optional
+	UpgradeStartTime *metav1.Time `json:"upgradeStartTime,omitempty"`
 }
 
 // ComponentStatus represents the status of a cluster component

@@ -71,14 +71,16 @@ type MongoDBReconciler struct {
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=cronjobs,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 
+//nolint:gocyclo // Reconcile orchestrates multi-phase lifecycle; future refactor tracked separately
 func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rresult ctrl.Result, rerr error) {
 	logger := log.FromContext(ctx)
 	logger.Info("Reconciling MongoDB", "namespace", req.Namespace, "name", req.Name)
@@ -135,9 +137,21 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 		return r.updateStatusError(ctx, mdb, "KeyfileSecret", err)
 	}
 
+	// 1.5. TLS Certificate (cert-manager)
+	if err := r.reconcileTLS(ctx, mdb); err != nil {
+		return r.updateStatusError(ctx, mdb, "TLS", err)
+	}
+
 	// 2. ConfigMap
 	if err := r.reconcileConfigMap(ctx, mdb); err != nil {
 		return r.updateStatusError(ctx, mdb, "ConfigMap", err)
+	}
+
+	// 2.1. Custom Config ConfigMap (spec.pod.customConfig.configInline)
+	if cm := resources.BuildCustomConfigMap(mdb.Name, mdb.Namespace, mdb.Spec.Pod); cm != nil {
+		if err := applyConfigMap(ctx, r.Client, r.Scheme, mdb, cm); err != nil {
+			return r.updateStatusError(ctx, mdb, "CustomConfigMap", err)
+		}
 	}
 
 	// 3. Headless Service
@@ -150,9 +164,27 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 		return r.updateStatusError(ctx, mdb, "ClientService", err)
 	}
 
+	// 4.5. Upgrade orchestration (pre-backup, validation, rollback)
+	if result, handled, err := r.reconcileUpgrade(ctx, mdb); err != nil {
+		return r.updateStatusError(ctx, mdb, "Upgrade", err)
+	} else if handled {
+		return result, nil
+	}
+
 	// 5. StatefulSet
 	if err := r.reconcileStatefulSet(ctx, mdb); err != nil {
 		return r.updateStatusError(ctx, mdb, "StatefulSet", err)
+	}
+
+	// 5.0.1. Transition to Validating after StatefulSet update
+	if mdb.Status.UpgradePhase == UpgradePhaseUpgrading {
+		mdb.Status.UpgradePhase = UpgradePhaseValidating
+		now := metav1.Now()
+		mdb.Status.UpgradeStartTime = &now
+		if err := updateStatusWithRetry(ctx, r.Client, mdb); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{RequeueAfter: parseValidationInterval(mdb.Spec.UpgradeStrategy)}, nil
 	}
 
 	// 5.1. PVC online expansion — Spec.Storage.Size 증가 시 자동 expansion.
@@ -244,6 +276,18 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 		}
 	}
 
+	// 9.05. Password rotation detection
+	if err := r.reconcilePasswordRotation(ctx, mdb); err != nil {
+		log.FromContext(ctx).Error(err, "password rotation check failed (best-effort)")
+	}
+
+	// 9.1. Exporter URI Secret (monitoring sidecar 인증용)
+	if mdb.Spec.Monitoring != nil && mdb.Spec.Monitoring.Enabled {
+		if err := r.reconcileExporterSecret(ctx, mdb); err != nil {
+			log.FromContext(ctx).Error(err, "exporter secret reconcile failed (best-effort)")
+		}
+	}
+
 	// 9.5. RS HPA (opt-in via Spec.AutoScaling.Enabled + ScalePolicy.Deliberate
 	// 이중 가드 — ADR-0008). 가드 통과 시에만 HPA 생성.
 	if err := r.reconcileRSHPA(ctx, mdb); err != nil {
@@ -253,6 +297,16 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 	// 9.6. PendingScale 가드 — Spec.Members 변경이 deliberate=false 때문에 보류
 	// 됐다면 status에 노출 + Event 발행.
 	r.recordPendingScale(ctx, mdb)
+
+	// 9.7. Backup CronJob (spec.backup.schedule 설정 시 자동 생성)
+	if mdb.Spec.Backup != nil && mdb.Spec.Backup.Schedule != "" {
+		cronJob := resources.BuildBackupCronJob(mdb.Name, mdb.Namespace, mdb.Spec.Backup.Schedule, "MongoDB", *mdb.Spec.Backup)
+		if _, err := controllerutil.CreateOrUpdate(ctx, r.Client, cronJob, func() error {
+			return controllerutil.SetControllerReference(mdb, cronJob, r.Scheme)
+		}); err != nil {
+			return r.updateStatusError(ctx, mdb, "BackupCronJob", err)
+		}
+	}
 
 	// 10. Update status
 	if err := r.updateStatus(ctx, mdb); err != nil {
@@ -703,6 +757,33 @@ func (r *MongoDBReconciler) recordPrimaryUnreachable(mdb *mongodbv1alpha1.MongoD
 		Reason:             reason,
 		Message:            firstLine(err.Error()),
 	})
+}
+
+func (r *MongoDBReconciler) reconcileExporterSecret(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
+	secretName := mdb.Name + "-exporter-uri"
+	host := fmt.Sprintf("%s-headless.%s.svc.cluster.local:27017", mdb.Name, mdb.Namespace)
+
+	adminSecret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Name: mdb.Spec.Auth.AdminCredentialsSecretRef.Name, Namespace: mdb.Namespace,
+	}, adminSecret); err != nil {
+		return err
+	}
+	user := string(adminSecret.Data["username"])
+	pass := string(adminSecret.Data["password"])
+
+	uri := fmt.Sprintf("mongodb://%s:%s@%s/?authSource=admin", user, pass, host)
+
+	desired := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: mdb.Namespace},
+		Type:       corev1.SecretTypeOpaque,
+		StringData: map[string]string{"uri": uri},
+	}
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, desired, func() error {
+		desired.StringData = map[string]string{"uri": uri}
+		return controllerutil.SetControllerReference(mdb, desired, r.Scheme)
+	})
+	return err
 }
 
 // firstLine은 multiline 에러 message에서 첫 줄만 잘라 반환한다.

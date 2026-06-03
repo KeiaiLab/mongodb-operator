@@ -23,6 +23,11 @@ import (
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
+// Severity constants.
+const (
+	SevWarning = "warning"
+)
+
 // planSummaryCollscan — mongo profile docs 의 plan summary "COLLSCAN" 문자열.
 // MissingIndex heuristic 의 1차 trigger (full collection scan).
 const planSummaryCollscan = "COLLSCAN"
@@ -70,6 +75,35 @@ func Analyze(docs []ProfileDoc, slowThresholdMs int32) []mongodbv1alpha1.Recomme
 	recs = append(recs, detectMissingIndexes(docs)...)
 	recs = append(recs, detectSlowQueryPatterns(docs, slowThresholdMs)...)
 	recs = append(recs, detectSchemaHints(docs)...)
+	return recs
+}
+
+// IndexStat represents a single index usage statistic from $indexStats.
+type IndexStat struct {
+	NS        string
+	IndexName string
+	Accesses  int64
+}
+
+// AnalyzeIndexUsage detects unused indexes (0 accesses) and returns recommendations.
+// Skips _id_ index which is always maintained by MongoDB.
+func AnalyzeIndexUsage(stats []IndexStat) []mongodbv1alpha1.Recommendation {
+	var recs []mongodbv1alpha1.Recommendation
+	for _, s := range stats {
+		if s.IndexName == "_id_" {
+			continue
+		}
+		if s.Accesses == 0 {
+			recs = append(recs, mongodbv1alpha1.Recommendation{
+				Type:     RecTypeUnusedIndex,
+				Severity: SevWarning,
+				Detail:   fmt.Sprintf("Index %q on %s has 0 accesses — consider dropping", s.IndexName, s.NS),
+			})
+		}
+	}
+	sort.Slice(recs, func(i, j int) bool {
+		return recs[i].Detail < recs[j].Detail
+	})
 	return recs
 }
 
@@ -134,7 +168,7 @@ func detectMissingIndexes(docs []ProfileDoc) []mongodbv1alpha1.Recommendation {
 			reason = "COLLSCAN 감지"
 		}
 		out = append(out, mongodbv1alpha1.Recommendation{
-			Type:            "MissingIndex",
+			Type:            RecTypeMissingIndex,
 			Severity:        severityFromLatency(avg),
 			DB:              db,
 			Collection:      coll,
@@ -196,7 +230,7 @@ func detectSlowQueryPatterns(docs []ProfileDoc, thresholdMs int32) []mongodbv1al
 		avg := int32(b.total / int64(b.count))
 		db, coll := splitNS(b.ns)
 		out = append(out, mongodbv1alpha1.Recommendation{
-			Type:         "SlowQueryPattern",
+			Type:         RecTypeSlowQueryPattern,
 			Severity:     severityFromLatency(avg),
 			DB:           db,
 			Collection:   coll,
@@ -319,7 +353,7 @@ func severityFromLatency(avg int32) string {
 	case avg >= 1000:
 		return "critical"
 	case avg >= 500:
-		return "warning"
+		return SevWarning
 	default:
 		return "info"
 	}

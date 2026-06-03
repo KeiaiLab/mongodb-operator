@@ -81,29 +81,61 @@ type MongoProfileFetcher struct {
 // - MongoDBSharded: mongos service DNS (`<name>-mongos`) + ReplicaSet="" (router)
 // per-shard 직접 connect 는 후속 sub-task (정확도 향상).
 func (f *MongoProfileFetcher) Fetch(ctx context.Context, sampleSize int32) ([]ProfileDoc, error) {
-	if f.Insights == nil {
-		return nil, fmt.Errorf("MongoProfileFetcher.Insights nil")
-	}
-	// spec-level 검증 우선 (K8sClient 의존 없음).
-	kind := f.Insights.Spec.ClusterRef.Kind
-	if kind != clusterKindMongoDB && kind != clusterKindSharded {
-		return nil, fmt.Errorf("unsupported ClusterRef.Kind %q (allowed %s|%s)", kind, clusterKindMongoDB, clusterKindSharded)
-	}
-	if f.K8sClient == nil {
-		return nil, fmt.Errorf("MongoProfileFetcher.K8sClient nil")
-	}
 	if sampleSize <= 0 {
 		sampleSize = 500
 	}
 
-	target, err := f.resolveConnectTarget(ctx)
+	cli, cleanup, err := f.connect(ctx)
 	if err != nil {
 		return nil, err
+	}
+	defer cleanup()
+
+	// ROADMAP §3.2 cycle 9 P3: profiling level 자동 설정. spec 의
+	// ProfilingLevel + SlowQueryThresholdMs 를 *각 분석 대상 DB* 에 적용
+	// 하여 profile data 진본성 보장. 실패는 *비치명* — 일부 DB 가 권한
+	// 부족 / read-only 시 log + 계속 (다른 DB 분석에 무관).
+	//
+	// Codex re-review (cycle 9 P4) #1 critical fix: mongos 는 profiler enable
+	// 불가 (level 1/2 invalid). MongoDBSharded kind 시 skip — applyProfilingLevel
+	// 호출이 silent no-op 으로 "적용됨" 오인 방지. per-shard 직접 적용은 후속
+	// sub-task (P5).
+	if f.Insights.Spec.ClusterRef.Kind == clusterKindMongoDB {
+		if err := f.applyProfilingLevel(ctx, cli); err != nil {
+			return nil, fmt.Errorf("apply profiling level: %w", err)
+		}
+	}
+
+	return collectProfileDocs(ctx, cli, sampleSize)
+}
+
+// connect — nil 검증(Insights→kind→K8sClient 순) + target 해석 + 자격증명 로드
+// + mongo connect 공통 진입. Fetch 와 FetchIndexStats 가 공유.
+//
+// 검증 순서/error 메시지는 기존 Fetch 계약(fetcher_test.go nil-guard)과 동일하게
+// 보존 — 호출자는 반환된 cleanup 을 *반드시* defer 로 실행 (Codex re-review #2 의
+// disconnect 전용 context 패턴: reconcile ctx 취소 무관 idempotent cleanup).
+func (f *MongoProfileFetcher) connect(ctx context.Context) (*mongo.Client, func(), error) {
+	if f.Insights == nil {
+		return nil, nil, fmt.Errorf("MongoProfileFetcher.Insights nil")
+	}
+	// spec-level 검증 우선 (K8sClient 의존 없음).
+	kind := f.Insights.Spec.ClusterRef.Kind
+	if kind != clusterKindMongoDB && kind != clusterKindSharded {
+		return nil, nil, fmt.Errorf("unsupported ClusterRef.Kind %q (allowed %s|%s)", kind, clusterKindMongoDB, clusterKindSharded)
+	}
+	if f.K8sClient == nil {
+		return nil, nil, fmt.Errorf("MongoProfileFetcher.K8sClient nil")
+	}
+
+	target, err := f.resolveConnectTarget(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	creds, err := f.loadCredentialsFromSecret(ctx, target.AdminSecretName, target.Namespace)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	cli, err := mongoclient.NewClient(ctx, mongoclient.ConnectOpts{
@@ -115,33 +147,29 @@ func (f *MongoProfileFetcher) Fetch(ctx context.Context, sampleSize int32) ([]Pr
 		Timeout:    defaultConnectTimeout,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("connect %s: %w", target.Host, err)
+		return nil, nil, fmt.Errorf("connect %s: %w", target.Host, err)
 	}
-	// Codex re-review #2 fix: disconnect 전용 context. reconcile ctx 가 이미
-	// canceled/timeout 인 경우에도 cleanup 보장 — context.Background() + 짧은
-	// timeout. 누수 방지 + idempotent.
-	defer func() {
+	cleanup := func() {
 		disconnectCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = cli.Disconnect(disconnectCtx)
-	}()
-
-	// ROADMAP §3.2 cycle 9 P3: profiling level 자동 설정. spec 의
-	// ProfilingLevel + SlowQueryThresholdMs 를 *각 분석 대상 DB* 에 적용
-	// 하여 profile data 진본성 보장. 실패는 *비치명* — 일부 DB 가 권한
-	// 부족 / read-only 시 log + 계속 (다른 DB 분석에 무관).
-	//
-	// Codex re-review (cycle 9 P4) #1 critical fix: mongos 는 profiler enable
-	// 불가 (level 1/2 invalid). MongoDBSharded kind 시 skip — applyProfilingLevel
-	// 호출이 silent no-op 으로 "적용됨" 오인 방지. per-shard 직접 적용은 후속
-	// sub-task (P5).
-	if kind == clusterKindMongoDB {
-		if err := f.applyProfilingLevel(ctx, cli); err != nil {
-			return nil, fmt.Errorf("apply profiling level: %w", err)
-		}
 	}
+	return cli, cleanup, nil
+}
 
-	return collectProfileDocs(ctx, cli, sampleSize)
+// FetchIndexStats — 분석 대상 DB 의 모든 collection 에 대해 $indexStats 수집
+// (ROADMAP §3.2 UnusedIndex). AnalyzeIndexUsage 입력.
+//
+// Fetch 와 별도 connection — analysis 는 AnalysisInterval(기본 15분) 주기라
+// 추가 connect 비용 무시 가능 (Simplicity > 단일 connection 최적화). $indexStats
+// 는 mongos 에서도 동작하므로 MongoDB + MongoDBSharded 양 kind 지원.
+func (f *MongoProfileFetcher) FetchIndexStats(ctx context.Context) ([]IndexStat, error) {
+	cli, cleanup, err := f.connect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	return collectIndexStats(ctx, cli)
 }
 
 // applyProfilingLevel — listDatabases → 각 분석 대상 DB 의 profile level 을
@@ -354,6 +382,62 @@ func collectProfileDocs(ctx context.Context, cli *mongo.Client, sampleSize int32
 		_ = cursor.Close(ctx)
 		if len(all) >= globalCap {
 			break
+		}
+	}
+	return all, nil
+}
+
+// collectIndexStats — listDatabases → 각 분석 대상 DB 의 collection 마다
+// $indexStats aggregation → IndexStat. admin/local/config + system.* 제외.
+//
+// $indexStats 는 collection 별 인덱스 접근 카운터(accesses.ops)를 반환 — 0 이면
+// 미사용 인덱스 후보 (AnalyzeIndexUsage 가 _id_ 제외 후 판정). collection drop
+// race (NamespaceNotFound code 26) 는 skip, 그 외 error 는 surface.
+// mongos 에서도 동작 ($indexStats 가 shard 별 카운터 aggregate).
+func collectIndexStats(ctx context.Context, cli *mongo.Client) ([]IndexStat, error) {
+	dbNames, err := cli.ListDatabaseNames(ctx, bson.D{})
+	if err != nil {
+		return nil, fmt.Errorf("listDatabases: %w", err)
+	}
+
+	var all []IndexStat
+	for _, dbName := range dbNames {
+		switch dbName {
+		case skipDBAdmin, skipDBLocal, skipDBConfig:
+			continue
+		}
+		db := cli.Database(dbName)
+		collNames, err := db.ListCollectionNames(ctx, bson.D{})
+		if err != nil {
+			return nil, fmt.Errorf("listCollections on %s: %w", dbName, err)
+		}
+		for _, collName := range collNames {
+			if strings.HasPrefix(collName, "system.") {
+				continue
+			}
+			ns := dbName + "." + collName
+			cursor, err := db.Collection(collName).Aggregate(ctx, mongo.Pipeline{
+				{{Key: "$indexStats", Value: bson.D{}}},
+			})
+			if err != nil {
+				// isProfileAbsent 재사용 — code 26 (NamespaceNotFound) 만 skip.
+				if isProfileAbsent(err) {
+					continue
+				}
+				return nil, fmt.Errorf("$indexStats on %s: %w", ns, err)
+			}
+			for cursor.Next(ctx) {
+				var m bson.M
+				if decErr := cursor.Decode(&m); decErr != nil {
+					continue
+				}
+				all = append(all, ConvertIndexStat(ns, m))
+			}
+			if cerr := cursor.Err(); cerr != nil {
+				_ = cursor.Close(ctx)
+				return nil, fmt.Errorf("cursor $indexStats on %s: %w", ns, cerr)
+			}
+			_ = cursor.Close(ctx)
 		}
 	}
 	return all, nil

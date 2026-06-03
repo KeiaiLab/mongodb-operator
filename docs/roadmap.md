@@ -32,6 +32,7 @@
 - [x] PVC online resize — `internal/controller/pvc_resize.go`
 - [x] Bootstrap race-free (K8s Lease 분산락) — `internal/controller/bootstrap_lease.go`
 - [x] PodDisruptionBudget 자동화 — `internal/controller/resources_apply.go` (PDB 분기)
+- [x] Level V Auto Pilot — A등급 5건 (HPA gate / webhook validation / PlanMissingIndexActions / PlanSlowQueryHints / DetectLaggingMembers) 구현 + 21 unit test (#269). `PlanMissingIndexActions`/`PlanSlowQueryHints` 는 MongoDBInsights `Status.AutoPilotActions` 로 advisory(DryRun 기본=표면화만) reconcile 통합 — #283 (실측 2026-06-03). *B등급 9건 (DecideShardScaling / DecideOplogWindowScaling / FilterCrashLoopPods / PlanPVCExpansion / DetectTrafficSpike / DetectAuthFailureSpike) 은 순수 함수 + 테스트 완성, 입력 수집(shard dist / oplog / connections / pod state) + reconcile 연결은 후속.*
 
 ### 강점 (재확인용)
 - Kubernetes 네이티브 (CRD + Operator 패턴)
@@ -147,7 +148,7 @@
 
 ### 3.1 고급 백업 기능
 #### 3.1.1 쿼리 가능한 백업
-- [x] 백업 → 읽기 전용 MongoDB 인스턴스 복원 controller — `BackupSpec.Queryable` 필드 + verification controller 가 read-only mongod StatefulSet (1 member) 자동 생성 — cycle 9 F46
+- [~] 백업 → 읽기 전용 MongoDB 인스턴스 복원 controller — `BackupSpec.Queryable` 필드 + `BuildQueryableStatefulSet` (`internal/resources/builder.go`) 정의 완료. 단 verification reconcile loop 에서 미호출 (실측 2026-06-03) — read-only StatefulSet 자동 생성 통합 후속. cycle 9 F46
 - [x] 백업 데이터 검증 + 쿼리 API — `MongoDBBackupVerification` CRD `Spec.SampleQueries` + `Status.QueryResults` — cycle 9 F47
 - [x] e2e (`test/e2e/queryable_backup_test.go` 신규) — verification API path stub — cycle 9 (실 mongod restore drill 은 cycle 11+ 운영 보강)
 
@@ -162,8 +163,10 @@
 
 ### 3.2 성능 분석 도구 (`MongoDBInsights`)
 - [x] 신규 CRD `MongoDBInsights` — `api/v1alpha1/mongodbinsights_types.go` (Spec + Status + Recommendation type) — cycle 7 F51
-- [~] 쿼리 프로파일링 자동 분석 — `ProfilingLevel` + `SlowQueryThresholdMs` + `SampleSize` + `AnalysisInterval` 필드 + reconciler 가 `internal/insights/ProfileFetcher` 경유 system.profile 수집 → `insights.Analyze` 호출 — cycle 7 F52 / cycle 9 P1 적용 완료 (MongoDB kind 한정, MongoDBSharded 는 후속). ProfilingLevel 동적 설정 자동화는 후속 sub-task.
-- [~] 인덱스 추천 엔진 — `internal/insights/analyzer.go` 순수 함수 (COLLSCAN + examined/returned ratio + ESR 휴리스틱 suggestion) + 11 unit test (cycle 9 P1 적용). `Recommendation.Type=MissingIndex` 라이브 검출. `UnusedIndex` 는 별도 sub-task (`serverStatus.metrics.queryExecutor` 통합 필요) — cycle 7 F53 / cycle 9 P1 부분 완료.
+- [x] 쿼리 프로파일링 자동 분석 (MongoDB kind) — `ProfilingLevel` + `SlowQueryThresholdMs` + `SampleSize` + `AnalysisInterval` 필드 + reconciler 가 `internal/insights/ProfileFetcher` 경유 system.profile 수집 → `insights.Analyze` 호출. `applyProfilingLevel` (`fetcher.go`) listDatabases→per-DB profile command 동적 설정 + `runAnalysis` 통합 완료 — cycle 7 F52 / cycle 9 P1 (실측 2026-06-03).
+- [ ] MongoDBSharded per-shard 프로파일링 — 현재 `fetcher.go` 에서 sharded skip. mongos 아닌 config + 각 shard RS 로 profile command fan-out 필요.
+- [x] MissingIndex 추천 엔진 — `internal/insights/analyzer.go` `detectMissingIndexes` (COLLSCAN + examined/returned ratio + ESR 힌트) + 다수 unit test + reconciler `runAnalysis` 통합 (`mongodbinsights_controller.go`) — cycle 7 F53 / cycle 9 P1 (실측 2026-06-03).
+- [x] UnusedIndex 추천 — `AnalyzeIndexUsage` (`$indexStats` 기반, `analyzer.go`) + 4 unit test + fetcher `collectIndexStats`/`FetchIndexStats` ($indexStats 수집) + `runAnalysis` 통합 (index stats 실패는 비치명) — #281 (실측 2026-06-03).
 - [x] 느린 쿼리 감지 + 경고 — `Recommendation.Type=SlowQueryPattern` + `Severity` + `AvgLatencyMs` + `QuerySamples[]` — cycle 7 F54
 - [x] 스키마 디자인 제안 — `Recommendation.Type=SchemaHint` + `Detail` 자유 텍스트 — cycle 7 F55
 - Verify: `kubectl get mongodbinsights <name> -o yaml` 의 `.status.recommendations` 비어있지 않음 — cycle 9 분석 엔진 후
@@ -304,6 +307,8 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 | Date | Change | Refs |
 |---|---|---|
+| 2026-06-03 | dead-code 통합 — §3.2 UnusedIndex [~]→[x] (fetcher $indexStats 수집 + runAnalysis 통합) + Level V Auto Pilot A등급(PlanMissingIndexActions/PlanSlowQueryHints) → MongoDBInsights Status.AutoPilotActions advisory(DryRun) 배선. generated deepcopy/RBAC 동기화 동반. | #281 #282 #283 |
+| 2026-06-03 | ROADMAP drift 8건 정정 — 코드 실측 검증(workflow 7-agent) 후: §3.2 프로파일링(MongoDB kind)·MissingIndex [~]→[x], §3.2 UnusedIndex 분리 + MongoDBSharded 프로파일링 [ ] 분해, §3.1.1 QueryableBackup [x]→[~] (builder 미통합), §5.4(a) KMS [x] + 경로정정(`internal/controller/encryption/`), §5.6 i18n·ArtifactHub·RBAC cleanup [x], Level V Auto Pilot(#269) 등재. i18n {ko,ja,zh} 재동기는 후속. | drift-correction workflow |
 | 2026-05-17 | OLM v1 only 전환 ([x]) — v0 cluster path (`deploy/olm/`) + community-operators sync 자동화 영구 폐기. INSTALL 3-path → 2-path matrix. FBC catalog `deploy/olm/catalog/` → `deploy/catalog/` 이동. bundle/ 유지 (v1 ClusterCatalog backing). | ADR-0028 Phase D, PR #173 |
 | 2026-05-17 | 사실 정정 — §3.2 (MongoDBInsights cycle 9 P1 적용 완료, [x]→[~]) + §4.3 (builder merge cycle 14 적용 완료) + §4.5 (VolumePermissions cycle 13 적용 완료). 코드-문서 정합. | dev cycle C — Goal-Driven 자율 |
 | 2026-05-15 | Phase 5.6 — OLM v1 narrow installer RBAC ([x]) + olmv1-system NetworkPolicy ([x]). `deploy/olm-v1/clusterextension-narrow-rbac.yaml` + `networkpolicies.yaml`. 잔여 후속: community-operators sync / RBAC v1.25 deprecated | ADR-0030 |
@@ -340,7 +345,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 ### 5.4 Security hardening v2
 
-- [ ] KMS encryption-at-rest — `internal/security/kms.go`
+- [x] KMS encryption-at-rest — `internal/controller/encryption/kms.go` + `integration.go` (Vault Transit 실 HTTP Encrypt/Decrypt/Health + ProbeKMS + 336줄 테스트, Phase 2.4 F38-F42 + cycle-17, 실측 2026-06-03). 경로 정정: `internal/security/kms.go` → `internal/controller/encryption/`. *AWS/GCP/Azure 는 TLS probe only — 전체 SDK wrap/unwrap 은 후속 [~].*
 - [ ] mTLS internal pod-to-pod — `internal/security/mtls.go`
 - [ ] SPIFFE/SPIRE identity — `internal/security/spiffe.go`
 
@@ -351,14 +356,14 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 ### 5.6 Community + ecosystem
 
-- [ ] Helm OperatorHub charts repository — `charts/repo/` + GitHub Pages
+- [x] Helm OperatorHub charts publish — `charts/artifacthub-repo.yml` + `helm-publish.yml` (gh-pages HTTP + ghcr.io OCI 양쪽) + `artifacthub-verify.yml` (#276, 실측 2026-06-03). *GPG signing CI 자동화는 후속 [~] (ADR-0037 잔여, 현재 로컬 `--sign`).*
 - [ ] community-operators upstream sync 6 minor 무사고 (ADR-0027 봉인)
-- [ ] SUPPORT.md + i18n (.ko/.en/.ja) — `docs/i18n/`
+- [x] SUPPORT.md + i18n (.ko/.ja/.zh) — `docs/support.md` + `docs/i18n/{ko,ja,zh}/` 각 13 문서. 최상위 `docs/` = SSOT (실측 2026-06-03).
 - [x] OLM 번들 외부 사용자 운영 수준 (ADR-0028, 2026-05-14) — 5 결격 동시 해소: `containerImage` ↔ `version` drift / `alm-examples: '[]'` / `replaces`+`olm.skipRange` 부재 / 채널 alpha 단일 / `maturity: alpha`. `make bundle VERSION=1.5.0` 단일 명령으로 stable+alpha 양 채널 + alm-examples 3 CRD 자동 채움 + skipRange `>=0.3.0 <1.5.0`. `operator-sdk bundle validate --select-optional suite=operatorframework` PASS. `bundle/manifests/mongodb-operator.clusterserviceversion.yaml` + `config/manifests/bases/...csv.yaml` + `config/samples/bundle/` + `Makefile bundle target`.
 - [x] OLM v1 narrow installer RBAC (ADR-0030, 2026-05-15) — `deploy/olm-v1/clusterextension-narrow-rbac.yaml` (200+ line, bundle CSV 의 13 cluster + 3 namespace permissions derive, operator-controller `docs/howto/derive-service-account` 표준 정합). cluster-admin alternative — production 권장. cluster-side apply 는 사용자 결정 (cluster-admin binding 제거 + narrow apply 의 운영 영향).
 - [x] OLM v1 NetworkPolicy (ADR-0030, 2026-05-15) — `deploy/olm-v1/networkpolicies.yaml`: operator-controller + catalogd 2 NP (zero-trust 정합, OPRUN-3923 OLM v1 변형). cluster-side apply 사용자 결정.
 - [ ] community-operators upstream PR (0.3.0 → 1.5.0 sync) — ADR-0027 자동화 deferred 상태. `bundle/` + `bundle.Dockerfile` fork PR + Cosign signature + ADR-0029 의 OLM v1 변형.
-- [ ] OLM 번들 RBAC v1.25-deprecated apiVersion cleanup (HPA `autoscaling/v2beta1` + PDB `policy/v1beta1` → `autoscaling/v2` + `policy/v1`) — ADR-0028 잔여 warning. `config/rbac/role.yaml` 의 ClusterPermissions Rules[4] / Rules[12].
+- [x] OLM 번들 RBAC v1.25-deprecated apiVersion cleanup — `internal/resources/builder.go` 가 `autoscaling/v2` + `policy/v1` 직접 사용, 코드베이스 deprecated `v2beta1`/`v1beta1` 0건 (실측 2026-06-03). PR #275 는 빌더 회귀 가드 테스트 추가 (별건).
 
 ### Brainstorm gate
 

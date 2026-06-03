@@ -24,6 +24,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// Federation condition type 상수 — cross-cluster reconcile 상태를 추적.
+// #224: controller 가 metav1.Condition.Type 에 사용할 문자열.
+const (
+	// FederationConditionRegionReady 는 개별 region 이 정상 reconcile 완료된 상태.
+	FederationConditionRegionReady = "RegionReady"
+
+	// FederationConditionCrossClusterSynced 는 모든 region 간 oplog 동기화 완료 상태.
+	FederationConditionCrossClusterSynced = "CrossClusterSynced"
+)
+
 // MongoDBFederationSpec defines a multi-cluster MongoDB ReplicaSet topology.
 type MongoDBFederationSpec struct {
 	// Version is the MongoDB version applied to all regions.
@@ -108,6 +118,7 @@ type FederationRegionStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=mdbfed
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"

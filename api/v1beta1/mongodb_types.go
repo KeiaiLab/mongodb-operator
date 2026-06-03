@@ -190,6 +190,19 @@ type MongoDBStatus struct {
 	// 변경 요청. 보류 중이 아니면 nil.
 	// +optional
 	PendingScale *PendingScale `json:"pendingScale,omitempty"`
+
+	// PreviousVersion is the version before an in-progress upgrade (rollback target).
+	// +optional
+	PreviousVersion string `json:"previousVersion,omitempty"`
+
+	// UpgradePhase tracks the current upgrade orchestration phase.
+	// +kubebuilder:validation:Enum="";BackingUp;Upgrading;Validating;RollingBack
+	// +optional
+	UpgradePhase string `json:"upgradePhase,omitempty"`
+
+	// UpgradeStartTime is when the current upgrade was initiated.
+	// +optional
+	UpgradeStartTime *metav1.Time `json:"upgradeStartTime,omitempty"`
 }
 
 // MemberStatus represents the status of a replica set member

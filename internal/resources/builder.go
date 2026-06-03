@@ -137,19 +137,55 @@ func buildTLSPEMMount() corev1.VolumeMount {
 //
 // tlsAllowInvalidHostnames (v1.4.17 fix, cycle 19 last): mongos 가 cfg replica set 에
 // outbound TLS connect 시 hostname verification 을 우회. mongos --configdb 의 connection
-// string 은 short hostname (argos-mongo-cfg-0:27017) 사용 — cert SAN 의 wildcard FQDN
-// (*.argos-mongo-cfg-headless.<ns>.svc.cluster.local) 와 직접 매치 안 됨 → TLS verify
+// string 은 short hostname (keiailab-mongo-cfg-0:27017) 사용 — cert SAN 의 wildcard FQDN
+// (*.keiailab-mongo-cfg-headless.<ns>.svc.cluster.local) 와 직접 매치 안 됨 → TLS verify
 // fail → sharding pool init 실패 → 27017 미 listen → kubelet liveness kill cascade.
 // cluster-internal CA chain + preferTLS 환경에서 hostname 검증은 의미 적음 (CA 로 ID
 // 검증 충분), short/long hostname mix 흡수 의무.
-func tlsArgs() []string {
-	return []string{
-		"--tlsMode", "preferTLS",
+//
+//nolint:unused // PVC template builder kept for future StatefulSet integration
+func buildDataVolumeClaimTemplate(storage mongodbv1alpha1.StorageSpec) corev1.PersistentVolumeClaim {
+	accessModes := storage.AccessModes
+	if len(accessModes) == 0 {
+		accessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
+	}
+	storageClassName := ptr.To(storage.StorageClassName)
+	if storage.StorageClassName == "" {
+		storageClassName = nil
+	}
+	pvc := corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "data"},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes:      accessModes,
+			StorageClassName: storageClassName,
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: storage.Size,
+				},
+			},
+		},
+	}
+	if storage.Selector != nil {
+		pvc.Spec.Selector = storage.Selector
+	}
+	return pvc
+}
+
+func tlsArgs(tls *mongodbv1alpha1.TLSSpec) []string {
+	mode := "preferTLS"
+	if tls != nil && tls.Mode != "" {
+		mode = tls.Mode
+	}
+	args := []string{
+		"--tlsMode", mode,
 		"--tlsCertificateKeyFile", MongoTLSPEMPath + "/server.pem",
 		"--tlsCAFile", MongoTLSMountPath + "/ca.crt",
 		"--tlsAllowConnectionsWithoutCertificates",
-		"--tlsAllowInvalidHostnames",
 	}
+	if tls == nil || tls.AllowInvalidHostnames == nil || *tls.AllowInvalidHostnames {
+		args = append(args, "--tlsAllowInvalidHostnames")
+	}
+	return args
 }
 
 // buildTLSServerVolume 은 cert-manager 가 발급한 server cert Secret (<name>-tls)
@@ -409,6 +445,24 @@ func BuildMongoDBConfigMap(mdb *mongodbv1alpha1.MongoDB) *corev1.ConfigMap {
 	}
 }
 
+// BuildCustomConfigMap generates a ConfigMap from spec.pod.customConfig.configInline.
+// Returns nil if customConfig is nil or configInline is empty.
+func BuildCustomConfigMap(name, namespace string, pod *mongodbv1alpha1.PodSpec) *corev1.ConfigMap {
+	if pod == nil || pod.CustomConfig == nil || pod.CustomConfig.ConfigInline == "" {
+		return nil
+	}
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name + "-custom-config",
+			Namespace: namespace,
+			Labels:    buildLabels(name, "custom-config"),
+		},
+		Data: map[string]string{
+			"mongod.conf": pod.CustomConfig.ConfigInline,
+		},
+	}
+}
+
 // BuildConfigServerScriptsConfigMap는 Config Server StatefulSet에 마운트되는
 // scripts ConfigMap을 만든다. port=27019.
 func BuildConfigServerScriptsConfigMap(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.ConfigMap {
@@ -541,7 +595,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			buildTLSServerMount(),
 			buildTLSPEMMount(),
 		)
-		args = append(args, tlsArgs()...)
+		args = append(args, tlsArgs(mdb.Spec.TLS)...)
 	}
 
 	// cycle 13 (실 통합): auth (LDAP/OIDC) + encryption (KMS) + audit args 를
@@ -670,8 +724,15 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			},
 			Env: []corev1.EnvVar{
 				{
-					Name:  "MONGODB_URI",
-					Value: "mongodb://localhost:27017",
+					Name: "MONGODB_URI",
+					ValueFrom: &corev1.EnvVarSource{
+						SecretKeyRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: mdb.Name + "-exporter-uri",
+							},
+							Key: "uri",
+						},
+					},
 				},
 			},
 			Resources: corev1.ResourceRequirements{
@@ -1041,7 +1102,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 			buildTLSServerMount(),
 			buildTLSPEMMount(),
 		)
-		args = append(args, tlsArgs()...)
+		args = append(args, tlsArgs(mdbsh.Spec.TLS)...)
 	}
 
 	// cycle 14 sharded ConfigServer integration: auth / encryption / audit args.
@@ -1292,7 +1353,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 			buildTLSServerMount(),
 			buildTLSPEMMount(),
 		)
-		args = append(args, tlsArgs()...)
+		args = append(args, tlsArgs(mdbsh.Spec.TLS)...)
 	}
 
 	// cycle 14 sharded Shard integration.
@@ -1358,7 +1419,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 							VolumeMounts:    mongodVolumeMounts,
 							Lifecycle:       mongodLifecycle,
 							// Layer 5 modern HA: hang detection. mongosh ping 단순 path
-							// (script 의존 0). argos cycle 21 stop hook 21차 동기.
+							// (script 의존 0). keiailab cycle 21 stop hook 21차 동기.
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
@@ -1622,7 +1683,7 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 	}
 	// Pillar P7 Phase 3b — TLS args (mongos, preferTLS plaintext fallback).
 	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
-		args = append(args, tlsArgs()...)
+		args = append(args, tlsArgs(mdbsh.Spec.TLS)...)
 	}
 
 	// cycle 14 mongos integration: auth + audit args. mongos 는 데이터 저장 안 하므로
@@ -1728,7 +1789,17 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 			},
 			Args: []string{"--collect-all", "--compatible-mode"},
 			Env: []corev1.EnvVar{
-				{Name: "MONGODB_URI", Value: "mongodb://localhost:27017"},
+				{
+					Name: "MONGODB_URI",
+					ValueFrom: &corev1.EnvVarSource{
+						SecretKeyRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: mdbsh.Name + "-exporter-uri",
+							},
+							Key: "uri",
+						},
+					},
+				},
 			},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
@@ -1866,7 +1937,7 @@ func buildMongosVolumes(mdbsh *mongodbv1alpha1.MongoDBSharded) []corev1.Volume {
 }
 
 // BuildBackupJob creates a Job for MongoDB backup
-func BuildBackupJob(backup *mongodbv1alpha1.MongoDBBackup, connectionString string) *batchv1.Job {
+func BuildBackupJob(backup *mongodbv1alpha1.MongoDBBackup, authSecretName string) *batchv1.Job {
 	labels := buildLabels(backup.Name, "backup")
 
 	backoff := int32(3)
@@ -1874,8 +1945,15 @@ func BuildBackupJob(backup *mongodbv1alpha1.MongoDBBackup, connectionString stri
 
 	var envVars []corev1.EnvVar
 	envVars = append(envVars, corev1.EnvVar{
-		Name:  "MONGODB_URI",
-		Value: connectionString,
+		Name: "MONGODB_URI",
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: authSecretName,
+				},
+				Key: "connectionString",
+			},
+		},
 	})
 
 	// S3 storage configuration
@@ -2048,13 +2126,13 @@ func buildBackupScript(backup *mongodbv1alpha1.MongoDBBackup) string {
 //
 // 본 cycle 의 acceptance: Job 객체 생성 + controller 가 spawn. 실제 oplog
 // archive 의 S3 fetch + mongorestore 실행 정합은 cycle 16 운영 강화 시점.
-func BuildRestoreJob(backup *mongodbv1alpha1.MongoDBBackup, connectionString string) *batchv1.Job {
+func BuildRestoreJob(backup *mongodbv1alpha1.MongoDBBackup, authSecretName string) *batchv1.Job {
 	labels := buildLabels(backup.Name, "restore")
 	backoff := int32(3)
 	ttl := int32(86400)
 
 	envVars := []corev1.EnvVar{
-		{Name: "MONGODB_URI", Value: connectionString},
+		{Name: "MONGODB_URI", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: authSecretName}, Key: "connectionString"}}},
 		{Name: "SOURCE_BACKUP", Value: backup.Spec.Restore.SourceBackupName},
 	}
 	if backup.Spec.Restore.PointInTime != nil {
@@ -2493,4 +2571,54 @@ func buildHPAMetrics(metrics []mongodbv1alpha1.AutoScalingMetric) []autoscalingv
 		}
 	}
 	return out
+}
+
+// BuildQueryableStatefulSet creates a single-member read-only StatefulSet
+// for queryable backup access.
+func BuildQueryableStatefulSet(backup *mongodbv1alpha1.MongoDBBackup, spec *mongodbv1alpha1.QueryableBackupSpec) *appsv1.StatefulSet {
+	if spec == nil || !spec.Enabled {
+		return nil
+	}
+	name := backup.Name + "-queryable"
+	labels := buildLabels(name, "queryable-backup")
+	replicas := int32(1)
+
+	return &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: backup.Namespace,
+			Labels:    labels,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: &replicas,
+			Selector: &metav1.LabelSelector{MatchLabels: labels},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:         "mongod",
+						Image:        "mongo:8.0",
+						Args:         []string{"--bind_ip_all", "--noauth", "--dbpath", "/data/db"},
+						Ports:        []corev1.ContainerPort{{Name: "mongodb", ContainerPort: 27017}},
+						VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/data/db"}},
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("250m"),
+								corev1.ResourceMemory: resource.MustParse("256Mi"),
+							},
+						},
+					}},
+				},
+			},
+			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{{
+				ObjectMeta: metav1.ObjectMeta{Name: "data"},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					Resources: corev1.VolumeResourceRequirements{
+						Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("5Gi")},
+					},
+				},
+			}},
+		},
+	}
 }

@@ -89,6 +89,7 @@ type VerificationQueryResult struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=mdbverify
 // +kubebuilder:printcolumn:name="Backup",type="string",JSONPath=".spec.backupRef.name"

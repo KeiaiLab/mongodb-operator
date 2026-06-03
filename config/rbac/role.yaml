@@ -8,7 +8,6 @@ rules:
   - ""
   resources:
   - configmaps
-  - secrets
   - services
   verbs:
   - create
@@ -34,6 +33,17 @@ rules:
   - list
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - apps
   resources:
   - deployments
@@ -53,6 +63,17 @@ rules:
   verbs:
   - create
   - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - cronjobs
+  verbs:
+  - create
   - get
   - list
   - patch
@@ -98,6 +119,7 @@ rules:
   - mongodb.keiailab.com
   resources:
   - mongodbbackups
+  - mongodbbackupverifications
   - mongodbclustergroups
   - mongodbfederations
   - mongodbinsights
@@ -124,6 +146,7 @@ rules:
   - mongodb.keiailab.com
   resources:
   - mongodbbackups/status
+  - mongodbbackupverifications/status
   - mongodbclustergroups/status
   - mongodbfederations/status
   - mongodbinsights/status

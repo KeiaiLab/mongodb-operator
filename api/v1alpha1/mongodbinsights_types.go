@@ -26,6 +26,14 @@ type MongoDBInsightsSpec struct {
 	// ClusterRef references the target MongoDB or MongoDBSharded.
 	ClusterRef ClusterReference `json:"clusterRef"`
 
+	// TargetKind 는 분석 대상 CRD 종류. MongoDB 또는 MongoDBSharded.
+	// #226: MongoDBSharded 지원 — sharded cluster 의 각 shard + mongos 의
+	// system.profile 을 수집하여 통합 분석.
+	// +kubebuilder:validation:Enum=MongoDB;MongoDBSharded
+	// +kubebuilder:default="MongoDB"
+	// +optional
+	TargetKind string `json:"targetKind,omitempty"`
+
 	// ProfilingLevel = 0 (off) | 1 (slow only) | 2 (all). 기본 1.
 	// +kubebuilder:validation:Enum=0;1;2
 	// +kubebuilder:default=1
@@ -51,6 +59,16 @@ type MongoDBInsightsSpec struct {
 	// 미설정 시 cluster 의 admin credentials 재사용.
 	// +optional
 	AnalysisCredentialsSecretRef *corev1.LocalObjectReference `json:"analysisCredentialsSecretRef,omitempty"`
+
+	// AutoIndex — MissingIndex 권장에 대한 Auto Pilot 인덱스 조치 정책.
+	// 기본 dry-run (표면화만, 실행 없음 — DryRun 기본 true). nil 이면 비활성.
+	// +optional
+	AutoIndex *AutoIndexSpec `json:"autoIndex,omitempty"`
+
+	// AutoQueryHint — SlowQueryPattern 권장에 대한 Auto Pilot hint 정책.
+	// 기본 dry-run. nil 이면 비활성.
+	// +optional
+	AutoQueryHint *AutoQueryHintSpec `json:"autoQueryHint,omitempty"`
 }
 
 // MongoDBInsightsStatus — 분석 결과.
@@ -70,6 +88,12 @@ type MongoDBInsightsStatus struct {
 	// SlowQueriesSampled — 마지막 cycle 에 분석된 slow query 수.
 	// +optional
 	SlowQueriesSampled int32 `json:"slowQueriesSampled,omitempty"`
+
+	// AutoPilotActions — Auto Pilot 가 Recommendations 기반으로 계획한 조치.
+	// 기본 DryRun=true (표면화만 — 비가역 운영 자동 실행 방지). Spec.AutoIndex /
+	// AutoQueryHint 활성 시에만 채워짐.
+	// +optional
+	AutoPilotActions []AutoPilotAction `json:"autoPilotActions,omitempty"`
 
 	// Conditions follow standard k8s convention.
 	// +optional
@@ -109,7 +133,31 @@ type Recommendation struct {
 	QuerySamples []string `json:"querySamples,omitempty"`
 }
 
+// AutoPilotAction — Auto Pilot 가 Recommendation 으로부터 계획한 자동 조치 1건.
+// DryRun=true (기본) 면 표면화만 하고 실행하지 않는다 — 비가역 운영 안전 기본값
+// (AutoIndexSpec/AutoQueryHintSpec 의 DryRun 기본 true 정합).
+type AutoPilotAction struct {
+	// Type = MissingIndex (인덱스 생성 계획) | SlowQueryHint (쿼리 hint 계획)
+	// +kubebuilder:validation:Enum=MissingIndex;SlowQueryHint
+	Type string `json:"type"`
+
+	// NS = "db.collection" 대상 (파싱 가능 시).
+	// +optional
+	NS string `json:"ns,omitempty"`
+
+	// Severity = info | warning | critical
+	// +optional
+	Severity string `json:"severity,omitempty"`
+
+	// Detail human-readable 조치 근거.
+	Detail string `json:"detail"`
+
+	// DryRun true 면 표면화만 (실행 안 함). 기본 정책.
+	DryRun bool `json:"dryRun"`
+}
+
 // +kubebuilder:object:root=true
+// +kubebuilder:storageversion
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=mdbinsights
 // +kubebuilder:printcolumn:name="Phase",type="string",JSONPath=".status.phase"

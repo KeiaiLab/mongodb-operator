@@ -136,7 +136,7 @@ Bitnami only has a `PodMonitor`. Percona pushes you toward PMM (their commercial
 This isn't a weekend project. We run a **21-pod production sharded cluster** on our infrastructure:
 
 ```
-MongoDBSharded: argos-mongo
+MongoDBSharded: keiailab-mongo
 ├── Config Servers: 3 (StatefulSet, ceph-rbd)
 ├── Shards: 5 × 3 members = 15 (StatefulSet, ceph-rbd, 1TB each)
 ├── Mongos: 3 (Deployment, TLS + SCRAM-SHA-256)
