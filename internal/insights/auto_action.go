@@ -22,6 +22,7 @@ const (
 	RecTypeMissingIndex     = "MissingIndex"
 	RecTypeSlowQueryPattern = "SlowQueryPattern"
 	RecTypeUnusedIndex      = "UnusedIndex"
+	RecTypeSchemaHint       = "SchemaHint"
 )
 
 // IndexAction describes a planned createIndex() operation.
@@ -103,7 +104,7 @@ func PlanSlowQueryHints(recs []mongodbv1alpha1.Recommendation, spec *mongodbv1al
 
 // meetsSeverity returns true if got >= min (info<warning<critical).
 func meetsSeverity(got, min string) bool {
-	order := map[string]int{"info": 0, "warning": 1, "critical": 2}
+	order := map[string]int{SevInfo: 0, SevWarning: 1, SevCritical: 2}
 	gv, gok := order[got]
 	mv, mok := order[min]
 	if !gok || !mok {

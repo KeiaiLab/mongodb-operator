@@ -336,7 +336,7 @@ func (f *MongoProfileFetcher) resolveConnectTarget(ctx context.Context) (connect
 			AdminSecretName: mdb.Spec.Auth.AdminCredentialsSecretRef.Name,
 			Namespace:       mdb.Namespace,
 		}, nil
-	case "MongoDBSharded":
+	case clusterKindSharded:
 		mdbsh := &mongodbv1alpha1.MongoDBSharded{}
 		if err := f.K8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: ns}, mdbsh); err != nil {
 			if apierrors.IsNotFound(err) {

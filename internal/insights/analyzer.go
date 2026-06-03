@@ -25,8 +25,13 @@ import (
 
 // Severity constants.
 const (
-	SevWarning = "warning"
+	SevWarning  = "warning"
+	SevInfo     = "info"
+	SevCritical = "critical"
 )
+
+// idIndexName — MongoDB 기본 `_id` 인덱스명 (UnusedIndex 분석서 제외 대상).
+const idIndexName = "_id_"
 
 // planSummaryCollscan — mongo profile docs 의 plan summary "COLLSCAN" 문자열.
 // MissingIndex heuristic 의 1차 trigger (full collection scan).
@@ -90,7 +95,7 @@ type IndexStat struct {
 func AnalyzeIndexUsage(stats []IndexStat) []mongodbv1alpha1.Recommendation {
 	var recs []mongodbv1alpha1.Recommendation
 	for _, s := range stats {
-		if s.IndexName == "_id_" {
+		if s.IndexName == idIndexName {
 			continue
 		}
 		if s.Accesses == 0 {
@@ -257,8 +262,8 @@ func detectSchemaHints(docs []ProfileDoc) []mongodbv1alpha1.Recommendation {
 		seen[d.NS] = true
 		db, coll := splitNS(d.NS)
 		out = append(out, mongodbv1alpha1.Recommendation{
-			Type:       "SchemaHint",
-			Severity:   "info",
+			Type:       RecTypeSchemaHint,
+			Severity:   SevInfo,
 			DB:         db,
 			Collection: coll,
 			Detail:     fmt.Sprintf("%d개 $or/$nor 절 감지 — 복합 인덱스 또는 schema 정규화 검토", clauses),
@@ -351,11 +356,11 @@ func splitNS(ns string) (string, string) {
 func severityFromLatency(avg int32) string {
 	switch {
 	case avg >= 1000:
-		return "critical"
+		return SevCritical
 	case avg >= 500:
 		return SevWarning
 	default:
-		return "info"
+		return SevInfo
 	}
 }
 

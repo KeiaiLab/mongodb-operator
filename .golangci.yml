@@ -22,6 +22,12 @@ linters:
     - unparam
     - unused
   settings:
+    goconst:
+      # 테스트 fixture 의 도메인 리터럴(bson 연산자 "$or" / mongod 플래그 / shard
+      # 명령 등)은 상수 강제 대상이 아니다. 기존 exclusion(_test.go)은 *리포트*만
+      # 억제하고 threshold 카운트엔 test 등장을 포함하므로, code 1회 등장도
+      # test 반복 때문에 flagged 되는 false-positive 발생 → ignore-tests 로 차단.
+      ignore-tests: true
     revive:
       rules:
         - name: comment-spacings
