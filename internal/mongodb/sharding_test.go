@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
@@ -106,7 +107,7 @@ func TestShardManager_ConnectErrorPaths(t *testing.T) {
 		{"RemoveShard", func() error { return mgr.RemoveShard(ctx, "mongos-0", "ns", "u", "p", "shard0") }, "removeShard"},
 		{"EnableSharding", func() error { return mgr.EnableSharding(ctx, "mongos-0", "ns", "u", "p", "mydb") }, "enableSharding"},
 		{"ShardCollection", func() error {
-			return mgr.ShardCollection(ctx, "mongos-0", "ns", "u", "p", "mydb.coll", map[string]interface{}{"_id": "hashed"})
+			return mgr.ShardCollection(ctx, "mongos-0", "ns", "u", "p", "mydb.coll", bson.D{{Key: "_id", Value: "hashed"}})
 		}, "shardCollection"},
 	}
 	for _, tc := range cases {

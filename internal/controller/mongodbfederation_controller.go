@@ -84,7 +84,9 @@ func (r *MongoDBFederationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	fed.Status.Phase = computeFederationPhase(fed)
 
 	if err := r.Status().Update(ctx, fed); err != nil {
-		logger.V(1).Info("status update failed (may be transient)", "err", err)
+		// status update 실패를 silent 유실하지 않고 error 로 반환해 재큐 + 재시도.
+		logger.Error(err, "federation status update failed")
+		return ctrl.Result{}, err
 	}
 
 	logger.V(1).Info("federation reconciled (cycle 17 cross-cluster propagation)",

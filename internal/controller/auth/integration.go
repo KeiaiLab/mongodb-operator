@@ -17,6 +17,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -162,16 +163,13 @@ func FetchOIDCJWKS(ctx context.Context, jwksURI string, caCertPEM []byte) ([]byt
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("JWKS HTTP %d", resp.StatusCode)
 	}
-	buf := make([]byte, 0, 4096)
-	tmp := make([]byte, 4096)
-	for {
-		n, err := resp.Body.Read(tmp)
-		if n > 0 {
-			buf = append(buf, tmp[:n]...)
-		}
-		if err != nil {
-			break
-		}
+	// 결함 #9: 기존 수동 read 루프는 io.EOF 가 아닌 오류도 break 로 무시하고
+	// 부분 버퍼를 성공처럼 반환했다. io.ReadAll 로 비-EOF 오류를 전파하고,
+	// io.LimitReader 로 응답 크기 상한(1MiB)을 유지한다.
+	const maxJWKSBytes = 1 << 20 // 1MiB
+	buf, err := io.ReadAll(io.LimitReader(resp.Body, maxJWKSBytes))
+	if err != nil {
+		return nil, fmt.Errorf("JWKS read: %w", err)
 	}
 	return buf, nil
 }

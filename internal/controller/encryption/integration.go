@@ -212,6 +212,9 @@ func ProbeKMS(ctx context.Context, spec *mongodbv1alpha1.EncryptionSpec, vaultTo
 
 func probeTLSEndpoint(ctx context.Context, urlStr string, caCertPEM []byte) error {
 	transport := &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12}}
+	// 호출마다 새로 만든 transport 의 유휴 keep-alive 연결을 함수 종료 시 정리하여
+	// 소켓 누수를 차단한다 (transport 는 이 함수 안에서만 사용되는 일회성).
+	defer transport.CloseIdleConnections()
 	if len(caCertPEM) > 0 {
 		pool := x509.NewCertPool()
 		if !pool.AppendCertsFromPEM(caCertPEM) {

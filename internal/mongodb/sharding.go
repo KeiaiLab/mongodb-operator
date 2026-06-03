@@ -149,7 +149,11 @@ func (s *ShardManager) EnableSharding(ctx context.Context, mongosPod, namespace,
 }
 
 // ShardCollection shards a collection with the given key.
-func (s *ShardManager) ShardCollection(ctx context.Context, mongosPod, namespace, adminUser, adminPassword, collection string, key map[string]interface{}) error {
+//
+// key 는 bson.D(순서 보존 slice)로 받는다. compound shard key 의 필드 순서는
+// MongoDB shardCollection 명령에서 의미가 있으므로 map(무순서)으로 받으면
+// 매 호출마다 키 순서가 비결정적이 된다 — 의도와 다른 shard key 생성 위험.
+func (s *ShardManager) ShardCollection(ctx context.Context, mongosPod, namespace, adminUser, adminPassword, collection string, key bson.D) error {
 	return s.runAdminCommand(ctx, mongosPod, namespace, bson.D{
 		{Key: "shardCollection", Value: collection},
 		{Key: "key", Value: key},

@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -665,7 +666,10 @@ func IsValidUpgradePath(from, to string) error {
 			supported = append(supported, min)
 		}
 	}
-	// supported 가 정렬된 list 라고 가정 (sort 부담 피함 — 작은 set).
+	// 결함 #13: SupportedMongoDBVersions 의 *선언 순서* 에 의존하면 정렬되지
+	// 않은 list 에서 인접 step 판단이 틀린다. 명시적으로 minor 를 정렬해
+	// fromMinor/toMinor 의 index 인접성을 안정적으로 판정한다 (작은 set, 비용 무시).
+	sort.Ints(supported)
 	// fromMinor 의 index 와 toMinor 의 index 가 인접해야 함.
 	fromIdx, toIdx := -1, -1
 	for i, m := range supported {

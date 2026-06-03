@@ -232,7 +232,8 @@ func (f *MongoProfileFetcher) FetchShardedProfiles(ctx context.Context, sampleSi
 
 	var all []ProfileDoc
 	var lastErr error
-	okCount := 0
+	okCount := 0     // 연결 성공한 shard 수
+	collectedOK := 0 // 수집(applyProfilingLevel + collectProfileDocs)까지 성공한 shard 수
 	for _, target := range targets {
 		cli, cleanup, cerr := f.connectTo(ctx, target)
 		if cerr != nil {
@@ -246,11 +247,19 @@ func (f *MongoProfileFetcher) FetchShardedProfiles(ctx context.Context, sampleSi
 			lastErr = derr
 		} else {
 			all = append(all, docs...)
+			collectedOK++
 		}
 		cleanup()
 	}
-	if okCount == 0 && lastErr != nil {
-		return nil, fmt.Errorf("all %d shards unreachable: %w", len(targets), lastErr)
+	// 전 shard 가 수집 실패 (연결조차 0 또는 연결됐으나 수집 0건) → silent empty 방지로 error surface.
+	if collectedOK == 0 && lastErr != nil {
+		return nil, fmt.Errorf("all %d shards failed (connected=%d): %w", len(targets), okCount, lastErr)
+	}
+	// 부분 실패 (일부 shard 만 수집 성공) → 수집된 결과 + 경고 error 동반.
+	// 호출자가 '정상이지만 빈/불완전 결과' 로 오인하지 않도록 표면화한다. 결과 슬라이스를
+	// 함께 반환하므로 호출자는 partial 데이터를 활용하거나(비치명 처리) 재시도를 결정할 수 있다.
+	if collectedOK < len(targets) && lastErr != nil {
+		return all, fmt.Errorf("partial shard failure (%d/%d shards collected): %w", collectedOK, len(targets), lastErr)
 	}
 	return all, nil
 }

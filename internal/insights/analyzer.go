@@ -269,9 +269,11 @@ func detectSchemaHints(docs []ProfileDoc) []mongodbv1alpha1.Recommendation {
 			Detail:     fmt.Sprintf("%d개 $or/$nor 절 감지 — 복합 인덱스 또는 schema 정규화 검토", clauses),
 		})
 	}
-	// 결과 정렬 — NS 기준.
+	// 결과 정렬 — NS 기준. DB 와 Collection 사이에 NUL 구분자를 삽입해
+	// 경계 모호로 인한 정렬 키 충돌을 방지한다 (예: DB="ab",Coll="c" 와
+	// DB="a",Coll="bc" 가 단순 연결 시 동일 "abc" 로 충돌).
 	sort.Slice(out, func(i, j int) bool {
-		return out[i].DB+out[i].Collection < out[j].DB+out[j].Collection
+		return out[i].DB+"\x00"+out[i].Collection < out[j].DB+"\x00"+out[j].Collection
 	})
 	return out
 }

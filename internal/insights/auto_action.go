@@ -62,7 +62,7 @@ func PlanMissingIndexActions(recs []mongodbv1alpha1.Recommendation, spec *mongod
 			continue
 		}
 		actions = append(actions, IndexAction{
-			NS:       extractNS(r.Detail),
+			NS:       joinNS(r.DB, r.Collection),
 			Keys:     extractKeys(r.Detail),
 			Severity: r.Severity,
 			Reason:   r.Detail,
@@ -89,7 +89,7 @@ func PlanSlowQueryHints(recs []mongodbv1alpha1.Recommendation, spec *mongodbv1al
 			continue
 		}
 		actions = append(actions, QueryHintAction{
-			NS:       extractNS(r.Detail),
+			NS:       joinNS(r.DB, r.Collection),
 			Pattern:  r.Detail,
 			Severity: r.Severity,
 			Reason:   r.Detail,
@@ -113,16 +113,16 @@ func meetsSeverity(got, min string) bool {
 	return gv >= mv
 }
 
-// extractNS extracts "db.coll" from recommendation Detail string.
-// Best-effort heuristic — controller validates before action.
-func extractNS(detail string) string {
-	for _, token := range strings.Fields(detail) {
-		token = strings.Trim(token, ":,.\"'")
-		if strings.Count(token, ".") == 1 && !strings.HasPrefix(token, ".") {
-			return token
-		}
+// joinNS combines structured DB/Collection fields into "db.coll" namespace.
+// 결함 #14: 기존 extractNS 는 Detail 문자열(NS 미포함, filter shape 만 존재)을
+// 휴리스틱 파싱해 NS 를 추출하지 못했다. Recommendation 은 DB/Collection 을
+// 별도 필드로 보존하므로 구조화 필드를 직접 사용한다. 둘 중 하나라도 비면
+// (schema-level hint) 빈 문자열.
+func joinNS(db, coll string) string {
+	if db == "" || coll == "" {
+		return ""
 	}
-	return ""
+	return db + "." + coll
 }
 
 // extractKeys extracts proposed index keys from recommendation Detail.

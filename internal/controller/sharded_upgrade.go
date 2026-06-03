@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -77,6 +78,13 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeBackup(ctx context.Con
 	backup := &mongodbv1alpha1.MongoDBBackup{}
 	err := r.Get(ctx, types.NamespacedName{Name: backupName, Namespace: mdbsh.Namespace}, backup)
 	if err != nil {
+		// NotFound가 아닌 에러(일시적 API 오류 등)는 신규 생성으로 진행하지 않고 전파한다.
+		// 일시 오류를 NotFound로 오인해 Create하면 이미 존재하는 백업과 충돌하거나
+		// 백업을 중복 생성할 수 있다.
+		if !apierrors.IsNotFound(err) {
+			return ctrl.Result{}, false, err
+		}
+		// NotFound일 때만 pre-upgrade 백업을 신규 생성한다.
 		backup = &mongodbv1alpha1.MongoDBBackup{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      backupName,
@@ -226,16 +234,23 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeRollback(ctx context.C
 	}
 
 	logger.Info("rolling back sharded cluster to previous version", "version", mdbsh.Status.PreviousVersion)
-	mdbsh.Spec.Version.Version = mdbsh.Status.PreviousVersion
+
+	// Spec→Status 순서 안전: 먼저 Spec(Version)을 Update한다. r.Update는 성공 시 서버가
+	// 발급한 최신 ResourceVersion으로 mdbsh를 in-place 갱신하므로, 이후 status 갱신은
+	// 그 최신 RV 위에서 시작한다. 즉 Spec update 이전의 stale RV로 status를 덮어쓰지 않는다.
+	previousVersion := mdbsh.Status.PreviousVersion
+	mdbsh.Spec.Version.Version = previousVersion
 	if err := r.Update(ctx, mdbsh); err != nil {
 		return ctrl.Result{}, false, err
 	}
 
+	// Spec update로 갱신된 mdbsh(최신 RV) 위에서 status를 갱신한다. conflict가 나더라도
+	// updateStatusWithRetry가 refetch 후 applyStatus를 재적용하므로 stale 덮어쓰기가 없다.
 	applyStatus := func() {
 		mdbsh.Status.UpgradePhase = ""
 		mdbsh.Status.UpgradeStartTime = nil
 		setShardedUpgradeCondition(mdbsh, "UpgradeRolledBack", metav1.ConditionTrue,
-			"RolledBack", fmt.Sprintf("Rolled back to %s", mdbsh.Status.PreviousVersion))
+			"RolledBack", fmt.Sprintf("Rolled back to %s", previousVersion))
 	}
 	applyStatus()
 	if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
