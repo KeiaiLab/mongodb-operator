@@ -502,6 +502,28 @@ spec:
                 - enabled
                 - storage
                 type: object
+              balancer:
+                description: Balancer configures the chunk balancer (Phase 5.3 — topology
+                  v2).
+                properties:
+                  window:
+                    description: |-
+                      Window restricts chunk migrations to a daily time window (off-peak
+                      throttling). Omit to let the balancer run at any time.
+                    properties:
+                      start:
+                        description: Start of the active window, HH:MM (24h).
+                        pattern: ^([01]\d|2[0-3]):[0-5]\d$
+                        type: string
+                      stop:
+                        description: Stop of the active window, HH:MM (24h).
+                        pattern: ^([01]\d|2[0-3]):[0-5]\d$
+                        type: string
+                    required:
+                    - start
+                    - stop
+                    type: object
+                type: object
               configServer:
                 description: ConfigServer defines config server configuration
                 properties:

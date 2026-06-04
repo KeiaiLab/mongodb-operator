@@ -352,7 +352,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 ### 5.3 Sharded topology v2
 
 - [ ] Zone-aware shard placement — `internal/controller/shard/zone_placement.go`
-- [ ] Chunk migration throttling — `internal/controller/shard/throttle.go`
+- [x] Chunk migration throttling — balancer active window. `internal/mongodb/balancer.go` (`BalancerWindowUpdate`/`ValidateBalancerWindow` 순수 + `ShardManager.SetBalancerWindow` config.settings upsert) + `MongoDBShardedSpec.Balancer.Window{Start,Stop}` CRD(HH:MM pattern) + `reconcileAddShards` 배선(default off). Verify: `go test ./internal/mongodb/ -run 'TestBalancerWindowUpdate|TestValidateBalancerWindow|TestSetBalancerWindow'` PASS (12 케이스)
 - [ ] Auto-rebalance feedback loop — `internal/controller/shard/rebalancer.go`
 
 ### 5.4 Security hardening v2
