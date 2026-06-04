@@ -165,6 +165,12 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 		return result, nil
 	}
 
+	// 4.7. mTLS rolling 전환 단계 해소 (5.4-c2) — StatefulSet 빌드 전 effective
+	// clusterAuthMode 를 안전 단계로 설정 + Status.MTLSPhase 추적 (default off → no-op).
+	if err := r.reconcileMTLSPhase(ctx, mdb); err != nil {
+		return r.updateStatusError(ctx, mdb, "MTLSPhase", err)
+	}
+
 	// 5. StatefulSet
 	if err := r.reconcileStatefulSet(ctx, mdb); err != nil {
 		return r.updateStatusError(ctx, mdb, "StatefulSet", err)

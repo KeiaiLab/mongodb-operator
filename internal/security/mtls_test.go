@@ -13,6 +13,37 @@ import (
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
+func TestResolveMTLSStep(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name         string
+		desired      string
+		currentPhase string
+		rolloutReady bool
+		wantApply    string
+		wantDone     bool
+	}{
+		{"disabled (desired 빈값) → 즉시 done", "", "x509", true, "", true},
+		{"신규/keyFile 에서 시작, ready → 한 단계 전진", "x509", "", true, "sendKeyFile", false},
+		{"중간 단계 ready → 다음 단계", "x509", "sendKeyFile", true, "sendX509", false},
+		{"마지막 직전 ready → 도달 done", "x509", "sendX509", true, "x509", true},
+		{"rollout 미완 → 현 단계 유지 (점프 금지)", "x509", "sendKeyFile", false, "sendKeyFile", false},
+		{"이미 도달 → 유지 done", "x509", "x509", true, "x509", true},
+		{"빈 currentPhase + rollout 미완 → keyFile 유지", "x509", "", false, "keyFile", false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			apply, done := ResolveMTLSStep(tc.desired, tc.currentPhase, tc.rolloutReady)
+			if apply != tc.wantApply || done != tc.wantDone {
+				t.Errorf("ResolveMTLSStep(%q,%q,%v) = (%q,%v), want (%q,%v)",
+					tc.desired, tc.currentPhase, tc.rolloutReady, apply, done, tc.wantApply, tc.wantDone)
+			}
+		})
+	}
+}
+
 func TestNextClusterAuthMode(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

@@ -52,6 +52,32 @@ func indexOf(xs []string, v string) int {
 	return -1
 }
 
+// ResolveMTLSStep decides the clusterAuthMode to apply this reconcile on the safe
+// rolling path. currentPhase is the mode currently rolled out (Status.MTLSPhase),
+// desired is the spec target, rolloutReady is whether the current phase finished
+// rolling out across all members. Returns the mode to apply now + whether the
+// transition reached desired. Empty currentPhase is treated as keyFile (mongod
+// default) so the operator NEVER jumps — it advances one adjacent step only when
+// the current phase is fully rolled out, which is what makes enabling mTLS on a
+// running cluster safe (members never differ by more than one step).
+func ResolveMTLSStep(desired, currentPhase string, rolloutReady bool) (apply string, done bool) {
+	if desired == "" {
+		return "", true // mTLS disabled — nothing to apply
+	}
+	cur := currentPhase
+	if cur == "" {
+		cur = "keyFile" // mongod default — roll up from here, never jump
+	}
+	if cur == desired {
+		return desired, true
+	}
+	if !rolloutReady {
+		return cur, false // hold on current phase until every member is on it
+	}
+	next := NextClusterAuthMode(cur, desired)
+	return next, next == desired
+}
+
 // MembershipOrg is the X.509 organization shared by every cluster member cert.
 // mongod treats certs sharing O+OU as members of the same cluster.
 const MembershipOrg = "keiailab-mongodb-cluster"
