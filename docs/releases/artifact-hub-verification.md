@@ -173,7 +173,7 @@ helm repo update
 ```yaml
 annotations:
   # 라이센스
-  artifacthub.io/license: Apache-2.0
+  artifacthub.io/license: MIT
   
   # 카테고리
   artifacthub.io/category: database

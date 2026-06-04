@@ -29,7 +29,7 @@ maintainers:
 icon: https://raw.githubusercontent.com/mongodb/mongo/master/docs/leaf.svg
 
 annotations:
-  artifacthub.io/license: Apache-2.0
+  artifacthub.io/license: MIT
   artifacthub.io/category: database
   artifacthub.io/maturity: stable
   artifacthub.io/operator: "true"
