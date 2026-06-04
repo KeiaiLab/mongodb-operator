@@ -1,11 +1,7 @@
 /*
 Copyright 2026 Keiailab.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the MIT License. See the LICENSE file for details.
 */
 
 // mongodbclustergroup_types.go — F56-F60 (cycle 8) 멀티 클러스터 관리 CRD.
