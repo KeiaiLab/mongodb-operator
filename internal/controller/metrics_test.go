@@ -113,3 +113,43 @@ func TestDeleteMetricsFor_Cleanup(t *testing.T) {
 	MetricReconcileTotal.WithLabelValues("ns-cleanup", "name-cleanup").Inc()
 	DeleteMetricsFor("ns-cleanup", "name-cleanup")
 }
+
+// ObserveReconcile 가 latency + long-tail histogram 양쪽에 관측을 기록하는지 검증.
+func TestObserveReconcile_RecordsBothHistograms(t *testing.T) {
+	t.Parallel()
+	ns, name := "ns-obs", "name-obs"
+	ObserveReconcile(ns, name, "success", 2.5)
+
+	gathered, err := metrics.Registry.(prometheus.Gatherer).Gather()
+	if err != nil {
+		t.Fatalf("gather: %v", err)
+	}
+	want := map[string]bool{
+		"mongodb_reconcile_duration_seconds":  false,
+		"mongodb_reconcile_long_tail_seconds": false,
+	}
+	for _, mf := range gathered {
+		if _, ok := want[*mf.Name]; !ok {
+			continue
+		}
+		for _, m := range mf.Metric {
+			var matchNs, matchName bool
+			for _, lp := range m.Label {
+				if *lp.Name == "namespace" && *lp.Value == ns {
+					matchNs = true
+				}
+				if *lp.Name == "name" && *lp.Value == name {
+					matchName = true
+				}
+			}
+			if matchNs && matchName && m.Histogram != nil && *m.Histogram.SampleCount >= 1 {
+				want[*mf.Name] = true
+			}
+		}
+	}
+	for metric, found := range want {
+		if !found {
+			t.Errorf("ObserveReconcile 후 %s 에 관측 누락 (ns=%s name=%s)", metric, ns, name)
+		}
+	}
+}

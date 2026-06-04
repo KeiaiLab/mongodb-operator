@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -77,9 +78,21 @@ func ensureShardedUpgradeStartTime(mdbsh *mongodbv1alpha1.MongoDBSharded) {
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 
-func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rresult ctrl.Result, rerr error) {
 	logger := log.FromContext(ctx)
 	logger.Info("Reconciling MongoDBSharded", "namespace", req.Namespace, "name", req.Name)
+
+	// SLO observability — reconcile latency + long-tail histogram (Phase 5.1).
+	// sharded reconcile 은 cfg+shards+mongos 로 가장 무거워 long-tail p99 추적 가치가 크다.
+	MetricReconcileTotal.WithLabelValues(req.Namespace, req.Name).Inc()
+	timer := prometheus.NewTimer(prometheus.ObserverFunc(func(v float64) {
+		result := "success"
+		if rerr != nil {
+			result = "error"
+		}
+		ObserveReconcile(req.Namespace, req.Name, result, v)
+	}))
+	defer timer.ObserveDuration()
 
 	// Fetch MongoDBSharded instance
 	mdbsh := &mongodbv1alpha1.MongoDBSharded{}

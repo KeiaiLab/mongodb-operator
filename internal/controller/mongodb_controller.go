@@ -83,7 +83,7 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 		if rerr != nil {
 			result = "error"
 		}
-		MetricReconcileLatency.WithLabelValues(req.Namespace, req.Name, result).Observe(v)
+		ObserveReconcile(req.Namespace, req.Name, result, v)
 	}))
 	defer timer.ObserveDuration()
 
