@@ -3,7 +3,7 @@
 /*
 Copyright 2026 Keiailab.
 
-Licensed under the Apache License, Version 2.0.
+SPDX-License-Identifier: MIT
 */
 
 // integration_test.go — 실 MongoDB 대상 insights round-trip 검증 (opt-in).

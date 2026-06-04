@@ -1,7 +1,7 @@
 /*
 Copyright 2026 Keiailab.
 
-Licensed under the Apache License, Version 2.0.
+SPDX-License-Identifier: MIT
 */
 
 // Package controller — auto_scaling.go: Level V Auto Pilot 자동 스케일링 (B1, B2).

@@ -1,7 +1,7 @@
 /*
 Copyright 2026 Keiailab.
 
-Licensed under the Apache License, Version 2.0.
+SPDX-License-Identifier: MIT
 */
 
 // Package insights — auto_action.go: Level V Auto Pilot 자동 액션 (A3, A4).

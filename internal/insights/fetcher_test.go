@@ -1,7 +1,7 @@
 /*
 Copyright 2026 Keiailab.
 
-Licensed under the Apache License, Version 2.0.
+SPDX-License-Identifier: MIT
 */
 
 // fetcher_test.go — ProfileFetcher 인터페이스 + MongoProfileFetcher 의

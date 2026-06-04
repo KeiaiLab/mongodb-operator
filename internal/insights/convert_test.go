@@ -1,7 +1,7 @@
 /*
 Copyright 2026 Keiailab.
 
-Licensed under the Apache License, Version 2.0.
+SPDX-License-Identifier: MIT
 */
 
 // convert_test.go — BSON variance 회귀 가드 (Codex review (RFC-0045) #2 fix).

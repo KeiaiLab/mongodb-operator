@@ -1,7 +1,7 @@
 /*
 Copyright 2026 Keiailab.
 
-Licensed under the Apache License, Version 2.0.
+SPDX-License-Identifier: MIT
 */
 
 // Package controller — auto_anomaly.go: Level V Auto Pilot 이상 감지 (B6, B7).

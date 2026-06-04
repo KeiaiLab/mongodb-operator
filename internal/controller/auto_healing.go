@@ -1,7 +1,7 @@
 /*
 Copyright 2026 Keiailab.
 
-Licensed under the Apache License, Version 2.0.
+SPDX-License-Identifier: MIT
 */
 
 // Package controller — auto_healing.go: Level V Auto Pilot 자가복구 (A5, B3-B5).

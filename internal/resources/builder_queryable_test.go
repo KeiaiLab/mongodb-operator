@@ -1,7 +1,7 @@
 /*
 Copyright 2026 Keiailab.
 
-Licensed under the Apache License, Version 2.0.
+SPDX-License-Identifier: MIT
 */
 
 // builder_queryable_test.go — BuildQueryableStatefulSet 특성화 테스트 (ROADMAP §3.1.1).

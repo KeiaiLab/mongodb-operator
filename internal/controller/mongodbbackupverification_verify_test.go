@@ -1,8 +1,7 @@
 /*
 Copyright 2024 Keiailab.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
+SPDX-License-Identifier: MIT
 */
 
 // 본 파일은 envtest/실제 mongo 없이 fake client + mock docCounter 로 backup

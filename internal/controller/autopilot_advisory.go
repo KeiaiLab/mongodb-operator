@@ -1,7 +1,7 @@
 /*
 Copyright 2026 Keiailab.
 
-Licensed under the Apache License, Version 2.0.
+SPDX-License-Identifier: MIT
 */
 
 // autopilot_advisory.go — Auto Pilot A등급 advisory (ROADMAP §3.2 / Level V).

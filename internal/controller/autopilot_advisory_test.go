@@ -1,7 +1,7 @@
 /*
 Copyright 2026 Keiailab.
 
-Licensed under the Apache License, Version 2.0.
+SPDX-License-Identifier: MIT
 */
 
 // autopilot_advisory_test.go — buildAutoPilotActions 순수 단위 (envtest 불요).
