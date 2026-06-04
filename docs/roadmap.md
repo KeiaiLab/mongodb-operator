@@ -351,9 +351,9 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 ### 5.3 Sharded topology v2
 
-- [ ] Zone-aware shard placement — `internal/controller/shard/zone_placement.go`
+- [x] Zone-aware shard placement — `internal/mongodb/zone.go` (`AddShardToZoneCommand`/`UpdateZoneKeyRangeCommand` 순수 + `ValidateZoneName` + `ShardManager.AddShardToZone`/`UpdateZoneKeyRange`) + `ShardSpec.Zones[]{ShardIndex,Zone}` CRD(zone pattern) + `reconcileAddShards` 배선(default off, idempotent). Verify: `go test ./internal/mongodb/ -run 'Zone'` PASS (11 케이스)
 - [x] Chunk migration throttling — balancer active window. `internal/mongodb/balancer.go` (`BalancerWindowUpdate`/`ValidateBalancerWindow` 순수 + `ShardManager.SetBalancerWindow` config.settings upsert) + `MongoDBShardedSpec.Balancer.Window{Start,Stop}` CRD(HH:MM pattern) + `reconcileAddShards` 배선(default off). Verify: `go test ./internal/mongodb/ -run 'TestBalancerWindowUpdate|TestValidateBalancerWindow|TestSetBalancerWindow'` PASS (12 케이스)
-- [ ] Auto-rebalance feedback loop — `internal/controller/shard/rebalancer.go`
+- [~] Auto-rebalance feedback loop — `internal/controller/auto_rebalance.go` (`AnalyzeChunkDistribution`/`DetectImbalance`/`DecideBalancerControl` advisory 순수함수, 18 테스트). reconcile 배선(실 chunk 분포 수집 + balancer 제어)은 후속. Verify: `go test ./internal/controller/ -run 'TestAnalyzeChunkDistribution|TestDetectImbalance|TestDecideBalancerControl'` PASS
 
 ### 5.4 Security hardening v2
 

@@ -87,6 +87,18 @@ type MongoDBShardedSpec struct {
 	NetworkPolicy *NetworkPolicySpec `json:"networkPolicy,omitempty"`
 }
 
+// ShardZoneAssignment maps a shard to a zone for zone-aware placement (Phase 5.3).
+// 운영자가 shardIndex 의 shard 를 zone 에 배치 → sh.addShardToZone(<name>-shard-N, zone).
+type ShardZoneAssignment struct {
+	// ShardIndex is the 0-based shard index (maps to <cluster>-shard-<index>).
+	// +kubebuilder:validation:Minimum=0
+	ShardIndex int32 `json:"shardIndex"`
+
+	// Zone is the zone name (alphanumeric, dash, underscore; max 63 chars).
+	// +kubebuilder:validation:Pattern=`^[a-zA-Z0-9_-]{1,63}$`
+	Zone string `json:"zone"`
+}
+
 // BalancerSpec configures the MongoDB chunk balancer (Phase 5.3 throttling).
 type BalancerSpec struct {
 	// Window restricts chunk migrations to a daily time window (off-peak
@@ -169,6 +181,11 @@ type ShardSpec struct {
 	// Storage defines storage configuration for each shard
 	// +optional
 	Storage StorageSpec `json:"storage,omitempty"`
+
+	// Zones assigns shards to zones for zone-aware placement (Phase 5.3).
+	// 각 항목은 shard 를 zone 에 매핑 (sh.addShardToZone). 미설정 시 zone 미사용.
+	// +optional
+	Zones []ShardZoneAssignment `json:"zones,omitempty"`
 
 	// Resources defines resource requirements for each shard member
 	// +optional
