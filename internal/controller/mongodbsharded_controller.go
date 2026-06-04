@@ -658,6 +658,18 @@ func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh
 	statusErr := updateStatusWithRetry(ctx, r.Client, mdbsh, func() {
 		mdbsh.Status.ShardsAdded = addedSnapshot
 	})
+
+	// Balancer active window (Phase 5.3) — Window 설정 시 config.settings 갱신
+	// (idempotent upsert). 미설정 시 no-op (default off → 기존 동작 보존).
+	if b := mdbsh.Spec.Balancer; b != nil && b.Window != nil {
+		if err := shardManager.SetBalancerWindow(ctx, mongosPod, mdbsh.Namespace, b.Window.Start, b.Window.Stop); err != nil {
+			logger.Error(err, "Failed to set balancer window")
+			addErrs = append(addErrs, fmt.Errorf("balancer window: %w", err))
+		} else {
+			logger.Info("Balancer active window applied", "start", b.Window.Start, "stop", b.Window.Stop)
+		}
+	}
+
 	if len(addErrs) > 0 {
 		return stderrors.Join(append(addErrs, statusErr)...)
 	}

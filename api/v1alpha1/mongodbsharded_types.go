@@ -44,6 +44,10 @@ type MongoDBShardedSpec struct {
 	// Mongos defines mongos router configuration
 	Mongos MongosSpec `json:"mongos"`
 
+	// Balancer configures the chunk balancer (Phase 5.3 — topology v2).
+	// +optional
+	Balancer *BalancerSpec `json:"balancer,omitempty"`
+
 	// TLS defines TLS configuration
 	// +optional
 	TLS *TLSSpec `json:"tls,omitempty"`
@@ -81,6 +85,25 @@ type MongoDBShardedSpec struct {
 	// 활성화 시 cfg(27019)/shard(27018)/mongos(27017) 컴포넌트별 deny-by-default.
 	// +optional
 	NetworkPolicy *NetworkPolicySpec `json:"networkPolicy,omitempty"`
+}
+
+// BalancerSpec configures the MongoDB chunk balancer (Phase 5.3 throttling).
+type BalancerSpec struct {
+	// Window restricts chunk migrations to a daily time window (off-peak
+	// throttling). Omit to let the balancer run at any time.
+	// +optional
+	Window *BalancerWindowSpec `json:"window,omitempty"`
+}
+
+// BalancerWindowSpec is the balancer active window (cluster local time, 24h).
+type BalancerWindowSpec struct {
+	// Start of the active window, HH:MM (24h).
+	// +kubebuilder:validation:Pattern=`^([01]\d|2[0-3]):[0-5]\d$`
+	Start string `json:"start"`
+
+	// Stop of the active window, HH:MM (24h).
+	// +kubebuilder:validation:Pattern=`^([01]\d|2[0-3]):[0-5]\d$`
+	Stop string `json:"stop"`
 }
 
 // ConfigServerSpec defines config server configuration
