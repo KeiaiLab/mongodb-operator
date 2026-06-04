@@ -40,6 +40,15 @@ const (
 	// oplogTailerBatchSeconds 는 한 oplog batch 의 회전 간격. 작을수록 RPO
 	// 가 짧지만 S3 객체 수 증가. 30s 기본은 1 hour oplog 가 120 객체 정도.
 	oplogTailerBatchSeconds = 30
+
+	// oplogUploadIntervalSeconds 는 uploader sidecar 가 staging → S3 업로드를
+	// 시도하는 주기. tailer batch 와 동일 (rollover 직후 업로드, RPO 최소화).
+	oplogUploadIntervalSeconds = 30
+
+	// oplogUploaderImage 는 uploader sidecar image. mongodump 불필요 (tailer 가
+	// dump) → 경량 aws-cli (backup-s3.sh.tpl 의 aws s3 cp 패턴 재사용). AWS 공식
+	// image — ADR-0136 Bitnami portfolio 금지 무관.
+	oplogUploaderImage = "amazon/aws-cli:2.27.49"
 )
 
 // IsOplogTailerEnabled 는 주어진 BackupSpec 이 PITR 활성 + retention 양수인지
@@ -152,6 +161,115 @@ func BuildOplogStagingVolume() corev1.Volume {
 				SizeLimit: resourceQuantityPtr("4Gi"),
 			},
 		},
+	}
+}
+
+// IsOplogUploaderEnabled 는 PITR oplog uploader sidecar 추가 대상인지 검사.
+// tailer 활성 (IsOplogTailerEnabled) + Storage.Type=="s3" 양쪽 충족 시에만
+// uploader 를 추가한다. PVC storage 는 staging EmptyDir 가 곧 최종 저장이
+// 아니므로 (별 retention 설계) 본 cycle uploader 대상 외 — S3 전용.
+func IsOplogUploaderEnabled(spec *mongodbv1alpha1.BackupSpec) bool {
+	if !IsOplogTailerEnabled(spec) {
+		return false
+	}
+	return spec.Storage.Type == "s3" && spec.Storage.S3 != nil
+}
+
+// BuildOplogUploaderSidecar 는 PITR oplog S3 업로드 sidecar 컨테이너 spec 을
+// 반환. tailer 가 oplogStagingMount EmptyDir 에 떨어뜨린 oplog-*.bson 을
+// oplogUploadIntervalSeconds 주기로 S3 (BackupSpec.Storage.S3) 에 업로드 +
+// 업로드 성공 시 로컬 삭제 (staging 공간 회수). mongod / tailer 와 동일 pod.
+//
+// 호출 시점: BuildStatefulSet / BuildShardStatefulSet / BuildConfigServerStatefulSet
+// 에서 IsOplogUploaderEnabled 가 true 인 경우만 (PVC storage 는 uploader 불필요).
+//
+// image: aws-cli (mongodump 불필요 — tailer 가 dump). credential: S3.CredentialsRef
+// 의 access-key / secret-key (BuildBackupJob 의 S3 env 패턴 동일).
+// 보안: securityContext 는 tailer 와 동일 (non-root 999, capabilities drop ALL).
+// aws cli 는 env credential 사용 (~/.aws 불필요) + HOME=/tmp (temp 파일).
+func BuildOplogUploaderSidecar(spec *mongodbv1alpha1.BackupSpec) corev1.Container {
+	s3 := spec.Storage.S3
+
+	// aws cli 는 AWS_DEFAULT_REGION 을 요구 — S3_REGION 커스텀 env 는 cli 가
+	// 보지 않으므로, 미설정 시 InvalidLocationConstraint / region None 오류.
+	// RGW (Ceph) 는 zonegroup 무관하나 cli signing 에 region 문자열이 필수 →
+	// 빈 값이면 dummy us-east-1 사용 (e2e 라이브 RGW 검증으로 발견, 2026-06-04).
+	region := s3.Region
+	if region == "" {
+		region = "us-east-1"
+	}
+
+	env := []corev1.EnvVar{
+		{Name: "S3_BUCKET", Value: s3.Bucket},
+		{Name: "S3_ENDPOINT", Value: s3.Endpoint},
+		{Name: "S3_REGION", Value: s3.Region},
+		{Name: "AWS_DEFAULT_REGION", Value: region},
+		{Name: "S3_PREFIX", Value: s3.Prefix},
+		{Name: "HOME", Value: "/tmp"},
+		{
+			Name: "AWS_ACCESS_KEY_ID",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: s3.CredentialsRef,
+					Key:                  "access-key",
+				},
+			},
+		},
+		{
+			Name: "AWS_SECRET_ACCESS_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: s3.CredentialsRef,
+					Key:                  "secret-key",
+				},
+			},
+		},
+	}
+
+	tlsFlag := ""
+	if s3.InsecureSkipTLS {
+		tlsFlag = " --no-verify-ssl"
+	}
+
+	// staging 의 oplog-*.bson 을 S3 로 cp + 성공 시 삭제. 실패 객체는 다음
+	// cycle 재시도 (rm 안 함). aws cli 는 AWS_ACCESS_KEY_ID 등 env credential
+	// 자동 사용. ${S3_PREFIX} 에 oplog/ subkey 부착해 backup archive 와 분리.
+	script := `set -eu
+echo "[oplog-uploader] S3 upload loop interval=` + intString(oplogUploadIntervalSeconds) + `s dest=s3://${S3_BUCKET}/${S3_PREFIX}oplog/"
+while true; do
+  for f in ` + oplogStagingMount + `/oplog-*.bson; do
+    [ -e "$f" ] || continue
+    base=$(basename "$f")
+    if aws s3 cp "$f" "s3://${S3_BUCKET}/${S3_PREFIX}oplog/${base}" --endpoint-url="${S3_ENDPOINT}"` + tlsFlag + `; then
+      rm -f "$f"
+      echo "[oplog-uploader] uploaded ${base}"
+    else
+      echo "[oplog-uploader] upload failed: ${base} (retry next cycle)"
+    fi
+  done
+  sleep ` + intString(oplogUploadIntervalSeconds) + `
+done
+`
+
+	return corev1.Container{
+		Name:    "oplog-uploader",
+		Image:   oplogUploaderImage,
+		Command: []string{"/bin/sh", "-c", script},
+		Env:     env,
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("50m"),
+				corev1.ResourceMemory: resource.MustParse("64Mi"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("200m"),
+				corev1.ResourceMemory: resource.MustParse("256Mi"),
+			},
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: oplogStagingVolume, MountPath: oplogStagingMount},
+		},
+		SecurityContext: buildDefaultContainerSecurityContext(),
 	}
 }
 
