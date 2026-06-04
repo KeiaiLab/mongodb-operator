@@ -19,6 +19,24 @@ import (
 // internal/resources (MongoTLSPEMPath + "/server.pem").
 const DefaultClusterFile = "/etc/ssl/mongo-pem/server.pem"
 
+// MembershipOrg is the X.509 organization shared by every cluster member cert.
+// mongod treats certs sharing O+OU as members of the same cluster.
+const MembershipOrg = "keiailab-mongodb-cluster"
+
+// MembershipSubject returns the cert-manager Certificate subject for X.509
+// cluster membership: O=MembershipOrg, OU=<clusterName>. All member certs of one
+// cluster must share these so mongod recognises them as the same cluster.
+// Returns nil when mTLS is disabled (server cert keeps its default subject).
+func MembershipSubject(spec *mongodbv1alpha1.MTLSSpec, clusterName string) map[string]any {
+	if spec == nil || !spec.Enabled {
+		return nil
+	}
+	return map[string]any{
+		"organizations":       []any{MembershipOrg},
+		"organizationalUnits": []any{clusterName},
+	}
+}
+
 // MongodArgs returns the mongod --clusterAuthMode / --tlsClusterFile flags for
 // X.509 inter-node (cluster membership) authentication. Returns nil when the
 // spec is nil or disabled (default off → no production impact).

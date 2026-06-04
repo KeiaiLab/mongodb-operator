@@ -13,6 +13,38 @@ import (
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
+func TestMembershipSubject(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		spec    *mongodbv1alpha1.MTLSSpec
+		cluster string
+		want    map[string]any
+	}{
+		{"nil spec → nil", nil, "keiailab-mongo", nil},
+		{"disabled → nil", &mongodbv1alpha1.MTLSSpec{Enabled: false}, "keiailab-mongo", nil},
+		{
+			"enabled → shared O + per-cluster OU",
+			&mongodbv1alpha1.MTLSSpec{Enabled: true},
+			"keiailab-mongo",
+			map[string]any{
+				"organizations":       []any{MembershipOrg},
+				"organizationalUnits": []any{"keiailab-mongo"},
+			},
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := MembershipSubject(tc.spec, tc.cluster)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("MembershipSubject(%+v, %q) = %v, want %v", tc.spec, tc.cluster, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestMongodArgs(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

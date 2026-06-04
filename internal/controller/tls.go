@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
+	securitypkg "github.com/keiailab/mongodb-operator/internal/security"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -107,6 +108,9 @@ func buildCertificate(mdbsh *mongodbv1alpha1.MongoDBSharded) *unstructured.Unstr
 			"rotationPolicy": "Always",
 		},
 	}
+	if subj := securitypkg.MembershipSubject(mdbsh.Spec.TLS.MTLS, mdbsh.Name); subj != nil {
+		spec["subject"] = subj
+	}
 	if d := mdbsh.Spec.TLS.CertManager.Duration; d != "" {
 		spec["duration"] = d
 	}
@@ -179,6 +183,9 @@ func buildRSCertificate(mdb *mongodbv1alpha1.MongoDB) *unstructured.Unstructured
 			"size":           int64(256),
 			"rotationPolicy": "Always",
 		},
+	}
+	if subj := securitypkg.MembershipSubject(mdb.Spec.TLS.MTLS, mdb.Name); subj != nil {
+		spec["subject"] = subj
 	}
 	if d := mdb.Spec.TLS.CertManager.Duration; d != "" {
 		spec["duration"] = d
