@@ -743,6 +743,10 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 		hasAdmin := mdb.Spec.Auth.AdminCredentialsSecretRef.Name != ""
 		containers = append(containers, BuildOplogTailerSidecar(mdb.Spec.Version, mongoDBPort, hasAdmin))
 		volumes = append(volumes, BuildOplogStagingVolume())
+		// PITR S3 uploader sidecar (S3 storage 시): staging → S3 업로드 + 로컬 회수.
+		if IsOplogUploaderEnabled(mdb.Spec.Backup) {
+			containers = append(containers, BuildOplogUploaderSidecar(mdb.Spec.Backup))
+		}
 		// Also mount staging on mongod for restore drill.
 		containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
 			Name:      oplogStagingVolume,
@@ -1205,6 +1209,10 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 		sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers,
 			BuildOplogTailerSidecar(mdbsh.Spec.Version, 27019, hasAdmin))
 		sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, BuildOplogStagingVolume())
+		if IsOplogUploaderEnabled(mdbsh.Spec.Backup) {
+			sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers,
+				BuildOplogUploaderSidecar(mdbsh.Spec.Backup))
+		}
 		sts.Spec.Template.Spec.Containers[0].VolumeMounts = append(
 			sts.Spec.Template.Spec.Containers[0].VolumeMounts,
 			corev1.VolumeMount{Name: oplogStagingVolume, MountPath: oplogStagingMount},
@@ -1456,6 +1464,10 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 		sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers,
 			BuildOplogTailerSidecar(mdbsh.Spec.Version, 27018, hasAdmin))
 		sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, BuildOplogStagingVolume())
+		if IsOplogUploaderEnabled(mdbsh.Spec.Backup) {
+			sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers,
+				BuildOplogUploaderSidecar(mdbsh.Spec.Backup))
+		}
 		sts.Spec.Template.Spec.Containers[0].VolumeMounts = append(
 			sts.Spec.Template.Spec.Containers[0].VolumeMounts,
 			corev1.VolumeMount{Name: oplogStagingVolume, MountPath: oplogStagingMount},
