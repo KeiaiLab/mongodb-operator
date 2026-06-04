@@ -347,7 +347,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 - [ ] Multi-region cluster federation — `api/v1alpha1/mongodbfederation_types.go`
 - [ ] PITR cross-region replication — `internal/controller/backup/cross_region.go`
-- [ ] Automated DR drill — `test/dr/quarterly_drill.go`
+- [~] Automated DR drill — `internal/controller/dr_restore_drill.go` (`ValidatePITRTarget` oplog window 검증 + `EvaluateRestoreDrill` 복원 collection 검증, 순수함수 12 테스트). webhook/reconcile 배선 + 실 cross-cluster drill 은 후속. Verify: `go test ./internal/controller/ -run 'TestValidatePITRTarget|TestEvaluateRestoreDrill'` PASS
 
 ### 5.3 Sharded topology v2
 
