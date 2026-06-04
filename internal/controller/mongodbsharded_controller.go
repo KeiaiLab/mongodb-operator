@@ -676,6 +676,22 @@ func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh
 		}
 	}
 
+	// Zone-aware shard placement (Phase 5.3) — Zones 설정 시 shard→zone 매핑
+	// (idempotent addShardToZone). 미설정 시 no-op (default off → 기존 동작 보존).
+	for _, z := range mdbsh.Spec.Shards.Zones {
+		if z.ShardIndex < 0 || z.ShardIndex >= mdbsh.Spec.Shards.Count {
+			addErrs = append(addErrs, fmt.Errorf("zone assignment shardIndex %d 범위 밖 (count=%d)", z.ShardIndex, mdbsh.Spec.Shards.Count))
+			continue
+		}
+		shardName := fmt.Sprintf("%s-shard-%d", mdbsh.Name, z.ShardIndex)
+		if err := shardManager.AddShardToZone(ctx, mongosPod, mdbsh.Namespace, shardName, z.Zone); err != nil {
+			logger.Error(err, "Failed to assign shard to zone", "shard", shardName, "zone", z.Zone)
+			addErrs = append(addErrs, fmt.Errorf("zone %s→%s: %w", shardName, z.Zone, err))
+		} else {
+			logger.Info("Shard assigned to zone", "shard", shardName, "zone", z.Zone)
+		}
+	}
+
 	if len(addErrs) > 0 {
 		return stderrors.Join(append(addErrs, statusErr)...)
 	}
