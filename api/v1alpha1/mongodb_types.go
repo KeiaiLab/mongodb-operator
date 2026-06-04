@@ -158,6 +158,12 @@ type MongoDBStatus struct {
 	// +optional
 	TLSSecretName string `json:"tlsSecretName,omitempty"`
 
+	// MTLSPhase is the clusterAuthMode currently rolled out across members.
+	// The operator advances it one safe step per reconcile toward spec.tls.mtls.mode
+	// (keyFile→sendKeyFile→sendX509→x509) so a running cluster is never broken.
+	// +optional
+	MTLSPhase string `json:"mtlsPhase,omitempty"`
+
 	// LastBackup contains information about the last backup
 	// +optional
 	LastBackup *BackupStatus `json:"lastBackup,omitempty"`

@@ -8562,6 +8562,12 @@ spec:
                   - state
                   type: object
                 type: array
+              mtlsPhase:
+                description: |-
+                  MTLSPhase is the clusterAuthMode currently rolled out across members.
+                  The operator advances it one safe step per reconcile toward spec.tls.mtls.mode
+                  (keyFile→sendKeyFile→sendX509→x509) so a running cluster is never broken.
+                type: string
               observedGeneration:
                 description: ObservedGeneration is the most recent generation observed
                 format: int64
