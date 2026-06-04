@@ -16,6 +16,16 @@ rules:
       {{- end }}
       {{- if .Values.features.backup.enabled }}
       - mongodbbackups
+      - mongodbbackupverifications
+      {{- end }}
+      {{- if .Values.features.insights.enabled }}
+      - mongodbinsights
+      {{- end }}
+      {{- if .Values.features.federation.enabled }}
+      - mongodbfederations
+      {{- end }}
+      {{- if .Values.features.clustergroup.enabled }}
+      - mongodbclustergroups
       {{- end }}
     verbs:
       - create
@@ -34,6 +44,16 @@ rules:
       {{- end }}
       {{- if .Values.features.backup.enabled }}
       - mongodbbackups/status
+      - mongodbbackupverifications/status
+      {{- end }}
+      {{- if .Values.features.insights.enabled }}
+      - mongodbinsights/status
+      {{- end }}
+      {{- if .Values.features.federation.enabled }}
+      - mongodbfederations/status
+      {{- end }}
+      {{- if .Values.features.clustergroup.enabled }}
+      - mongodbclustergroups/status
       {{- end }}
     verbs:
       - get
@@ -48,6 +68,9 @@ rules:
       {{- end }}
       {{- if .Values.features.backup.enabled }}
       - mongodbbackups/finalizers
+      {{- end }}
+      {{- if .Values.features.federation.enabled }}
+      - mongodbfederations/finalizers
       {{- end }}
     verbs:
       - update
