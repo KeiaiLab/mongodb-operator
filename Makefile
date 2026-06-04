@@ -28,8 +28,9 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: manifests
-manifests: controller-gen sync-crds ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	@$(MAKE) --no-print-directory sync-crds  # #5: controller-gen 이 config/crd/bases 갱신한 *뒤* sync (prerequisite 면 갱신 전 실행되어 charts stale)
 
 # v1.4.3 — config/crd/bases (controller-gen 출력) 와 charts/mongodb-operator/crds
 # (helm chart 번들) 의 drift 방지. v1.4.0~v1.4.2 까지 chart bundle 이 stale 한
