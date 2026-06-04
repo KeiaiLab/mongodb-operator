@@ -277,6 +277,15 @@ features:
   # Backup 컨트롤러 — 자동 테스트 0건. connectionString 평문 노출(P0). 베타 미지원.
   backup:
     enabled: false
+  # Insights — 쿼리 프로파일링 advisory (DryRun 기본, read-only 분석). cycle 7 F51-F55 + cycle 9 P1.
+  insights:
+    enabled: false
+  # Federation (다중 리전) — skeleton (cross-cluster bind 후속). CR 없으면 no-op. cycle 5 F33-F37.
+  federation:
+    enabled: false
+  # ClusterGroup (멀티 클러스터) — skeleton (cross-cluster propagation 후속). CR 없으면 no-op. cycle 8 F56-F60.
+  clustergroup:
+    enabled: false
   # Auto-scaling (HPA) — RS/cfg drift 방지 mutex 부재(P1). 베타 미지원.
   autoscaling:
     enabled: false
