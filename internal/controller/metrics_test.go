@@ -55,6 +55,9 @@ func TestMetricsCount_AtLeast30(t *testing.T) {
 	MetricInsightsRecommendations.WithLabelValues("ns-test", "name-test", "MissingIndex", "warning").Set(2)
 	MetricInsightsAnalysisTotal.WithLabelValues("ns-test", "name-test", "success").Inc()
 	MetricInsightsSampledTotal.WithLabelValues("ns-test", "name-test").Add(500)
+	// observability v2 long-tail (Phase 5.1)
+	MetricReconcileLongTailSeconds.WithLabelValues("ns-test", "name-test", "success").Observe(1.5)
+	MetricAdminCommandLatencySeconds.WithLabelValues("ns-test", "name-test", "ping").Observe(0.02)
 
 	gathered, err := metrics.Registry.(prometheus.Gatherer).Gather()
 	if err != nil {
@@ -66,9 +69,9 @@ func TestMetricsCount_AtLeast30(t *testing.T) {
 			count++
 		}
 	}
-	// cycle 9 P2: 33 → 36 metrics (3 insights metrics 추가).
-	if count < 33 {
-		t.Errorf("expected at least 33 mongodb_* metrics registered, got %d", count)
+	// cycle 9 P2: 33 → 36 metrics (insights 3) → 38 (Phase 5.1 long-tail 2).
+	if count < 38 {
+		t.Errorf("expected at least 38 mongodb_* metrics registered, got %d", count)
 	}
 	t.Logf("registered mongodb_* metrics: %d", count)
 }

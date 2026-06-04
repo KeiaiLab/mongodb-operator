@@ -84,6 +84,9 @@ spec:
 		{"MongoDBReconcileErrors",
 			fmt.Sprintf(`rate(mongodb_reconcile_errors_total{name="%s"}[5m]) > 0`, clusterName),
 			"warning", "Operator reconciler reporting errors"},
+		{"MongoDBReconcileLongTailP99",
+			fmt.Sprintf(`histogram_quantile(0.99, rate(mongodb_reconcile_long_tail_seconds_bucket{name="%s"}[10m])) > 60`, clusterName),
+			"warning", "Reconcile p99 latency above 60s (observability v2 long-tail)"},
 	}
 
 	for _, r := range rules {
