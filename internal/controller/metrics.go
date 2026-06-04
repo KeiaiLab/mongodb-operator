@@ -181,6 +181,15 @@ func init() {
 	)
 }
 
+// ObserveReconcile records one reconcile duration into both the fine-grained
+// latency histogram and the long-tail histogram (Phase 5.1 p99/p999 tracking).
+// 두 histogram 을 같은 값으로 관측 — 호출처(RS/sharded reconcile timer)가 중복
+// Observe 를 작성하지 않도록 단일 진입점.
+func ObserveReconcile(namespace, name, result string, seconds float64) {
+	MetricReconcileLatency.WithLabelValues(namespace, name, result).Observe(seconds)
+	MetricReconcileLongTailSeconds.WithLabelValues(namespace, name, result).Observe(seconds)
+}
+
 // DeleteMetricsFor — CR 삭제 시 cardinality 누적 방지.
 func DeleteMetricsFor(namespace, name string) {
 	MetricReconcileTotal.DeleteLabelValues(namespace, name)
@@ -189,5 +198,6 @@ func DeleteMetricsFor(namespace, name string) {
 	})
 	for _, r := range []string{"success", "error"} {
 		MetricReconcileLatency.DeleteLabelValues(namespace, name, r)
+		MetricReconcileLongTailSeconds.DeleteLabelValues(namespace, name, r)
 	}
 }
