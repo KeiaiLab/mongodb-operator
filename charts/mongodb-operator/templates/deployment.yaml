@@ -82,6 +82,15 @@ spec:
             {{- if .Values.features.backup.enabled }}
             - --enable-backup-controller=true
             {{- end }}
+            {{- if .Values.features.insights.enabled }}
+            - --enable-insights-controller=true
+            {{- end }}
+            {{- if .Values.features.federation.enabled }}
+            - --enable-federation-controller=true
+            {{- end }}
+            {{- if .Values.features.clustergroup.enabled }}
+            - --enable-clustergroup-controller=true
+            {{- end }}
             {{- if .Values.features.autoscaling.enabled }}
             - --enable-autoscaling=true
             {{- end }}
