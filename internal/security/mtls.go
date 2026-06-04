@@ -19,6 +19,39 @@ import (
 // internal/resources (MongoTLSPEMPath + "/server.pem").
 const DefaultClusterFile = "/etc/ssl/mongo-pem/server.pem"
 
+// ClusterAuthOrder is the safe rolling transition path for mongod
+// --clusterAuthMode. mongod members can only differ by one adjacent step during
+// a transition (skipping a step makes members reject each other), so the
+// operator advances one position per reconcile.
+var ClusterAuthOrder = []string{"keyFile", "sendKeyFile", "sendX509", "x509"}
+
+// NextClusterAuthMode returns the next clusterAuthMode on the safe rolling path
+// from current toward desired — exactly one adjacent step. Returns desired when
+// already there, or when either value is off-path (no safe sequence to walk).
+func NextClusterAuthMode(current, desired string) string {
+	ci, di := indexOf(ClusterAuthOrder, current), indexOf(ClusterAuthOrder, desired)
+	if ci < 0 || di < 0 {
+		return desired // off-path → no safe sequence, caller jumps directly
+	}
+	switch {
+	case ci < di:
+		return ClusterAuthOrder[ci+1]
+	case ci > di:
+		return ClusterAuthOrder[ci-1]
+	default:
+		return desired
+	}
+}
+
+func indexOf(xs []string, v string) int {
+	for i, x := range xs {
+		if x == v {
+			return i
+		}
+	}
+	return -1
+}
+
 // MembershipOrg is the X.509 organization shared by every cluster member cert.
 // mongod treats certs sharing O+OU as members of the same cluster.
 const MembershipOrg = "keiailab-mongodb-cluster"
