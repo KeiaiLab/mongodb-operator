@@ -13,6 +13,33 @@ import (
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
+func TestNextClusterAuthMode(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name             string
+		current, desired string
+		want             string
+	}{
+		{"forward 1: keyFile→x509 한 단계", "keyFile", "x509", "sendKeyFile"},
+		{"forward 2: sendKeyFile→x509", "sendKeyFile", "x509", "sendX509"},
+		{"forward 3: sendX509→x509 도달", "sendX509", "x509", "x509"},
+		{"이미 도달: x509→x509", "x509", "x509", "x509"},
+		{"reverse 1: x509→keyFile 한 단계", "x509", "keyFile", "sendX509"},
+		{"동일: keyFile→keyFile", "keyFile", "keyFile", "keyFile"},
+		{"off-path current → desired 점프", "", "x509", "x509"},
+		{"off-path desired → desired 점프", "keyFile", "weird", "weird"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := NextClusterAuthMode(tc.current, tc.desired); got != tc.want {
+				t.Errorf("NextClusterAuthMode(%q, %q) = %q, want %q", tc.current, tc.desired, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestMembershipSubject(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
