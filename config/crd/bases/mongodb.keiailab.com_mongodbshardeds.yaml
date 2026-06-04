@@ -23825,6 +23825,13 @@ spec:
                     format: int32
                     type: integer
                 type: object
+              mtlsPhase:
+                description: |-
+                  MTLSPhase is the clusterAuthMode currently rolled out across all components
+                  (config server / shards / mongos). The operator advances it one safe step
+                  per reconcile toward spec.tls.mtls.mode so a running sharded cluster is
+                  never broken (Phase 5.4-c2 sharded sister).
+                type: string
               observedGeneration:
                 description: ObservedGeneration is the most recent generation observed
                 format: int64

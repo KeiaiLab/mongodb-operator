@@ -415,6 +415,13 @@ type MongoDBShardedStatus struct {
 	// ConnectionString is the MongoDB connection URI (via mongos)
 	ConnectionString string `json:"connectionString,omitempty"`
 
+	// MTLSPhase is the clusterAuthMode currently rolled out across all components
+	// (config server / shards / mongos). The operator advances it one safe step
+	// per reconcile toward spec.tls.mtls.mode so a running sharded cluster is
+	// never broken (Phase 5.4-c2 sharded sister).
+	// +optional
+	MTLSPhase string `json:"mtlsPhase,omitempty"`
+
 	// LastBackup contains information about the last backup
 	// +optional
 	LastBackup *BackupStatus `json:"lastBackup,omitempty"`

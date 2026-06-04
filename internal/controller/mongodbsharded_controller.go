@@ -138,6 +138,12 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return result, nil
 	}
 
+	// 1.7. mTLS rolling 전환 단계 해소 (5.4-c2 sharded) — 컴포넌트 빌드 전 effective
+	// clusterAuthMode 를 안전 단계로 설정 + Status.MTLSPhase 추적 (default off → no-op).
+	if err := r.reconcileMTLSPhase(ctx, mdbsh); err != nil {
+		return r.updateStatusError(ctx, mdbsh, "MTLSPhase", err)
+	}
+
 	// 2. Config Server
 	if err := r.reconcileConfigServer(ctx, mdbsh); err != nil {
 		return r.updateStatusError(ctx, mdbsh, "ConfigServer", err)
