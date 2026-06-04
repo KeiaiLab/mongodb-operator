@@ -234,6 +234,43 @@ func TestBuildReplicaSetStatefulSet(t *testing.T) {
 	assert.Equal(t, "mongodb", sts.Spec.Template.Spec.Containers[0].Name)
 }
 
+func TestBuildReplicaSetStatefulSet_MTLSEnabled_WiresClusterAuthArgs(t *testing.T) {
+	mdb := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-mongodb", Namespace: "default"},
+		Spec: mongodbv1alpha1.MongoDBSpec{
+			Members:        3,
+			ReplicaSetName: "rs0",
+			Version:        mongodbv1alpha1.MongoDBVersion{Version: "7.0"},
+			Storage:        mongodbv1alpha1.StorageSpec{Size: resource.MustParse("10Gi"), DataDirPath: "/data/db"},
+			TLS: &mongodbv1alpha1.TLSSpec{
+				Enabled: true,
+				MTLS:    &mongodbv1alpha1.MTLSSpec{Enabled: true, Mode: "x509"},
+			},
+		},
+	}
+
+	args := BuildReplicaSetStatefulSet(mdb).Spec.Template.Spec.Containers[0].Args
+
+	assert.Contains(t, args, "--clusterAuthMode=x509", "mTLS 활성 시 mongod 에 clusterAuthMode 와이어링")
+	assert.Contains(t, args, "--tlsClusterFile=/etc/ssl/mongo-pem/server.pem")
+}
+
+func TestBuildReplicaSetStatefulSet_MTLSDefaultOff_NoClusterAuthArgs(t *testing.T) {
+	mdb := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-mongodb", Namespace: "default"},
+		Spec: mongodbv1alpha1.MongoDBSpec{
+			Members:        3,
+			ReplicaSetName: "rs0",
+			Version:        mongodbv1alpha1.MongoDBVersion{Version: "7.0"},
+			Storage:        mongodbv1alpha1.StorageSpec{Size: resource.MustParse("10Gi"), DataDirPath: "/data/db"},
+		},
+	}
+
+	for _, a := range BuildReplicaSetStatefulSet(mdb).Spec.Template.Spec.Containers[0].Args {
+		assert.NotContains(t, a, "clusterAuthMode", "MTLS 미설정 시 clusterAuthMode 미와이어링 (production-safe default)")
+	}
+}
+
 func TestBuildReplicaSetStatefulSetWithStorageClass(t *testing.T) {
 	storageClass := "fast-storage"
 	mdb := &mongodbv1alpha1.MongoDB{

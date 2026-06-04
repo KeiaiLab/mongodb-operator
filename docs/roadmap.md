@@ -307,6 +307,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 | Date | Change | Refs |
 |---|---|---|
+| 2026-06-04 | §5.4 mTLS pod-to-pod 1차 [ ]→[~] — `internal/security/mtls.go` `MongodArgs` (clusterAuthMode/tlsClusterFile, keyFile→sendX509→x509) + `MTLSSpec` CRD 필드(default off) + 4 mongod 컨테이너 와이어링 + 6 단위 + 2 builder 통합 테스트. cert provisioning + rolling 전환은 후속 sub-task. 라이브 배포: insights/federation/clustergroup 컨트롤러 enable (operator !3/!51 머지, Flux 0.1.19, 5 컨트롤러 실측). | operator !5, platform-data !51, 이슈 #4 |
 | 2026-06-03 | Phase 5 brainstorm 시작 (사용자 "전체 자율 진행" 승인) — 6 카테고리 우선순위 권장안 (5.3 sharded v2 · 5.4 mTLS = P1, 5.1/5.2 = P2). gate [ ]→[~]. | (phase5-brainstorm-scope) |
 | 2026-06-03 | §3.2 MongoDBSharded per-shard 프로파일링 [ ]→[x] — `FetchShardedProfiles` (각 shard RS 직접 연결 + applyProfilingLevel + collectProfileDocs merge) + controller `IsShardedKind` 분기. mongos system.profile 부재 해소. | (sharded-profiling) |
 | 2026-06-03 | Phase 5 brainstorm gate 명시 — heading ⛔ BRAINSTORM GATE 배너 + 해소 절차 3-step (superpowers:brainstorming → 확정/교체/통합 → 입자도 분해). 합의 없는 autonomous 구현 차단 (§1 Think Before Coding). | (phase5-brainstorm-gate) |
@@ -356,7 +357,10 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 ### 5.4 Security hardening v2
 
 - [x] KMS encryption-at-rest — `internal/controller/encryption/kms.go` + `integration.go` (Vault Transit 실 HTTP Encrypt/Decrypt/Health + ProbeKMS + 336줄 테스트, Phase 2.4 F38-F42 + cycle-17, 실측 2026-06-03). 경로 정정: `internal/security/kms.go` → `internal/controller/encryption/`. *AWS/GCP/Azure 는 TLS probe only — 전체 SDK wrap/unwrap 은 후속 [~].*
-- [ ] mTLS internal pod-to-pod — `internal/security/mtls.go`
+- [~] mTLS internal pod-to-pod — `internal/security/mtls.go`
+  - [x] clusterAuthMode/tlsClusterFile arg builder — `security.MongodArgs` (keyFile/sendKeyFile/sendX509/x509) + `MTLSSpec` CRD 필드(default off) + 4 mongod 컨테이너(RS/configsvr/shard/mongos) 와이어링. 6 단위 + 2 builder 통합 테스트 (실측 2026-06-04). Verify: `go test ./internal/security/ -run TestMongodArgs && go test ./internal/resources/ -run TestBuildReplicaSetStatefulSet_MTLS` PASS
+  - [ ] 멤버 cert provisioning — cert-manager Certificate 에 cluster membership SAN/usage 추가 (`internal/controller/tls.go`)
+  - [ ] rolling 전환 reconcile — keyFile→sendX509→x509 무중단 전환 가드 (running 클러스터 깨지 않기)
 - [ ] SPIFFE/SPIRE identity — `internal/security/spiffe.go`
 
 ### 5.5 operator-commons v1.0.0 import

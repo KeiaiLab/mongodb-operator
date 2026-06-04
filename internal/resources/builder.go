@@ -35,6 +35,7 @@ import (
 	auditpkg "github.com/keiailab/mongodb-operator/internal/controller/audit"
 	authpkg "github.com/keiailab/mongodb-operator/internal/controller/auth"
 	encryptionpkg "github.com/keiailab/mongodb-operator/internal/controller/encryption"
+	securitypkg "github.com/keiailab/mongodb-operator/internal/security"
 )
 
 const (
@@ -176,6 +177,16 @@ func tlsArgs(tls *mongodbv1alpha1.TLSSpec) []string {
 		args = append(args, "--tlsAllowInvalidHostnames")
 	}
 	return args
+}
+
+// mtlsArgs 는 X.509 inter-node (pod-to-pod) 인증용 mongod 플래그
+// (--clusterAuthMode / --tlsClusterFile) 를 반환한다. tls 가 nil 이거나
+// MTLS 비활성 시 nil (production-safe default off). Phase 5.4 security hardening v2.
+func mtlsArgs(tls *mongodbv1alpha1.TLSSpec) []string {
+	if tls == nil {
+		return nil
+	}
+	return securitypkg.MongodArgs(tls.MTLS)
 }
 
 // buildTLSServerVolume 은 cert-manager 가 발급한 server cert Secret (<name>-tls)
@@ -586,6 +597,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			buildTLSPEMMount(),
 		)
 		args = append(args, tlsArgs(mdb.Spec.TLS)...)
+		args = append(args, mtlsArgs(mdb.Spec.TLS)...)
 	}
 
 	// cycle 13 (실 통합): auth (LDAP/OIDC) + encryption (KMS) + audit args 를
@@ -1093,6 +1105,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 			buildTLSPEMMount(),
 		)
 		args = append(args, tlsArgs(mdbsh.Spec.TLS)...)
+		args = append(args, mtlsArgs(mdbsh.Spec.TLS)...)
 	}
 
 	// cycle 14 sharded ConfigServer integration: auth / encryption / audit args.
@@ -1348,6 +1361,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 			buildTLSPEMMount(),
 		)
 		args = append(args, tlsArgs(mdbsh.Spec.TLS)...)
+		args = append(args, mtlsArgs(mdbsh.Spec.TLS)...)
 	}
 
 	// cycle 14 sharded Shard integration.
@@ -1674,6 +1688,7 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 	// Pillar P7 Phase 3b — TLS args (mongos, preferTLS plaintext fallback).
 	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
 		args = append(args, tlsArgs(mdbsh.Spec.TLS)...)
+		args = append(args, mtlsArgs(mdbsh.Spec.TLS)...)
 	}
 
 	// cycle 14 mongos integration: auth + audit args. mongos 는 데이터 저장 안 하므로

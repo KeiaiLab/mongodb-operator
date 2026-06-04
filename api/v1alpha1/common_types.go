@@ -289,6 +289,34 @@ type TLSSpec struct {
 	// CustomCert references a custom TLS secret
 	// +optional
 	CustomCert *CustomCertSpec `json:"customCert,omitempty"`
+
+	// MTLS enables X.509 inter-node (pod-to-pod) authentication via mongod
+	// --clusterAuthMode. Disabled by default. Requires TLS enabled + a cluster
+	// membership certificate (Phase 5.4 — security hardening v2).
+	// +optional
+	MTLS *MTLSSpec `json:"mtls,omitempty"`
+}
+
+// MTLSSpec configures X.509 inter-node (cluster) authentication for replica set /
+// shard membership — pod-to-pod mTLS. Maps to mongod --clusterAuthMode +
+// --tlsClusterFile. Enable via rolling transition: keyFile → sendKeyFile →
+// sendX509 → x509 (avoids breaking a running cluster).
+type MTLSSpec struct {
+	// Enabled turns on X.509 cluster membership authentication.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Mode sets mongod --clusterAuthMode. Use sendKeyFile/sendX509 for rolling
+	// migration from keyFile, then x509 for full mTLS.
+	// +kubebuilder:default="x509"
+	// +kubebuilder:validation:Enum=keyFile;sendKeyFile;sendX509;x509
+	// +optional
+	Mode string `json:"mode,omitempty"`
+
+	// ClusterFile is the PEM path for --tlsClusterFile (membership cert).
+	// Defaults to the mounted server TLS cert when empty.
+	// +optional
+	ClusterFile string `json:"clusterFile,omitempty"`
 }
 
 // CertManagerSpec defines cert-manager configuration
