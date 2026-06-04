@@ -38,10 +38,8 @@ manifests: controller-gen sync-crds ## Generate WebhookConfiguration, ClusterRol
 .PHONY: sync-crds
 sync-crds: ## Sync config/crd/bases → charts/mongodb-operator/crds (release 전 의무 — drift 차단).
 	@echo "=== sync CRD bundles (config/crd/bases → charts/mongodb-operator/crds) ==="
-	@cp config/crd/bases/mongodb.keiailab.com_mongodbs.yaml charts/mongodb-operator/crds/
-	@cp config/crd/bases/mongodb.keiailab.com_mongodbshardeds.yaml charts/mongodb-operator/crds/
-	@cp config/crd/bases/mongodb.keiailab.com_mongodbbackups.yaml charts/mongodb-operator/crds/
-	@echo "✓ CRD bundles synced"
+	@cp config/crd/bases/*.yaml charts/mongodb-operator/crds/
+	@echo "✓ CRD bundles synced ($$(ls -1 config/crd/bases/*.yaml | wc -l | tr -d ' ') CRDs)"
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
