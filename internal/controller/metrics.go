@@ -130,9 +130,26 @@ var (
 			Help: "Total MongoDBInsights profile docs sampled across analysis cycles"},
 		labelNamespaceName)
 
+	// --- Phase 5.1 observability v2: long-tail latency histograms (2) ---
+	// 기존 reconcile/query latency 보다 *고해상도 long-tail* 버킷으로 p99 추적.
+	// `mongodb_reconcile_long_tail_seconds` — reconcile 꼬리 지연 (느린 reconcile
+	// 의 p99/p999 가시성, 0.5~120s 세밀 버킷).
+	MetricReconcileLongTailSeconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{Subsystem: metricSubsystem, Name: "reconcile_long_tail_seconds",
+			Help:    "Reconcile duration long-tail buckets for p99/p999 SLO tracking",
+			Buckets: []float64{0.5, 1, 2, 5, 10, 20, 40, 60, 90, 120}},
+		[]string{"namespace", "name", "result"})
+	// `mongodb_admin_command_latency_seconds` — operator → mongod admin command
+	// (ping/replSetGetStatus/balancer 등) 왕복 지연 long-tail.
+	MetricAdminCommandLatencySeconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{Subsystem: metricSubsystem, Name: "admin_command_latency_seconds",
+			Help:    "Operator-to-mongod admin command round-trip latency (long-tail)",
+			Buckets: prometheus.ExponentialBuckets(0.005, 2, 13)},
+		[]string{"namespace", "name", "command"})
+
 	// Total: 3 (existing reconcile) + 5 (query) + 6 (replication) + 5 (storage)
 	//      + 4 (connections) + 5 (backup) + 5 (audit/kms/fed)
-	//      + 3 (insights, cycle 9 P2) = 36 metrics.
+	//      + 3 (insights, cycle 9 P2) + 2 (observability v2 long-tail) = 38 metrics.
 )
 
 func init() {
@@ -159,6 +176,8 @@ func init() {
 		MetricFederationRegionsSynced, MetricClusterGroupMembers,
 		// insights (3, cycle 9 P2)
 		MetricInsightsRecommendations, MetricInsightsAnalysisTotal, MetricInsightsSampledTotal,
+		// observability v2 long-tail (2, Phase 5.1)
+		MetricReconcileLongTailSeconds, MetricAdminCommandLatencySeconds,
 	)
 }
 
