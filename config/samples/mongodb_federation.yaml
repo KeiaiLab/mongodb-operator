@@ -1,0 +1,32 @@
+---
+# MongoDBFederation 샘플 — 여러 region(클러스터)에 걸친 글로벌 MongoDB.
+# 각 region 은 별도 클러스터의 kubeconfig Secret(clusterKubeConfigRef)으로 접근한다.
+# 주의: 실제 동작하려면 regions.clusterKubeConfigRef 가 원격 클러스터 kubeconfig 를 담은
+#       Secret 을 가리켜야 한다. 단일 클러스터만 쓰면 MongoDBClusterGroup 을 사용하라.
+apiVersion: mongodb.keiailab.com/v1alpha1
+kind: MongoDBFederation
+metadata:
+  name: keiailab-global
+  namespace: data
+spec:
+  version:
+    version: "8.3"
+  auth:
+    mechanism: SCRAM-SHA-256
+    adminCredentialsSecretRef:
+      name: keiailab-global-admin       # admin user/password 를 담은 Secret
+  regions:
+    - name: seoul
+      members: 3
+      zone: ap-northeast-2a
+      priority: primary
+      clusterKubeConfigRef:
+        name: kubeconfig-seoul          # seoul 클러스터 접근 kubeconfig Secret
+    - name: tokyo
+      members: 3
+      zone: ap-northeast-1a
+      priority: secondary
+      clusterKubeConfigRef:
+        name: kubeconfig-tokyo
+  tls:
+    enabled: false

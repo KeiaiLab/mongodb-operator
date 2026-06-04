@@ -1,0 +1,22 @@
+---
+# MongoDBInsights 샘플 — 대상 MongoDB 의 느린 쿼리 분석 + 인덱스/쿼리힌트 권고.
+# autoIndex.dryRun=true → 권고만 생성하고 실제 인덱스는 만들지 않아 프로덕션 안전.
+# clusterRef 는 같은 네임스페이스의 MongoDB 또는 MongoDBSharded 를 가리킨다.
+apiVersion: mongodb.keiailab.com/v1alpha1
+kind: MongoDBInsights
+metadata:
+  name: keiailab-mongo-insights
+  namespace: data
+spec:
+  clusterRef:
+    kind: MongoDBSharded
+    name: keiailab-mongo
+  enabled: true
+  analysisInterval: "1h"
+  slowQueryThresholdMs: 100
+  autoIndex:
+    enabled: true
+    dryRun: true             # 권고만 — 실제 인덱스 생성 안 함 (프로덕션 안전)
+    minSeverity: warning
+  autoQueryHint:
+    enabled: false
