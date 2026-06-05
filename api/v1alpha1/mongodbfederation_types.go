@@ -90,6 +90,13 @@ type MongoDBFederationStatus struct {
 	// +optional
 	RegionStatuses []FederationRegionStatus `json:"regionStatuses,omitempty"`
 
+	// ActivePrimary is the region currently selected as primary by priority
+	// among Synced regions (Phase 5.2). Empty when no region is eligible
+	// (all degraded/failed or all secondary-only). Observability into the
+	// failover decision — actual rs.reconfig promotion is a follow-up.
+	// +optional
+	ActivePrimary string `json:"activePrimary,omitempty"`
+
 	// Conditions follow standard k8s convention.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
