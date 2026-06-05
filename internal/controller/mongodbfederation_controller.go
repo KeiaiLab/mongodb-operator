@@ -47,6 +47,17 @@ func (r *MongoDBFederationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// Spec 검증 (Phase 5.2) — 무효 region 구성(중복 name / 범위 밖 priority / primary
+	// 부재)은 cross-cluster propagation 전에 조기 거부. webhook 미배선 환경의 안전망.
+	if err := ValidateFederationRegions(fed.Spec.Regions); err != nil {
+		logger.Error(err, "federation region 구성 무효 — reconcile 중단")
+		fed.Status.Phase = federationPhaseFailed
+		if uerr := updateStatusWithRetry(ctx, r.Client, fed, func() { fed.Status.Phase = federationPhaseFailed }); uerr != nil {
+			return ctrl.Result{}, uerr
+		}
+		return ctrl.Result{}, nil
+	}
+
 	// Phase 결정: regions 의 LastSyncTime 가 nil 인 region 이 있으면 Bootstrapping.
 	// 모두 Synced 이면 Synced. 하나라도 Failed 이면 Degraded.
 	fed.Status.Phase = computeFederationPhase(fed)
