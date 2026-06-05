@@ -345,8 +345,8 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 
 ### 5.2 Disaster recovery 고도화
 
-- [ ] Multi-region cluster federation — `api/v1alpha1/mongodbfederation_types.go`
-- [ ] PITR cross-region replication — `internal/controller/backup/cross_region.go`
+- [~] Multi-region cluster federation — `api/v1alpha1/mongodbfederation_types.go` + `internal/controller/federation_failover.go` (`DecideFederationPrimary` priority 기반 primary 선출, Synced+priority>0, 동률 name 사전순) + `federation_validation.go` (`ValidateFederationRegions` name 유일/priority 범위/viable primary) + reconcile 배선. 실 primary promotion(cross-cluster rs.reconfig) + remote propagation 은 후속. Verify: `go test ./internal/controller/ -run 'TestDecideFederationPrimary|TestValidateFederationRegions'` PASS (23 케이스)
+- [~] PITR cross-region replication — `internal/controller/crossregion_restore.go` (`SelectRestoreSource` covering backup 중 최신 CompletedAt 선택 + `withinOplogRetention`). 실 cross-region backup 메타 수집(remote 조회) + restore reconcile 배선은 후속. Verify: `go test ./internal/controller/ -run 'TestSelectRestoreSource|TestWithinOplogRetention'` PASS (14 케이스)
 - [~] Automated DR drill — `internal/controller/dr_restore_drill.go` (`ValidatePITRTarget` oplog window 검증 + `EvaluateRestoreDrill` 복원 collection 검증, 순수함수 12 테스트). webhook/reconcile 배선 + 실 cross-cluster drill 은 후속. Verify: `go test ./internal/controller/ -run 'TestValidatePITRTarget|TestEvaluateRestoreDrill'` PASS
 
 ### 5.3 Sharded topology v2
