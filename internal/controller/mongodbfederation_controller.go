@@ -93,6 +93,10 @@ func (r *MongoDBFederationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	// Phase 재산출 (region status 갱신 후).
 	fed.Status.Phase = computeFederationPhase(fed)
 
+	// Active primary 선출 (Phase 5.2) — Synced region 중 priority 최고. 관찰 필드만
+	// 갱신, 실 promotion(rs.reconfig)은 후속. region 변동 없으면 동일값 idempotent.
+	fed.Status.ActivePrimary = DecideFederationPrimary(fed.Spec.Regions, fed.Status.RegionStatuses).PrimaryRegion
+
 	if err := r.Status().Update(ctx, fed); err != nil {
 		// status update 실패를 silent 유실하지 않고 error 로 반환해 재큐 + 재시도.
 		logger.Error(err, "federation status update failed")

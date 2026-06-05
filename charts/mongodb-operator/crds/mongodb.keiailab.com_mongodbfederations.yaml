@@ -781,6 +781,13 @@ spec:
           status:
             description: MongoDBFederationStatus is the observed federation state.
             properties:
+              activePrimary:
+                description: |-
+                  ActivePrimary is the region currently selected as primary by priority
+                  among Synced regions (Phase 5.2). Empty when no region is eligible
+                  (all degraded/failed or all secondary-only). Observability into the
+                  failover decision — actual rs.reconfig promotion is a follow-up.
+                type: string
               conditions:
                 description: Conditions follow standard k8s convention.
                 items:
