@@ -80,9 +80,9 @@ Our disclosure process follows these guidelines:
 5. **Public Release**: We will publish a security advisory and release a fix
 6. **Credit**: We will credit you for the discovery (with your permission)
 
-## Apache 2.0 Security Disclaimer
+## Security Disclaimer
 
-This project is licensed under the Apache License 2.0. As per Section 7 of the license, the project is provided on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE.
+This project is licensed under the MIT License. As stated in the license, the software is provided "AS IS", WITHOUT WARRANTY OF ANY KIND, express or implied, including but not limited to the warranties of MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, and NONINFRINGEMENT.
 
 While we strive to maintain high security standards, you are solely responsible for determining the appropriateness of using or redistributing this project and assume any risks associated with your exercise of permissions under the license.
 

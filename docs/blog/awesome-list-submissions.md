@@ -24,13 +24,13 @@ Status as of v1.9.0 community launch:
 ### ramnes/awesome-mongodb — "Deployment" or "Administration" section
 
 ```markdown
-* [mongodb-operator](https://github.com/keiailab/mongodb-operator) - Kubernetes Operator managing MongoDB ReplicaSets, Sharded Clusters, and automated backups via CRDs. Apache-2.0.
+* [mongodb-operator](https://github.com/keiailab/mongodb-operator) - Kubernetes Operator managing MongoDB ReplicaSets, Sharded Clusters, and automated backups via CRDs. MIT.
 ```
 
 ### ramitsurana/awesome-kubernetes — "Database > Operators" section
 
 ```markdown
-- [mongodb-operator](https://github.com/keiailab/mongodb-operator) - Kubernetes Operator for MongoDB ReplicaSets and Sharded Clusters with built-in backup, TLS, LDAP, and monitoring. Apache-2.0.
+- [mongodb-operator](https://github.com/keiailab/mongodb-operator) - Kubernetes Operator for MongoDB ReplicaSets and Sharded Clusters with built-in backup, TLS, LDAP, and monitoring. MIT.
 ```
 
 ### avelino/awesome-go — "Database > Database Tools" (optional)
@@ -50,7 +50,7 @@ git checkout -b add-mongodb-operator
 git add README.md && git commit -s -m "Add mongodb-operator (Kubernetes operator)"
 git push -u origin add-mongodb-operator
 gh pr create --repo ramnes/awesome-mongodb --title "Add mongodb-operator" \
-  --body "Kubernetes operator for MongoDB ReplicaSets + Sharded Clusters + Backup. Apache-2.0, production-proven."
+  --body "Kubernetes operator for MongoDB ReplicaSets + Sharded Clusters + Backup. MIT, production-proven."
 cd .. && rm -rf awesome-mongodb
 
 # ramitsurana/awesome-kubernetes
@@ -61,7 +61,7 @@ git checkout -b add-mongodb-operator
 git add README.md && git commit -s -m "Add mongodb-operator under Database/Operators"
 git push -u origin add-mongodb-operator
 gh pr create --repo ramitsurana/awesome-kubernetes --title "Add mongodb-operator" \
-  --body "Kubernetes operator for MongoDB. Apache-2.0."
+  --body "Kubernetes operator for MongoDB. MIT."
 cd .. && rm -rf awesome-kubernetes
 ```
 

@@ -43,7 +43,7 @@ curl -s https://keiailab.github.io/mongodb-operator/index.yaml | grep -A 10 "ver
 - [ ] **버전 표시**: v1.0.0이 최신 버전으로 표시됨
 - [ ] **메타데이터 정확성**:
   - Description: "A Kubernetes Operator for managing MongoDB..."
-  - License: Apache-2.0
+  - License: MIT
   - Category: database
   - Operator Capabilities: Full Lifecycle
 - [ ] **CRDs 표시**: 3개 CRD (MongoDB, MongoDBSharded, MongoDBBackup)

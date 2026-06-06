@@ -4,7 +4,7 @@
 - [x] OLM bundle in `bundle/manifests/`
 - [x] ClusterServiceVersion with `alm-examples`
 - [x] 3 CRDs (MongoDB, MongoDBSharded, MongoDBBackup)
-- [x] Apache-2.0 license
+- [x] MIT license
 - [x] Container image on GHCR
 
 ## Submission Steps

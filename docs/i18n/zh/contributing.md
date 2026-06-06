@@ -274,5 +274,5 @@ mongodb-operator/
 
 ## 许可证
 
-通过为本项目做出贡献,即表示您同意您的贡献以 Apache License 2.0 进行授权。
+通过为本项目做出贡献,即表示您同意您的贡献以 MIT License 进行授权。
 

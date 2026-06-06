@@ -49,17 +49,17 @@ submit() {
   git commit -s -m "Add mongodb-operator (Kubernetes operator for MongoDB)"
   git push -u origin add-mongodb-operator
   gh pr create --repo "$upstream" --title "Add mongodb-operator" \
-    --body "Kubernetes operator for MongoDB ReplicaSets + Sharded Clusters + Backup. Apache-2.0. $REPO_URL"
+    --body "Kubernetes operator for MongoDB ReplicaSets + Sharded Clusters + Backup. MIT. $REPO_URL"
   cd ..
   rm -rf "$name"
 }
 
 submit "ramnes/awesome-mongodb" \
-  "* [mongodb-operator]($REPO_URL) - Kubernetes Operator managing MongoDB ReplicaSets, Sharded Clusters, and automated backups via CRDs. Apache-2.0." \
+  "* [mongodb-operator]($REPO_URL) - Kubernetes Operator managing MongoDB ReplicaSets, Sharded Clusters, and automated backups via CRDs. MIT." \
   "Deployment"
 
 submit "ramitsurana/awesome-kubernetes" \
-  "- [mongodb-operator]($REPO_URL) - Kubernetes Operator for MongoDB ReplicaSets and Sharded Clusters with built-in backup, TLS, LDAP, and monitoring. Apache-2.0." \
+  "- [mongodb-operator]($REPO_URL) - Kubernetes Operator for MongoDB ReplicaSets and Sharded Clusters with built-in backup, TLS, LDAP, and monitoring. MIT." \
   "Operators"
 
 echo "==> Done. Verify with: gh pr list --repo ramnes/awesome-mongodb --author eightynine01"

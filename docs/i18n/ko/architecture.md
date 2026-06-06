@@ -17,7 +17,7 @@
 - **범위**: MongoDB 7.0+ 배포에 대해 `MongoDB`, `MongoDBSharded`, `MongoDBBackup`, federation, insights CRD 를 reconcile 하는 K8s 컨트롤러.
 - **안정성 티어**: v1.5.0 (GA scope = ReplicaSet, Sharded / Backup / HPA = beta feature gate).
 - **최신 릴리스**: v1.5.0 (2026-05-13)
-- **라이선스**: Apache-2.0
+- **라이선스**: MIT
 - **모듈 경로**: `github.com/keiailab/mongodb-operator`
 
 ## CRD 표면 (CRD surface — 8 CRD)
@@ -145,7 +145,7 @@
 ## Non-goal (의도적 비목표)
 
 - ❌ MongoDB 7.0 미만 버전 (`pkg/version` allowlist 기준)
-- ❌ Operator 에 MongoDB Enterprise 바이너리 동봉 (Apache-2.0 라이선스 경계)
+- ❌ Operator 에 MongoDB Enterprise 바이너리 동봉 (MIT 라이선스 경계)
 - ❌ MongoDB Atlas / cloud-managed 통합 (out of scope)
 - ❌ `bitnami/mongodb` chart 임베드 (자체 구현으로 parity 달성)
 

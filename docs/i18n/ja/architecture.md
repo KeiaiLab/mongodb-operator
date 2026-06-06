@@ -15,7 +15,7 @@
 - **スコープ**: MongoDB 7.0+ デプロイメントに対し、`MongoDB`、`MongoDBSharded`、`MongoDBBackup`、federation、insights CRD を reconcile する K8s コントローラー。
 - **安定性ティア**: v1.5.0 (GA scope = ReplicaSet、Sharded / Backup / HPA = beta feature gate)。
 - **最新リリース**: v1.5.0 (2026-05-13)
-- **ライセンス**: Apache-2.0
+- **ライセンス**: MIT
 - **モジュールパス**: `github.com/keiailab/mongodb-operator`
 
 ## CRD サーフェス (8 CRD)
@@ -143,7 +143,7 @@
 ## Non-goal (意図的にスコープ外)
 
 - ❌ MongoDB 7.0 未満のバージョン (`pkg/version` allowlist に従う)
-- ❌ Operator バンドルに MongoDB Enterprise バイナリ同梱 (Apache-2.0 ライセンスの境界)
+- ❌ Operator バンドルに MongoDB Enterprise バイナリ同梱 (MIT ライセンスの境界)
 - ❌ MongoDB Atlas / cloud-managed 統合 (out of scope)
 - ❌ `bitnami/mongodb` chart の埋め込み (parity はネイティブ実装で達成)
 
