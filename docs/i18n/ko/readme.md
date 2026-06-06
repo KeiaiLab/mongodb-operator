@@ -6,10 +6,10 @@
 
 > English README: [README.md](README.md) — canonical / 정본
 
-> **Apache-2.0 MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+**
+> **MIT MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+**
 
 <p align="center">
-  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="라이선스"/></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="라이선스"/></a>
   <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go" alt="Go 버전"/></a>
   <a href="https://www.mongodb.com/"><img src="https://img.shields.io/badge/MongoDB-7.0%2B-47A248?logo=mongodb" alt="MongoDB"/></a>
   <a href="https://kubernetes.io/"><img src="https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes" alt="Kubernetes"/></a>
@@ -506,14 +506,14 @@ kubectl apply -f config/samples/mongodb_replicaset.yaml
 
 ## License (라이선스)
 
-본 프로젝트는 Apache License 2.0 하에 배포됩니다 — 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
+본 프로젝트는 MIT License 하에 배포됩니다 — 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
 
 ### 써드파티 라이선스
 
 본 operator 는 MongoDB 데이터베이스를 관리하지만 MongoDB 소프트웨어를 포함하거나 배포하지 않습니다. MongoDB Community Server 는 [Server Side Public License (SSPL)](https://www.mongodb.com/licensing/server-side-public-license) 하에 배포됩니다.
 
 **중요한 라이선스 참고사항:**
-- 본 operator (Apache 2.0) 는 MongoDB 배포를 조율하는 독립 소프트웨어입니다
+- 본 operator (MIT) 는 MongoDB 배포를 조율하는 독립 소프트웨어입니다
 - MongoDB 컨테이너 이미지는 공식 MongoDB 레포지토리에서 가져옵니다
 - 사용자는 MongoDB 라이선스 조건 준수에 책임이 있습니다
 - Operator 는 MongoDB 바이너리를 수정하거나 재배포하지 않습니다

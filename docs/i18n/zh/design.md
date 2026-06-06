@@ -148,7 +148,7 @@ LDAP / OIDC / Vault Transit / cross-cluster federation 这类 *external system i
 
 ### §9.1 License + Governance
 
-- License: Apache-2.0 (LICENSE 文件)
+- License: MIT (LICENSE 文件)
 - Governance: [Governance](../governance.md)
 - Code of Conduct: [Code of Conduct](../code-of-conduct.md)
 - Security: [Security](../security.md) — CVE coordinator、supported versions

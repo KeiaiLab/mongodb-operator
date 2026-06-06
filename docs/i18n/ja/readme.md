@@ -4,10 +4,10 @@
 
 # mongodb-operator
 
-> **Kubernetes 向け Apache-2.0 MongoDB Operator — ReplicaSet + Sharded Cluster + バックアップ、vanilla MongoDB 7.0+**
+> **Kubernetes 向け MIT MongoDB Operator — ReplicaSet + Sharded Cluster + バックアップ、vanilla MongoDB 7.0+**
 
 <p align="center">
-  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"/></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/></a>
   <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go" alt="Go Version"/></a>
   <a href="https://www.mongodb.com/"><img src="https://img.shields.io/badge/MongoDB-7.0%2B-47A248?logo=mongodb" alt="MongoDB"/></a>
   <a href="https://kubernetes.io/"><img src="https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes" alt="Kubernetes"/></a>
@@ -504,14 +504,14 @@ kubectl apply -f config/samples/mongodb_replicaset.yaml
 
 ## ライセンス
 
-本プロジェクトは Apache License 2.0 のもとでライセンスされています — 詳細は [LICENSE](LICENSE) ファイルを参照してください。
+本プロジェクトは MIT License のもとでライセンスされています — 詳細は [LICENSE](LICENSE) ファイルを参照してください。
 
 ### サードパーティライセンス
 
 本 Operator は MongoDB データベースを管理しますが、MongoDB ソフトウェアそのものを同梱・配布するものではありません。MongoDB Community Server は [Server Side Public License (SSPL)](https://www.mongodb.com/licensing/server-side-public-license) のもとでライセンスされています。
 
 **重要なライセンス上の注意:**
-- 本 Operator (Apache 2.0) は MongoDB のデプロイをオーケストレーションする独立したソフトウェアです
+- 本 Operator (MIT) は MongoDB のデプロイをオーケストレーションする独立したソフトウェアです
 - MongoDB コンテナイメージは公式 MongoDB リポジトリから取得されます
 - MongoDB のライセンス条項への準拠はユーザーの責任です
 - 本 Operator は MongoDB バイナリの改変・再配布を行いません

@@ -1,7 +1,7 @@
 ---
 title: "We Built an Open-Source MongoDB Operator Because Neither Percona Nor the Community Operator Was Enough"
 published: false
-description: "An Apache-2.0 Kubernetes operator for MongoDB that handles ReplicaSets, Sharded Clusters, Backup, TLS, LDAP, and monitoring — all declaratively. Here's why we built it and how it compares."
+description: "An MIT Kubernetes operator for MongoDB that handles ReplicaSets, Sharded Clusters, Backup, TLS, LDAP, and monitoring — all declaratively. Here's why we built it and how it compares."
 tags: kubernetes, mongodb, opensource, devops
 cover_image: https://github.com/keiailab/mongodb-operator/raw/main/docs/branding/cover.png
 canonical_url: https://github.com/keiailab/mongodb-operator
@@ -15,7 +15,7 @@ You want to run MongoDB on Kubernetes. You have three options:
 2. **Percona Operator** — Feature-rich, but tied to Percona Server for MongoDB (not vanilla MongoDB). Some features require commercial support.
 3. **Bitnami Helm Chart** — Static manifests. No reconciliation loop. Scale out requires manual `helm upgrade`.
 
-None of them gave us what we needed: **a fully declarative, Apache-2.0 operator for vanilla MongoDB 8.x with built-in backup, sharding, and monitoring**.
+None of them gave us what we needed: **a fully declarative, MIT operator for vanilla MongoDB 8.x with built-in backup, sharding, and monitoring**.
 
 So we built one.
 
@@ -217,4 +217,4 @@ Contributions welcome. Star the repo if you find it useful.
 
 ---
 
-*mongodb-operator is Apache-2.0 licensed. It manages vanilla MongoDB — no vendor lock-in, no SSPL constraints, no commercial upsell.*
+*mongodb-operator is MIT licensed. It manages vanilla MongoDB — no vendor lock-in, no SSPL constraints, no commercial upsell.*

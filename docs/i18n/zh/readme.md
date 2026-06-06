@@ -4,10 +4,10 @@
 
 # mongodb-operator
 
-> **Kubernetes 的 Apache-2.0 MongoDB Operator — ReplicaSet + Sharded Cluster + 备份,原生 MongoDB 7.0+**
+> **Kubernetes 的 MIT MongoDB Operator — ReplicaSet + Sharded Cluster + 备份,原生 MongoDB 7.0+**
 
 <p align="center">
-  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License"/></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/></a>
   <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go" alt="Go Version"/></a>
   <a href="https://www.mongodb.com/"><img src="https://img.shields.io/badge/MongoDB-7.0%2B-47A248?logo=mongodb" alt="MongoDB"/></a>
   <a href="https://kubernetes.io/"><img src="https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes" alt="Kubernetes"/></a>
@@ -504,14 +504,14 @@ kubectl apply -f config/samples/mongodb_replicaset.yaml
 
 ## 许可证
 
-本项目采用 Apache License 2.0 许可证 — 详情请参阅 [LICENSE](LICENSE) 文件。
+本项目采用 MIT License 许可证 — 详情请参阅 [LICENSE](LICENSE) 文件。
 
 ### 第三方许可证
 
 本 operator 管理 MongoDB 数据库,但不包含或分发 MongoDB 软件。MongoDB Community Server 采用 [Server Side Public License (SSPL)](https://www.mongodb.com/licensing/server-side-public-license) 许可证。
 
 **重要许可证说明:**
-- 本 operator (Apache 2.0) 是编排 MongoDB 部署的独立软件
+- 本 operator (MIT) 是编排 MongoDB 部署的独立软件
 - MongoDB 容器镜像从 MongoDB 官方仓库拉取
 - 用户负责遵守 MongoDB 的许可证条款
 - 本 operator 不修改或重新分发 MongoDB 二进制文件

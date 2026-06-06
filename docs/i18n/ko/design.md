@@ -150,7 +150,7 @@ Detailed: [Roadmap](../roadmap.md).
 
 ### §9.1 License + Governance
 
-- License: Apache-2.0 (LICENSE 파일)
+- License: MIT (LICENSE 파일)
 - Governance: [Governance](../governance.md)
 - Code of Conduct: [Code of Conduct](../code-of-conduct.md)
 - Security: [Security](../security.md) — CVE coordinator, supported versions

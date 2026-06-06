@@ -13,9 +13,9 @@
 
 ## 1. 身份标识
 
-**Organization**: [keiailab](https://github.com/keiailab) — Kubernetes-native 数据平台 operator (Apache-2.0、license-clean、vanilla-upstream 兼容)。
+**Organization**: [keiailab](https://github.com/keiailab) — Kubernetes-native 数据平台 operator (MIT、license-clean、vanilla-upstream 兼容)。
 
-**Project**: `mongodb-operator` — Kubernetes 的 Apache-2.0 MongoDB Operator — ReplicaSet + Sharded Cluster + Backup,原生 MongoDB 7.0+。
+**Project**: `mongodb-operator` — Kubernetes 的 MIT MongoDB Operator — ReplicaSet + Sharded Cluster + Backup,原生 MongoDB 7.0+。
 
 **Family**: 共享 [`operator-commons`](https://github.com/keiailab/operator-commons) 通用库的四个姊妹 operator 之一:
 
@@ -92,10 +92,10 @@ GitHub README 的 shield.io badge 建议使用上述 hex。
 
 # mongodb-operator
 
-> **Apache-2.0 MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+**
+> **MIT MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+**
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/></a>
   <!-- 기존 shield.io badges 유지 + 정합 -->
 </p>
 
@@ -118,7 +118,7 @@ GitHub README 的 shield.io badge 建议使用上述 hex。
 
 README 中 shield.io badge 的顺序 (左→右):
 
-1. License (Apache-2.0)
+1. License (MIT)
 2. Go Version (1.25+)
 3. Database (MongoDB 7.0+)
 4. Kubernetes Version (1.26+)
@@ -142,7 +142,7 @@ README 中 shield.io badge 的顺序 (左→右):
 
 ## 11. 许可证与归属
 
-- License: [Apache-2.0](LICENSE)
+- License: [MIT](LICENSE)
 - Copyright: © 2026 keiailab contributors
 - Third-party attributions: 见 [NOTICE](NOTICE) (如适用)
 

@@ -15,7 +15,7 @@
 - **Scope**: K8s controllers reconciling `MongoDB`, `MongoDBSharded`, `MongoDBBackup`, federation, and insights CRDs over MongoDB 7.0+ deployments.
 - **Stability tier**: v1.5.0 (GA scope = ReplicaSet; Sharded / Backup / HPA = beta feature gates).
 - **Latest release**: v1.5.0 (2026-05-13)
-- **License**: Apache-2.0
+- **License**: MIT
 - **Module path**: `github.com/keiailab/mongodb-operator`
 
 ## CRD surface (8 CRDs)
@@ -143,7 +143,7 @@ Full list: `docs/kb/adr/INDEX.md`.
 ## Non-goals
 
 - ❌ MongoDB version < 7.0 (per `pkg/version` allowlist)
-- ❌ Operator-bundled MongoDB Enterprise binaries (Apache-2.0 license boundary)
+- ❌ Operator-bundled MongoDB Enterprise binaries (MIT license boundary)
 - ❌ MongoDB Atlas / cloud-managed integration (out of scope)
 - ❌ Embedded `bitnami/mongodb` chart (we implement parity natively)
 
