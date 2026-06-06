@@ -11,7 +11,7 @@ abstract: >-
   Kubernetes operator for MongoDB — manages MongoDB (ReplicaSet) and
   MongoDBSharded (config server + shards + mongos) CRDs with K8s Lease
   distributed lock for race-free admin bootstrap, mongos HPA, and shard
-  drain backoff. Apache 2.0 licensed, ArtifactHub published.
+  drain backoff. MIT licensed, ArtifactHub published.
 keywords:
   - kubernetes
   - operator
@@ -19,6 +19,6 @@ keywords:
   - database
   - replicaset
   - sharded
-license: Apache-2.0
-version: v1.9.0
-date-released: "2026-05-26"
+license: MIT
+version: v1.11.0
+date-released: "2026-06-03"

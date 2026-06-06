@@ -80,9 +80,9 @@ MongoDB Operator 包含若干安全功能:
 5. **公开发布**: 我们将发布 security advisory 并发布修复
 6. **致谢**: 我们将为您的发现给予致谢(在您许可的情况下)
 
-## Apache 2.0 安全免责声明
+## 安全免责声明
 
-本项目根据 Apache License 2.0 许可。根据该许可证第 7 条,本项目按「现状 (AS IS)」基础提供,不附带任何明示或暗示的保证或条件,包括但不限于 TITLE、NON-INFRINGEMENT、MERCHANTABILITY 或 FITNESS FOR A PARTICULAR PURPOSE 的任何保证或条件。
+本项目采用 MIT License 许可。根据该许可证,本软件按「现状 (AS IS)」基础提供,不附带任何明示或暗示的保证或条件,包括但不限于 MERCHANTABILITY、FITNESS FOR A PARTICULAR PURPOSE 或 NONINFRINGEMENT 的保证。
 
 尽管我们努力维持高水准的安全标准,但您需自行判断使用或再分发本项目的适当性,并自行承担在该许可证下行使权限所伴随的任何风险。
 

@@ -48,7 +48,7 @@ Legend: ✅ Equivalent or better · ⚠️ Partial · ❌ Not supported · ⚪ N
 | 29 | RS member removal | User responsibility | `RemoveMember()` via `replSetReconfig` | ✅ | `replicaset.go:264` + test |
 | 30 | Password rotation | Manual | Not automated | ⚪ | Both manual |
 | 31 | OpenShift compatibility | `adaptSecurityContext` | Not explicitly tested | ⚠️ | |
-| 32 | License | Apache-2.0 | Apache-2.0 | ✅ | |
+| 32 | License | MIT | MIT | ✅ | |
 
 ## Summary
 

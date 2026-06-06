@@ -274,5 +274,5 @@ Releases are managed by maintainers. The process includes:
 
 ## License
 
-By contributing to this project, you agree that your contributions will be licensed under the Apache License 2.0.
+By contributing to this project, you agree that your contributions will be licensed under the MIT License.
 

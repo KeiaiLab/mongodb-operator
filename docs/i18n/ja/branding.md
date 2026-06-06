@@ -13,9 +13,9 @@
 
 ## 1. アイデンティティ
 
-**Organization**: [keiailab](https://github.com/keiailab) — Kubernetes-native なデータプラットフォーム operator (Apache-2.0、license-clean、vanilla-upstream 互換)。
+**Organization**: [keiailab](https://github.com/keiailab) — Kubernetes-native なデータプラットフォーム operator (MIT、license-clean、vanilla-upstream 互換)。
 
-**Project**: `mongodb-operator` — Kubernetes 向け Apache-2.0 MongoDB Operator — ReplicaSet + Sharded Cluster + Backup、vanilla MongoDB 7.0+。
+**Project**: `mongodb-operator` — Kubernetes 向け MIT MongoDB Operator — ReplicaSet + Sharded Cluster + Backup、vanilla MongoDB 7.0+。
 
 **Family**: [`operator-commons`](https://github.com/keiailab/operator-commons) 共有ライブラリを利用する 4 つの姉妹 operator のひとつです:
 
@@ -92,10 +92,10 @@ GitHub README の shield.io badge には上記 hex の利用を推奨します�
 
 # mongodb-operator
 
-> **Apache-2.0 MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+**
+> **MIT MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+**
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/></a>
   <!-- 기존 shield.io badges 유지 + 정합 -->
 </p>
 
@@ -118,7 +118,7 @@ GitHub README の shield.io badge には上記 hex の利用を推奨します�
 
 README の shield.io badge の順序 (左→右):
 
-1. License (Apache-2.0)
+1. License (MIT)
 2. Go Version (1.25+)
 3. Database (MongoDB 7.0+)
 4. Kubernetes Version (1.26+)
@@ -142,7 +142,7 @@ README の shield.io badge の順序 (左→右):
 
 ## 11. ライセンスおよび表記
 
-- License: [Apache-2.0](LICENSE)
+- License: [MIT](LICENSE)
 - Copyright: © 2026 keiailab contributors
 - Third-party attributions: [NOTICE](NOTICE) を参照 (該当する場合)
 

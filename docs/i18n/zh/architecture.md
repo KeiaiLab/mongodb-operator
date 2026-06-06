@@ -15,7 +15,7 @@
 - **范围**: 针对 MongoDB 7.0+ 部署,对 `MongoDB`、`MongoDBSharded`、`MongoDBBackup`、federation、insights 等 CRD 进行 reconcile 的 K8s 控制器。
 - **稳定性层级**: v1.5.0 (GA scope = ReplicaSet,Sharded / Backup / HPA = beta feature gate)。
 - **最新发布**: v1.5.0 (2026-05-13)
-- **许可证**: Apache-2.0
+- **许可证**: MIT
 - **模块路径**: `github.com/keiailab/mongodb-operator`
 
 ## CRD 表面 (8 个 CRD)
@@ -143,7 +143,7 @@
 ## Non-goal (有意排除)
 
 - ❌ MongoDB 7.0 以下版本 (依 `pkg/version` allowlist)
-- ❌ Operator 捆绑 MongoDB Enterprise 二进制 (Apache-2.0 许可证边界)
+- ❌ Operator 捆绑 MongoDB Enterprise 二进制 (MIT 许可证边界)
 - ❌ MongoDB Atlas / 云托管集成 (out of scope)
 - ❌ 嵌入 `bitnami/mongodb` chart (我们以原生方式实现 parity)
 
