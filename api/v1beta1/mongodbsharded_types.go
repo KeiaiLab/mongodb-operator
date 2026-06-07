@@ -509,3 +509,4 @@ func init() {
 // Statusable interface 구현.
 func (m *MongoDBSharded) GetConditions() *[]metav1.Condition { return &m.Status.Conditions }
 func (m *MongoDBSharded) SetPhase(phase string)              { m.Status.Phase = MongoDBShardedPhase(phase) }
+func (m *MongoDBSharded) SetObservedGeneration(g int64)      { m.Status.ObservedGeneration = g }
