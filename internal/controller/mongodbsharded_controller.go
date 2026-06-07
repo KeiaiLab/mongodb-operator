@@ -186,6 +186,18 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.updateStatusError(ctx, mdbsh, "Mongos", err)
 	}
 
+	// 6.05. Exporter URI Secret (monitoring sidecar 인증용).
+	// reconcileMongos(6) 가 monitoring.enabled=true 시 mongos pod 에 exporter
+	// sidecar(builder.go BuildMongosDeployment)를 주입하는데, 그 sidecar 의
+	// MONGODB_URI env 가 <name>-exporter-uri Secret 의 "uri" 키를 참조한다.
+	// 이 Secret 을 만드는 reconcile 이 sharded controller 에 부재했다 — 비-sharded
+	// MongoDBReconciler.reconcileExporterSecret 에만 있었음 → sharded 에서
+	// monitoring.enabled=true 시 sidecar 가 CreateContainerConfigError 로 영구
+	// 멈추고 mongos pod 가 ready 되지 않는 reconcile 갭. 그래서 isMongosReady(9)
+	// 게이트 *이전*에, mongos Deployment 생성 직후 reconcile 한다. 게이트 분기는
+	// helper 안에 두어 Reconcile 의 cyclomatic complexity 를 키우지 않는다.
+	r.reconcileShardedExporterSecretIfEnabled(ctx, mdbsh)
+
 	// 6.1. Transition to Validating after all components updated
 	if mdbsh.Status.UpgradePhase == UpgradePhaseUpgrading {
 		setValidating := func() {
@@ -745,6 +757,74 @@ func (r *MongoDBShardedReconciler) getAdminPassword(ctx context.Context, mdbsh *
 	}
 
 	return string(password), nil
+}
+
+// shardedExporterHost는 mongos pod 의 exporter sidecar 가 접속할 host:port 를
+// 반환한다. exporter 는 mongos Deployment pod 내부의 *동일 pod* sidecar 이므로
+// 루프백(127.0.0.1:27017)으로 mongos 에 직접 접속한다. 루프백을 쓰는 이유:
+//   - 비-sharded 와 달리 mongos 에는 headless(per-pod) DNS 가 없어 service DNS 로
+//     접속하면 *다른* mongos pod 로 라우팅될 수 있다(sidecar 의 self-scrape 의도와
+//     불일치).
+//   - tls.mode=preferTLS 운영에서 mongos 는 비-TLS 연결을 수용하므로 루프백 평문
+//     접속이 동작한다(비-sharded reconcileExporterSecret 와 동일하게 TLS 파라미터
+//     없는 평문 URI 사용 — 검증된 기존 동작 보존). requireTLS 전환 시에는 URI 에
+//     tls 파라미터 추가가 필요하며, 이는 비-sharded 와 공통의 후속 과제다.
+func shardedExporterHost() string {
+	return "127.0.0.1:27017"
+}
+
+// reconcileShardedExporterSecretIfEnabled는 monitoring.enabled=true 일 때만
+// exporter-uri Secret 을 reconcile 하는 best-effort 래퍼다. 게이트 분기를 본
+// helper 안에 격리해 Reconcile 의 cyclomatic complexity 를 키우지 않는다.
+// best-effort(비치명): secret 실패가 cfg/shard 정상 동작을 막지 않도록 error 는
+// log 만 남긴다(비-sharded reconcileExporterSecret 호출부와 동일 정책).
+// ADR-0018 정합: 본 변경은 Monitoring.Enabled 게이트의 exporter *sidecar*
+// 메커니즘(비-sharded 가 이미 구현·운영)의 parity 복구이며, 보류 중인
+// ServiceMonitor/PrometheusRule reconcile(Phase 2)을 도입하지 않는다.
+func (r *MongoDBShardedReconciler) reconcileShardedExporterSecretIfEnabled(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) {
+	if mdbsh.Spec.Monitoring == nil || !mdbsh.Spec.Monitoring.Enabled {
+		return
+	}
+	if err := r.reconcileShardedExporterSecret(ctx, mdbsh); err != nil {
+		log.FromContext(ctx).Error(err, "sharded exporter secret reconcile failed (best-effort)")
+	}
+}
+
+// reconcileShardedExporterSecret는 mongos exporter sidecar 가 참조하는
+// <name>-exporter-uri Secret(키 "uri")을 reconcile 한다. 비-sharded
+// MongoDBReconciler.reconcileExporterSecret 와 동일한 패턴이며 host 만 mongos
+// 루프백으로 다르다. admin 자격(username/password)은
+// Spec.Auth.AdminCredentialsSecretRef 가 가리키는 Secret 에서 읽고, buildExporterURI
+// (mongodb_controller.go, 동일 package)로 예약문자-안전 URI 를 조립해 재사용한다.
+func (r *MongoDBShardedReconciler) reconcileShardedExporterSecret(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
+	if mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name == "" {
+		return fmt.Errorf("monitoring enabled 이지만 auth.adminCredentialsSecretRef 가 비어 exporter URI 를 만들 수 없음")
+	}
+
+	secretName := mdbsh.Name + "-exporter-uri"
+
+	adminSecret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Name: mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name, Namespace: mdbsh.Namespace,
+	}, adminSecret); err != nil {
+		return fmt.Errorf("get admin credentials secret: %w", err)
+	}
+
+	uri, err := buildExporterURI(adminSecret, shardedExporterHost())
+	if err != nil {
+		return err
+	}
+
+	desired := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: mdbsh.Namespace},
+		Type:       corev1.SecretTypeOpaque,
+		StringData: map[string]string{"uri": uri},
+	}
+	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, desired, func() error {
+		desired.StringData = map[string]string{"uri": uri}
+		return controllerutil.SetControllerReference(mdbsh, desired, r.Scheme)
+	})
+	return err
 }
 
 func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
