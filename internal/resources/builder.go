@@ -91,7 +91,10 @@ func BuildPEMMergeInitContainer() corev1.Container {
 		Image: keyfileInitImage, // busybox:1.37 const 단일화 정합
 		Command: []string{
 			"sh", "-c",
-			"cat /tls-input/tls.crt /tls-input/tls.key > /tls-pem/server.pem && " +
+			// rm -f: init container 재시작 시 emptyDir 에 남은 0400 server.pem 을
+			// 먼저 제거해 `cat >` 트렁케이트 Permission denied 를 차단 (idempotent).
+			"rm -f /tls-pem/server.pem && " +
+				"cat /tls-input/tls.crt /tls-input/tls.key > /tls-pem/server.pem && " +
 				"chmod 0400 /tls-pem/server.pem",
 		},
 		SecurityContext: buildKeyfileInitContainerSecurityContext(),
