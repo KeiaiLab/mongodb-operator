@@ -270,3 +270,4 @@ func init() {
 // Statusable interface 구현 — internal/controller/helpers.go의 generic helper에서 사용.
 func (m *MongoDB) GetConditions() *[]metav1.Condition { return &m.Status.Conditions }
 func (m *MongoDB) SetPhase(phase string)              { m.Status.Phase = MongoDBPhase(phase) }
+func (m *MongoDB) SetObservedGeneration(g int64)      { m.Status.ObservedGeneration = g }

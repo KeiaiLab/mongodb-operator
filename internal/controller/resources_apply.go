@@ -15,11 +15,26 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 const deploymentRevisionAnnotation = "deployment.kubernetes.io/revision"
+
+// createOrUpdateWithRetry 는 controllerutil.CreateOrUpdate 를 낙관적 동시성 충돌
+// (apierrors.IsConflict, "the object has been modified") 시 재시도로 감싼다.
+// CreateOrUpdate 는 매 호출마다 GET 으로 target 을 최신 resourceVersion 으로
+// 다시 채우므로, 운영 중 StatefulSet/Deployment 의 status·메타가 churn 하는
+// 동안 발생한 conflict 를 같은 reconcile 안에서 흡수한다. 이전에는 단일 conflict
+// 가 곧장 reconcile 에러로 전파돼 ReconcileError 가 반복 기록되고 cfg/shard
+// StatefulSet 의 generation fight 를 유발했다.
+func createOrUpdateWithRetry(ctx context.Context, c client.Client, target client.Object, mutate controllerutil.MutateFn) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, err := controllerutil.CreateOrUpdate(ctx, c, target, mutate)
+		return err
+	})
+}
 
 // 본 파일은 controller-runtime의 controllerutil.CreateOrUpdate를 도메인 타입별
 // 로 감싸는 helper다. 자체 createOrUpdate(DeepCopy → SetResourceVersion → Update)
@@ -39,14 +54,13 @@ func applyConfigMap(ctx context.Context, c client.Client, scheme *runtime.Scheme
 	target := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, c, target, func() error {
+	return createOrUpdateWithRetry(ctx, c, target, func() error {
 		target.Labels = desired.Labels
 		target.Annotations = desired.Annotations
 		target.Data = desired.Data
 		target.BinaryData = desired.BinaryData
 		return controllerutil.SetControllerReference(owner, target, scheme)
 	})
-	return err
 }
 
 // applyService는 desired Service를 idempotent하게 적용한다.
@@ -56,7 +70,7 @@ func applyService(ctx context.Context, c client.Client, scheme *runtime.Scheme, 
 	target := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, c, target, func() error {
+	return createOrUpdateWithRetry(ctx, c, target, func() error {
 		target.Labels = desired.Labels
 		target.Annotations = desired.Annotations
 		// Create 시점: ClusterIP를 desired 그대로 (headless면 "None").
@@ -86,7 +100,6 @@ func applyService(ctx context.Context, c client.Client, scheme *runtime.Scheme, 
 		target.Spec.InternalTrafficPolicy = desired.Spec.InternalTrafficPolicy
 		return controllerutil.SetControllerReference(owner, target, scheme)
 	})
-	return err
 }
 
 // applyStatefulSet은 desired StatefulSet을 idempotent하게 적용한다.
@@ -103,7 +116,7 @@ func applyStatefulSet(ctx context.Context, c client.Client, scheme *runtime.Sche
 	target := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, c, target, func() error {
+	return createOrUpdateWithRetry(ctx, c, target, func() error {
 		target.Labels = desired.Labels
 		target.Annotations = desired.Annotations
 		if target.CreationTimestamp.IsZero() {
@@ -122,7 +135,6 @@ func applyStatefulSet(ctx context.Context, c client.Client, scheme *runtime.Sche
 		}
 		return controllerutil.SetControllerReference(owner, target, scheme)
 	})
-	return err
 }
 
 // applyNetworkPolicy는 desired NetworkPolicy를 idempotent하게 적용한다.
@@ -132,7 +144,7 @@ func applyNetworkPolicy(ctx context.Context, c client.Client, scheme *runtime.Sc
 	target := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, c, target, func() error {
+	return createOrUpdateWithRetry(ctx, c, target, func() error {
 		target.Labels = desired.Labels
 		target.Annotations = desired.Annotations
 		target.Spec.PodSelector = desired.Spec.PodSelector
@@ -141,7 +153,6 @@ func applyNetworkPolicy(ctx context.Context, c client.Client, scheme *runtime.Sc
 		target.Spec.Egress = desired.Spec.Egress
 		return controllerutil.SetControllerReference(owner, target, scheme)
 	})
-	return err
 }
 
 // applyPDB는 desired PodDisruptionBudget을 idempotent하게 적용한다.
@@ -151,7 +162,7 @@ func applyPDB(ctx context.Context, c client.Client, scheme *runtime.Scheme, owne
 	target := &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, c, target, func() error {
+	return createOrUpdateWithRetry(ctx, c, target, func() error {
 		target.Labels = desired.Labels
 		target.Annotations = desired.Annotations
 		target.Spec.Selector = desired.Spec.Selector
@@ -159,7 +170,6 @@ func applyPDB(ctx context.Context, c client.Client, scheme *runtime.Scheme, owne
 		target.Spec.MaxUnavailable = desired.Spec.MaxUnavailable
 		return controllerutil.SetControllerReference(owner, target, scheme)
 	})
-	return err
 }
 
 // applyDeployment는 desired Deployment를 idempotent하게 적용한다.
@@ -177,7 +187,7 @@ func applyDeployment(ctx context.Context, c client.Client, scheme *runtime.Schem
 	target := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: desired.Namespace},
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, c, target, func() error {
+	return createOrUpdateWithRetry(ctx, c, target, func() error {
 		target.Labels = desired.Labels
 		target.Annotations = deploymentAnnotationsWithControllerRevision(desired.Annotations, target.Annotations)
 		if target.CreationTimestamp.IsZero() {
@@ -201,7 +211,6 @@ func applyDeployment(ctx context.Context, c client.Client, scheme *runtime.Schem
 		}
 		return controllerutil.SetControllerReference(owner, target, scheme)
 	})
-	return err
 }
 
 func deploymentAnnotationsWithControllerRevision(desired, current map[string]string) map[string]string {

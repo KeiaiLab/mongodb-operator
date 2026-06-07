@@ -97,6 +97,7 @@ type Statusable interface {
 	client.Object
 	GetConditions() *[]metav1.Condition
 	SetPhase(phase string)
+	SetObservedGeneration(generation int64)
 }
 
 // applyErrorCondition는 reconcile 에러 처리의 표준 패턴-
@@ -130,11 +131,24 @@ func applyErrorCondition(
 	// PR-2: status mutation 을 클로저로 감싸 conflict 재시도 시 Get 후 재실행되도록 한다.
 	applyStatus := func() {
 		obj.SetPhase("Failed")
+		// kstatus 정합: 현재 generation 을 관측했음을 status 에 기록해 Flux
+		// helm-controller 가 ObservedGeneration != Generation 을 보고 InProgress 로
+		// 오판(→ wait timeout, HelmRelease Stalled)하지 않게 한다. 동시에 Ready 를
+		// False 로 내려 직전 성공의 stale Ready=True 와 phase=Failed 공존 모순을 제거.
+		obj.SetObservedGeneration(obj.GetGeneration())
 		meta.SetStatusCondition(obj.GetConditions(), metav1.Condition{
-			Type:    conditionTypeReconcileError,
-			Status:  metav1.ConditionTrue,
-			Reason:  mongodbv1alpha1.ReasonReconcileFailed,
-			Message: fmt.Sprintf("Failed to reconcile %s- %v", component, reconcileErr),
+			Type:               conditionTypeReconcileError,
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: obj.GetGeneration(),
+			Reason:             mongodbv1alpha1.ReasonReconcileFailed,
+			Message:            fmt.Sprintf("Failed to reconcile %s- %v", component, reconcileErr),
+		})
+		meta.SetStatusCondition(obj.GetConditions(), metav1.Condition{
+			Type:               conditionTypeReady,
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: obj.GetGeneration(),
+			Reason:             mongodbv1alpha1.ReasonReconcileFailed,
+			Message:            fmt.Sprintf("Reconcile failed for %s- %v", component, reconcileErr),
 		})
 	}
 	applyStatus()
