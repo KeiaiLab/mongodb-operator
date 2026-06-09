@@ -76,7 +76,7 @@ GitHub README 의 shield.io badge 는 위 hex 사용 권장.
 - **Direct (직접적)** — 가능한 경우 단락보다 bullet-point
 - **Evidence-based (근거 기반)** — 주장에는 benchmark / SLA / 링크 포함
 - **Vendor-neutral (벤더 중립)** — upstream (PostgreSQL, MongoDB, Valkey) 참조는 하되 제 3 자 operator 를 embed / wrap 하지 않음
-- **License-aware (라이선스 인지)** — Apache-2.0 + BSD/MIT/PG-license 의존성만 사용
+- **License-aware (라이선스 인지)** — MIT/BSD/Apache-2.0/PG-license 의존성만 사용
 
 **피해야 할 것**:
 - 마케팅적 최상급 표현 ("blazing fast", "revolutionary", "best-in-class")
@@ -147,4 +147,3 @@ README 의 shield.io badge 순서 (좌→우):
 - License: [MIT](LICENSE)
 - Copyright: © 2026 keiailab contributors
 - Third-party attributions: [NOTICE](NOTICE) 참조 (해당 시)
-
