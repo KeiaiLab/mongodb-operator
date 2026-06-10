@@ -143,7 +143,7 @@ release: ## Full release pipeline. VERSION=v1.x.y 필수 (e.g., make release VER
 
 # PGP signing 옵션 — HELM_SIGN=1 시 helm package --sign 으로 .prov 파일 생성.
 HELM_SIGN            ?= 0
-HELM_GPG_FINGERPRINT ?= 89A409476828CB992338C378651E51AF520BCB78
+HELM_GPG_FINGERPRINT ?= F1A6893583E632A757FF6767F3CC8C6AEC9CEB08
 HELM_GPG_KEY         ?= $(HELM_GPG_FINGERPRINT)
 HELM_KEYRING         ?= $(HOME)/.gnupg/secring.gpg
 HELM_PUBLISH_TARGET  ?= oci

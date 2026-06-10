@@ -13,7 +13,7 @@ keiailab operator 4종(mongodb-operator / postgres-operator / valkey-operator + 
   postgres/valkey는 `deploy/overlays/prod/`를 사용 — 동일 GitOps 패턴이 서로 다른
   경로에 분산.
 - **ArtifactHub 검증 자동화 부재**: ArtifactHub Signed badge 전제 조건인 PGP
-  signingKey(`89A409476828CB992338C378651E51AF520BCB78`) 메타데이터 검증이 수동에만
+  signingKey(`F1A6893583E632A757FF6767F3CC8C6AEC9CEB08`) 메타데이터 검증이 수동에만
   의존.
 - **CI 게이트 비대칭**: valkey가 가장 성숙한 reference 구현(ADR-0024 수기 chart 패턴
   + ADR-0044 Signed/Official trust badge).
@@ -28,7 +28,7 @@ org-wide `deploy/overlays/prod/` 표준과 drift. base 경로 심도(`../../../c
 
 - **Layer 1 — ArtifactHub publish** (4종 모두): helm chart(`charts/<name>/`) → gh-pages
   → ArtifactHub Signed badge. 공통 PGP signingKey fingerprint
-  `89A409476828CB992338C378651E51AF520BCB78`를 `charts/artifacthub-repo.yml`에 등록.
+  `F1A6893583E632A757FF6767F3CC8C6AEC9CEB08`를 `charts/artifacthub-repo.yml`에 등록.
 - **Layer 2 — GitOps 배포 overlay** (operator 3종만, operator-commons 제외):
   kustomize(`deploy/overlays/prod/`), namespace=`data`, base namespace delete patch 적용.
   operator-commons는 `type: library`로 배포 대상이 아니므로 Layer 2에서 제외.

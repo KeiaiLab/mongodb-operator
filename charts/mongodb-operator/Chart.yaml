@@ -34,8 +34,8 @@ annotations:
   artifacthub.io/maturity: stable
   artifacthub.io/operator: "true"
   artifacthub.io/signKey: |
-    fingerprint: 89A409476828CB992338C378651E51AF520BCB78
-    url: https://github.com/keiailab.gpg
+    fingerprint: F1A6893583E632A757FF6767F3CC8C6AEC9CEB08
+    url: https://raw.githubusercontent.com/keiailab/mongodb-operator/main/charts/keiailab-helm-signing-public.asc
   # operatorCapabilities — OperatorHub Phase V "Auto Pilot" 격상.
   # Level I-IV (45/66) 완료에 추가로 v1.10.0에서 Level V 14건 (A 5건 + B 9건) 구현:
   #   A1: HPA opt-in gate — 기존 reconcileMongosHPA 활성화 경로
