@@ -236,6 +236,40 @@ mongodb:
   # -- Default exporter image for monitoring
   exporterImage: percona/mongodb_exporter:0.51.0
 
+# External Secrets Operator integration.
+# 기본값은 false: 기존처럼 CRD 의 SecretRef 이름만 사용한다.
+# enabled=true 시 chart 가 ExternalSecret 을 생성해 Infisical/ESO 에서
+# Kubernetes Secret 을 materialize 한다.
+externalSecrets:
+  enabled: false
+  secretStoreKind: ClusterSecretStore
+  secretStoreName: infisical
+  refreshInterval: 1h
+  admin:
+    enabled: false
+    name: mongodb-admin-credentials
+    targetName: mongodb-admin-credentials
+    usernameKey: username
+    passwordKey: password
+    usernameRemoteKey: /data/mongodb/admin/username
+    passwordRemoteKey: /data/mongodb/admin/password
+  app:
+    enabled: false
+    name: mongodb-app-credentials
+    targetName: mongodb-app-credentials
+    usernameKey: username
+    passwordKey: password
+    usernameRemoteKey: /data/mongodb/app/username
+    passwordRemoteKey: /data/mongodb/app/password
+  backupS3:
+    enabled: false
+    name: ceph-objectstore-credentials
+    targetName: ceph-objectstore-credentials
+    accessKeyKey: access-key
+    secretKeyKey: secret-key
+    accessKeyRemoteKey: /data/mongodb/backup/access-key
+    secretKeyRemoteKey: /data/mongodb/backup/secret-key
+
 # Logging configuration
 logging:
   # -- Log level (debug, info, error)
