@@ -126,7 +126,7 @@ fi
 rm -rf "${RELEASE_TMP}"
 
 # 8. helm-publish.
-echo "==> Step 6/6: Helm chart publish to gh-pages"
+echo "==> Step 6/6: Helm chart publish to OCI"
 bash scripts/helm-publish.sh
 
 echo
@@ -135,6 +135,6 @@ echo "릴리스 완료: $VERSION"
 echo "==================================================="
 echo "  이미지: ${IMAGE_REPOSITORY}:${VERSION}"
 echo "  chart:  ${HELM_CHART} (${TARGET_VER})"
-echo "  helm:   https://keiailab.github.io/mongodb-operator"
+echo "  helm:   oci://ghcr.io/keiailab/charts/mongodb-operator"
 echo "  GH release: https://github.com/keiailab/mongodb-operator/releases/tag/${VERSION}"
 echo "  ArtifactHub: ~30분 내 인덱싱"

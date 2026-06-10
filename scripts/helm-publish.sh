@@ -7,15 +7,13 @@
 #
 # 동작:
 #   1. helm package chart → /tmp 임시 디렉터리.
-#   2. gh-pages branch worktree clone (없으면 orphan 생성).
-#   3. .tgz copy + artifacthub-repo.yml copy.
-#   4. helm repo index (--merge index.yaml 이 있으면).
-#   5. commit + push.
+#   2. HELM_PUBLISH_TARGET=oci 기본값으로 GHCR OCI chart repo 에 push.
+#   3. HELM_PUBLISH_TARGET=gh-pages 설정 시 legacy GitHub Pages Helm repo 갱신.
 #
 # 사전조건:
 #   - helm CLI 설치.
 #   - git remote 'origin' 설정.
-#   - HELM_REPO_URL 환경변수 (기본: https://keiailab.github.io/mongodb-operator).
+#   - HELM_OCI_REPO 환경변수 (기본: oci://ghcr.io/keiailab/charts).
 #   - HELM_SIGN=1 시 HELM_PRIVATE_KEY_FILE 또는 HELM_KEYRING 에 signing secret key 필요.
 #
 # CLAUDE.md §2 (RFC 0002) — GHA helm-publish workflow 대체 (로컬 4계층).
@@ -26,6 +24,8 @@ set -euo pipefail
 
 HELM_CHART="${HELM_CHART:-charts/mongodb-operator}"
 HELM_REPO_URL="${HELM_REPO_URL:-https://keiailab.github.io/mongodb-operator}"
+HELM_OCI_REPO="${HELM_OCI_REPO:-oci://ghcr.io/keiailab/charts}"
+HELM_PUBLISH_TARGET="${HELM_PUBLISH_TARGET:-oci}"
 RELEASE_TMP="${RELEASE_TMP:-/tmp/mongodb-operator-release}"
 GHPAGES_TMP="${GHPAGES_TMP:-/tmp/mongodb-operator-gh-pages}"
 HELM_SIGN="${HELM_SIGN:-0}"
@@ -121,6 +121,24 @@ if [[ "${HELM_SIGN}" == "1" ]]; then
 else
   helm package "${HELM_CHART}" -d "${RELEASE_TMP}"
 fi
+chart_archive="$(find "${RELEASE_TMP}" -maxdepth 1 -name 'mongodb-operator-*.tgz' | head -n 1)"
+CHART_VERSION="$(awk '/^version:/ { print $2; exit }' "$(pwd)/${HELM_CHART}/Chart.yaml")"
+
+case "${HELM_PUBLISH_TARGET}" in
+  oci)
+    echo "==> helm push OCI"
+    helm push "${chart_archive}" "${HELM_OCI_REPO}"
+    rm -rf "${RELEASE_TMP}" "${GHPAGES_TMP}"
+    echo "Helm OCI chart 게시 완료 (version=${CHART_VERSION}, repo=${HELM_OCI_REPO}). ArtifactHub은 ~30분 내 인덱싱."
+    exit 0
+    ;;
+  gh-pages)
+    ;;
+  *)
+    echo "ERROR: unsupported HELM_PUBLISH_TARGET=${HELM_PUBLISH_TARGET} (expected: oci or gh-pages)" >&2
+    exit 1
+    ;;
+esac
 
 echo "==> gh-pages worktree"
 if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
@@ -142,7 +160,6 @@ else
 fi
 
 echo "==> commit + push"
-CHART_VERSION="$(awk '/^version:/ { print $2; exit }' "$(pwd)/${HELM_CHART}/Chart.yaml")"
 (
   cd "${GHPAGES_TMP}"
   git add -A
