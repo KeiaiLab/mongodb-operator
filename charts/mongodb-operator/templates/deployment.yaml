@@ -30,7 +30,7 @@ spec:
       serviceAccountName: {{ include "mongodb-operator.serviceAccountName" . }}
       {{- with .Values.podSecurityContext }}
       securityContext:
-        {{- toYaml . | nindent 8 }}
+        {{- include "keiailab.security.podSecurityContext" (dict "override" .) | nindent 8 }}
       {{- end }}
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
@@ -82,6 +82,15 @@ spec:
             {{- if .Values.features.backup.enabled }}
             - --enable-backup-controller=true
             {{- end }}
+            {{- if .Values.features.insights.enabled }}
+            - --enable-insights-controller=true
+            {{- end }}
+            {{- if .Values.features.federation.enabled }}
+            - --enable-federation-controller=true
+            {{- end }}
+            {{- if .Values.features.clustergroup.enabled }}
+            - --enable-clustergroup-controller=true
+            {{- end }}
             {{- if .Values.features.autoscaling.enabled }}
             - --enable-autoscaling=true
             {{- end }}
@@ -102,7 +111,7 @@ spec:
             {{- end }}
           {{- with .Values.securityContext }}
           securityContext:
-            {{- toYaml . | nindent 12 }}
+            {{- include "keiailab.security.containerSecurityContext" (dict "override" .) | nindent 12 }}
           {{- end }}
           {{- if .Values.customLivenessProbe }}
           livenessProbe:

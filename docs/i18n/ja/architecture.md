@@ -58,9 +58,9 @@
 - Role (ネームスペースごと): StatefulSet / Service / Secret / ConfigMap / PVC / PDB / NetworkPolicy
 - ServiceAccount: `mongodb-operator` (default-deny NetworkPolicy 適用)
 
-## operator-commons インポートサーフェス
+## keiailab-commons インポートサーフェス
 
-`operator-commons/ARCHITECTURE.md` のマトリクスに基づく採用率: **6/8 (75%)**。
+`keiailab-commons/ARCHITECTURE.md` のマトリクスに基づく採用率: **6/8 (75%)**。
 
 | パッケージ | ステータス | 用途 |
 |---|---|---|

@@ -24,13 +24,13 @@ CLAUDE.md §7: "본 규약은 **상용 제품 수준**의 다중 프로젝트 �
 - OP (운영): ✅ release.sh 자동화 / chart .tgz publish / OCI image multi-stage build / OLM v1 bundle
 - C (커뮤니티): ✅ ADOPTERS.md / CONTRIBUTING / CODE_OF_CONDUCT / SECURITY / GOVERNANCE (i18n 4-lang) 정합
 
-audit 시계열 기록: [`commons/docs/quality/audit-history.md`](https://github.com/keiailab/operator-commons) → "🎉 2026-05-21 15:30 — audit ❌ 0 달성" 섹션.
+audit 시계열 기록: [`commons/docs/quality/audit-history.md`](https://github.com/keiailab/keiailab-commons) → "🎉 2026-05-21 15:30 — audit ❌ 0 달성" 섹션.
 
 ### 2. 거버넌스 baseline
 
 - **RFC-0002 정합** (GitHub Actions 영구 금지) — 본 repo 의 lefthook pre-commit hook 이 `.github/workflows/` 추가 자동 차단 (mongodb-ADR/0035). 예외 3종 (Pages 정적 배포 + Dependabot/Renovate + release tag → Release body) 은 mongodb-ADR/0033 dual-track 으로 명시.
 - **i18n 4-lang** (en/ko/ja/zh) README + AGENTS + GOVERNANCE + CONTRIBUTING + CODE_OF_CONDUCT + SECURITY + ADOPTERS — supercycle 2026-05-21 Wave 4 완료.
-- **operator-commons** 의존성 정합: `github.com/keiailab/operator-commons` 적합 버전 import (Sprint 1 의 pkg/pvc + pkg/topology 채택 — mongodb-ADR/0034 / commons-ADR/0016).
+- **keiailab-commons** 의존성 정합: `github.com/keiailab/keiailab-commons` 적합 버전 import (Sprint 1 의 pkg/pvc + pkg/topology 채택 — mongodb-ADR/0034 / commons-ADR/0016).
 - **OLM v1 정합**: ADR-0029 + ADR-0030 (operator-controller v1.8 + narrow installer RBAC + olmv1-system NP) — 외부 사용자 production-readiness 검증 완료.
 
 ## Decision
@@ -72,7 +72,7 @@ audit 시계열 기록: [`commons/docs/quality/audit-history.md`](https://github
 ## 참조
 
 - commons-ADR/0013: `audit-production-grade.sh` 5 repo SSOT 측정 자동화
-- commons audit-history (시계열): https://github.com/keiailab/operator-commons
+- commons audit-history (시계열): https://github.com/keiailab/keiailab-commons
 - CLAUDE.md §7 (v3.x-stable 정의): `keiailab/.codex` 글로벌 standards (private 저장소, 외부 URL 비공개)
 - mongodb-ADR/0033: GHA retention (dual-track)
 - mongodb-ADR/0034: Sprint 1 commons pkg/pvc + pkg/topology 채택

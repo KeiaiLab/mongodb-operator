@@ -346,9 +346,9 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용을 권�
 - [ ] mTLS internal pod-to-pod — `internal/security/mtls.go`
 - [ ] SPIFFE / SPIRE identity — `internal/security/spiffe.go`
 
-### 5.5 operator-commons v1.0.0 import (operator-commons v1.0.0 Import)
+### 5.5 keiailab-commons v1.0.0 import (keiailab-commons v1.0.0 Import)
 
-- [ ] `go.mod` bump → `operator-commons v1.0.0` (P-B.11.4 후)
+- [ ] `go.mod` bump → `keiailab-commons v1.0.0` (P-B.11.4 후)
 - [ ] commons pkg/webhook conversion 도입 (P-B.10.3 후)
 
 ### 5.6 Community + ecosystem (Community + Ecosystem)

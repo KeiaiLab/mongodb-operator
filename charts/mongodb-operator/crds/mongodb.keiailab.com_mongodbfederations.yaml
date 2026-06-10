@@ -1,0 +1,1735 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.0
+  name: mongodbfederations.mongodb.keiailab.com
+spec:
+  group: mongodb.keiailab.com
+  names:
+    kind: MongoDBFederation
+    listKind: MongoDBFederationList
+    plural: mongodbfederations
+    shortNames:
+    - mdbfed
+    singular: mongodbfederation
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .spec.regions[*].name
+      name: Regions
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: MongoDBFederation is the Schema for the mongodbfederations API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: MongoDBFederationSpec defines a multi-cluster MongoDB ReplicaSet
+              topology.
+            properties:
+              auth:
+                description: |-
+                  Auth applies to the federated replica set (admin credentials must be
+                  the same secret content across all cluster kubeconfigs).
+                properties:
+                  adminCredentialsSecretRef:
+                    description: AdminCredentialsSecretRef references the admin credentials
+                      secret
+                    properties:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  ldap:
+                    description: |-
+                      LDAP defines optional LDAP-backed enterprise authentication.
+                      Mechanism 이 PLAIN 또는 SCRAM-SHA-256 일 때 sasl-passthrough 적용.
+                    properties:
+                      authorizationQueryTemplate:
+                        description: |-
+                          AuthorizationQueryTemplate is the LDAP query template for role
+                          mapping. e.g. `{USER}?memberOf?base`.
+                        type: string
+                      bindCredentialsSecretRef:
+                        description: |-
+                          BindCredentialsSecretRef references LDAP service account credentials
+                          (keys: bindDN / password) for user lookup.
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      bindMethod:
+                        default: simple
+                        description: |-
+                          BindMethod = simple | sasl. simple 은 bind DN + password, sasl 은
+                          SASL mechanism (e.g. PLAIN).
+                        enum:
+                        - simple
+                        - sasl
+                        type: string
+                      caSecretRef:
+                        description: 'CASecretRef references the LDAP CA bundle (key:
+                          ca.crt).'
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      servers:
+                        description: |-
+                          Servers is a comma-separated list of LDAP server hostnames
+                          (host:port). MongoDB 가 client 로 접속할 LDAP server.
+                        minLength: 1
+                        type: string
+                      tls:
+                        default: true
+                        description: |-
+                          TLS enables LDAP over TLS (ldaps://). 별도 CA secret 필요 시
+                          CASecretRef 사용.
+                        type: boolean
+                      userToDNMapping:
+                        description: |-
+                          UserToDNMapping is a MongoDB-format JSON array string for LDAP user
+                          to DN transformation. e.g. `[{match:"(.+)",ldapQuery:"OU=Users,DC=ex,DC=com??sub?(uid={0})"}]`
+                        type: string
+                    required:
+                    - servers
+                    type: object
+                  mechanism:
+                    default: SCRAM-SHA-256
+                    description: |-
+                      Mechanism defines the auth mechanism. PLAIN 은 LDAP-backed
+                      (sasl-passthrough), MONGODB-OIDC 는 OIDC IdP bind.
+                    enum:
+                    - SCRAM-SHA-256
+                    - SCRAM-SHA-1
+                    - X509
+                    - PLAIN
+                    - MONGODB-OIDC
+                    type: string
+                  oidc:
+                    description: |-
+                      OIDC defines optional OIDC / OAuth2 authentication.
+                      Mechanism 이 MONGODB-OIDC 일 때 활성. Keycloak / Okta / Auth0
+                      호환 — issuerURL + clientID 매핑.
+                    properties:
+                      clientID:
+                        description: ClientID is the OIDC client identifier registered
+                          with the IdP.
+                        minLength: 1
+                        type: string
+                      identityProvider:
+                        default: generic
+                        description: SupportedIdentityProviders 정합 hint — IdP 호환 검증용.
+                        enum:
+                        - keycloak
+                        - okta
+                        - auth0
+                        - google
+                        - generic
+                        type: string
+                      issuerURL:
+                        description: IssuerURL is the OIDC provider issuer (must match
+                          `iss` claim).
+                        minLength: 1
+                        type: string
+                      rolesClaim:
+                        default: groups
+                        description: |-
+                          RolesClaim is the JWT claim that carries role memberships.
+                          Default `groups`.
+                        type: string
+                      userClaim:
+                        default: sub
+                        description: UserClaim is the JWT claim used as MongoDB username.
+                          Default `sub`.
+                        type: string
+                    required:
+                    - clientID
+                    - issuerURL
+                    type: object
+                  users:
+                    description: Users defines additional users to create
+                    items:
+                      description: MongoDBUser defines a MongoDB user
+                      properties:
+                        db:
+                          description: DB is the authentication database
+                          type: string
+                        name:
+                          description: Name is the username
+                          type: string
+                        passwordSecretRef:
+                          description: PasswordSecretRef references the password secret
+                          properties:
+                            key:
+                              description: The key of the secret to select from.  Must
+                                be a valid secret key.
+                              type: string
+                            name:
+                              default: ""
+                              description: |-
+                                Name of the referent.
+                                This field is effectively required, but due to backwards compatibility is
+                                allowed to be empty. Instances of this type with an empty value here are
+                                almost certainly wrong.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              type: string
+                            optional:
+                              description: Specify whether the Secret or its key must
+                                be defined
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        roles:
+                          description: Roles defines user roles
+                          items:
+                            description: MongoDBRole defines a MongoDB role
+                            properties:
+                              db:
+                                description: DB is the database for the role
+                                type: string
+                              name:
+                                description: Name is the role name
+                                type: string
+                            required:
+                            - db
+                            - name
+                            type: object
+                          type: array
+                      required:
+                      - db
+                      - name
+                      - passwordSecretRef
+                      - roles
+                      type: object
+                    type: array
+                required:
+                - adminCredentialsSecretRef
+                type: object
+              regions:
+                description: Regions defines per-cluster member configuration.
+                items:
+                  description: FederationRegion defines one cluster slice of the federation.
+                  properties:
+                    clusterKubeConfigRef:
+                      description: |-
+                        ClusterKubeConfigRef references a Secret in operator namespace with
+                        key `kubeconfig` containing the target cluster credentials. Federation
+                        controller uses this to manage remote MongoDB CR.
+                      properties:
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    members:
+                      default: 2
+                      description: Members is the number of MongoDB ReplicaSet members
+                        in this region.
+                      format: int32
+                      minimum: 1
+                      type: integer
+                    name:
+                      description: Name is the human-readable region identifier (e.g.
+                        "us-west", "eu-central").
+                      minLength: 1
+                      type: string
+                    priority:
+                      default: "1.0"
+                      description: |-
+                        Priority is the MongoDB replica priority value (0.0-1000.0). Higher
+                        priority members are preferred as primary. Use 0 to make a region
+                        secondary-only (analytics / DR).
+                      type: string
+                    storage:
+                      description: Storage applies to MongoDB pods in this region.
+                      properties:
+                        accessModes:
+                          description: |-
+                            AccessModes contains the desired access modes for the PVC.
+                            Defaults to ReadWriteOnce if not specified.
+                          items:
+                            type: string
+                          type: array
+                        dataDirPath:
+                          default: /data/db
+                          description: DataDirPath is the path for MongoDB data
+                          type: string
+                        encryption:
+                          description: |-
+                            Encryption defines optional encryption-at-rest configuration (F-IMP-02 / F38 cycle 6).
+                            MongoDB Enterprise WiredTiger 의 encryption-at-rest 정합 — 본 cycle 의
+                            acceptance 는 *키 provider config 정합 + Secret/Vault/Cloud KMS 매핑*
+                            까지. 실 키 회전 자동화는 cycle 9+ 운영 강화 시점.
+                          properties:
+                            cipherMode:
+                              default: AES256-GCM
+                              description: CipherMode = AES256-CBC | AES256-GCM (MongoDB
+                                6.0+ GCM).
+                              enum:
+                              - AES256-CBC
+                              - AES256-GCM
+                              type: string
+                            enabled:
+                              default: false
+                              description: Enabled toggles WiredTiger encryption-at-rest.
+                              type: boolean
+                            keyProvider:
+                              default: secret
+                              description: KeyProvider = secret | vault | aws-kms
+                                | gcp-kms | azure-kv
+                              enum:
+                              - secret
+                              - vault
+                              - aws-kms
+                              - gcp-kms
+                              - azure-kv
+                              type: string
+                            keyRotationDays:
+                              default: 0
+                              description: |-
+                                KeyRotationDays — 0 = no automatic rotation. >0 = controller가 N 일마다
+                                새 키 발급 + 기존 키 archive.
+                              format: int32
+                              type: integer
+                            kmsConfig:
+                              description: |-
+                                KMSConfig holds provider-specific configuration. 각 provider 가 자체
+                                sub-spec 을 채움 (mutually exclusive — provider 별 1건만).
+                              properties:
+                                awsKMS:
+                                  description: 'AWSKMS (KeyProvider=aws-kms): AWS
+                                    KMS CMK ARN.'
+                                  properties:
+                                    authSecretRef:
+                                      description: |-
+                                        AuthSecretRef IRSA-aware. Secret keys: access_key_id / secret_access_key.
+                                        IRSA 사용 시 빈 secret + ServiceAccount annotations 로 인증.
+                                      properties:
+                                        name:
+                                          default: ""
+                                          description: |-
+                                            Name of the referent.
+                                            This field is effectively required, but due to backwards compatibility is
+                                            allowed to be empty. Instances of this type with an empty value here are
+                                            almost certainly wrong.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                          type: string
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    keyARN:
+                                      description: KeyARN e.g. "arn:aws:kms:us-east-1:123:key/abc-..."
+                                      pattern: ^arn:aws:kms:.+:.+:key/.+$
+                                      type: string
+                                    region:
+                                      description: Region e.g. "us-east-1"
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - keyARN
+                                  - region
+                                  type: object
+                                azureKV:
+                                  description: 'AzureKV (KeyProvider=azure-kv): Azure
+                                    Key Vault key URL.'
+                                  properties:
+                                    authSecretRef:
+                                      description: AuthSecretRef SP credentials (client_secret)
+                                        — workload identity 사용 시 nil.
+                                      properties:
+                                        name:
+                                          default: ""
+                                          description: |-
+                                            Name of the referent.
+                                            This field is effectively required, but due to backwards compatibility is
+                                            allowed to be empty. Instances of this type with an empty value here are
+                                            almost certainly wrong.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                          type: string
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    clientID:
+                                      type: string
+                                    keyName:
+                                      description: KeyName + KeyVersion (optional,
+                                        latest if empty).
+                                      minLength: 1
+                                      type: string
+                                    keyVersion:
+                                      type: string
+                                    tenantID:
+                                      description: TenantID + ClientID — workload
+                                        identity 시 ServiceAccount 로 매핑.
+                                      type: string
+                                    vaultURL:
+                                      description: VaultURL e.g. "https://my-kv.vault.azure.net"
+                                      pattern: ^https://.+\.vault\.azure\.net/?$
+                                      type: string
+                                  required:
+                                  - keyName
+                                  - vaultURL
+                                  type: object
+                                gcpKMS:
+                                  description: 'GCPKMS (KeyProvider=gcp-kms): GCP
+                                    KMS keyring + key.'
+                                  properties:
+                                    authSecretRef:
+                                      description: AuthSecretRef Workload Identity
+                                        시 빈 secret. 그 외에 SA JSON Secret.
+                                      properties:
+                                        name:
+                                          default: ""
+                                          description: |-
+                                            Name of the referent.
+                                            This field is effectively required, but due to backwards compatibility is
+                                            allowed to be empty. Instances of this type with an empty value here are
+                                            almost certainly wrong.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                          type: string
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    key:
+                                      minLength: 1
+                                      type: string
+                                    keyring:
+                                      description: Keyring + Key 식별자.
+                                      minLength: 1
+                                      type: string
+                                    location:
+                                      description: Location e.g. "us-central1" or
+                                        "global".
+                                      minLength: 1
+                                      type: string
+                                    projectID:
+                                      description: ProjectID GCP project containing
+                                        the keyring.
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - key
+                                  - keyring
+                                  - location
+                                  - projectID
+                                  type: object
+                                secret:
+                                  description: 'Secret (KeyProvider=secret): keyfile
+                                    Secret 직접 참조. 단일 마스터키.'
+                                  properties:
+                                    secretRef:
+                                      description: SecretRef.Name + Key = base64 32-byte
+                                        raw key.
+                                      properties:
+                                        key:
+                                          description: The key of the secret to select
+                                            from.  Must be a valid secret key.
+                                          type: string
+                                        name:
+                                          default: ""
+                                          description: |-
+                                            Name of the referent.
+                                            This field is effectively required, but due to backwards compatibility is
+                                            allowed to be empty. Instances of this type with an empty value here are
+                                            almost certainly wrong.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                          type: string
+                                        optional:
+                                          description: Specify whether the Secret
+                                            or its key must be defined
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                  required:
+                                  - secretRef
+                                  type: object
+                                vault:
+                                  description: 'Vault (KeyProvider=vault): HashiCorp
+                                    Vault Transit engine.'
+                                  properties:
+                                    address:
+                                      description: Address e.g. "https://vault.example.com:8200"
+                                      minLength: 1
+                                      type: string
+                                    authMethod:
+                                      default: kubernetes
+                                      description: AuthMethod = token | kubernetes
+                                        | approle
+                                      enum:
+                                      - token
+                                      - kubernetes
+                                      - approle
+                                      type: string
+                                    authSecretRef:
+                                      description: |-
+                                        AuthSecretRef references K8s Secret with auth credentials
+                                        (token / role + jwt / role-id + secret-id).
+                                      properties:
+                                        name:
+                                          default: ""
+                                          description: |-
+                                            Name of the referent.
+                                            This field is effectively required, but due to backwards compatibility is
+                                            allowed to be empty. Instances of this type with an empty value here are
+                                            almost certainly wrong.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                          type: string
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    caSecretRef:
+                                      description: CASecretRef optional TLS CA for
+                                        Vault server verification.
+                                      properties:
+                                        name:
+                                          default: ""
+                                          description: |-
+                                            Name of the referent.
+                                            This field is effectively required, but due to backwards compatibility is
+                                            allowed to be empty. Instances of this type with an empty value here are
+                                            almost certainly wrong.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                          type: string
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    keyName:
+                                      description: KeyName Vault key identifier (Transit
+                                        engine 의 named key).
+                                      minLength: 1
+                                      type: string
+                                    transitPath:
+                                      default: transit
+                                      description: TransitPath default `transit`.
+                                      type: string
+                                  required:
+                                  - address
+                                  - authSecretRef
+                                  - keyName
+                                  type: object
+                              type: object
+                          required:
+                          - enabled
+                          type: object
+                        persistentVolumeClaimRetentionPolicy:
+                          description: |-
+                            PersistentVolumeClaimRetentionPolicy describes the lifecycle of PVCs
+                            created from the StatefulSet's VolumeClaimTemplates. WhenDeleted/WhenScaled
+                            모두 Retain(기본) 또는 Delete를 허용. 기본은 Retain — 운영자가 명시적으로
+                            데이터 폐기를 선택하기 전까지 PVC를 보존하기 위함.
+                          properties:
+                            whenDeleted:
+                              description: |-
+                                WhenDeleted specifies what happens to PVCs created from StatefulSet
+                                VolumeClaimTemplates when the StatefulSet is deleted. The default policy
+                                of `Retain` causes PVCs to not be affected by StatefulSet deletion. The
+                                `Delete` policy causes those PVCs to be deleted.
+                              type: string
+                            whenScaled:
+                              description: |-
+                                WhenScaled specifies what happens to PVCs created from StatefulSet
+                                VolumeClaimTemplates when the StatefulSet is scaled down. The default
+                                policy of `Retain` causes PVCs to not be affected by a scaledown. The
+                                `Delete` policy causes the associated PVCs for any excess pods above
+                                the replica count to be deleted.
+                              type: string
+                          type: object
+                        selector:
+                          description: Selector is a label query over PersistentVolumes
+                            to bind.
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of label selector
+                                requirements. The requirements are ANDed.
+                              items:
+                                description: |-
+                                  A label selector requirement is a selector that contains values, a key, and an operator that
+                                  relates the key and values.
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector
+                                      applies to.
+                                    type: string
+                                  operator:
+                                    description: |-
+                                      operator represents a key's relationship to a set of values.
+                                      Valid operators are In, NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      values is an array of string values. If the operator is In or NotIn,
+                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                      the values array must be empty. This array is replaced during a strategic
+                                      merge patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                              x-kubernetes-list-type: atomic
+                            matchLabels:
+                              additionalProperties:
+                                type: string
+                              description: |-
+                                matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                operator is "In", and the values array contains only "value". The requirements are ANDed.
+                              type: object
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        size:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          default: 10Gi
+                          description: Size is the storage size
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        storageClassName:
+                          description: |-
+                            StorageClassName is the name of the StorageClass
+                            If not specified, the default storage class will be used
+                          type: string
+                        subPath:
+                          description: SubPath within the volume to mount as the data
+                            directory.
+                          type: string
+                      type: object
+                    zone:
+                      description: Zone is an optional zone tag for zone-aware sharding
+                        routing.
+                      type: string
+                  required:
+                  - clusterKubeConfigRef
+                  - members
+                  - name
+                  type: object
+                minItems: 2
+                type: array
+              tls:
+                description: |-
+                  TLS applies cluster-wide. cert-manager Issuer 가 각 cluster 에 동일
+                  이름으로 존재한다고 가정.
+                properties:
+                  allowInvalidHostnames:
+                    default: true
+                    description: |-
+                      AllowInvalidHostnames skips hostname verification in TLS handshake.
+                      Needed when cert SANs use wildcard FQDNs but internal comms use short hostnames.
+                      Set to false when certs include proper per-pod SANs.
+                    type: boolean
+                  certManager:
+                    description: CertManager enables cert-manager integration
+                    properties:
+                      duration:
+                        default: 2160h
+                        description: Duration is the certificate duration
+                        type: string
+                      issuerRef:
+                        description: IssuerRef references a cert-manager Issuer or
+                          ClusterIssuer
+                        properties:
+                          kind:
+                            default: ClusterIssuer
+                            description: Kind is the issuer kind (Issuer or ClusterIssuer)
+                            enum:
+                            - Issuer
+                            - ClusterIssuer
+                            type: string
+                          name:
+                            description: Name is the issuer name
+                            type: string
+                        required:
+                        - kind
+                        - name
+                        type: object
+                      renewBefore:
+                        default: 360h
+                        description: RenewBefore is when to renew before expiry
+                        type: string
+                    required:
+                    - issuerRef
+                    type: object
+                  customCert:
+                    description: CustomCert references a custom TLS secret
+                    properties:
+                      secretName:
+                        description: SecretName is the name of the TLS secret
+                        type: string
+                    required:
+                    - secretName
+                    type: object
+                  enabled:
+                    default: true
+                    description: Enabled enables TLS for MongoDB connections
+                    type: boolean
+                  mode:
+                    default: preferTLS
+                    description: |-
+                      Mode sets the mongod --tlsMode value.
+                      Valid values: "preferTLS" (default, allows non-TLS connections),
+                      "requireTLS" (rejects non-TLS connections).
+                    enum:
+                    - preferTLS
+                    - requireTLS
+                    type: string
+                  mtls:
+                    description: |-
+                      MTLS enables X.509 inter-node (pod-to-pod) authentication via mongod
+                      --clusterAuthMode. Disabled by default. Requires TLS enabled + a cluster
+                      membership certificate (Phase 5.4 — security hardening v2).
+                    properties:
+                      clusterFile:
+                        description: |-
+                          ClusterFile is the PEM path for --tlsClusterFile (membership cert).
+                          Defaults to the mounted server TLS cert when empty.
+                        type: string
+                      enabled:
+                        description: Enabled turns on X.509 cluster membership authentication.
+                        type: boolean
+                      mode:
+                        default: x509
+                        description: |-
+                          Mode sets mongod --clusterAuthMode. Use sendKeyFile/sendX509 for rolling
+                          migration from keyFile, then x509 for full mTLS.
+                        enum:
+                        - keyFile
+                        - sendKeyFile
+                        - sendX509
+                        - x509
+                        type: string
+                    type: object
+                required:
+                - enabled
+                type: object
+              version:
+                description: Version is the MongoDB version applied to all regions.
+                properties:
+                  image:
+                    description: Image is the MongoDB container image
+                    type: string
+                  version:
+                    description: Version is the MongoDB version (e.g., "8.3.1")
+                    pattern: ^\d+\.\d+(\.\d+)?$
+                    type: string
+                required:
+                - version
+                type: object
+            required:
+            - auth
+            - regions
+            - version
+            type: object
+          status:
+            description: MongoDBFederationStatus is the observed federation state.
+            properties:
+              activePrimary:
+                description: |-
+                  ActivePrimary is the region currently selected as primary by priority
+                  among Synced regions (Phase 5.2). Empty when no region is eligible
+                  (all degraded/failed or all secondary-only). Observability into the
+                  failover decision — actual rs.reconfig promotion is a follow-up.
+                type: string
+              conditions:
+                description: Conditions follow standard k8s convention.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              phase:
+                description: 'Phase: Pending | Bootstrapping | Synced | Degraded |
+                  Failed'
+                enum:
+                - Pending
+                - Bootstrapping
+                - Synced
+                - Degraded
+                - Failed
+                type: string
+              regionStatuses:
+                description: RegionStatuses tracks per-region reconcile state.
+                items:
+                  description: FederationRegionStatus is per-region observed state.
+                  properties:
+                    error:
+                      description: Error contains the last reconcile error (empty
+                        when synced).
+                      type: string
+                    lastSyncTime:
+                      description: LastSyncTime is when the controller last reached
+                        the region cluster.
+                      format: date-time
+                      type: string
+                    name:
+                      description: Name matches Spec.Regions[].Name.
+                      type: string
+                    phase:
+                      description: 'Phase per region: Pending | Synced | Degraded
+                        | Failed'
+                      enum:
+                      - Pending
+                      - Synced
+                      - Degraded
+                      - Failed
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .spec.regions[*].name
+      name: Regions
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: MongoDBFederation is the Schema for the mongodbfederations API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: MongoDBFederationSpec defines a multi-cluster MongoDB ReplicaSet
+              topology.
+            properties:
+              auth:
+                description: |-
+                  Auth applies to the federated replica set (admin credentials must be
+                  the same secret content across all cluster kubeconfigs).
+                properties:
+                  adminCredentialsSecretRef:
+                    description: AdminCredentialsSecretRef references the admin credentials
+                      secret
+                    properties:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  ldap:
+                    description: |-
+                      LDAP defines optional LDAP-backed enterprise authentication.
+                      Mechanism 이 PLAIN 또는 SCRAM-SHA-256 일 때 sasl-passthrough 적용.
+                    properties:
+                      authorizationQueryTemplate:
+                        description: |-
+                          AuthorizationQueryTemplate is the LDAP query template for role
+                          mapping. e.g. `{USER}?memberOf?base`.
+                        type: string
+                      bindCredentialsSecretRef:
+                        description: |-
+                          BindCredentialsSecretRef references LDAP service account credentials
+                          (keys: bindDN / password) for user lookup.
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      bindMethod:
+                        default: simple
+                        description: |-
+                          BindMethod = simple | sasl. simple 은 bind DN + password, sasl 은
+                          SASL mechanism (e.g. PLAIN).
+                        enum:
+                        - simple
+                        - sasl
+                        type: string
+                      caSecretRef:
+                        description: 'CASecretRef references the LDAP CA bundle (key:
+                          ca.crt).'
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      servers:
+                        description: |-
+                          Servers is a comma-separated list of LDAP server hostnames
+                          (host:port). MongoDB 가 client 로 접속할 LDAP server.
+                        minLength: 1
+                        type: string
+                      tls:
+                        default: true
+                        description: |-
+                          TLS enables LDAP over TLS (ldaps://). 별도 CA secret 필요 시
+                          CASecretRef 사용.
+                        type: boolean
+                      userToDNMapping:
+                        description: |-
+                          UserToDNMapping is a MongoDB-format JSON array string for LDAP user
+                          to DN transformation. e.g. `[{match:"(.+)",ldapQuery:"OU=Users,DC=ex,DC=com??sub?(uid={0})"}]`
+                        type: string
+                    required:
+                    - servers
+                    type: object
+                  mechanism:
+                    default: SCRAM-SHA-256
+                    description: |-
+                      Mechanism defines the auth mechanism. PLAIN 은 LDAP-backed
+                      (sasl-passthrough), MONGODB-OIDC 는 OIDC IdP bind.
+                    enum:
+                    - SCRAM-SHA-256
+                    - SCRAM-SHA-1
+                    - X509
+                    - PLAIN
+                    - MONGODB-OIDC
+                    type: string
+                  oidc:
+                    description: |-
+                      OIDC defines optional OIDC / OAuth2 authentication.
+                      Mechanism 이 MONGODB-OIDC 일 때 활성. Keycloak / Okta / Auth0
+                      호환 — issuerURL + clientID 매핑.
+                    properties:
+                      clientID:
+                        description: ClientID is the OIDC client identifier registered
+                          with the IdP.
+                        minLength: 1
+                        type: string
+                      identityProvider:
+                        default: generic
+                        description: SupportedIdentityProviders 정합 hint — IdP 호환 검증용.
+                        enum:
+                        - keycloak
+                        - okta
+                        - auth0
+                        - google
+                        - generic
+                        type: string
+                      issuerURL:
+                        description: IssuerURL is the OIDC provider issuer (must match
+                          `iss` claim).
+                        minLength: 1
+                        type: string
+                      rolesClaim:
+                        default: groups
+                        description: |-
+                          RolesClaim is the JWT claim that carries role memberships.
+                          Default `groups`.
+                        type: string
+                      userClaim:
+                        default: sub
+                        description: UserClaim is the JWT claim used as MongoDB username.
+                          Default `sub`.
+                        type: string
+                    required:
+                    - clientID
+                    - issuerURL
+                    type: object
+                  users:
+                    description: Users defines additional users to create
+                    items:
+                      description: MongoDBUser defines a MongoDB user
+                      properties:
+                        db:
+                          description: DB is the authentication database
+                          type: string
+                        name:
+                          description: Name is the username
+                          type: string
+                        passwordSecretRef:
+                          description: PasswordSecretRef references the password secret
+                          properties:
+                            key:
+                              description: The key of the secret to select from.  Must
+                                be a valid secret key.
+                              type: string
+                            name:
+                              default: ""
+                              description: |-
+                                Name of the referent.
+                                This field is effectively required, but due to backwards compatibility is
+                                allowed to be empty. Instances of this type with an empty value here are
+                                almost certainly wrong.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              type: string
+                            optional:
+                              description: Specify whether the Secret or its key must
+                                be defined
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        roles:
+                          description: Roles defines user roles
+                          items:
+                            description: MongoDBRole defines a MongoDB role
+                            properties:
+                              db:
+                                description: DB is the database for the role
+                                type: string
+                              name:
+                                description: Name is the role name
+                                type: string
+                            required:
+                            - db
+                            - name
+                            type: object
+                          type: array
+                      required:
+                      - db
+                      - name
+                      - passwordSecretRef
+                      - roles
+                      type: object
+                    type: array
+                required:
+                - adminCredentialsSecretRef
+                type: object
+              regions:
+                description: Regions defines per-cluster member configuration.
+                items:
+                  description: FederationRegion defines one cluster slice of the federation.
+                  properties:
+                    clusterKubeConfigRef:
+                      description: |-
+                        ClusterKubeConfigRef references a Secret in operator namespace with
+                        key `kubeconfig` containing the target cluster credentials. Federation
+                        controller uses this to manage remote MongoDB CR.
+                      properties:
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    members:
+                      default: 2
+                      description: Members is the number of MongoDB ReplicaSet members
+                        in this region.
+                      format: int32
+                      minimum: 1
+                      type: integer
+                    name:
+                      description: Name is the human-readable region identifier (e.g.
+                        "us-west", "eu-central").
+                      minLength: 1
+                      type: string
+                    priority:
+                      default: "1.0"
+                      description: |-
+                        Priority is the MongoDB replica priority value (0.0-1000.0). Higher
+                        priority members are preferred as primary. Use 0 to make a region
+                        secondary-only (analytics / DR).
+                      type: string
+                    storage:
+                      description: Storage applies to MongoDB pods in this region.
+                      properties:
+                        accessModes:
+                          description: |-
+                            AccessModes contains the desired access modes for the PVC.
+                            Defaults to ReadWriteOnce if not specified.
+                          items:
+                            type: string
+                          type: array
+                        dataDirPath:
+                          default: /data/db
+                          description: DataDirPath is the path for MongoDB data
+                          type: string
+                        encryption:
+                          description: |-
+                            Encryption defines optional encryption-at-rest configuration (F-IMP-02 / F38 cycle 6).
+                            MongoDB Enterprise WiredTiger 의 encryption-at-rest 정합 — 본 cycle 의
+                            acceptance 는 *키 provider config 정합 + Secret/Vault/Cloud KMS 매핑*
+                            까지. 실 키 회전 자동화는 cycle 9+ 운영 강화 시점.
+                          properties:
+                            cipherMode:
+                              default: AES256-GCM
+                              description: CipherMode = AES256-CBC | AES256-GCM (MongoDB
+                                6.0+ GCM).
+                              enum:
+                              - AES256-CBC
+                              - AES256-GCM
+                              type: string
+                            enabled:
+                              default: false
+                              description: Enabled toggles WiredTiger encryption-at-rest.
+                              type: boolean
+                            keyProvider:
+                              default: secret
+                              description: KeyProvider = secret | vault | aws-kms
+                                | gcp-kms | azure-kv
+                              enum:
+                              - secret
+                              - vault
+                              - aws-kms
+                              - gcp-kms
+                              - azure-kv
+                              type: string
+                            keyRotationDays:
+                              default: 0
+                              description: |-
+                                KeyRotationDays — 0 = no automatic rotation. >0 = controller가 N 일마다
+                                새 키 발급 + 기존 키 archive.
+                              format: int32
+                              type: integer
+                            kmsConfig:
+                              description: |-
+                                KMSConfig holds provider-specific configuration. 각 provider 가 자체
+                                sub-spec 을 채움 (mutually exclusive — provider 별 1건만).
+                              properties:
+                                awsKMS:
+                                  description: 'AWSKMS (KeyProvider=aws-kms): AWS
+                                    KMS CMK ARN.'
+                                  properties:
+                                    authSecretRef:
+                                      description: |-
+                                        AuthSecretRef IRSA-aware. Secret keys: access_key_id / secret_access_key.
+                                        IRSA 사용 시 빈 secret + ServiceAccount annotations 로 인증.
+                                      properties:
+                                        name:
+                                          default: ""
+                                          description: |-
+                                            Name of the referent.
+                                            This field is effectively required, but due to backwards compatibility is
+                                            allowed to be empty. Instances of this type with an empty value here are
+                                            almost certainly wrong.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                          type: string
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    keyARN:
+                                      description: KeyARN e.g. "arn:aws:kms:us-east-1:123:key/abc-..."
+                                      pattern: ^arn:aws:kms:.+:.+:key/.+$
+                                      type: string
+                                    region:
+                                      description: Region e.g. "us-east-1"
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - keyARN
+                                  - region
+                                  type: object
+                                azureKV:
+                                  description: 'AzureKV (KeyProvider=azure-kv): Azure
+                                    Key Vault key URL.'
+                                  properties:
+                                    authSecretRef:
+                                      description: AuthSecretRef SP credentials (client_secret)
+                                        — workload identity 사용 시 nil.
+                                      properties:
+                                        name:
+                                          default: ""
+                                          description: |-
+                                            Name of the referent.
+                                            This field is effectively required, but due to backwards compatibility is
+                                            allowed to be empty. Instances of this type with an empty value here are
+                                            almost certainly wrong.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                          type: string
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    clientID:
+                                      type: string
+                                    keyName:
+                                      description: KeyName + KeyVersion (optional,
+                                        latest if empty).
+                                      minLength: 1
+                                      type: string
+                                    keyVersion:
+                                      type: string
+                                    tenantID:
+                                      description: TenantID + ClientID — workload
+                                        identity 시 ServiceAccount 로 매핑.
+                                      type: string
+                                    vaultURL:
+                                      description: VaultURL e.g. "https://my-kv.vault.azure.net"
+                                      pattern: ^https://.+\.vault\.azure\.net/?$
+                                      type: string
+                                  required:
+                                  - keyName
+                                  - vaultURL
+                                  type: object
+                                gcpKMS:
+                                  description: 'GCPKMS (KeyProvider=gcp-kms): GCP
+                                    KMS keyring + key.'
+                                  properties:
+                                    authSecretRef:
+                                      description: AuthSecretRef Workload Identity
+                                        시 빈 secret. 그 외에 SA JSON Secret.
+                                      properties:
+                                        name:
+                                          default: ""
+                                          description: |-
+                                            Name of the referent.
+                                            This field is effectively required, but due to backwards compatibility is
+                                            allowed to be empty. Instances of this type with an empty value here are
+                                            almost certainly wrong.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                          type: string
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    key:
+                                      minLength: 1
+                                      type: string
+                                    keyring:
+                                      description: Keyring + Key 식별자.
+                                      minLength: 1
+                                      type: string
+                                    location:
+                                      description: Location e.g. "us-central1" or
+                                        "global".
+                                      minLength: 1
+                                      type: string
+                                    projectID:
+                                      description: ProjectID GCP project containing
+                                        the keyring.
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - key
+                                  - keyring
+                                  - location
+                                  - projectID
+                                  type: object
+                                secret:
+                                  description: 'Secret (KeyProvider=secret): keyfile
+                                    Secret 직접 참조. 단일 마스터키.'
+                                  properties:
+                                    secretRef:
+                                      description: SecretRef.Name + Key = base64 32-byte
+                                        raw key.
+                                      properties:
+                                        key:
+                                          description: The key of the secret to select
+                                            from.  Must be a valid secret key.
+                                          type: string
+                                        name:
+                                          default: ""
+                                          description: |-
+                                            Name of the referent.
+                                            This field is effectively required, but due to backwards compatibility is
+                                            allowed to be empty. Instances of this type with an empty value here are
+                                            almost certainly wrong.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                          type: string
+                                        optional:
+                                          description: Specify whether the Secret
+                                            or its key must be defined
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                  required:
+                                  - secretRef
+                                  type: object
+                                vault:
+                                  description: 'Vault (KeyProvider=vault): HashiCorp
+                                    Vault Transit engine.'
+                                  properties:
+                                    address:
+                                      description: Address e.g. "https://vault.example.com:8200"
+                                      minLength: 1
+                                      type: string
+                                    authMethod:
+                                      default: kubernetes
+                                      description: AuthMethod = token | kubernetes
+                                        | approle
+                                      enum:
+                                      - token
+                                      - kubernetes
+                                      - approle
+                                      type: string
+                                    authSecretRef:
+                                      description: |-
+                                        AuthSecretRef references K8s Secret with auth credentials
+                                        (token / role + jwt / role-id + secret-id).
+                                      properties:
+                                        name:
+                                          default: ""
+                                          description: |-
+                                            Name of the referent.
+                                            This field is effectively required, but due to backwards compatibility is
+                                            allowed to be empty. Instances of this type with an empty value here are
+                                            almost certainly wrong.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                          type: string
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    caSecretRef:
+                                      description: CASecretRef optional TLS CA for
+                                        Vault server verification.
+                                      properties:
+                                        name:
+                                          default: ""
+                                          description: |-
+                                            Name of the referent.
+                                            This field is effectively required, but due to backwards compatibility is
+                                            allowed to be empty. Instances of this type with an empty value here are
+                                            almost certainly wrong.
+                                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                          type: string
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    keyName:
+                                      description: KeyName Vault key identifier (Transit
+                                        engine 의 named key).
+                                      minLength: 1
+                                      type: string
+                                    transitPath:
+                                      default: transit
+                                      description: TransitPath default `transit`.
+                                      type: string
+                                  required:
+                                  - address
+                                  - authSecretRef
+                                  - keyName
+                                  type: object
+                              type: object
+                          required:
+                          - enabled
+                          type: object
+                        persistentVolumeClaimRetentionPolicy:
+                          description: |-
+                            PersistentVolumeClaimRetentionPolicy describes the lifecycle of PVCs
+                            created from the StatefulSet's VolumeClaimTemplates. WhenDeleted/WhenScaled
+                            모두 Retain(기본) 또는 Delete를 허용. 기본은 Retain — 운영자가 명시적으로
+                            데이터 폐기를 선택하기 전까지 PVC를 보존하기 위함.
+                          properties:
+                            whenDeleted:
+                              description: |-
+                                WhenDeleted specifies what happens to PVCs created from StatefulSet
+                                VolumeClaimTemplates when the StatefulSet is deleted. The default policy
+                                of `Retain` causes PVCs to not be affected by StatefulSet deletion. The
+                                `Delete` policy causes those PVCs to be deleted.
+                              type: string
+                            whenScaled:
+                              description: |-
+                                WhenScaled specifies what happens to PVCs created from StatefulSet
+                                VolumeClaimTemplates when the StatefulSet is scaled down. The default
+                                policy of `Retain` causes PVCs to not be affected by a scaledown. The
+                                `Delete` policy causes the associated PVCs for any excess pods above
+                                the replica count to be deleted.
+                              type: string
+                          type: object
+                        selector:
+                          description: Selector is a label query over PersistentVolumes
+                            to bind.
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of label selector
+                                requirements. The requirements are ANDed.
+                              items:
+                                description: |-
+                                  A label selector requirement is a selector that contains values, a key, and an operator that
+                                  relates the key and values.
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector
+                                      applies to.
+                                    type: string
+                                  operator:
+                                    description: |-
+                                      operator represents a key's relationship to a set of values.
+                                      Valid operators are In, NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      values is an array of string values. If the operator is In or NotIn,
+                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                      the values array must be empty. This array is replaced during a strategic
+                                      merge patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                              x-kubernetes-list-type: atomic
+                            matchLabels:
+                              additionalProperties:
+                                type: string
+                              description: |-
+                                matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                operator is "In", and the values array contains only "value". The requirements are ANDed.
+                              type: object
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        size:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          default: 10Gi
+                          description: Size is the storage size
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        storageClassName:
+                          description: |-
+                            StorageClassName is the name of the StorageClass
+                            If not specified, the default storage class will be used
+                          type: string
+                        subPath:
+                          description: SubPath within the volume to mount as the data
+                            directory.
+                          type: string
+                      type: object
+                    zone:
+                      description: Zone is an optional zone tag for zone-aware sharding
+                        routing.
+                      type: string
+                  required:
+                  - clusterKubeConfigRef
+                  - members
+                  - name
+                  type: object
+                minItems: 2
+                type: array
+              tls:
+                description: |-
+                  TLS applies cluster-wide. cert-manager Issuer 가 각 cluster 에 동일
+                  이름으로 존재한다고 가정.
+                properties:
+                  allowInvalidHostnames:
+                    default: true
+                    description: |-
+                      AllowInvalidHostnames skips hostname verification in TLS handshake.
+                      Needed when cert SANs use wildcard FQDNs but internal comms use short hostnames.
+                      Set to false when certs include proper per-pod SANs.
+                    type: boolean
+                  certManager:
+                    description: CertManager enables cert-manager integration
+                    properties:
+                      duration:
+                        default: 2160h
+                        description: Duration is the certificate duration
+                        type: string
+                      issuerRef:
+                        description: IssuerRef references a cert-manager Issuer or
+                          ClusterIssuer
+                        properties:
+                          kind:
+                            default: ClusterIssuer
+                            description: Kind is the issuer kind (Issuer or ClusterIssuer)
+                            enum:
+                            - Issuer
+                            - ClusterIssuer
+                            type: string
+                          name:
+                            description: Name is the issuer name
+                            type: string
+                        required:
+                        - kind
+                        - name
+                        type: object
+                      renewBefore:
+                        default: 360h
+                        description: RenewBefore is when to renew before expiry
+                        type: string
+                    required:
+                    - issuerRef
+                    type: object
+                  customCert:
+                    description: CustomCert references a custom TLS secret
+                    properties:
+                      secretName:
+                        description: SecretName is the name of the TLS secret
+                        type: string
+                    required:
+                    - secretName
+                    type: object
+                  enabled:
+                    default: true
+                    description: Enabled enables TLS for MongoDB connections
+                    type: boolean
+                  mode:
+                    default: preferTLS
+                    description: |-
+                      Mode sets the mongod --tlsMode value.
+                      Valid values: "preferTLS" (default, allows non-TLS connections),
+                      "requireTLS" (rejects non-TLS connections).
+                    enum:
+                    - preferTLS
+                    - requireTLS
+                    type: string
+                required:
+                - enabled
+                type: object
+              version:
+                description: Version is the MongoDB version applied to all regions.
+                properties:
+                  image:
+                    description: Image is the MongoDB container image
+                    type: string
+                  version:
+                    description: Version is the MongoDB version (e.g., "8.3.1")
+                    pattern: ^\d+\.\d+(\.\d+)?$
+                    type: string
+                required:
+                - version
+                type: object
+            required:
+            - auth
+            - regions
+            - version
+            type: object
+          status:
+            description: MongoDBFederationStatus is the observed federation state.
+            properties:
+              conditions:
+                description: Conditions follow standard k8s convention.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              phase:
+                description: 'Phase: Pending | Bootstrapping | Synced | Degraded |
+                  Failed'
+                enum:
+                - Pending
+                - Bootstrapping
+                - Synced
+                - Degraded
+                - Failed
+                type: string
+              regionStatuses:
+                description: RegionStatuses tracks per-region reconcile state.
+                items:
+                  description: FederationRegionStatus is per-region observed state.
+                  properties:
+                    error:
+                      description: Error contains the last reconcile error (empty
+                        when synced).
+                      type: string
+                    lastSyncTime:
+                      description: LastSyncTime is when the controller last reached
+                        the region cluster.
+                      format: date-time
+                      type: string
+                    name:
+                      description: Name matches Spec.Regions[].Name.
+                      type: string
+                    phase:
+                      description: 'Phase per region: Pending | Synced | Degraded
+                        | Failed'
+                      enum:
+                      - Pending
+                      - Synced
+                      - Degraded
+                      - Failed
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: false
+    subresources:
+      status: {}

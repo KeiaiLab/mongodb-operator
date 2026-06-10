@@ -1,4 +1,4 @@
-# ADR-0019: operator-commons v0.5.0 helper 승격 — validateStorageSize + apiError 통일
+# ADR-0019: keiailab-commons v0.5.0 helper 승격 — validateStorageSize + apiError 통일
 
 - Date: 2026-05-07
 - Status: Proposed
@@ -40,7 +40,7 @@ helper 사용으로 일관화.
 #### 3. ADR-0017 Type 분류 docs (3-of-3 audit 의무)
 
 ADR-0016 + ADR-0017 의 *cross-cut audit 표 형식* 이 commons repo 의 docs 로
-이전 — 3 operator 가 동일 ADR 형식 사용. operator-commons 의 README 또는
+이전 — 3 operator 가 동일 ADR 형식 사용. keiailab-commons 의 README 또는
 별 문서.
 
 #### 4. `validateUsersSecretRefs` (1-of-3, 거절)
@@ -52,7 +52,7 @@ ADR-0016 alternatives B 의 premature abstraction.
 
 ## Decision
 
-**operator-commons v0.5.0 release 시 승격 (Phase A):**
+**keiailab-commons v0.5.0 release 시 승격 (Phase A):**
 
 1. `pkg/webhook/validate_storage_size.go` 신규 — `ValidateStorageSizeMin(path,
    size, min)` 시그너처. 기본 min=1Gi, 호출자가 override 가능 (postgres 의
@@ -64,12 +64,12 @@ ADR-0016 alternatives B 의 premature abstraction.
 **거절 (Phase B 보류):**
 
 - `validateUsersSecretRefs` — 1-of-3 사용. 4번째 operator 추가 시 재고.
-- ADR docs 통일 — operator-commons repo 자체 ADR section 도입은 *governance
+- ADR docs 통일 — keiailab-commons repo 자체 ADR section 도입은 *governance
   복잡도* ↑. 별 RFC.
 
 ### Migration plan (3 operator 동시)
 
-#### Step 1: operator-commons v0.5.0 publish (별 cycle)
+#### Step 1: keiailab-commons v0.5.0 publish (별 cycle)
 
 - `pkg/webhook/validate_storage_size.go` + 단위 테스트 (100% coverage).
 - `pkg/webhook/apierror.go` + 단위 테스트.
@@ -108,7 +108,7 @@ ADR-0016 alternatives B 의 premature abstraction.
 
 - 3 operator go.mod bump + PR 동시성 — *partial migration* 시 cross-version
   drift. *Step 1-4 동시 진행* 의무.
-- operator-commons v0.x 의 *breaking change 가능성* — v1.0 미달 단계라 API
+- keiailab-commons v0.x 의 *breaking change 가능성* — v1.0 미달 단계라 API
   shape 변경 자유. 단 본 ADR 의 helper 들은 *core stable* 추정.
 
 ### 트레이드오프
@@ -118,7 +118,7 @@ migration cost (3 PR 동시) < DRY 가치. 또한 *cross-cut audit pattern 의
 
 ### 후속 작업
 
-- 별 cycle 에 operator-commons v0.5.0 release.
+- 별 cycle 에 keiailab-commons v0.5.0 release.
 - 3 operator 마이그레이션 PR (동시).
 - 운영 검증 후 v0.5.0 stable 선언.
 
@@ -135,7 +135,7 @@ migration cost (3 PR 동시) < DRY 가치. 또한 *cross-cut audit pattern 의
 
 ### B. v0.5.0 대신 v1.0.0 stable 승격
 
-본 시점에 operator-commons v1.0.0 stable 선언.
+본 시점에 keiailab-commons v1.0.0 stable 선언.
 
 **거절 사유**: v1.0 은 *API shape 변경 동결* 의무. 향후 추가 helper 후보
 (예: `validateAuthSecretRef`, `validateBackupSpec`) 가 *3-of-3 입증 전*

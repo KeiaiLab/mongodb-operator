@@ -170,6 +170,10 @@ kubectl describe svc my-mongodb -n database | grep Type
 # Verify admin credentials
 kubectl get secret mongodb-admin -n database -o yaml
 
+# If credentials are sourced through ESO/Infisical
+kubectl get externalsecret mongodb-admin -n database
+kubectl describe externalsecret mongodb-admin -n database
+
 # Test authentication
 kubectl exec -it my-mongodb-0 -n database -c mongod -- \
   mongosh -u admin -p $(kubectl get secret mongodb-admin -n database -o jsonpath='{.data.password}' | base64 --decode) --eval 'db.adminCommand("ping")'
@@ -468,6 +472,9 @@ kubectl get svc my-mongodb -n database -o yaml | grep port
 ```bash
 # Verify credentials secret
 kubectl get secret mongodb-admin -n database -o jsonpath='{.data.password}' | base64 --decode
+
+# Verify ExternalSecret materialization when ESO/Infisical is enabled
+kubectl get externalsecret mongodb-admin -n database
 
 # Check authentication mechanism in CRD
 kubectl get mongodb my-mongodb -n database -o yaml | grep -A 5 auth

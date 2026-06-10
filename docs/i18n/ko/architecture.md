@@ -60,9 +60,9 @@
 - Role (네임스페이스별): StatefulSet / Service / Secret / ConfigMap / PVC / PDB / NetworkPolicy
 - ServiceAccount: `mongodb-operator` (default-deny NetworkPolicy 적용)
 
-## operator-commons import 표면 (operator-commons import surface)
+## keiailab-commons import 표면 (keiailab-commons import surface)
 
-`operator-commons/ARCHITECTURE.md` 매트릭스 기준 채택률: **6/8 (75%)**.
+`keiailab-commons/ARCHITECTURE.md` 매트릭스 기준 채택률: **6/8 (75%)**.
 
 | 패키지 | 상태 | 용도 |
 |---|---|---|

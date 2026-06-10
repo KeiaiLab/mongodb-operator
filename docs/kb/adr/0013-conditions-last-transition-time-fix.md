@@ -3,7 +3,7 @@
 - Date: 2026-05-07
 - Status: Accepted
 - Authors: @keiailab
-- Refs: ADR-0008 (operator-commons 채택), valkey iteration 32 (cb9b807) 패턴
+- Refs: ADR-0008 (keiailab-commons 채택), valkey iteration 32 (cb9b807) 패턴
 
 ## Context
 
@@ -99,7 +99,7 @@ meta.SetStatusCondition 위임* 으로 K8s convention 정합화. mongodb 도 동
 
 ## Alternatives Considered
 
-1. **operator-commons 신규 conditions 패키지** — 거절: upstream `meta.SetStatusCondition`
+1. **keiailab-commons 신규 conditions 패키지** — 거절: upstream `meta.SetStatusCondition`
    이 *동등 기능 제공*. wrapper-only 패키지는 over-engineering (HANDOFF iteration
    32 의 boundary 분석).
 2. **인라인 패턴 보존 + `LastTransitionTime` 비-Now 조건 추가** — 거절: upstream
@@ -139,4 +139,4 @@ go test ./internal/controller/ -count=1
 - valkey iteration 32 (cb9b807) — 동일 패턴 fix
 - HANDOFF iteration 32 — 3-way boundary 분석 (commons / upstream / 자체 보존)
 - k8s.io/apimachinery/pkg/api/meta.SetStatusCondition GoDoc
-- ADR-0008 (operator-commons 채택)
+- ADR-0008 (keiailab-commons 채택)

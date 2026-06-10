@@ -56,6 +56,6 @@ EventRecorder 변경 없음 (이미 mongodb 가 표준 원본).
 ## References
 
 - 글로벌 RFC: `~/Documents/ai-dev/rfcs/0017-operator-tooling-unification.md`
-- 관련 audit: `~/.claude/plans/mongodb-operator-operator-commons-postgr-tranquil-horizon.md`
+- 관련 audit: `~/.claude/plans/mongodb-operator-keiailab-commons-postgr-tranquil-horizon.md`
 - 관련 ADR: ADR-0011 (mongodb pre-commit policy — 본 ADR 로 일부 super-seded)
 - 관련 PR: #(TBD)
