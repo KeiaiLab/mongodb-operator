@@ -1,7 +1,7 @@
-# Initial kube-linter config — chart 의 production-grade security baseline 충족
-# 까지 default rules 비활성 (follow-up PR 으로 chart templates 의 security
-# context / probes / capabilities drop / resources 추가 후 rules 점진 활성).
+# kube-linter default checks are intentionally enabled.
+#
+# Do not set `doNotAutoAddDefaults: true` here. An empty include list with
+# defaults disabled produces an empty SARIF file, which makes the upload-sarif
+# step fail before GitHub can show the actual chart findings.
 checks:
-  doNotAutoAddDefaults: true
-  include: []
   exclude: []
