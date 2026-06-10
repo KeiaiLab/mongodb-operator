@@ -19,12 +19,12 @@
 | sister operator | ❌ → ✅ (sister ADR-0021) |
 | mongodb-operator | ❌ → ✅ (본 ADR) |
 | sister operator | ❌ (ralph-loop 관할) |
-| operator-commons | ✅ (ADR-0012 SSOT) |
+| keiailab-commons | ✅ (ADR-0012 SSOT) |
 | forgewise | ✅ |
 
 즉 *정책* (RFC-0002) 은 있지만 *자동 강제* (lefthook hook) 이 부재. 사람이 의도하지 않은 `.github/workflows/` 신규 추가 시 차단 불가.
 
-본 ADR 은 operator-commons ADR-0012 패턴을 mongodb-operator 에 sync 한다. sister operator 의 ADR-0021 와 sister.
+본 ADR 은 keiailab-commons ADR-0012 패턴을 mongodb-operator 에 sync 한다. sister operator 의 ADR-0021 와 sister.
 
 ### v2.0 정합 고려 (ADR-0033 dual-track)
 
@@ -35,7 +35,7 @@ ADR-0033 (Accepted, 2026-05-21) 결정: mongodb-operator 는 v2.0 = GHA *유지*
 - 기존 파일 변경 (dependabot 의 actions 버전 bump 등) 은 허용
 - 우회: `PLAN_BYPASS=1 git commit` (PR 본문 사유 + ADR 인용 의무)
 
-이는 commons ADR-0012 의 정합 그대로다 — operator-commons 가 GHA 0 인 것과 무관하게, hook 자체는 *신규 추가 차단* 만 수행하므로 GHA 유지 노선 (ADR-0033) 과 모순 없음.
+이는 commons ADR-0012 의 정합 그대로다 — keiailab-commons 가 GHA 0 인 것과 무관하게, hook 자체는 *신규 추가 차단* 만 수행하므로 GHA 유지 노선 (ADR-0033) 과 모순 없음.
 
 ## Decision
 
@@ -135,6 +135,6 @@ Accepted — 2026-05-21.
 
 - RFC-0002: `~/.codex/CLAUDE.md` §2 (GitHub Actions 영구 금지)
 - ADR-0033: `0033-gha-retention-for-public-oss.md` (GHA 유지 + dual-track)
-- commons ADR-0012: `~/Workspace/keiailab/operator-commons/docs/kb/adr/0012-rfc-0002-gha-block-hook.md` (SSOT 패턴)
+- commons ADR-0012: `~/Workspace/keiailab/keiailab-commons/docs/kb/adr/0012-rfc-0002-gha-block-hook.md` (SSOT 패턴)
 - postgres ADR-0021: `~/Workspace/keiailab/sister operator/docs/kb/adr/0021-rfc-0002-gha-block-hook.md` (sister)
-- audit script: `~/Workspace/keiailab/operator-commons/scripts/audit-production-grade.sh` (P2-2)
+- audit script: `~/Workspace/keiailab/keiailab-commons/scripts/audit-production-grade.sh` (P2-2)

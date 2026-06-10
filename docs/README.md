@@ -27,6 +27,7 @@ Complete documentation for deploying, managing, and contributing to MongoDB Oper
 - **[TLS Configuration](advanced/tls.md)** — TLS encryption with cert-manager
 - **[Monitoring](advanced/monitoring.md)** — Prometheus metrics and Grafana dashboards
 - **[Backup and Restore](advanced/backup.md)** — Automated backups to S3/PVC
+- **[Secret Management](advanced/secret-management.md)** — External Secrets Operator and Infisical credential sourcing
 - **[Scaling Strategies](advanced/scaling.md)** — Horizontal and vertical scaling
 - **[Admission Webhook](advanced/webhook.md)** — Validating webhook configuration
 
@@ -97,6 +98,7 @@ docs/
 │   ├── tls.md                   # TLS encryption
 │   ├── monitoring.md            # Prometheus/Grafana
 │   ├── backup.md                # Backup/restore
+│   ├── secret-management.md     # ExternalSecret/Infisical credential sourcing
 │   ├── scaling.md               # Scaling strategies
 │   └── webhook.md               # Admission webhook
 ├── developers/

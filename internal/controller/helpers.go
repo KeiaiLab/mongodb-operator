@@ -26,8 +26,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	commonsfinalizer "github.com/keiailab/keiailab-commons/pkg/finalizer"
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
-	commonsfinalizer "github.com/keiailab/operator-commons/pkg/finalizer"
 )
 
 // reconcileSecretIfNotExists는 Secret이 존재하지 않으면 build()로 생성한다.

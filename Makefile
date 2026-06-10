@@ -138,13 +138,16 @@ release: ## Full release pipeline. VERSION=v1.x.y 필수 (e.g., make release VER
 	@echo "✓ Release $(VERSION) 완료"
 	@echo "  - Image- ghcr.io/keiailab/mongodb-operator:$(VERSION)"
 	@echo "  - GH Release- https://github.com/keiailab/mongodb-operator/releases/tag/$(VERSION)"
-	@echo "  - Helm Repo- helm repo update + helm search repo keiailab/mongodb-operator"
+	@echo "  - Helm OCI- oci://ghcr.io/keiailab/charts/mongodb-operator"
 	@echo "  - ArtifactHub은 ~30분 내 인덱스 자동 갱신"
 
 # PGP signing 옵션 — HELM_SIGN=1 시 helm package --sign 으로 .prov 파일 생성.
-HELM_SIGN     ?= 0
-HELM_GPG_KEY  ?= 89A409476828CB992338C378651E51AF520BCB78
-HELM_KEYRING  ?= $(HOME)/.gnupg/secring.gpg
+HELM_SIGN            ?= 0
+HELM_GPG_FINGERPRINT ?= F1A6893583E632A757FF6767F3CC8C6AEC9CEB08
+HELM_GPG_KEY         ?= $(HELM_GPG_FINGERPRINT)
+HELM_KEYRING         ?= $(HOME)/.gnupg/secring.gpg
+HELM_PUBLISH_TARGET  ?= oci
+HELM_OCI_REPO        ?= oci://ghcr.io/keiailab/charts
 
 # Build platforms — AGENTS.md §2 + RFC-0002 §2: amd64-only 강제 (multi-arch 금지).
 # C-P0-12 (.lefthook.yml: platforms-amd64-guard) 가 grep 으로 multi-arch 재발 차단.
@@ -242,32 +245,14 @@ helm-cosign-sign: ## G-13 (cycle 19) — CloudPirates parity Cosign chart 서명
 	@echo "✓ Cosign signing complete — chart + .sig + .crt artifacts ready for publish"
 
 .PHONY: helm-publish
-helm-publish: ## Publish helm chart to gh-pages (RFC 0002 helm-publish.yml 대체 로컬 자동화). HELM_SIGN=1 시 PGP .prov 동반.
-	@echo "=== helm package ==="
-	@mkdir -p /tmp/release
-	@if [ "$(HELM_SIGN)" = "1" ]; then \
-		echo "INFO- chart 서명 활성 (PGP key $(HELM_GPG_KEY))"; \
-		helm package --sign --key "$(HELM_GPG_KEY)" --keyring "$(HELM_KEYRING)" charts/mongodb-operator -d /tmp/release/; \
-	else \
-		helm package charts/mongodb-operator -d /tmp/release/; \
-	fi
-	@echo "=== gh-pages worktree ==="
-	@mkdir -p /tmp/ghpages-publish
-	@if [ ! -d /tmp/ghpages-publish/gh-pages ]; then \
-		cd /tmp/ghpages-publish && git clone --branch gh-pages --single-branch git@github.com:keiailab/mongodb-operator.git gh-pages; \
-	else \
-		cd /tmp/ghpages-publish/gh-pages && git fetch origin gh-pages && git reset --hard origin/gh-pages; \
-	fi
-	@echo "=== copy chart + regen index ==="
-	cp /tmp/release/mongodb-operator-*.tgz /tmp/ghpages-publish/gh-pages/
-	@cp /tmp/release/mongodb-operator-*.tgz.prov /tmp/ghpages-publish/gh-pages/ 2>/dev/null || true
-	@cp $(CURDIR)/charts/artifacthub-repo.yml /tmp/ghpages-publish/gh-pages/ 2>/dev/null || true
-	cd /tmp/ghpages-publish/gh-pages && helm repo index . --merge index.yaml --url https://keiailab.github.io/mongodb-operator
-	@echo "=== commit + push ==="
-	@cd /tmp/ghpages-publish/gh-pages && git add -A && \
-		(git diff --cached --quiet || git commit -m "chore(helm): publish $$(grep -E '^version' $(CURDIR)/charts/mongodb-operator/Chart.yaml | awk '{print $$2}')" ) && \
-		git push origin gh-pages
-	@echo "✓ Helm chart published. ArtifactHub은 ~30분 내 인덱싱."
+helm-publish: ## Publish helm chart to OCI by default. HELM_PUBLISH_TARGET=gh-pages keeps legacy Pages publish.
+	@HELM_SIGN="$(HELM_SIGN)" \
+	  HELM_GPG_FINGERPRINT="$(HELM_GPG_FINGERPRINT)" \
+	  HELM_GPG_KEY="$(HELM_GPG_KEY)" \
+	  HELM_KEYRING="$(HELM_KEYRING)" \
+	  HELM_PUBLISH_TARGET="$(HELM_PUBLISH_TARGET)" \
+	  HELM_OCI_REPO="$(HELM_OCI_REPO)" \
+	  bash scripts/helm-publish.sh
 
 .PHONY: setup
 setup: ## RFC 0002 로컬 게이트 설치 (pre-commit + pre-push hook).

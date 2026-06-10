@@ -17,12 +17,12 @@
 
 **Project**: `mongodb-operator` — Kubernetes 的 MIT MongoDB Operator — ReplicaSet + Sharded Cluster + Backup,原生 MongoDB 7.0+。
 
-**Family**: 共享 [`operator-commons`](https://github.com/keiailab/operator-commons) 通用库的四个姊妹 operator 之一:
+**Family**: 共享 [`keiailab-commons`](https://github.com/keiailab/keiailab-commons) 通用库的四个姊妹 operator 之一:
 
 | Project | Database | Repository |
 |---|---|---|
 | `mongodb-operator` | MongoDB 7.0+ | https://github.com/keiailab/mongodb-operator |
-| `operator-commons` | Shared Go library | https://github.com/keiailab/operator-commons |
+| `keiailab-commons` | Shared Go library | https://github.com/keiailab/keiailab-commons |
 
 ## 2. Logo 与视觉资源
 
@@ -74,7 +74,7 @@ GitHub README 的 shield.io badge 建议使用上述 hex。
 - **Direct (直接)** — 尽可能使用 bullet-point 代替段落
 - **Evidence-based (基于证据)** — 论断需附 benchmark / SLA / 链接
 - **Vendor-neutral (厂商中立)** — 引用 upstream (PostgreSQL、MongoDB、Valkey),但不 embed / wrap 第三方 operator
-- **License-aware (许可证意识)** — 仅使用 Apache-2.0 + BSD/MIT/PG-license 依赖
+- **License-aware (许可证意识)** — 仅使用 MIT/BSD/Apache-2.0/PG-license 依赖
 
 **应避免的表达**:
 - 市场化的最高级表述 ("blazing fast"、"revolutionary"、"best-in-class")
@@ -145,4 +145,3 @@ README 中 shield.io badge 的顺序 (左→右):
 - License: [MIT](LICENSE)
 - Copyright: © 2026 keiailab contributors
 - Third-party attributions: 见 [NOTICE](NOTICE) (如适用)
-

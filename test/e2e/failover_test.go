@@ -79,7 +79,7 @@ spec:
 				failoverCRName, "-n", failoverNamespace,
 				"-o", "jsonpath={.status.currentPrimary}"))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(strings.TrimSpace(out)).To(Equal(failoverCRName + "-0"),
+			Expect(strings.TrimSpace(out)).To(Equal(failoverCRName+"-0"),
 				"초기 primary 는 pod-0 (replicaset bootstrap convention)")
 		})
 
@@ -110,7 +110,7 @@ spec:
 					failoverCRName, "-n", failoverNamespace,
 					"-o", "jsonpath={.status.currentPrimary}"))
 				return strings.TrimSpace(out)
-			}, 3*time.Minute, 10*time.Second).ShouldNot(Equal(failoverCRName + "-0"),
+			}, 3*time.Minute, 10*time.Second).ShouldNot(Equal(failoverCRName+"-0"),
 				"primary 는 pod-0 외 다른 pod 로 변경되어야 함")
 		})
 

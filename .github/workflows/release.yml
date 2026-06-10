@@ -27,7 +27,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.derive.outputs.version }}
+      app_version: ${{ steps.derive.outputs.app_version }}
       tag: ${{ steps.derive.outputs.tag }}
+      image_release: ${{ steps.derive.outputs.image_release }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -45,16 +47,41 @@ jobs:
           if [ "$CHART_VER" != "$VERSION" ]; then
             echo "::error::Chart.yaml version=$CHART_VER does not match tag=$VERSION"; exit 1
           fi
-          if [ "$APP_VER" != "$VERSION" ]; then
-            echo "::error::Chart.yaml appVersion=$APP_VER does not match tag=$VERSION"; exit 1
+          if [ "$APP_VER" = "$VERSION" ]; then
+            IMAGE_RELEASE=true
+            echo "✓ image release: tag=$TAG / version=$VERSION / appVersion=$APP_VER all aligned"
+          else
+            IMAGE_RELEASE=false
+            echo "✓ chart-only release: tag=$TAG / chart=$VERSION / appVersion=$APP_VER"
+            echo "  image/GitHub Release jobs will be skipped; Helm chart publish handles the chart artifact."
           fi
-          echo "tag=$TAG"           >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION"   >> "$GITHUB_OUTPUT"
-          echo "✓ tag=$TAG / version=$VERSION / appVersion=$APP_VER all aligned"
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "app_version=$APP_VER"
+            echo "image_release=$IMAGE_RELEASE"
+          } >> "$GITHUB_OUTPUT"
+
+  chart-only-summary:
+    name: Chart-only release summary
+    needs: preflight
+    if: needs.preflight.outputs.image_release == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          {
+            echo "### Chart-only release"
+            echo ""
+            echo "- tag: ${{ needs.preflight.outputs.tag }}"
+            echo "- chart version: ${{ needs.preflight.outputs.version }}"
+            echo "- appVersion/image: ${{ needs.preflight.outputs.app_version }}"
+            echo "- result: image, SBOM, and GitHub Release jobs intentionally skipped"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   image:
-    name: Build & push multi-arch image
+    name: Build & push linux/amd64 image
     needs: preflight
+    if: needs.preflight.outputs.image_release == 'true'
     runs-on: ubuntu-latest
     outputs:
       digest: ${{ steps.push.outputs.digest }}
@@ -93,6 +120,7 @@ jobs:
   sbom:
     name: SBOM (syft)
     needs: [preflight, image]
+    if: needs.preflight.outputs.image_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: anchore/sbom-action@v0
@@ -108,6 +136,7 @@ jobs:
   notes:
     name: Release notes (git-cliff)
     needs: preflight
+    if: needs.preflight.outputs.image_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -128,6 +157,7 @@ jobs:
   chart-tgz:
     name: Package helm chart
     needs: preflight
+    if: needs.preflight.outputs.image_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -146,6 +176,7 @@ jobs:
   github-release:
     name: Create GitHub Release
     needs: [preflight, image, sbom, notes, chart-tgz]
+    if: needs.preflight.outputs.image_release == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8

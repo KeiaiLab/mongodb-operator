@@ -62,7 +62,7 @@ spec:
 		cmd.Stdin = strings.NewReader(manifest)
 		out, err := utils.Run(cmd)
 		Expect(err).To(HaveOccurred(), "webhook must reject cleartext LDAP bind credentials")
-		Expect(out + err.Error()).To(ContainSubstring("cleartext"), "reject reason should mention cleartext")
+		Expect(out+err.Error()).To(ContainSubstring("cleartext"), "reject reason should mention cleartext")
 	})
 
 	// OIDC http issuer reject — operator webhook https-only enforcement.
@@ -91,7 +91,7 @@ spec:
 		cmd.Stdin = strings.NewReader(manifest)
 		out, err := utils.Run(cmd)
 		Expect(err).To(HaveOccurred(), "webhook must reject OIDC http issuer")
-		Expect(out + err.Error()).To(Or(
+		Expect(out+err.Error()).To(Or(
 			ContainSubstring("https"),
 			ContainSubstring("Invalid value"),
 		), "reject reason should mention https requirement")

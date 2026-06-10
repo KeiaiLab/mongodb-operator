@@ -1,9 +1,9 @@
-# ADR-0034: Sprint 1 — operator-commons pkg/pvc + pkg/topology 채택 (-327 LOC)
+# ADR-0034: Sprint 1 — keiailab-commons pkg/pvc + pkg/topology 채택 (-327 LOC)
 
 - Date: 2026-05-21
 - Status: Accepted
 - Authors: @keiailab (Codex Major #7 — Sprint 1 Phase 2)
-- Refs: operator-commons ADR-0012 (commons-side decisions)
+- Refs: keiailab-commons ADR-0012 (commons-side decisions)
 
 ## Context
 
@@ -25,7 +25,7 @@ LOC) 가 postgres / valkey 와 거의 동일 cross-repo 중복. commons Sprint 1
    mongodb 는 `Members >= 2` 의미론 → commons 의 **default**
    `WithMinReplicas(2)` 와 동일 → 옵션 미지정.
 
-3. **go.mod**: `operator-commons v0.8.0 → v0.8.1-0.20260521045707-85a46ba80952`
+3. **go.mod**: `keiailab-commons v0.8.0 → v0.8.1-0.20260521045707-85a46ba80952`
    (commons PR #52 pre-merge). v0.9.0 tag 후 본 ADR 갱신.
 
 ## Consequences
@@ -49,7 +49,7 @@ LOC) 가 postgres / valkey 와 거의 동일 cross-repo 중복. commons Sprint 1
 
 ## Refs
 
-- operator-commons PR #52, ADR-0012.
+- keiailab-commons PR #52, ADR-0012.
 - 삭제된 원본:
   - `internal/controller/pvc_resize.go` (-119 LOC).
   - `internal/controller/pvc_resize_test.go` (-124 LOC).

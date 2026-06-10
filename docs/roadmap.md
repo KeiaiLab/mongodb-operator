@@ -359,9 +359,9 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 - [ ] mTLS internal pod-to-pod — `internal/security/mtls.go`
 - [ ] SPIFFE/SPIRE identity — `internal/security/spiffe.go`
 
-### 5.5 operator-commons v1.0.0 import
+### 5.5 keiailab-commons v1.0.0 import
 
-- [ ] `go.mod` bump → `operator-commons v1.0.0` (P-B.11.4 후)
+- [ ] `go.mod` bump → `keiailab-commons v1.0.0` (P-B.11.4 후)
 - [ ] commons pkg/webhook conversion 도입 (P-B.10.3 후)
 
 ### 5.6 Community + ecosystem
@@ -391,7 +391,7 @@ Enterprise 기능이 필요한 경우 MongoDB Enterprise Operator 사용 권장.
 | 5.1 observability v2 (PGO/histogram) | 중 | 낮음 | — | **P2** — PGO + long-tail histogram 우선(tractable), OTLP 후속 |
 | 5.2 DR (cross-region PITR/drill) | 높음 | 매우 높음 | multi-cluster | **P2** — cross-region 설계 우선, federation live apply 는 cycle 18 |
 | 5.4 SPIFFE/SPIRE | 중 | 높음 | SPIRE 운영 | **P3** — mTLS 정착 후 |
-| 5.5 commons v1.0.0 import | 중 | 낮음 | **upstream 릴리스** | **P3 (blocked)** — operator-commons v1.0.0 대기 |
+| 5.5 commons v1.0.0 import | 중 | 낮음 | **upstream 릴리스** | **P3 (blocked)** — keiailab-commons v1.0.0 대기 |
 | 5.6 community-operators PR | 중 | 중 | upstream 수용 | 별 트랙 진행 중 (사용자 승인) |
 
 권장 구현 순서: **5.3 → 5.4 mTLS → 5.1 (PGO/histogram) → 5.2 cross-region 설계 → 5.4 SPIFFE / 5.2 federation-live(후속) → 5.5(upstream 대기)**. 게이트는 권장안 채택으로 해소 진행 중 (헤딩 ⛔ 배너는 *미합의 카테고리 무단 구현* 차단 유지).

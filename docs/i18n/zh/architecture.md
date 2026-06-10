@@ -58,9 +58,9 @@
 - Role (按命名空间): StatefulSet / Service / Secret / ConfigMap / PVC / PDB / NetworkPolicy
 - ServiceAccount: `mongodb-operator` (应用 default-deny NetworkPolicy)
 
-## operator-commons 导入表面
+## keiailab-commons 导入表面
 
-按 `operator-commons/ARCHITECTURE.md` 矩阵的采用情况: **6/8 (75%)**。
+按 `keiailab-commons/ARCHITECTURE.md` 矩阵的采用情况: **6/8 (75%)**。
 
 | 包 | 状态 | 用途 |
 |---|---|---|

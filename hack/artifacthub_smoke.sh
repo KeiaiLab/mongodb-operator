@@ -5,11 +5,14 @@ artifacthub_api_url="${ARTIFACTHUB_API_URL:-https://artifacthub.io/api/v1}"
 artifacthub_org="${ARTIFACTHUB_ORG:-keiailab}"
 artifacthub_package_name="${ARTIFACTHUB_PACKAGE_NAME:-mongodb-operator}"
 artifacthub_repository_name="${ARTIFACTHUB_REPOSITORY_NAME:-keiailab-mongodb-operator}"
+artifacthub_repository_url="${EXPECTED_ARTIFACTHUB_REPOSITORY_URL:-${ARTIFACTHUB_REPOSITORY_URL:-oci://ghcr.io/keiailab/charts/mongodb-operator}}"
 helm_repo_url="${HELM_REPO_URL:-https://keiailab.github.io/mongodb-operator}"
 
 curl_bin="${CURL_BIN:-curl}"
 helm_bin="${HELM_BIN:-helm}"
 jq_bin="${JQ_BIN:-jq}"
+smoke_attempts="${ARTIFACTHUB_SMOKE_ATTEMPTS:-1}"
+smoke_sleep_seconds="${ARTIFACTHUB_SMOKE_SLEEP_SECONDS:-30}"
 
 tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/mongodb-operator-artifacthub.XXXXXX")"
 trap 'rm -rf "$tmpdir"' EXIT
@@ -44,41 +47,70 @@ fetch_json() {
 	"$curl_bin" -fsSL "$url" -o "$out"
 }
 
-echo "=== Helm repository reachability ==="
-"$curl_bin" -fsSL "${helm_repo_url%/}/index.yaml" -o "$tmpdir/index.yaml"
-"$curl_bin" -fsSL "${helm_repo_url%/}/artifacthub-repo.yml" -o "$tmpdir/artifacthub-repo.yml"
-grep -q '^repositoryID:' "$tmpdir/artifacthub-repo.yml"
-
-echo "Helm repository OK: ${helm_repo_url%/}"
-
-if command -v "$helm_bin" >/dev/null 2>&1; then
-	"$helm_bin" repo add "$artifacthub_repository_name" "$helm_repo_url" >/dev/null 2>&1 || true
-	"$helm_bin" repo update "$artifacthub_repository_name" >/dev/null
-	"$helm_bin" search repo "${artifacthub_repository_name}/${artifacthub_package_name}" --versions --devel \
-		| grep -q "${artifacthub_repository_name}/${artifacthub_package_name}"
-	echo "Helm index package OK: ${artifacthub_repository_name}/${artifacthub_package_name}"
-else
-	echo "WARN: helm not found; local Helm index search skipped" >&2
+chart_yaml="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/charts/${artifacthub_package_name}/Chart.yaml"
+expected_chart_version="${EXPECTED_CHART_VERSION:-${TAG:-}}"
+expected_chart_version="${expected_chart_version##refs/tags/}"
+expected_chart_version="${expected_chart_version#v}"
+if [[ -z "$expected_chart_version" && -f "$chart_yaml" ]]; then
+	expected_chart_version="$(awk -F': *' '/^version:/ {gsub(/"/, "", $2); print $2; exit}' "$chart_yaml")"
 fi
 
+expected_app_version="${EXPECTED_APP_VERSION:-${APP_VERSION:-}}"
+if [[ -z "$expected_app_version" && -f "$chart_yaml" ]]; then
+	expected_app_version="$(awk -F': *' '/^appVersion:/ {gsub(/"/, "", $2); print $2; exit}' "$chart_yaml")"
+fi
+
+if [[ -z "$expected_chart_version" ]]; then
+	echo "ERROR: expected chart version is unknown. Set EXPECTED_CHART_VERSION or TAG." >&2
+	exit 1
+fi
+if [[ -z "$expected_app_version" ]]; then
+	echo "ERROR: expected appVersion is unknown. Set EXPECTED_APP_VERSION or keep Chart.yaml available." >&2
+	exit 1
+fi
+
+echo "=== Expected release contract ==="
+echo "Chart version: ${expected_chart_version}"
+echo "App version:   ${expected_app_version}"
+echo "Artifact Hub repository URL: ${artifacthub_repository_url%/}"
+echo "Smoke attempts: ${smoke_attempts} (sleep ${smoke_sleep_seconds}s)"
+
+echo "=== Legacy Helm repository reachability (warning-only) ==="
+if "$curl_bin" -fsSL "${helm_repo_url%/}/index.yaml" -o "$tmpdir/index.yaml" 2>/dev/null; then
+	echo "Legacy Helm repository reachable: ${helm_repo_url%/}"
+	if command -v "$helm_bin" >/dev/null 2>&1; then
+		"$helm_bin" repo add "$artifacthub_repository_name" "$helm_repo_url" >/dev/null 2>&1 || true
+		"$helm_bin" repo update "$artifacthub_repository_name" >/dev/null
+		if "$helm_bin" search repo "${artifacthub_repository_name}/${artifacthub_package_name}" --versions --devel \
+			| grep -q "${artifacthub_repository_name}/${artifacthub_package_name}"; then
+			echo "Legacy Helm index package visible: ${artifacthub_repository_name}/${artifacthub_package_name}"
+		else
+			echo "::warning::legacy Helm index package not visible; Artifact Hub tracks OCI, so this is not a gate."
+		fi
+	fi
+else
+	echo "::warning::legacy Helm repository is unreachable; Artifact Hub tracks OCI, so this is not a gate."
+fi
+
+require_tool "$curl_bin"
 require_tool "$jq_bin"
 
 echo "=== Artifact Hub repository registration ==="
 org_query="$(urlencode "$artifacthub_org")"
 fetch_json "${artifacthub_api_url%/}/repositories/search?org=${org_query}&kind=0&limit=60" "$tmpdir/repositories.json"
 
-normalized_helm_url="$(normalize_url "$helm_repo_url")"
+normalized_artifacthub_repository_url="$(normalize_url "$artifacthub_repository_url")"
 repo_filter='
 	.[]?
-	| select((.url // "" | sub("/$"; "")) == $url or .name == $name)
+	| select(.name == $name and ((.url // "" | sub("/$"; "")) == $url))
 '
-repo_json="$("$jq_bin" -e -c --arg url "$normalized_helm_url" --arg name "$artifacthub_repository_name" "$repo_filter" "$tmpdir/repositories.json" 2>/dev/null || true)"
+repo_json="$("$jq_bin" -e -c --arg url "$normalized_artifacthub_repository_url" --arg name "$artifacthub_repository_name" "$repo_filter" "$tmpdir/repositories.json" 2>/dev/null || true)"
 
 if [[ -z "$repo_json" ]]; then
 	echo "ERROR: Artifact Hub repository is not registered." >&2
 	echo "  org: ${artifacthub_org}" >&2
 	echo "  expected name: ${artifacthub_repository_name}" >&2
-	echo "  expected url: ${normalized_helm_url}" >&2
+	echo "  expected url: ${normalized_artifacthub_repository_url}" >&2
 	echo "  fix: make artifacthub-register ARTIFACTHUB_API_KEY_ID=... ARTIFACTHUB_API_KEY_SECRET=..." >&2
 	exit 2
 fi
@@ -93,40 +125,88 @@ if [[ -n "$tracking_errors" ]]; then
 	exit 3
 fi
 
+echo "=== GHCR OCI chart availability ==="
+if command -v "$helm_bin" >/dev/null 2>&1; then
+	oci_chart_ready=false
+	for attempt in $(seq 1 "$smoke_attempts"); do
+		if "$helm_bin" show chart "$normalized_artifacthub_repository_url" --version "$expected_chart_version" >"$tmpdir/oci-chart.yaml" 2>"$tmpdir/oci-chart.err"; then
+			oci_chart_ready=true
+			break
+		fi
+		if [[ "$attempt" -lt "$smoke_attempts" ]]; then
+			echo "GHCR OCI chart not visible yet (${attempt}/${smoke_attempts}); waiting ${smoke_sleep_seconds}s..."
+			sleep "$smoke_sleep_seconds"
+		fi
+	done
+	if [[ "$oci_chart_ready" != "true" ]]; then
+		cat "$tmpdir/oci-chart.err" >&2 || true
+		echo "ERROR: GHCR OCI chart is not published yet." >&2
+		echo "  chart: ${normalized_artifacthub_repository_url}" >&2
+		echo "  version: ${expected_chart_version}" >&2
+		exit 4
+	fi
+	oci_chart_version="$(awk -F': *' '/^version:/ {gsub(/"/, "", $2); print $2; exit}' "$tmpdir/oci-chart.yaml")"
+	oci_app_version="$(awk -F': *' '/^appVersion:/ {gsub(/"/, "", $2); print $2; exit}' "$tmpdir/oci-chart.yaml")"
+	if [[ "$oci_chart_version" != "$expected_chart_version" || "$oci_app_version" != "$expected_app_version" ]]; then
+		echo "ERROR: GHCR OCI chart metadata mismatch." >&2
+		echo "  expected chart/app: ${expected_chart_version}/${expected_app_version}" >&2
+		echo "  actual chart/app:   ${oci_chart_version}/${oci_app_version}" >&2
+		exit 5
+	fi
+	echo "GHCR OCI chart OK: ${normalized_artifacthub_repository_url}:${expected_chart_version}"
+else
+	echo "ERROR: helm not found; cannot verify GHCR OCI chart." >&2
+	exit 5
+fi
+
 echo "=== Artifact Hub package registration ==="
 package_url="${artifacthub_api_url%/}/packages/helm/${artifacthub_repository_name}/${artifacthub_package_name}"
-if ! "$curl_bin" -fsSL "$package_url" -o "$tmpdir/package.json"; then
-	echo "ERROR: Artifact Hub repository exists but package is not indexed yet." >&2
-	echo "  package API: $package_url" >&2
-	echo "  retry after Artifact Hub tracker runs, or push a new chart version to force reprocessing." >&2
-	exit 4
-fi
-
-"$jq_bin" -e --arg name "$artifacthub_package_name" '.name == $name' "$tmpdir/package.json" >/dev/null
-echo "Artifact Hub package OK: https://artifacthub.io/packages/helm/${artifacthub_repository_name}/${artifacthub_package_name}"
-
-echo "=== Provenance (.prov) 도달성 ==="
-# VERSION: Chart.yaml에서 추출 (TAG 환경변수가 없을 때 fallback)
-VERSION="${TAG:-}"
-if [[ -z "$VERSION" ]]; then
-	chart_yaml="$(dirname "$0")/../charts/${artifacthub_package_name}/Chart.yaml"
-	if [[ -f "$chart_yaml" ]]; then
-		VERSION="$(grep '^version:' "$chart_yaml" | awk '{print $2}' | tr -d '"')"
+package_version_url="${package_url}/${expected_chart_version}"
+artifacthub_package_ready=false
+for attempt in $(seq 1 "$smoke_attempts"); do
+	if "$curl_bin" -fsSL "$package_version_url" -o "$tmpdir/package.json" 2>"$tmpdir/package.err"; then
+		artifacthub_package_ready=true
+		break
 	fi
+	if [[ "$attempt" -lt "$smoke_attempts" ]]; then
+		echo "Artifact Hub target version not indexed yet (${attempt}/${smoke_attempts}); waiting ${smoke_sleep_seconds}s..."
+		sleep "$smoke_sleep_seconds"
+	fi
+done
+if [[ "$artifacthub_package_ready" != "true" ]]; then
+	cat "$tmpdir/package.err" >&2 || true
+	echo "ERROR: Artifact Hub repository exists but target chart version is not indexed yet." >&2
+	echo "  package API: $package_version_url" >&2
+	echo "  retry after Artifact Hub tracker runs, or push a new chart version to force reprocessing." >&2
+	exit 6
 fi
 
-verify_provenance() {
-	local prov="${helm_repo_url%/}/${artifacthub_package_name}-${VERSION}.tgz.prov"
+"$jq_bin" -e \
+	--arg name "$artifacthub_package_name" \
+	--arg version "$expected_chart_version" \
+	--arg app_version "$expected_app_version" \
+	--arg repository_url "$normalized_artifacthub_repository_url" \
+	'(.name // $name) == $name
+	 and .version == $version
+	 and .app_version == $app_version
+	 and ((.repository.url // "") | sub("/$"; "")) == $repository_url
+	 and .signed == true' \
+	"$tmpdir/package.json" >/dev/null || {
+	echo "ERROR: Artifact Hub package metadata mismatch." >&2
+	"$jq_bin" '{name, version, app_version, signed, repository: .repository.url}' "$tmpdir/package.json" >&2
+	exit 7
+}
+echo "Artifact Hub package OK: https://artifacthub.io/packages/helm/${artifacthub_repository_name}/${artifacthub_package_name}?modal=version-${expected_chart_version}"
+
+echo "=== Legacy HTTP provenance (.prov) reachability (warning-only) ==="
+verify_legacy_provenance() {
+	local prov="${helm_repo_url%/}/${artifacthub_package_name}-${expected_chart_version}.tgz.prov"
 	echo "→ provenance 확인: ${prov}"
 	if "$curl_bin" -fsSL -o "$tmpdir/chart.tgz.prov" "${prov}" 2>/dev/null; then
-		echo "✓ .prov 도달 가능 (Signed badge 전제 충족)"
+		echo "✓ legacy HTTP .prov 도달 가능"
 	else
-		echo "::warning::.prov 부재 — Signed badge 미달성(로컬 helm-publish.sh --sign 필요). warn-only, 통과."
+		echo "::warning::legacy HTTP .prov 부재. Artifact Hub OCI signed 상태는 API(.signed=true)로 검증 완료."
 	fi
 }
 
-if [[ -n "$VERSION" ]]; then
-	verify_provenance
-else
-	echo "WARN: VERSION 미확인 — .prov 검증 건너뜀" >&2
-fi
+verify_legacy_provenance

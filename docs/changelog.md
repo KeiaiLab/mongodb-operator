@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.4] — 2026-06-10
+
+### Added
+
+- Helm chart opt-in `externalSecrets` rendering for MongoDB admin, app-user,
+  and S3 backup credentials through External Secrets Operator / Infisical.
+- Secret management guide and troubleshooting checks for ExternalSecret
+  readiness before decoding Kubernetes Secret data.
+
 ## [1.11.0] — 2026-06-03
 
 클린코드 점검(8개 모듈 적대적 검증, golangci-lint 0 issues 상태)에서 확정한 결함 29건 전체 적용 + 백업 검증 실 구현. 5개 스택 PR(#296~#300) 머지.
@@ -255,7 +264,7 @@ Plan: `~/.claude/plans/olm-v1-only-lucky-sloth.md`. Refs: ADR-0028 Phase D, ADR-
 - **MonitoringSpec deprecation** (Phase 1, ADR-0018): `Spec.Monitoring.{Service
   Monitor,PrometheusRules,Exporter}` 4 type 에 godoc `Deprecated:` marker.
   controller 미구현 (silent ignore UX 함정 명시화). breaking change 0.
-- **operator-commons v0.4.0** dependency bump (pkg/webhook 의
+- **keiailab-commons v0.4.0** dependency bump (pkg/webhook 의
   `ValidateWithPredicate` helper 사용 — 3 operator 통일).
 - **사용자 가이드** (`docs/advanced/webhook.md`): 13 invariants 매트릭스 +
   failurePolicy 영향 + troubleshooting + Type A' unreachable patterns.
@@ -269,7 +278,7 @@ Plan: `~/.claude/plans/olm-v1-only-lucky-sloth.md`. Refs: ADR-0028 Phase D, ADR-
   11건 + clean 영역 15건 + KPI baseline) + `production-grade-sprint.md` (7
   phase 행동 plan, Mermaid 시각화) + `audit-cluster-state.sh` (자동 측정
   도구) + `cluster-snapshots/` (DR 임시 보관).
-- **ADR-0019 Proposed**: operator-commons v0.5.0 helper 승격 plan
+- **ADR-0019 Proposed**: keiailab-commons v0.5.0 helper 승격 plan
   (validateStorageSize + apiError 3-of-3 입증).
 - **controller-runtime v0.22.4 → v0.23.3**: admission.Validator API 의
   *non-generic → generic* 진화 정합 (commit `76269ec`). webhook signature
@@ -1013,4 +1022,3 @@ None. This is a major release representing stabilization of the project with all
 [Unreleased]: https://github.com/keiailab/mongodb-operator/compare/v1.5.0...HEAD
 [1.5.0]: https://github.com/keiailab/mongodb-operator/releases/tag/v1.5.0
 [1.0.0]: https://github.com/keiailab/mongodb-operator/releases/tag/v1.0.0
-

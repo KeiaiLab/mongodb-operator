@@ -37,9 +37,9 @@ import (
 )
 
 const (
-	backupNamespace      = "mongodb-backup-e2e"
-	backupSourceCRName   = "mdb-backup-source"
-	backupCRName         = "mdb-backup-pvc"
+	backupNamespace    = "mongodb-backup-e2e"
+	backupSourceCRName = "mdb-backup-source"
+	backupCRName       = "mdb-backup-pvc"
 )
 
 var _ = Describe("MongoDBBackup PVC Round-Trip (Phase 1 M2 / iteration 13)", Ordered, func() {

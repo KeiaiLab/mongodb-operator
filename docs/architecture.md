@@ -58,9 +58,9 @@
 - Role (per ns): StatefulSet / Service / Secret / ConfigMap / PVC / PDB / NetworkPolicy
 - ServiceAccount: `mongodb-operator` (default-deny NetworkPolicy applied)
 
-## operator-commons import surface
+## keiailab-commons import surface
 
-Adoption per `operator-commons/ARCHITECTURE.md` matrix: **6/8 (75%)**.
+Adoption per `keiailab-commons/ARCHITECTURE.md` matrix: **6/8 (75%)**.
 
 | Package | Status | Usage |
 |---|---|---|

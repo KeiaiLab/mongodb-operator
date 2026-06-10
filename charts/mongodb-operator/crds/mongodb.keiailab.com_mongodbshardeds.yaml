@@ -502,6 +502,28 @@ spec:
                 - enabled
                 - storage
                 type: object
+              balancer:
+                description: Balancer configures the chunk balancer (Phase 5.3 — topology
+                  v2).
+                properties:
+                  window:
+                    description: |-
+                      Window restricts chunk migrations to a daily time window (off-peak
+                      throttling). Omit to let the balancer run at any time.
+                    properties:
+                      start:
+                        description: Start of the active window, HH:MM (24h).
+                        pattern: ^([01]\d|2[0-3]):[0-5]\d$
+                        type: string
+                      stop:
+                        description: Stop of the active window, HH:MM (24h).
+                        pattern: ^([01]\d|2[0-3]):[0-5]\d$
+                        type: string
+                    required:
+                    - start
+                    - stop
+                    type: object
+                type: object
               configServer:
                 description: ConfigServer defines config server configuration
                 properties:
@@ -23426,6 +23448,31 @@ spec:
                           directory.
                         type: string
                     type: object
+                  zones:
+                    description: |-
+                      Zones assigns shards to zones for zone-aware placement (Phase 5.3).
+                      각 항목은 shard 를 zone 에 매핑 (sh.addShardToZone). 미설정 시 zone 미사용.
+                    items:
+                      description: |-
+                        ShardZoneAssignment maps a shard to a zone for zone-aware placement (Phase 5.3).
+                        운영자가 shardIndex 의 shard 를 zone 에 배치 → sh.addShardToZone(<name>-shard-N, zone).
+                      properties:
+                        shardIndex:
+                          description: ShardIndex is the 0-based shard index (maps
+                            to <cluster>-shard-<index>).
+                          format: int32
+                          minimum: 0
+                          type: integer
+                        zone:
+                          description: Zone is the zone name (alphanumeric, dash,
+                            underscore; max 63 chars).
+                          pattern: ^[a-zA-Z0-9_-]{1,63}$
+                          type: string
+                      required:
+                      - shardIndex
+                      - zone
+                      type: object
+                    type: array
                 required:
                 - count
                 - membersPerShard
@@ -23495,6 +23542,32 @@ spec:
                     - preferTLS
                     - requireTLS
                     type: string
+                  mtls:
+                    description: |-
+                      MTLS enables X.509 inter-node (pod-to-pod) authentication via mongod
+                      --clusterAuthMode. Disabled by default. Requires TLS enabled + a cluster
+                      membership certificate (Phase 5.4 — security hardening v2).
+                    properties:
+                      clusterFile:
+                        description: |-
+                          ClusterFile is the PEM path for --tlsClusterFile (membership cert).
+                          Defaults to the mounted server TLS cert when empty.
+                        type: string
+                      enabled:
+                        description: Enabled turns on X.509 cluster membership authentication.
+                        type: boolean
+                      mode:
+                        default: x509
+                        description: |-
+                          Mode sets mongod --clusterAuthMode. Use sendKeyFile/sendX509 for rolling
+                          migration from keyFile, then x509 for full mTLS.
+                        enum:
+                        - keyFile
+                        - sendKeyFile
+                        - sendX509
+                        - x509
+                        type: string
+                    type: object
                 required:
                 - enabled
                 type: object
@@ -23777,6 +23850,13 @@ spec:
                     format: int32
                     type: integer
                 type: object
+              mtlsPhase:
+                description: |-
+                  MTLSPhase is the clusterAuthMode currently rolled out across all components
+                  (config server / shards / mongos). The operator advances it one safe step
+                  per reconcile toward spec.tls.mtls.mode so a running sharded cluster is
+                  never broken (Phase 5.4-c2 sharded sister).
+                type: string
               observedGeneration:
                 description: ObservedGeneration is the most recent generation observed
                 format: int64
