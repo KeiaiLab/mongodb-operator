@@ -2,7 +2,7 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.12.2
+version: 1.12.3
 appVersion: "1.12.2"
 kubeVersion: ">=1.26.0-0"
 
@@ -133,12 +133,7 @@ annotations:
             endpoint: https://s3.amazonaws.com
             credentialsRef:
               name: s3-credentials
-  # containsSecurityUpdates: 버전별 토글 정책 (artifacthub.io 공식 권장).
-  # v1.10.0/1.10.1: Auto Pilot feature only — 보안 수정 0건. "false".
-  # v1.10.3: artifacthub.io/images annotation tag mismatch fix — 보안 수정 0건. "false".
-  # v1.11.0: 보안 결함 다수 fix (PSA restricted / exporter secret URL 인코딩 /
-  #          webhook S3 검증 / audit YAML 이스케이프 / bitnami 이미지 제거) → "true".
-  artifacthub.io/containsSecurityUpdates: "true"
+  artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/images: |
     - name: mongodb-operator
       image: ghcr.io/keiailab/mongodb-operator:v1.12.2
@@ -148,22 +143,8 @@ annotations:
       image: percona/mongodb_exporter:0.51.0
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
-    - kind: added
-      description: "백업 검증(MongoDBBackupVerification) Verifying 단계 실 구현 — 복원 대상에 실제 연결하여 SampleQueries 의 문서 수가 MinExpectedDocs 이상인지 검증(기존 STUB: 쿼리 미실행 + 항상 통과). NewClientFromURI + docCounter 인터페이스로 단위 테스트 가능."
-    - kind: fixed
-      description: "[CRITICAL] BuildRestoreJob 이 backup.Spec.Restore 를 nil 가드 없이 역참조해 일반 백업 verify 시 controller panic/CrashLoop 되던 결함 fix(시그니처 (*Job,error) + nil 가드 + 호출처 에러 처리)."
-    - kind: fixed
-      description: "updateStatusWithRetry 가 conflict 시 refetch 로 호출자 status mutation 을 silent 유실하던 결함 fix(variadic mutate 재적용, 호출처 42곳 마이그레이션)."
-    - kind: fixed
-      description: "reconcile 정확성 14건 — Get 에러 NotFound 미구분, Spec→Status update 순서, UpgradeStartTime 덮어쓰기, IsValidUpgradePath 정렬 미보장, JWKS 비-EOF 오류 무시, federation status update silent 무시, insights Gauge 오용, sharding compound key 순서 등."
-    - kind: security
-      description: "exporter secret URI 의 username 무검증 + 패스워드 URL 미인코딩 fix(ok-idiom + url.UserPassword). PSA restricted 위반(volume permissions init RunAsUser=0+CHOWN / queryable StatefulSet SecurityContext 누락) → restricted helper 적용."
-    - kind: security
-      description: "webhook backup type=s3 인데 S3 config nil 일 때 검증 통과하던 결함 fix(field.Required). audit 의 사용자 CRD 필드 YAML 비이스케이프 삽입 → sigs.k8s.io/yaml Marshal 안전 인코딩."
-    - kind: security
-      description: "bitnami/kubectl:latest 이미지 제거 → registry.k8s.io/kubectl:v1.31.0(불변 태그 + 공급망 정책 정합)."
     - kind: changed
-      description: "운영 로그 기본값 production(JSON, zap Development:false), 죽은 코드 제거(okFloat/hasRegionStatus), HTTP transport 유휴연결 누수 정리."
+      description: "서명 메타데이터 전용 chart refresh. operator appVersion/image는 v1.12.2로 유지하고 Artifact Hub 신규 인덱싱용 signed OCI chart version만 발행한다."
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
