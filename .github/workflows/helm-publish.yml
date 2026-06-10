@@ -25,7 +25,7 @@ permissions:
   pages: read
 
 concurrency:
-  group: helm-publish-${{ github.event.release.tag_name || github.event.inputs.tag || github.ref }}
+  group: helm-publish-${{ github.event.release.tag_name || github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -79,9 +79,23 @@ jobs:
         run: |
           set -euo pipefail
           VERSION=$(grep '^version:' charts/mongodb-operator/Chart.yaml | awk '{print $2}' | tr -d '"')
+          APP_VERSION=$(grep '^appVersion:' charts/mongodb-operator/Chart.yaml | awk '{print $2}' | tr -d '"')
+          CHART_REF="oci://ghcr.io/keiailab/charts/mongodb-operator"
           echo "$GHCR_TOKEN" | helm registry login ghcr.io -u "$GHCR_USER" --password-stdin
+          if helm show chart "$CHART_REF" --version "$VERSION" > /tmp/existing-chart.yaml 2>/tmp/existing-chart.err; then
+            EXISTING_VERSION=$(awk -F': *' '/^version:/ {gsub(/"/, "", $2); print $2; exit}' /tmp/existing-chart.yaml)
+            EXISTING_APP_VERSION=$(awk -F': *' '/^appVersion:/ {gsub(/"/, "", $2); print $2; exit}' /tmp/existing-chart.yaml)
+            if [ "$EXISTING_VERSION" = "$VERSION" ] && [ "$EXISTING_APP_VERSION" = "$APP_VERSION" ]; then
+              echo "✓ OCI chart ${VERSION} already exists with appVersion ${APP_VERSION}; skipping push"
+              helm registry logout ghcr.io || true
+              exit 0
+            fi
+            echo "::error::OCI chart ${VERSION} exists with unexpected metadata: version=${EXISTING_VERSION}, appVersion=${EXISTING_APP_VERSION}"
+            exit 1
+          fi
           mkdir -p out
           helm package charts/mongodb-operator -d out/
           helm push "out/mongodb-operator-${VERSION}.tgz" oci://ghcr.io/keiailab/charts
+          helm show chart "$CHART_REF" --version "$VERSION" >/dev/null
           helm registry logout ghcr.io || true
           echo "✓ pushed chart ${VERSION} to oci://ghcr.io/keiailab/charts/mongodb-operator"

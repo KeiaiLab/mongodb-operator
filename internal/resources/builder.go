@@ -133,7 +133,7 @@ func buildTLSPEMMount() corev1.VolumeMount {
 // cluster-internal CA chain + preferTLS 환경에서 hostname 검증은 의미 적음 (CA 로 ID
 // 검증 충분), short/long hostname mix 흡수 의무.
 //
-//nolint:unused // PVC template builder kept for future StatefulSet integration
+//lint:ignore U1000 StatefulSet PVC template 통합 예정 helper 보존
 func buildDataVolumeClaimTemplate(storage mongodbv1alpha1.StorageSpec) corev1.PersistentVolumeClaim {
 	accessModes := storage.AccessModes
 	if len(accessModes) == 0 {
