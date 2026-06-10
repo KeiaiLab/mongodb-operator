@@ -22,9 +22,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	commonsfinalizer "github.com/keiailab/keiailab-commons/pkg/finalizer"
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"github.com/keiailab/mongodb-operator/internal/resources"
-	commonsfinalizer "github.com/keiailab/operator-commons/pkg/finalizer"
 )
 
 const (

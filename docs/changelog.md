@@ -264,7 +264,7 @@ Plan: `~/.claude/plans/olm-v1-only-lucky-sloth.md`. Refs: ADR-0028 Phase D, ADR-
 - **MonitoringSpec deprecation** (Phase 1, ADR-0018): `Spec.Monitoring.{Service
   Monitor,PrometheusRules,Exporter}` 4 type 에 godoc `Deprecated:` marker.
   controller 미구현 (silent ignore UX 함정 명시화). breaking change 0.
-- **operator-commons v0.4.0** dependency bump (pkg/webhook 의
+- **keiailab-commons v0.4.0** dependency bump (pkg/webhook 의
   `ValidateWithPredicate` helper 사용 — 3 operator 통일).
 - **사용자 가이드** (`docs/advanced/webhook.md`): 13 invariants 매트릭스 +
   failurePolicy 영향 + troubleshooting + Type A' unreachable patterns.
@@ -278,7 +278,7 @@ Plan: `~/.claude/plans/olm-v1-only-lucky-sloth.md`. Refs: ADR-0028 Phase D, ADR-
   11건 + clean 영역 15건 + KPI baseline) + `production-grade-sprint.md` (7
   phase 행동 plan, Mermaid 시각화) + `audit-cluster-state.sh` (자동 측정
   도구) + `cluster-snapshots/` (DR 임시 보관).
-- **ADR-0019 Proposed**: operator-commons v0.5.0 helper 승격 plan
+- **ADR-0019 Proposed**: keiailab-commons v0.5.0 helper 승격 plan
   (validateStorageSize + apiError 3-of-3 입증).
 - **controller-runtime v0.22.4 → v0.23.3**: admission.Validator API 의
   *non-generic → generic* 진화 정합 (commit `76269ec`). webhook signature

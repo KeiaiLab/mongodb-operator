@@ -17,12 +17,12 @@ This document is the canonical reference for `mongodb-operator` branding decisio
 
 **Project**: `mongodb-operator` — MIT MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+.
 
-**Family**: One of four sister operators sharing the [`operator-commons`](https://github.com/keiailab/operator-commons) shared library:
+**Family**: One of four sister operators sharing the [`keiailab-commons`](https://github.com/keiailab/keiailab-commons) shared library:
 
 | Project | Database | Repository |
 |---|---|---|
 | `mongodb-operator` | MongoDB 7.0+ | https://github.com/keiailab/mongodb-operator |
-| `operator-commons` | Shared Go library | https://github.com/keiailab/operator-commons |
+| `keiailab-commons` | Shared Go library | https://github.com/keiailab/keiailab-commons |
 
 ## 2. Logo & Visual Assets
 

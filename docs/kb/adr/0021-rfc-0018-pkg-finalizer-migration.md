@@ -3,7 +3,7 @@
 - Date: 2026-05-09
 - Status: Accepted (PR-A5 first cut — finalizer only, status migration 별 PR)
 - Authors: @keiailab
-- Refs: RFC-0018 (operator-commons/docs/kb/rfc/0018-status-finalizer-standard.md), ADR-0003 (commons), Plan §2 D10
+- Refs: RFC-0018 (keiailab-commons/docs/kb/rfc/0018-status-finalizer-standard.md), ADR-0003 (commons), Plan §2 D10
 
 ## Context
 
@@ -26,7 +26,7 @@ RFC-0018 §3.2 의 mongodb-operator 측 채택 (sister operator PR-A6 / ADR-0038
 ## Decision
 
 1. **4 controller 의 finalizer 호출** 을 `controllerutil` 에서
-   `github.com/keiailab/operator-commons/pkg/finalizer` (alias
+   `github.com/keiailab/keiailab-commons/pkg/finalizer` (alias
    `commonsfinalizer`) 로 위임.
 
 2. **API 매핑**:
@@ -51,7 +51,7 @@ RFC-0018 §3.2 의 mongodb-operator 측 채택 (sister operator PR-A6 / ADR-0038
 
 ### Negative
 
-- 의존성 표면 +1 (operator-commons/pkg/finalizer). v0.6.0 bump 후속
+- 의존성 표면 +1 (keiailab-commons/pkg/finalizer). v0.6.0 bump 후속
   (chore/bump-commons-v0.6.0 #117 머지 완료).
 
 ### Trade-offs
@@ -73,7 +73,7 @@ RFC-0018 §3.2 의 mongodb-operator 측 채택 (sister operator PR-A6 / ADR-0038
 
 ## Refs
 
-- RFC-0018: operator-commons/docs/kb/rfc/0018-status-finalizer-standard.md
+- RFC-0018: keiailab-commons/docs/kb/rfc/0018-status-finalizer-standard.md
 - ADR-0003 (commons): pkg/status 슈가 + pkg/finalizer 변경 없음 결정.
 - sister operator ADR-0038: 동일 패턴 (5 controller 변경).
 - sister operator ADR-0011: pkg/status 부분 채택 + finalizer 비대칭.

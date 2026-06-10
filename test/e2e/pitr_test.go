@@ -40,12 +40,12 @@ import (
 )
 
 const (
-	pitrNamespace      = "mongodb-pitr-e2e"
-	pitrSourceCRName   = "mdb-pitr-source"
-	pitrBackupCRName   = "mdb-pitr-backup"
-	pitrRestoreCRName  = "mdb-pitr-restore"
-	pitrWaitDuration   = 3 * time.Minute
-	pitrPollInterval   = 5 * time.Second
+	pitrNamespace     = "mongodb-pitr-e2e"
+	pitrSourceCRName  = "mdb-pitr-source"
+	pitrBackupCRName  = "mdb-pitr-backup"
+	pitrRestoreCRName = "mdb-pitr-restore"
+	pitrWaitDuration  = 3 * time.Minute
+	pitrPollInterval  = 5 * time.Second
 )
 
 var _ = Describe("MongoDBBackup PITR API (cycle 1 / F01-F05)", Ordered, func() {

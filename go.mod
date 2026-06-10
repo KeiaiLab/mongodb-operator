@@ -5,9 +5,9 @@ go 1.26.0
 toolchain go1.26.4
 
 require (
-	// TODO(#236): operator-commons v1.0.0 안정 릴리스 시 업그레이드 예정.
-	// 현재 v0.9.0 — API 변경 가능성 잔존.
-	github.com/keiailab/operator-commons v0.9.0
+	// TODO(#236): keiailab-commons v1.0.0 안정 릴리스 시 업그레이드 예정.
+	// 현재 v0.10.0 — API 변경 가능성 잔존.
+	github.com/keiailab/keiailab-commons v0.10.0
 	github.com/onsi/ginkgo/v2 v2.29.0
 	github.com/onsi/gomega v1.41.0
 	github.com/prometheus/client_golang v1.23.2

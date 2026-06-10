@@ -17,12 +17,12 @@
 
 **Project**: `mongodb-operator` — Kubernetes 的 MIT MongoDB Operator — ReplicaSet + Sharded Cluster + Backup,原生 MongoDB 7.0+。
 
-**Family**: 共享 [`operator-commons`](https://github.com/keiailab/operator-commons) 通用库的四个姊妹 operator 之一:
+**Family**: 共享 [`keiailab-commons`](https://github.com/keiailab/keiailab-commons) 通用库的四个姊妹 operator 之一:
 
 | Project | Database | Repository |
 |---|---|---|
 | `mongodb-operator` | MongoDB 7.0+ | https://github.com/keiailab/mongodb-operator |
-| `operator-commons` | Shared Go library | https://github.com/keiailab/operator-commons |
+| `keiailab-commons` | Shared Go library | https://github.com/keiailab/keiailab-commons |
 
 ## 2. Logo 与视觉资源
 

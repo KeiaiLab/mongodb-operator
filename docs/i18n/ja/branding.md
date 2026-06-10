@@ -17,12 +17,12 @@
 
 **Project**: `mongodb-operator` — Kubernetes 向け MIT MongoDB Operator — ReplicaSet + Sharded Cluster + Backup、vanilla MongoDB 7.0+。
 
-**Family**: [`operator-commons`](https://github.com/keiailab/operator-commons) 共有ライブラリを利用する 4 つの姉妹 operator のひとつです:
+**Family**: [`keiailab-commons`](https://github.com/keiailab/keiailab-commons) 共有ライブラリを利用する 4 つの姉妹 operator のひとつです:
 
 | Project | Database | Repository |
 |---|---|---|
 | `mongodb-operator` | MongoDB 7.0+ | https://github.com/keiailab/mongodb-operator |
-| `operator-commons` | Shared Go library | https://github.com/keiailab/operator-commons |
+| `keiailab-commons` | Shared Go library | https://github.com/keiailab/keiailab-commons |
 
 ## 2. ロゴおよびビジュアルアセット
 

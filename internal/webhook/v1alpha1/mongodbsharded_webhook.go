@@ -13,7 +13,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	commonswebhook "github.com/keiailab/operator-commons/pkg/webhook"
+	commonswebhook "github.com/keiailab/keiailab-commons/pkg/webhook"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )

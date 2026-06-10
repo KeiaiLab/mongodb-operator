@@ -24,11 +24,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
-	commonslabels "github.com/keiailab/operator-commons/pkg/labels"
-	commonsnp "github.com/keiailab/operator-commons/pkg/networkpolicy"
-	"github.com/keiailab/operator-commons/pkg/probes"
-	"github.com/keiailab/operator-commons/pkg/security"
-	commonstopology "github.com/keiailab/operator-commons/pkg/topology"
+	commonslabels "github.com/keiailab/keiailab-commons/pkg/labels"
+	commonsnp "github.com/keiailab/keiailab-commons/pkg/networkpolicy"
+	"github.com/keiailab/keiailab-commons/pkg/probes"
+	"github.com/keiailab/keiailab-commons/pkg/security"
+	commonstopology "github.com/keiailab/keiailab-commons/pkg/topology"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"github.com/keiailab/mongodb-operator/internal/assets"
@@ -205,7 +205,7 @@ func buildTLSServerMount() corev1.VolumeMount {
 	}
 }
 
-// buildLabels — operator-commons/pkg/labels 위임 (iteration 27).
+// buildLabels — keiailab-commons/pkg/labels 위임 (iteration 27).
 // 기존 4-key map (no version, no part-of) 동작 보존 — labels.Set.All() 의 optional
 // 필드 omit 동작 활용.
 func buildLabels(name, component string) map[string]string {
@@ -246,7 +246,7 @@ func buildDefaultContainerSecurityContext() *corev1.SecurityContext {
 // 동일 정의가 인라인 중복되어 있던 것을 commons 단일 진실원으로 위임.
 // 클러스터 사고 (2026-05-07): copy-keyfile container 가 capabilities.drop 과
 // seccompProfile 누락으로 PodSecurity restricted 위반 → StatefulSet pod 생성 거부.
-// iteration 8: operator-commons/pkg/security 로 통합 — 3 operator 가 동일 패턴 채택.
+// iteration 8: keiailab-commons/pkg/security 로 통합 — 3 operator 가 동일 패턴 채택.
 func buildKeyfileInitContainerSecurityContext() *corev1.SecurityContext {
 	return security.RestrictedContainer(
 		security.WithRunAsUser(999),
@@ -2228,7 +2228,7 @@ func BuildMongoDBPDB(mdb *mongodbv1alpha1.MongoDB) *policyv1.PodDisruptionBudget
 // 기본 정책: 같은 RS의 pods간 27017 ingress만 허용. AdditionalIngressFrom으로
 // 운영 namespace, 모니터링 stack(exporter scrape) 등을 추가 ingress로 명시 가능.
 //
-// iteration 26 (2026-05-07): operator-commons/pkg/networkpolicy v0.3.0 위임.
+// iteration 26 (2026-05-07): keiailab-commons/pkg/networkpolicy v0.3.0 위임.
 // 인라인 builder → commons.New + WithSelfIngress + WithIngressFromPeers.
 // valkey iteration 25 (97162b5) 패턴 차용. semantic equivalence 보존.
 func BuildMongoDBNetworkPolicy(mdb *mongodbv1alpha1.MongoDB) *networkingv1.NetworkPolicy {

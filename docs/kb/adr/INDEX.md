@@ -24,7 +24,7 @@
 | [ADR-0015](0015-webhook-failure-policy-fail.md) | ValidatingWebhookConfiguration failurePolicy=Fail (가용성 vs validation 가치) | Accepted | 2026-05-07 |
 | [ADR-0017](0017-crd-default-vs-webhook-invariant.md) | CRD default 가 있는 field 의 zero-value 거부 invariant 는 dead code (envtest 가 unreachable 발견) | Accepted | 2026-05-07 |
 | [ADR-0018](0018-monitoringspec-orphan-resolution.md) | MonitoringSpec orphan 의 단계적 해소 — Phase 1 deprecation, Phase 2/3 결정 보류 (Prometheus 도입 후) | Accepted | 2026-05-07 |
-| [ADR-0019](0019-operator-commons-v0.5-promotion.md) | operator-commons v0.5.0 helper 승격 — validateStorageSize + apiError 3-of-3 입증 후 통일 | Proposed | 2026-05-07 |
+| [ADR-0019](0019-keiailab-commons-v0.5-promotion.md) | keiailab-commons v0.5.0 helper 승격 — validateStorageSize + apiError 3-of-3 입증 후 통일 | Proposed | 2026-05-07 |
 | [ADR-0020](0020-rfc-0017-tooling-unification-adoption.md) | RFC-0017 operator tooling unification 채택 (lefthook + 18-linter + HEALTHCHECK) | Proposed | 2026-05-09 |
 | [ADR-0021](0021-rfc-0018-pkg-finalizer-migration.md) | RFC-0018 채택 — pkg/finalizer migration (controllerutil → commons, 4 controller, PR-A5 first cut, status 별도) | Accepted | 2026-05-09 |
 | [ADR-0022](0022-meta-set-status-condition-adoption.md) | meta.SetStatusCondition 전면 채택 — 6 site 마이그레이션 + ShardDraining 백오프 regression fix | Accepted | 2026-05-10 |
@@ -32,7 +32,7 @@
 | [ADR-0028](0028-olm-external-user-production-readiness.md) | OLM 번들 외부 사용자 운영 수준 — 5 결격 동시 해소, stable 채널 default 승격. (Phase C 의 Decision 부분 ADR-0029 가 supersede — 그 외 bundle/CSV 표준은 유효) | Accepted | 2026-05-14 |
 | [ADR-0029](0029-olm-v1-migration-from-v0.md) | OLM v1 (operator-controller v1.8) 채택 — v0.30 (legacy, 18개월 stale) → v1.8 (next-generation, ClusterCatalog + ClusterExtension) migration. 옵션 C 사용자 결정. Phase C 라이브 적용 완료 (KeiaiLab Cluster, 2026-05-15) | Accepted | 2026-05-15 |
 | [ADR-0030](0030-olm-v1-narrow-installer-rbac-and-network-policy.md) | OLM v1 narrow installer RBAC + olmv1-system NetworkPolicy — bundle CSV 의 13 clusterPermissions + 3 permissions derive (operator-controller `derive-service-account` 표준), cluster-admin 대체. olmv1-system NP 2종 (operator-controller + catalogd) 으로 zero-trust 정합 | Accepted | 2026-05-15 |
-| [ADR-0034](0034-sprint-1-commons-pvc-topology-adoption.md) | Sprint 1 — operator-commons pkg/pvc + pkg/topology 채택 (-327 LOC, mongodb callsite 1 + pvc 1 교체) | Accepted | 2026-05-21 |
+| [ADR-0034](0034-sprint-1-commons-pvc-topology-adoption.md) | Sprint 1 — keiailab-commons pkg/pvc + pkg/topology 채택 (-327 LOC, mongodb callsite 1 + pvc 1 교체) | Accepted | 2026-05-21 |
 | [ADR-0036](0036-v3x-stable-baseline.md) | v3.x-stable baseline 인정 (audit ❌ 0 충족, CLAUDE.md §7 v3.x-stable 조건) | Accepted | 2026-05-21 |
 | [ADR-0037](0037-gitops-artifacthub-standardization.md) | GitOps overlay + ArtifactHub 검증 파이프라인 표준화 (operator 4종 2-layer 표준, examples/gitops → deploy/overlays/prod 이전, signingKey, GH Actions OSS 정당화) | Accepted | 2026-06-02 |
 

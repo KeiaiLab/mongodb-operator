@@ -167,7 +167,7 @@ cluster-ops mode 의 ADR (cluster-side governance):
 - ADR-0016 cross-cut audit pattern (+ Errata: docs accuracy)
 - ADR-0017 CRD default vs webhook invariant (Type A/A'/B/C)
 - ADR-0018 MonitoringSpec orphan 단계적 해소
-- ADR-0019 operator-commons v0.5.0 helper 승격 (Proposed)
+- ADR-0019 keiailab-commons v0.5.0 helper 승격 (Proposed)
 
 ### Deployment governance (ADR-0028 ~ ADR-0030 chain, 2026-05-14~15)
 

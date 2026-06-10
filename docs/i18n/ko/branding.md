@@ -19,12 +19,12 @@
 
 **Project**: `mongodb-operator` — Kubernetes 용 MIT MongoDB Operator — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+.
 
-**Family**: [`operator-commons`](https://github.com/keiailab/operator-commons) 공용 라이브러리를 공유하는 4 개 자매 operator 중 하나:
+**Family**: [`keiailab-commons`](https://github.com/keiailab/keiailab-commons) 공용 라이브러리를 공유하는 4 개 자매 operator 중 하나:
 
 | Project | Database | Repository |
 |---|---|---|
 | `mongodb-operator` | MongoDB 7.0+ | https://github.com/keiailab/mongodb-operator |
-| `operator-commons` | Shared Go library | https://github.com/keiailab/operator-commons |
+| `keiailab-commons` | Shared Go library | https://github.com/keiailab/keiailab-commons |
 
 ## 2. Logo & Visual Assets (로고 및 시각 자산)
 

@@ -16,7 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	commonsversion "github.com/keiailab/operator-commons/pkg/version"
+	commonsversion "github.com/keiailab/keiailab-commons/pkg/version"
 )
 
 // MongoDBVersion defines MongoDB version configuration
