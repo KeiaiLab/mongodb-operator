@@ -2,7 +2,7 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.12.3
+version: 1.12.4
 appVersion: "1.12.2"
 kubeVersion: ">=1.26.0-0"
 
@@ -15,6 +15,7 @@ keywords:
   - sharded-cluster
   - backup
   - kubernetes
+  - external-secrets
 
 home: https://github.com/keiailab/mongodb-operator
 
@@ -144,7 +145,7 @@ annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
     - kind: changed
-      description: "서명 메타데이터 전용 chart refresh. operator appVersion/image는 v1.12.2로 유지하고 Artifact Hub 신규 인덱싱용 signed OCI chart version만 발행한다."
+      description: "Add opt-in ExternalSecret rendering for MongoDB admin/app/S3 credentials while keeping operator appVersion/image at v1.12.2."
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager

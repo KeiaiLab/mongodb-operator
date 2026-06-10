@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.4] — 2026-06-10
+
+### Added
+
+- Helm chart opt-in `externalSecrets` rendering for MongoDB admin, app-user,
+  and S3 backup credentials through External Secrets Operator / Infisical.
+- Secret management guide and troubleshooting checks for ExternalSecret
+  readiness before decoding Kubernetes Secret data.
+
 ## [1.11.0] — 2026-06-03
 
 클린코드 점검(8개 모듈 적대적 검증, golangci-lint 0 issues 상태)에서 확정한 결함 29건 전체 적용 + 백업 검증 실 구현. 5개 스택 PR(#296~#300) 머지.
@@ -1013,4 +1022,3 @@ None. This is a major release representing stabilization of the project with all
 [Unreleased]: https://github.com/keiailab/mongodb-operator/compare/v1.5.0...HEAD
 [1.5.0]: https://github.com/keiailab/mongodb-operator/releases/tag/v1.5.0
 [1.0.0]: https://github.com/keiailab/mongodb-operator/releases/tag/v1.0.0
-
