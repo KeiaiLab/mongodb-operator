@@ -4,6 +4,143 @@ entries:
   - annotations:
       artifacthub.io/category: database
       artifacthub.io/changes: |
+        - kind: changed
+          description: "Add opt-in ExternalSecret rendering for MongoDB admin/app/S3 credentials while keeping operator appVersion/image at v1.12.2."
+      artifacthub.io/containsSecurityUpdates: "false"
+      artifacthub.io/crds: |
+        - kind: MongoDB
+          version: v1alpha1
+          name: mongodbs.mongodb.keiailab.com
+          displayName: MongoDB ReplicaSet
+          description: Deploys and manages a MongoDB ReplicaSet cluster
+        - kind: MongoDBSharded
+          version: v1alpha1
+          name: mongodbshardeds.mongodb.keiailab.com
+          displayName: MongoDB Sharded Cluster
+          description: Deploys and manages a MongoDB Sharded cluster with config servers, shards, and mongos routers
+        - kind: MongoDBBackup
+          version: v1alpha1
+          name: mongodbbackups.mongodb.keiailab.com
+          displayName: MongoDB Backup
+          description: Creates and manages MongoDB backups to S3 or PVC storage
+      artifacthub.io/crdsExamples: |
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDB
+          metadata:
+            name: my-mongodb
+            namespace: database
+          spec:
+            members: 3
+            version:
+              version: "8.3.1"
+            storage:
+              storageClassName: standard
+              size: 10Gi
+            auth:
+              mechanism: SCRAM-SHA-256
+              adminCredentialsSecretRef:
+                name: mongodb-admin
+            monitoring:
+              enabled: true
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDBSharded
+          metadata:
+            name: my-sharded
+            namespace: database
+          spec:
+            version:
+              version: "8.3.1"
+            configServer:
+              members: 3
+              storage:
+                size: 5Gi
+            shards:
+              count: 2
+              membersPerShard: 3
+              storage:
+                size: 20Gi
+            mongos:
+              replicas: 2
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDBBackup
+          metadata:
+            name: my-backup
+            namespace: database
+          spec:
+            clusterRef:
+              name: my-mongodb
+              kind: MongoDB
+            type: full
+            compression: true
+            storage:
+              type: s3
+              s3:
+                bucket: mongodb-backups
+                endpoint: https://s3.amazonaws.com
+                credentialsRef:
+                  name: s3-credentials
+      artifacthub.io/images: |
+        - name: mongodb-operator
+          image: ghcr.io/keiailab/mongodb-operator:v1.12.2
+        - name: mongodb
+          image: mongo:8.3.1
+        - name: mongodb-exporter
+          image: percona/mongodb_exporter:0.51.0
+      artifacthub.io/license: MIT
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/keiailab/mongodb-operator/blob/main/README.md
+        - name: Source Code
+          url: https://github.com/keiailab/mongodb-operator
+        - name: MongoDB Documentation
+          url: https://www.mongodb.com/docs/
+      artifacthub.io/maturity: stable
+      artifacthub.io/operator: "true"
+      artifacthub.io/operatorCapabilities: Auto Pilot
+      artifacthub.io/prerelease: "false"
+      artifacthub.io/recommendations: |
+        - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
+        - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
+      artifacthub.io/signKey: |
+        fingerprint: F1A6893583E632A757FF6767F3CC8C6AEC9CEB08
+        url: https://raw.githubusercontent.com/keiailab/mongodb-operator/main/charts/keiailab-helm-signing-public.asc
+    apiVersion: v2
+    appVersion: 1.12.2
+    created: "2026-06-10T23:39:06.498454398Z"
+    dependencies:
+    - name: keiailab-commons
+      repository: oci://ghcr.io/keiailab/charts
+      version: 0.8.0
+    description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded
+      Clusters (v1.0.0 GA Release)
+    digest: 6602397e7fe89ec2bf137e7a216237b09316e8ef02201856c3b156e2f9c58420
+    home: https://github.com/keiailab/mongodb-operator
+    icon: https://raw.githubusercontent.com/mongodb/mongo/master/docs/leaf.svg
+    keywords:
+    - mongodb
+    - database
+    - nosql
+    - operator
+    - replicaset
+    - sharded-cluster
+    - backup
+    - kubernetes
+    - external-secrets
+    kubeVersion: '>=1.26.0-0'
+    maintainers:
+    - email: support@keiailab.com
+      name: Keiailab
+      url: https://keiailab.com
+    name: mongodb-operator
+    sources:
+    - https://github.com/keiailab/mongodb-operator
+    type: application
+    urls:
+    - https://github.com/KeiaiLab/mongodb-operator/releases/download/mongodb-operator-1.12.4/mongodb-operator-1.12.4.tgz
+    version: 1.12.4
+  - annotations:
+      artifacthub.io/category: database
+      artifacthub.io/changes: |
         - kind: fixed
           description: "[P0] Operator Deployment image helper 가 .Chart.AppVersion (semver 1.9.0) 를 그대로 tag 로 사용해 GHCR 의 실재 tag (v1.9.0, v prefix) 와 mismatch → helm install (image.tag override 없이) 시 즉시 ImagePullBackOff 되던 잠복 결함 fix. helper 가 default 시 'v' prefix 를 prepend 하도록 수정. .Values.image.tag override 는 영향 없음."
         - kind: fixed
@@ -5874,4 +6011,4 @@ entries:
     urls:
     - https://keiailab.github.io/mongodb-operator/mongodb-operator-0.0.6.tgz
     version: 0.0.6
-generated: "2026-05-28T17:53:30.197329+09:00"
+generated: "2026-06-10T23:39:06.499018222Z"
