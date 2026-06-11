@@ -30,8 +30,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	commonsapply "github.com/keiailab/keiailab-commons/pkg/apply"
 	commonsfinalizer "github.com/keiailab/keiailab-commons/pkg/finalizer"
 	commonspvc "github.com/keiailab/keiailab-commons/pkg/pvc"
+	commonsreconcile "github.com/keiailab/keiailab-commons/pkg/reconcile"
+	commonsstatus "github.com/keiailab/keiailab-commons/pkg/status"
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"github.com/keiailab/mongodb-operator/internal/mongodb"
 	"github.com/keiailab/mongodb-operator/internal/resources"
@@ -119,7 +122,7 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 			mdb.Status.Phase = mongodbv1alpha1.PhaseInitializing
 		}
 		setInitializing()
-		if err := updateStatusWithRetry(ctx, r.Client, mdb, setInitializing); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, setInitializing); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -143,7 +146,7 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 
 	// 2.1. Custom Config ConfigMap (spec.pod.customConfig.configInline)
 	if cm := resources.BuildCustomConfigMap(mdb.Name, mdb.Namespace, mdb.Spec.Pod); cm != nil {
-		if err := applyConfigMap(ctx, r.Client, r.Scheme, mdb, cm); err != nil {
+		if err := commonsapply.ConfigMap(ctx, r.Client, r.Scheme, mdb, cm); err != nil {
 			return r.updateStatusError(ctx, mdb, "CustomConfigMap", err)
 		}
 	}
@@ -178,7 +181,7 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 			mdb.Status.UpgradeStartTime = &now
 		}
 		setValidating()
-		if err := updateStatusWithRetry(ctx, r.Client, mdb, setValidating); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, setValidating); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{RequeueAfter: parseValidationInterval(mdb.Spec.UpgradeStrategy)}, nil
@@ -317,31 +320,31 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 func (r *MongoDBReconciler) handleDeletion(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (ctrl.Result, error) {
 	log.FromContext(ctx).Info("Handling MongoDB deletion")
 	// RS는 PVC retain 정책으로 별도 cleanup 불필요 (StatefulSet OwnerReference로 GC됨).
-	return handleFinalizerCleanup(ctx, r.Client, mdb, mongodbFinalizer, nil)
+	return commonsreconcile.HandleFinalizerCleanup(ctx, r.Client, mdb, mongodbFinalizer, nil)
 }
 
 func (r *MongoDBReconciler) reconcileKeyfileSecret(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
 	// Keyfile은 RS 인증용 — 모든 pod에 *동일한* 값이 유지되어야 함. 멱등 helper로 통합.
-	return reconcileSecretIfNotExists(ctx, r.Client, r.Scheme, mdb, mdb.Name+"-keyfile",
+	return commonsreconcile.SecretIfNotExists(ctx, r.Client, r.Scheme, mdb, mdb.Name+"-keyfile",
 		func() *corev1.Secret { return resources.BuildKeyfileSecret(mdb) })
 }
 
 func (r *MongoDBReconciler) reconcileConfigMap(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
-	return applyConfigMap(ctx, r.Client, r.Scheme, mdb, resources.BuildMongoDBConfigMap(mdb))
+	return commonsapply.ConfigMap(ctx, r.Client, r.Scheme, mdb, resources.BuildMongoDBConfigMap(mdb))
 }
 
 func (r *MongoDBReconciler) reconcileHeadlessService(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
-	return applyService(ctx, r.Client, r.Scheme, mdb, resources.BuildHeadlessService(mdb))
+	return commonsapply.Service(ctx, r.Client, r.Scheme, mdb, resources.BuildHeadlessService(mdb))
 }
 
 func (r *MongoDBReconciler) reconcileClientService(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
-	return applyService(ctx, r.Client, r.Scheme, mdb, resources.BuildClientService(mdb))
+	return commonsapply.Service(ctx, r.Client, r.Scheme, mdb, resources.BuildClientService(mdb))
 }
 
 func (r *MongoDBReconciler) reconcileStatefulSet(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
 	// HPA 활성 또는 ScalePolicy.Deliberate=false 시 STS replicas를 보존(ADR-0007/0008).
 	preserve := resources.IsRSHPAActive(mdb) || !resources.IsRSScaleDeliberate(mdb)
-	return applyStatefulSet(ctx, r.Client, r.Scheme, mdb, resources.BuildReplicaSetStatefulSet(mdb), preserve)
+	return commonsapply.StatefulSet(ctx, r.Client, r.Scheme, mdb, resources.BuildReplicaSetStatefulSet(mdb), preserve)
 }
 
 // reconcileNetworkPolicy는 spec.networkPolicy가 enabled일 때만 NetworkPolicy를 생성한다.
@@ -359,7 +362,7 @@ func (r *MongoDBReconciler) reconcileNetworkPolicy(ctx context.Context, mdb *mon
 		}
 		return r.Delete(ctx, existing)
 	}
-	return applyNetworkPolicy(ctx, r.Client, r.Scheme, mdb, desired)
+	return commonsapply.NetworkPolicy(ctx, r.Client, r.Scheme, mdb, desired)
 }
 
 // reconcilePDB는 spec.podDisruptionBudget가 enabled일 때만 PDB를 만든다.
@@ -378,7 +381,7 @@ func (r *MongoDBReconciler) reconcilePDB(ctx context.Context, mdb *mongodbv1alph
 		}
 		return r.Delete(ctx, existing)
 	}
-	return applyPDB(ctx, r.Client, r.Scheme, mdb, desired)
+	return commonsapply.PDB(ctx, r.Client, r.Scheme, mdb, desired)
 }
 
 func (r *MongoDBReconciler) areAllPodsReady(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (bool, error) {
@@ -444,7 +447,7 @@ func (r *MongoDBReconciler) reconcileReplicaSetInitialization(ctx context.Contex
 			mdb.Status.ReplicaSetInitialized = true
 		}
 		setRSInitialized()
-		return updateStatusWithRetry(ctx, r.Client, mdb, setRSInitialized)
+		return commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, setRSInitialized)
 	}
 
 	// Build replica set configuration
@@ -468,7 +471,7 @@ func (r *MongoDBReconciler) reconcileReplicaSetInitialization(ctx context.Contex
 		mdb.Status.ReplicaSetInitialized = true
 	}
 	setRSInitialized()
-	return updateStatusWithRetry(ctx, r.Client, mdb, setRSInitialized)
+	return commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, setRSInitialized)
 }
 
 func (r *MongoDBReconciler) hasPrimary(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (bool, error) {
@@ -529,7 +532,7 @@ func (r *MongoDBReconciler) reconcileAdminUser(ctx context.Context, mdb *mongodb
 		mdb.Status.AdminUserCreated = true
 	}
 	setAdminCreated()
-	return updateStatusWithRetry(ctx, r.Client, mdb, setAdminCreated)
+	return commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, setAdminCreated)
 }
 
 // verifyAdminUser는 bootstrap 직후 인증된 매니저로 admin user 존재를 ping한다.
@@ -632,7 +635,7 @@ func (r *MongoDBReconciler) updateStatus(ctx context.Context, mdb *mongodbv1alph
 	}
 	applyStatus()
 
-	return updateStatusWithRetry(ctx, r.Client, mdb, applyStatus)
+	return commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, applyStatus)
 }
 
 func (r *MongoDBReconciler) buildConditions(mdb *mongodbv1alpha1.MongoDB) []metav1.Condition {
@@ -731,7 +734,7 @@ func (r *MongoDBReconciler) setPrimaryUnreachableCondition(ctx context.Context, 
 		})
 	}
 	setUnreachable()
-	if statusErr := updateStatusWithRetry(ctx, r.Client, mdb, setUnreachable); statusErr != nil {
+	if statusErr := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, setUnreachable); statusErr != nil {
 		logger.Error(statusErr, "Failed to update PrimaryUnreachable condition")
 	}
 }
@@ -761,7 +764,7 @@ func (r *MongoDBReconciler) clearPrimaryUnreachableCondition(ctx context.Context
 		})
 	}
 	clearUnreachable()
-	if statusErr := updateStatusWithRetry(ctx, r.Client, mdb, clearUnreachable); statusErr != nil {
+	if statusErr := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, clearUnreachable); statusErr != nil {
 		logger.Error(statusErr, "Failed to clear PrimaryUnreachable condition")
 	}
 }
@@ -837,7 +840,7 @@ func firstLine(s string) string {
 }
 
 func (r *MongoDBReconciler) updateStatusError(ctx context.Context, mdb *mongodbv1alpha1.MongoDB, component string, err error) (ctrl.Result, error) {
-	return applyErrorCondition(ctx, r.Client, mdb, component, err, r.Recorder)
+	return commonsreconcile.ApplyErrorCondition(ctx, r.Client, mdb, component, err, r.Recorder)
 }
 
 // SetupWithManager sets up the controller with the Manager.

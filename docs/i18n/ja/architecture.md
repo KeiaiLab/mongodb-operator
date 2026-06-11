@@ -137,7 +137,7 @@
 - Phase 1 Production hardening: **100%** (21/21)
 - Phase 2 Enterprise auth + multi-region: **100%** (21/21)
 - Phase 3 Advanced enterprise: **100%** (16/16)
-- Phase 4 Bitnami parity: **100%** (26/26)
+- Phase 4 upstream chart parity: **100%** (26/26)
 - Phase 5 (post-v1.5.0): *定義中* — `~/.claude/plans/2026-05-14-4-operators-100pct/P-E.md`
 
 ## Non-goal (意図的にスコープ外)

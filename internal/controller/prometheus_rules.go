@@ -6,33 +6,26 @@ Copyright 2026 Keiailab.
 //
 // MongoDB / MongoDBSharded 의 Spec.Monitoring.PrometheusRule.Enabled 가 true 일
 // 때 reconciler 가 본 함수를 호출하여 표준 alerting rule (slow query,
-// replication lag, primary failover, backup failure, audit event spike)
-// YAML 을 생성한다. 결과는 monitoring.coreos.com/v1 PrometheusRule CR.
+// replication lag, primary failover, backup failure, audit event spike) 을
+// 생성한다. 결과는 monitoring.coreos.com/v1 PrometheusRule CR.
+//
+// v0.11.0: strings.Builder YAML 수작업 조립 → keiailab-commons pkg/monitoring
+// NewPrometheusRule 구조화 빌더로 교체 (unstructured CR 반환 — 호출자가 apply).
 
 package controller
 
 import (
 	"fmt"
-	"strings"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	commonsmonitoring "github.com/keiailab/keiailab-commons/pkg/monitoring"
 )
 
-// DefaultPrometheusAlertRules 는 cluster 이름과 namespace 를 받아 표준
-// alerting rule YAML 을 반환한다 (15 rule). caller (reconciler) 가 이를
-// PrometheusRule CR 의 spec.groups[0].rules 로 inject.
-func DefaultPrometheusAlertRules(namespace, clusterName string) string {
-	var sb strings.Builder
-	header := fmt.Sprintf(`apiVersion: monitoring.coreos.com/v1
-kind: PrometheusRule
-metadata:
-  name: %s-alerts
-  namespace: %s
-spec:
-  groups:
-  - name: mongodb-operator-alerts
-    rules:
-`, clusterName, namespace)
-	sb.WriteString(header)
-
+// BuildDefaultPrometheusRule 은 cluster 이름과 namespace 를 받아 표준
+// alerting rule 15종을 담은 PrometheusRule CR (unstructured) 을 반환한다.
+// caller (reconciler) 가 client 로 apply.
+func BuildDefaultPrometheusRule(namespace, clusterName string) *unstructured.Unstructured {
 	rules := []struct {
 		alert    string
 		expr     string
@@ -86,12 +79,22 @@ spec:
 			"warning", "Operator reconciler reporting errors"},
 	}
 
+	alerts := make([]commonsmonitoring.AlertRule, 0, len(rules))
 	for _, r := range rules {
-		fmt.Fprintf(&sb, "    - alert: %s\n", r.alert)
-		fmt.Fprintf(&sb, "      expr: %s\n", r.expr)
-		sb.WriteString("      for: 5m\n")
-		fmt.Fprintf(&sb, "      labels:\n        severity: %s\n", r.severity)
-		fmt.Fprintf(&sb, "      annotations:\n        summary: \"%s\"\n", r.summary)
+		alerts = append(alerts, commonsmonitoring.AlertRule{
+			Alert:       r.alert,
+			Expr:        r.expr,
+			For:         "5m",
+			Labels:      map[string]string{"severity": r.severity},
+			Annotations: map[string]string{"summary": r.summary},
+		})
 	}
-	return sb.String()
+
+	return commonsmonitoring.NewPrometheusRule(
+		clusterName+"-alerts", namespace, nil,
+		commonsmonitoring.RuleGroup{
+			Name:   "mongodb-operator-alerts",
+			Alerts: alerts,
+		},
+	)
 }

@@ -14,6 +14,8 @@ import (
 	"context"
 	"testing"
 
+	commonsstatus "github.com/keiailab/keiailab-commons/pkg/status"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -84,7 +86,7 @@ func TestUpdateStatusWithRetry_MutateReappliedAfterConflict(t *testing.T) {
 	}
 	mutate()
 
-	if err := updateStatusWithRetry(context.Background(), cl, obj, mutate); err != nil {
+	if err := commonsstatus.UpdateWithRetry(context.Background(), cl, obj, mutate); err != nil {
 		t.Fatalf("updateStatusWithRetry 실패: %v", err)
 	}
 
@@ -129,8 +131,8 @@ func TestUpdateStatusWithRetry_NoMutateBackwardCompatible(t *testing.T) {
 	obj.Status.Phase = mongodbv1alpha1.PhaseInitializing
 
 	// 가변 인자 미지정 — 기존 3-arg 호출과 동일.
-	if err := updateStatusWithRetry(context.Background(), cl, obj); err != nil {
-		t.Fatalf("updateStatusWithRetry(no mutate) 실패: %v", err)
+	if err := commonsstatus.UpdateWithRetry(context.Background(), cl, obj); err != nil {
+		t.Fatalf("commonsstatus.UpdateWithRetry(no mutate) 실패: %v", err)
 	}
 
 	got := &mongodbv1alpha1.MongoDB{}

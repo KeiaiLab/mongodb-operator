@@ -2,7 +2,7 @@
 Copyright 2026 Keiailab.
 */
 
-// presets.go — F73 (cycle 10) Bitnami-compatible resource presets.
+// presets.go — F73 (cycle 10) upstream chart 호환 resource presets.
 
 package resources
 
@@ -12,7 +12,7 @@ import (
 )
 
 // ResourcePreset 은 PodSpec.ResourcesPreset string 에 대응하는 사전 정의
-// 리소스 묶음. Bitnami chart 의 `resources.preset` 와 동일 명명.
+// 리소스 묶음. upstream chart 의 `resources.preset` 와 동일 명명.
 //
 // 사용자가 직접 Resources 를 지정하면 *preset 무시* — caller (builder) 가
 // Resources 우선 확인 후 비어있을 때만 본 함수 호출.

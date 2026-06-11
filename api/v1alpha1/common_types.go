@@ -510,7 +510,7 @@ type PrometheusRulesSpec struct {
 // ExporterSpec defines MongoDB exporter configuration
 type ExporterSpec struct {
 	// Image is the exporter image
-	// +kubebuilder:default="percona/mongodb_exporter:0.40"
+	// +kubebuilder:default="percona/mongodb_exporter:0.51.0"
 	Image string `json:"image,omitempty"`
 
 	// Resources defines exporter resource requirements
@@ -1101,14 +1101,14 @@ type PodSpec struct {
 	// +optional
 	DiagnosticMode *DiagnosticModeSpec `json:"diagnosticMode,omitempty"`
 
-	// Sidecars — F68 (cycle 10) Bitnami parity. mongod 와 *같은 pod* 에
+	// Sidecars — F68 (cycle 10) upstream chart parity. mongod 와 *같은 pod* 에
 	// 추가로 기동되는 컨테이너 (예: audit log forwarder, fluent-bit, oplog
 	// tailer 외 custom). operator 가 관리하는 sidecar (oplog-tailer / exporter)
 	// 와 충돌 시 ResourceBuilder 가 *Sidecars 우선* 으로 merge.
 	// +optional
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 
-	// InitContainers — F68 (cycle 10) Bitnami parity. mongod 기동 *전* 실행.
+	// InitContainers — F68 (cycle 10) upstream chart parity. mongod 기동 *전* 실행.
 	// operator 의 keyfile copy init 과 *함께* 추가됨 (operator init 이 항상 먼저).
 	// +optional
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
@@ -1131,18 +1131,18 @@ type PodSpec struct {
 	// +optional
 	LifecycleHooks *corev1.Lifecycle `json:"lifecycleHooks,omitempty"`
 
-	// VolumePermissions — F70 (cycle 10) Bitnami parity. PSA restricted /
+	// VolumePermissions — F70 (cycle 10) upstream chart parity. PSA restricted /
 	// non-root 환경에서 mongod 가 PVC 의 ownership 을 갖지 못할 때
 	// chown -R mongodb:mongodb /data/db 를 수행하는 init container.
 	// +optional
 	VolumePermissions *VolumePermissionsSpec `json:"volumePermissions,omitempty"`
 
-	// InitScripts — F71 (cycle 10) Bitnami parity. /docker-entrypoint-initdb.d
+	// InitScripts — F71 (cycle 10) upstream chart parity. /docker-entrypoint-initdb.d
 	// 마운트 + mongod 기동 시 1회 실행. admin user 부트스트랩 후 실행.
 	// +optional
 	InitScripts *InitScriptsSpec `json:"initScripts,omitempty"`
 
-	// ResourcesPreset — F73 (cycle 10) Bitnami parity. nano/micro/small/medium/
+	// ResourcesPreset — F73 (cycle 10) upstream chart parity. nano/micro/small/medium/
 	// large/xlarge/2xlarge 사전 정의 리소스 묶음. 직접 Resources 가 설정되면
 	// preset 은 무시 (Resources 우선).
 	// +kubebuilder:validation:Enum=none;nano;micro;small;medium;large;xlarge;"2xlarge"

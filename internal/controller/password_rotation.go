@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"fmt"
 
+	commonsstatus "github.com/keiailab/keiailab-commons/pkg/status"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -49,7 +51,7 @@ func (r *MongoDBReconciler) reconcilePasswordRotation(ctx context.Context, mdb *
 		}
 		applyStatus()
 		setAnnotation(mdb, "mongodb.keiailab.com/auth-secret-hash", currentHash)
-		if err := updateStatusWithRetry(ctx, r.Client, mdb, applyStatus); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, applyStatus); err != nil {
 			return err
 		}
 		if err := r.Update(ctx, mdb); err != nil {

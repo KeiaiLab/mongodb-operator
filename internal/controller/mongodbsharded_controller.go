@@ -30,7 +30,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	commonsapply "github.com/keiailab/keiailab-commons/pkg/apply"
 	commonsfinalizer "github.com/keiailab/keiailab-commons/pkg/finalizer"
+	commonsreconcile "github.com/keiailab/keiailab-commons/pkg/reconcile"
+	commonsstatus "github.com/keiailab/keiailab-commons/pkg/status"
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"github.com/keiailab/mongodb-operator/internal/mongodb"
 	"github.com/keiailab/mongodb-operator/internal/resources"
@@ -112,7 +115,7 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			mdbsh.Status.Phase = mongodbv1alpha1.ShardedPhaseInitializing
 		}
 		setInitializing()
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, setInitializing); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, setInitializing); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -175,7 +178,7 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			ensureShardedUpgradeStartTime(mdbsh)
 		}
 		setValidating()
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, setValidating); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, setValidating); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{RequeueAfter: parseValidationInterval(mdbsh.Spec.UpgradeStrategy)}, nil
@@ -260,12 +263,12 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 func (r *MongoDBShardedReconciler) handleDeletion(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) (ctrl.Result, error) {
 	log.FromContext(ctx).Info("Handling MongoDBSharded deletion")
 	// 모든 sub-resource는 OwnerReference로 GC. shard PVC는 retain 정책 그대로.
-	return handleFinalizerCleanup(ctx, r.Client, mdbsh, mongodbShardedFinalizer, nil)
+	return commonsreconcile.HandleFinalizerCleanup(ctx, r.Client, mdbsh, mongodbShardedFinalizer, nil)
 }
 
 func (r *MongoDBShardedReconciler) reconcileKeyfileSecret(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
 	// Keyfile은 sharded 인증용 — 모든 pod에 동일 값 유지. 멱등 helper로 통합.
-	return reconcileSecretIfNotExists(ctx, r.Client, r.Scheme, mdbsh, mdbsh.Name+"-keyfile",
+	return commonsreconcile.SecretIfNotExists(ctx, r.Client, r.Scheme, mdbsh, mdbsh.Name+"-keyfile",
 		func() *corev1.Secret { return resources.BuildShardedKeyfileSecret(mdbsh) })
 }
 
@@ -277,7 +280,7 @@ func (r *MongoDBShardedReconciler) reconcileConfigServer(ctx context.Context, md
 	}
 
 	// Headless service
-	if err := applyService(ctx, r.Client, r.Scheme, mdbsh, resources.BuildConfigServerService(mdbsh)); err != nil {
+	if err := commonsapply.Service(ctx, r.Client, r.Scheme, mdbsh, resources.BuildConfigServerService(mdbsh)); err != nil {
 		return err
 	}
 
@@ -287,7 +290,7 @@ func (r *MongoDBShardedReconciler) reconcileConfigServer(ctx context.Context, md
 	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, resources.BuildPEMMergeInitContainer())
 	}
-	return applyStatefulSet(ctx, r.Client, r.Scheme, mdbsh, sts, preserve)
+	return commonsapply.StatefulSet(ctx, r.Client, r.Scheme, mdbsh, sts, preserve)
 }
 
 // reconcileConfigServerScriptsConfigMap는 cfg StatefulSet이 lifecycle.postStart에서
@@ -298,7 +301,7 @@ func (r *MongoDBShardedReconciler) reconcileConfigServerScriptsConfigMap(ctx con
 	if mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name == "" {
 		return nil
 	}
-	return applyConfigMap(ctx, r.Client, r.Scheme, mdbsh, resources.BuildConfigServerScriptsConfigMap(mdbsh))
+	return commonsapply.ConfigMap(ctx, r.Client, r.Scheme, mdbsh, resources.BuildConfigServerScriptsConfigMap(mdbsh))
 }
 
 func (r *MongoDBShardedReconciler) isConfigServerReady(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
@@ -316,7 +319,7 @@ func (r *MongoDBShardedReconciler) reconcileShard(ctx context.Context, mdbsh *mo
 	}
 
 	// Headless service
-	if err := applyService(ctx, r.Client, r.Scheme, mdbsh, resources.BuildShardService(mdbsh, shardIndex)); err != nil {
+	if err := commonsapply.Service(ctx, r.Client, r.Scheme, mdbsh, resources.BuildShardService(mdbsh, shardIndex)); err != nil {
 		return err
 	}
 
@@ -326,7 +329,7 @@ func (r *MongoDBShardedReconciler) reconcileShard(ctx context.Context, mdbsh *mo
 	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, resources.BuildPEMMergeInitContainer())
 	}
-	return applyStatefulSet(ctx, r.Client, r.Scheme, mdbsh, sts, preserve)
+	return commonsapply.StatefulSet(ctx, r.Client, r.Scheme, mdbsh, sts, preserve)
 }
 
 // reconcileShardScriptsConfigMap는 shard StatefulSet이 lifecycle.postStart에서 호출
@@ -335,7 +338,7 @@ func (r *MongoDBShardedReconciler) reconcileShardScriptsConfigMap(ctx context.Co
 	if mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name == "" {
 		return nil
 	}
-	return applyConfigMap(ctx, r.Client, r.Scheme, mdbsh, resources.BuildShardScriptsConfigMap(mdbsh, shardIndex))
+	return commonsapply.ConfigMap(ctx, r.Client, r.Scheme, mdbsh, resources.BuildShardScriptsConfigMap(mdbsh, shardIndex))
 }
 
 // areShardsInitialized는 모든 shard의 rs.initiate가 완료됐는지 검사한다.
@@ -372,12 +375,12 @@ func (r *MongoDBShardedReconciler) areShardsReady(ctx context.Context, mdbsh *mo
 
 func (r *MongoDBShardedReconciler) reconcileMongos(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
 	// ConfigMap
-	if err := applyConfigMap(ctx, r.Client, r.Scheme, mdbsh, resources.BuildMongosConfigMap(mdbsh)); err != nil {
+	if err := commonsapply.ConfigMap(ctx, r.Client, r.Scheme, mdbsh, resources.BuildMongosConfigMap(mdbsh)); err != nil {
 		return err
 	}
 
 	// Service
-	if err := applyService(ctx, r.Client, r.Scheme, mdbsh, resources.BuildMongosService(mdbsh)); err != nil {
+	if err := commonsapply.Service(ctx, r.Client, r.Scheme, mdbsh, resources.BuildMongosService(mdbsh)); err != nil {
 		return err
 	}
 
@@ -386,7 +389,7 @@ func (r *MongoDBShardedReconciler) reconcileMongos(ctx context.Context, mdbsh *m
 	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
 		dep.Spec.Template.Spec.InitContainers = append(dep.Spec.Template.Spec.InitContainers, resources.BuildPEMMergeInitContainer())
 	}
-	return applyDeployment(ctx, r.Client, r.Scheme, mdbsh, dep, resources.IsMongosHPAActive(mdbsh))
+	return commonsapply.Deployment(ctx, r.Client, r.Scheme, mdbsh, dep, resources.IsMongosHPAActive(mdbsh))
 }
 
 func (r *MongoDBShardedReconciler) isMongosReady(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
@@ -433,7 +436,7 @@ func (r *MongoDBShardedReconciler) reconcileConfigServerInit(ctx context.Context
 			mdbsh.Status.ConfigServerInitialized = true
 		}
 		setConfigServerInitialized()
-		return updateStatusWithRetry(ctx, r.Client, mdbsh, setConfigServerInitialized)
+		return commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, setConfigServerInitialized)
 	}
 
 	// Build config server replica set configuration
@@ -458,7 +461,7 @@ func (r *MongoDBShardedReconciler) reconcileConfigServerInit(ctx context.Context
 		mdbsh.Status.ConfigServerInitialized = true
 	}
 	markConfigServerInitialized()
-	return updateStatusWithRetry(ctx, r.Client, mdbsh, markConfigServerInitialized)
+	return commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, markConfigServerInitialized)
 }
 
 func (r *MongoDBShardedReconciler) reconcileShardsInit(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
@@ -536,7 +539,7 @@ func (r *MongoDBShardedReconciler) reconcileShardsInit(ctx context.Context, mdbs
 	// 실패해도 shard 실패가 우선이므로 errors.Join으로 묶어 호출자에게 전달.
 	// conflict refetch 가 누적 슬라이스를 덮어쓰지 않도록 스냅샷을 재적용한다.
 	initializedSnapshot := append([]bool(nil), mdbsh.Status.ShardsInitialized...)
-	statusErr := updateStatusWithRetry(ctx, r.Client, mdbsh, func() {
+	statusErr := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, func() {
 		mdbsh.Status.ShardsInitialized = initializedSnapshot
 	})
 	if len(shardErrs) > 0 {
@@ -580,7 +583,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedAdminUser(ctx context.Context
 		mdbsh.Status.AdminUserCreated = true
 	}
 	setAdminUserCreated()
-	return updateStatusWithRetry(ctx, r.Client, mdbsh, setAdminUserCreated)
+	return commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, setAdminUserCreated)
 }
 
 func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) error {
@@ -655,7 +658,7 @@ func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh
 
 	// conflict refetch 가 누적 슬라이스를 덮어쓰지 않도록 스냅샷을 재적용한다.
 	addedSnapshot := append([]bool(nil), mdbsh.Status.ShardsAdded...)
-	statusErr := updateStatusWithRetry(ctx, r.Client, mdbsh, func() {
+	statusErr := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, func() {
 		mdbsh.Status.ShardsAdded = addedSnapshot
 	})
 	if len(addErrs) > 0 {
@@ -781,7 +784,7 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 		}
 	}
 	applyStatus()
-	return updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus)
+	return commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus)
 }
 
 // evaluateShardedConditions — pure function. *side effect 0*. updateStatus 가
@@ -954,7 +957,7 @@ func (r *MongoDBShardedReconciler) isClusterReady(mdbsh *mongodbv1alpha1.MongoDB
 }
 
 func (r *MongoDBShardedReconciler) updateStatusError(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, component string, err error) (ctrl.Result, error) {
-	return applyErrorCondition(ctx, r.Client, mdbsh, component, err, r.Recorder)
+	return commonsreconcile.ApplyErrorCondition(ctx, r.Client, mdbsh, component, err, r.Recorder)
 }
 
 // reconcileScaleIn은 spec.Shards.Count < status.shardCount일 때 잉여 shard들을
@@ -1218,7 +1221,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedPDBs(ctx context.Context, mdb
 		return r.cleanupShardedPDBs(ctx, mdbsh)
 	}
 	for _, pdb := range desired {
-		if err := applyPDB(ctx, r.Client, r.Scheme, mdbsh, pdb); err != nil {
+		if err := commonsapply.PDB(ctx, r.Client, r.Scheme, mdbsh, pdb); err != nil {
 			return fmt.Errorf("apply PDB %s: %w", pdb.Name, err)
 		}
 	}
@@ -1254,7 +1257,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedNetworkPolicies(ctx context.C
 		return r.cleanupShardedNetworkPolicies(ctx, mdbsh)
 	}
 	for _, np := range desired {
-		if err := applyNetworkPolicy(ctx, r.Client, r.Scheme, mdbsh, np); err != nil {
+		if err := commonsapply.NetworkPolicy(ctx, r.Client, r.Scheme, mdbsh, np); err != nil {
 			return fmt.Errorf("apply NetworkPolicy %s: %w", np.Name, err)
 		}
 	}

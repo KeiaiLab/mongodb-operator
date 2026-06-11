@@ -11,30 +11,25 @@ package controller
 import (
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
+
+	"github.com/keiailab/keiailab-commons/pkg/reconcilemetrics"
 )
 
 const metricSubsystem = "mongodb"
 
 var labelNamespaceName = []string{"namespace", "name"}
 
+// reconMetrics — 공통 reconcile SLO trio (keiailab-commons pkg/reconcilemetrics).
+// subsystem "mongodb" 주입으로 기존 시계열 이름 (mongodb_reconcile_total /
+// mongodb_reconcile_duration_seconds / mongodb_reconcile_errors_total) 을
+// byte-동일 보존. 기존 패키지 var 는 alias 로 유지해 controller 콜사이트 0 변경.
+var reconMetrics = reconcilemetrics.New(metricSubsystem)
+
 var (
-	// --- Reconcile (3) — existing ---
-	MetricReconcileTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{Subsystem: metricSubsystem, Name: "reconcile_total", Help: "Total Reconcile invocations"},
-		labelNamespaceName,
-	)
-	MetricReconcileLatency = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Subsystem: metricSubsystem, Name: "reconcile_duration_seconds",
-			Help:    "Reconcile function wall-clock duration in seconds",
-			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0},
-		},
-		[]string{"namespace", "name", "result"},
-	)
-	MetricReconcileErrors = prometheus.NewCounterVec(
-		prometheus.CounterOpts{Subsystem: metricSubsystem, Name: "reconcile_errors_total", Help: "Total Reconcile component failures"},
-		[]string{"namespace", "name", "component"},
-	)
+	// --- Reconcile (3) — commons reconcilemetrics trio alias ---
+	MetricReconcileTotal   = reconMetrics.Total
+	MetricReconcileLatency = reconMetrics.Latency
+	MetricReconcileErrors  = reconMetrics.Errors
 
 	// --- F17/F18 Query performance (5) — cycle 11 ---
 	MetricQueryLatencySeconds = prometheus.NewHistogramVec(
@@ -136,9 +131,10 @@ var (
 )
 
 func init() {
+	// reconcile trio (3) — commons 등록 경로 (자체 등록과 공존 시 duplicate
+	// registration panic 이므로 trio 는 본 호출 1곳에서만 등록).
+	reconMetrics.MustRegister(metrics.Registry)
 	metrics.Registry.MustRegister(
-		// reconcile (3)
-		MetricReconcileTotal, MetricReconcileLatency, MetricReconcileErrors,
 		// query (5)
 		MetricQueryLatencySeconds, MetricQueryIndexUsageRatio, MetricSlowQueryTotal,
 		MetricCollectionScansTotal, MetricQueriesIssuedTotal,
@@ -163,12 +159,8 @@ func init() {
 }
 
 // DeleteMetricsFor — CR 삭제 시 cardinality 누적 방지.
+// trio 삭제는 commons DeleteFor 위임 (Total 정확 라벨 + Errors partial-match +
+// Latency result 순회 — 기존 구현과 동일 거동).
 func DeleteMetricsFor(namespace, name string) {
-	MetricReconcileTotal.DeleteLabelValues(namespace, name)
-	MetricReconcileErrors.DeletePartialMatch(prometheus.Labels{
-		"namespace": namespace, "name": name,
-	})
-	for _, r := range []string{"success", "error"} {
-		MetricReconcileLatency.DeleteLabelValues(namespace, name, r)
-	}
+	reconMetrics.DeleteFor(namespace, name)
 }
