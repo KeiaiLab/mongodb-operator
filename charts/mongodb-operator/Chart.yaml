@@ -27,7 +27,7 @@ maintainers:
     email: support@keiailab.com
     url: https://keiailab.com
 
-icon: https://raw.githubusercontent.com/mongodb/mongo/master/docs/leaf.svg
+icon: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/symbol.png
 
 annotations:
   artifacthub.io/license: MIT
@@ -62,6 +62,13 @@ annotations:
       url: https://github.com/keiailab/mongodb-operator
     - name: MongoDB Documentation
       url: https://www.mongodb.com/docs/
+    - name: Design Assets
+      url: https://github.com/KeiaiLab/mongodb-operator/blob/main/docs/branding.md
+  artifacthub.io/screenshots: |
+    - title: Keiailab MongoDB Operator centered service symbol
+      url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/symbol.png
+    - title: Keiailab MongoDB Operator social cover
+      url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/cover.png
   artifacthub.io/crds: |
     - kind: MongoDB
       version: v1alpha1

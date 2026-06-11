@@ -1,6 +1,19 @@
 # MongoDB Operator Helm Chart
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/symbol.png" alt="Keiailab MongoDB Operator symbol" width="96"/>
+</p>
+
 A Kubernetes Operator for deploying and managing MongoDB ReplicaSets and Sharded Clusters.
+
+## Design assets
+
+| Asset | URL | Usage |
+|---|---|---|
+| Centered service symbol | https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/symbol.png | Artifact Hub package icon and screenshot |
+| Repository wordmark | https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/logo.png | Project pages and docs cards |
+| Social cover | https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/cover.png | Social cards and launch posts |
+| Branding guide | https://github.com/KeiaiLab/mongodb-operator/blob/main/docs/branding.md | GitHub visual usage rules |
 
 ## Features
 

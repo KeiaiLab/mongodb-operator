@@ -17,6 +17,15 @@
   <a href="https://github.com/keiailab/mongodb-operator/discussions"><img src="https://img.shields.io/github/discussions/keiailab/mongodb-operator?label=discussions&logo=github" alt="GitHub Discussions"/></a>
 </p>
 
+## Design assets
+
+| Asset | Path | Usage |
+|---|---|---|
+| Centered service symbol | [`docs/branding/symbol.png`](docs/branding/symbol.png) | GitHub README, Artifact Hub icon/screenshot |
+| Repository wordmark | [`docs/branding/logo.png`](docs/branding/logo.png) | Project pages and docs cards |
+| Social cover | [`docs/branding/cover.png`](docs/branding/cover.png) | Social cards and launch posts |
+| Branding guide | [`docs/branding.md`](docs/branding.md) | Public visual usage rules |
+
 A Kubernetes operator for running MongoDB on Kubernetes. It manages the lifecycle
 of MongoDB replica sets and sharded clusters through Custom Resources — bootstrapping
 the cluster, creating the admin user, wiring up TLS and metrics, and reconciling
