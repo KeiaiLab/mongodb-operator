@@ -21,6 +21,10 @@ case "$1 $2" in
 		printf 'keiailab-mongodb-operator/mongodb-operator 0.3.0-alpha.16 0.3.0-alpha.16\n'
 		exit 0
 		;;
+	"show chart")
+		printf 'version: 1.12.4\nappVersion: 1.12.2\n'
+		exit 0
+		;;
 esac
 echo "unexpected helm call: $*" >&2
 exit 99
@@ -64,14 +68,14 @@ case "$url" in
 		;;
 	*/repositories/search*)
 		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "registered" ]]; then
-			printf '[{"repository_id":"repo-id","name":"keiailab-mongodb-operator","url":"https://keiailab.github.io/mongodb-operator","last_tracking_errors":null}]' >"$out"
+			printf '[{"repository_id":"repo-id","name":"keiailab-mongodb-operator","url":"oci://ghcr.io/keiailab/charts/mongodb-operator","last_tracking_errors":null}]' >"$out"
 		else
 			printf '[]' >"$out"
 		fi
 		;;
-	*/packages/helm/keiailab-mongodb-operator/mongodb-operator)
+	*/packages/helm/keiailab-mongodb-operator/mongodb-operator/1.12.4)
 		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "registered" ]]; then
-			printf '{"name":"mongodb-operator"}' >"$out"
+			printf '{"name":"mongodb-operator","version":"1.12.4","app_version":"1.12.2","signed":true,"repository":{"url":"oci://ghcr.io/keiailab/charts/mongodb-operator"}}' >"$out"
 		else
 			exit 22
 		fi
@@ -91,6 +95,10 @@ export ARTIFACTHUB_API_URL="https://artifacthub.test/api/v1"
 export ARTIFACTHUB_ORG="keiailab"
 export ARTIFACTHUB_REPOSITORY_NAME="keiailab-mongodb-operator"
 export ARTIFACTHUB_PACKAGE_NAME="mongodb-operator"
+export EXPECTED_ARTIFACTHUB_REPOSITORY_URL="oci://ghcr.io/keiailab/charts/mongodb-operator"
+export EXPECTED_CHART_VERSION="1.12.4"
+export EXPECTED_APP_VERSION="1.12.2"
+export ARTIFACTHUB_SMOKE_SLEEP_SECONDS="0"
 export HELM_REPO_URL="https://keiailab.github.io/mongodb-operator"
 
 if ARTIFACTHUB_TEST_CASE=missing bash "$repo_root/hack/artifacthub_smoke.sh" >"$tmpdir/missing.out" 2>&1; then
