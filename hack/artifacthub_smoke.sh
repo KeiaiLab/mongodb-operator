@@ -7,6 +7,8 @@ artifacthub_package_name="${ARTIFACTHUB_PACKAGE_NAME:-mongodb-operator}"
 artifacthub_repository_name="${ARTIFACTHUB_REPOSITORY_NAME:-keiailab-mongodb-operator}"
 artifacthub_repository_url="${EXPECTED_ARTIFACTHUB_REPOSITORY_URL:-${ARTIFACTHUB_REPOSITORY_URL:-oci://ghcr.io/keiailab/charts/mongodb-operator}}"
 helm_repo_url="${HELM_REPO_URL:-https://keiailab.github.io/mongodb-operator}"
+artifacthub_api_key_id="${AH_API_KEY_ID:-${ARTIFACTHUB_API_KEY_ID:-}}"
+artifacthub_api_key_secret="${AH_API_KEY_SECRET:-${ARTIFACTHUB_API_KEY_SECRET:-}}"
 
 curl_bin="${CURL_BIN:-curl}"
 helm_bin="${HELM_BIN:-helm}"
@@ -123,6 +125,26 @@ if [[ -n "$tracking_errors" ]]; then
 	echo "ERROR: Artifact Hub repository tracking errors:" >&2
 	echo "$tracking_errors" >&2
 	exit 3
+fi
+
+if [[ -n "$artifacthub_api_key_id" && -n "$artifacthub_api_key_secret" ]]; then
+	repo_display_name="$("$jq_bin" -r '.display_name // "Keiailab MongoDB Operator"' <<<"$repo_json")"
+	repo_update_body="$("$jq_bin" -n \
+		--arg name "$artifacthub_repository_name" \
+		--arg display_name "$repo_display_name" \
+		--arg url "$normalized_artifacthub_repository_url" \
+		'{kind: 0, name: $name, display_name: $display_name, url: $url}')"
+	if "$curl_bin" -fsSL \
+		-X PUT "${artifacthub_api_url%/}/repositories/org/${artifacthub_org}/${artifacthub_repository_name}" \
+		-H "Content-Type: application/json" \
+		-H "X-API-KEY-ID: ${artifacthub_api_key_id}" \
+		-H "X-API-KEY-SECRET: ${artifacthub_api_key_secret}" \
+		-d "$repo_update_body" \
+		-o /dev/null; then
+		echo "Artifact Hub repository update accepted (tracker nudge)"
+	else
+		echo "::warning::Artifact Hub repository update nudge failed; continuing with passive tracker retry."
+	fi
 fi
 
 echo "=== GHCR OCI chart availability ==="
