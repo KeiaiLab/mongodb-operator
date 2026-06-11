@@ -163,39 +163,51 @@ echo "=== Artifact Hub package registration ==="
 package_url="${artifacthub_api_url%/}/packages/helm/${artifacthub_repository_name}/${artifacthub_package_name}"
 package_version_url="${package_url}/${expected_chart_version}"
 artifacthub_package_ready=false
+package_metadata_filter='
+	(.name // $name) == $name
+	and .version == $version
+	and .app_version == $app_version
+	and ((.repository.url // "") | sub("/$"; "")) == $repository_url
+	and .signed == true
+'
 for attempt in $(seq 1 "$smoke_attempts"); do
 	if "$curl_bin" -fsSL "$package_version_url" -o "$tmpdir/package.json" 2>"$tmpdir/package.err"; then
-		artifacthub_package_ready=true
-		break
-	fi
-	if [[ "$attempt" -lt "$smoke_attempts" ]]; then
-		echo "Artifact Hub target version not indexed yet (${attempt}/${smoke_attempts}); waiting ${smoke_sleep_seconds}s..."
-		sleep "$smoke_sleep_seconds"
+		if "$jq_bin" -e \
+			--arg name "$artifacthub_package_name" \
+			--arg version "$expected_chart_version" \
+			--arg app_version "$expected_app_version" \
+			--arg repository_url "$normalized_artifacthub_repository_url" \
+			"$package_metadata_filter" \
+			"$tmpdir/package.json" >/dev/null; then
+			artifacthub_package_ready=true
+			break
+		fi
+		if [[ "$attempt" -lt "$smoke_attempts" ]]; then
+			echo "Artifact Hub target metadata not ready yet (${attempt}/${smoke_attempts}); waiting ${smoke_sleep_seconds}s..."
+			"$jq_bin" '{version, app_version, signed, repository: .repository.url}' "$tmpdir/package.json"
+			sleep "$smoke_sleep_seconds"
+		fi
+	else
+		if [[ "$attempt" -lt "$smoke_attempts" ]]; then
+			echo "Artifact Hub target version not indexed yet (${attempt}/${smoke_attempts}); waiting ${smoke_sleep_seconds}s..."
+			sleep "$smoke_sleep_seconds"
+		fi
 	fi
 done
 if [[ "$artifacthub_package_ready" != "true" ]]; then
+	if [[ -s "$tmpdir/package.json" ]]; then
+		echo "ERROR: Artifact Hub package metadata did not reach the expected state." >&2
+		"$jq_bin" '{name, version, app_version, signed, repository: .repository.url}' "$tmpdir/package.json" >&2
+		echo "  expected chart/app/signed/repo: ${expected_chart_version}/${expected_app_version}/true/${normalized_artifacthub_repository_url}" >&2
+		echo "  retry after Artifact Hub tracker refreshes the package metadata." >&2
+		exit 7
+	fi
 	cat "$tmpdir/package.err" >&2 || true
 	echo "ERROR: Artifact Hub repository exists but target chart version is not indexed yet." >&2
 	echo "  package API: $package_version_url" >&2
 	echo "  retry after Artifact Hub tracker runs, or push a new chart version to force reprocessing." >&2
 	exit 6
 fi
-
-"$jq_bin" -e \
-	--arg name "$artifacthub_package_name" \
-	--arg version "$expected_chart_version" \
-	--arg app_version "$expected_app_version" \
-	--arg repository_url "$normalized_artifacthub_repository_url" \
-	'(.name // $name) == $name
-	 and .version == $version
-	 and .app_version == $app_version
-	 and ((.repository.url // "") | sub("/$"; "")) == $repository_url
-	 and .signed == true' \
-	"$tmpdir/package.json" >/dev/null || {
-	echo "ERROR: Artifact Hub package metadata mismatch." >&2
-	"$jq_bin" '{name, version, app_version, signed, repository: .repository.url}' "$tmpdir/package.json" >&2
-	exit 7
-}
 echo "Artifact Hub package OK: https://artifacthub.io/packages/helm/${artifacthub_repository_name}/${artifacthub_package_name}?modal=version-${expected_chart_version}"
 
 echo "=== Legacy HTTP provenance (.prov) reachability (warning-only) ==="
