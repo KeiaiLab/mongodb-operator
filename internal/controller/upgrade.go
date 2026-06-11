@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	commonsstatus "github.com/keiailab/keiailab-commons/pkg/status"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,7 +40,7 @@ func (r *MongoDBReconciler) reconcileUpgrade(ctx context.Context, mdb *mongodbv1
 				mdb.Status.UpgradeStartTime = nil
 			}
 			clearUpgrade()
-			if err := updateStatusWithRetry(ctx, r.Client, mdb, clearUpgrade); err != nil {
+			if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, clearUpgrade); err != nil {
 				return ctrl.Result{}, false, err
 			}
 		}
@@ -61,7 +63,7 @@ func (r *MongoDBReconciler) reconcileUpgrade(ctx context.Context, mdb *mongodbv1
 		}
 		initUpgrade()
 
-		if err := updateStatusWithRetry(ctx, r.Client, mdb, initUpgrade); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, initUpgrade); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
@@ -116,7 +118,7 @@ func (r *MongoDBReconciler) reconcileUpgradeBackup(ctx context.Context, mdb *mon
 			mdb.Status.UpgradePhase = UpgradePhaseUpgrading
 		}
 		setUpgrading()
-		if err := updateStatusWithRetry(ctx, r.Client, mdb, setUpgrading); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, setUpgrading); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
@@ -129,7 +131,7 @@ func (r *MongoDBReconciler) reconcileUpgradeBackup(ctx context.Context, mdb *mon
 				"BackupFailed", "Pre-upgrade backup failed, upgrade aborted")
 		}
 		abortUpgrade()
-		if err := updateStatusWithRetry(ctx, r.Client, mdb, abortUpgrade); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, abortUpgrade); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -164,7 +166,7 @@ func (r *MongoDBReconciler) reconcileUpgradeValidation(ctx context.Context, mdb 
 				"Upgraded", fmt.Sprintf("Successfully upgraded to %s", desiredVersion))
 		}
 		completeUpgrade()
-		if err := updateStatusWithRetry(ctx, r.Client, mdb, completeUpgrade); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, completeUpgrade); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -187,7 +189,7 @@ func (r *MongoDBReconciler) reconcileUpgradeValidation(ctx context.Context, mdb 
 			mdb.Status.UpgradePhase = UpgradePhaseRollingBack
 		}
 		setRollingBack()
-		if err := updateStatusWithRetry(ctx, r.Client, mdb, setRollingBack); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, setRollingBack); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
@@ -200,7 +202,7 @@ func (r *MongoDBReconciler) reconcileUpgradeValidation(ctx context.Context, mdb 
 		mdb.Status.UpgradeStartTime = nil
 	}
 	failUpgrade()
-	if err := updateStatusWithRetry(ctx, r.Client, mdb, failUpgrade); err != nil {
+	if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, failUpgrade); err != nil {
 		return ctrl.Result{}, false, err
 	}
 	return ctrl.Result{}, true, nil
@@ -216,7 +218,7 @@ func (r *MongoDBReconciler) reconcileUpgradeRollback(ctx context.Context, mdb *m
 			mdb.Status.UpgradeStartTime = nil
 		}
 		clearUpgrade()
-		if err := updateStatusWithRetry(ctx, r.Client, mdb, clearUpgrade); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, clearUpgrade); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -231,7 +233,7 @@ func (r *MongoDBReconciler) reconcileUpgradeRollback(ctx context.Context, mdb *m
 				"ValidationFailed", "Upgrade validation failed, manual intervention required")
 		}
 		failUpgrade()
-		if err := updateStatusWithRetry(ctx, r.Client, mdb, failUpgrade); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, failUpgrade); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -251,7 +253,7 @@ func (r *MongoDBReconciler) reconcileUpgradeRollback(ctx context.Context, mdb *m
 			"RolledBack", fmt.Sprintf("Rolled back to %s", mdb.Status.PreviousVersion))
 	}
 	finishRollback()
-	if err := updateStatusWithRetry(ctx, r.Client, mdb, finishRollback); err != nil {
+	if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, finishRollback); err != nil {
 		return ctrl.Result{}, false, err
 	}
 	return ctrl.Result{}, true, nil

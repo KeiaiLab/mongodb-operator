@@ -38,10 +38,12 @@ import (
 )
 
 const (
-	mongoDBPort   = 27017
-	metricsPort   = 9216
-	defaultImage  = "mongo:8.3.1"
-	exporterImage = "percona/mongodb_exporter:0.40"
+	mongoDBPort  = 27017
+	metricsPort  = 9216
+	defaultImage = "mongo:8.3.1"
+	// exporterImage — chart values / examples (0.51.0) 와 코드 const (0.40) 의
+	// 3-way drift 를 최신 쪽 0.51.0 단일 진실원으로 통일 (kubebuilder default 동기).
+	exporterImage = "percona/mongodb_exporter:0.51.0"
 	// keyfileInitImage 는 copy-keyfile init container (4곳: replicaset / cfg / shard / mongos)
 	// 의 단일 진실원. busybox 만 사용 (chmod + cp), CVE 패치 시 본 const 만 갱신.
 	keyfileInitImage = "busybox:1.37"
@@ -225,13 +227,17 @@ func buildResourceRequirements(spec mongodbv1alpha1.ResourcesSpec) corev1.Resour
 	}
 }
 
+// pod-level 기본 SecurityContext — commons pkg/security 위임 (v0.11.0).
+// 기존 수기 작성 (FSGroup/RunAsUser/RunAsGroup=999 + RunAsNonRoot) 대비
+// pod-level seccompProfile=RuntimeDefault 가 추가된다 (PSA restricted 정합 —
+// container-level 은 RestrictedContainer 로 이미 적용 중이라 의미 변화 없음.
+// 단 pod template hash 변경으로 operator 업그레이드 시 1회 rolling restart).
 func buildDefaultSecurityContext() *corev1.PodSecurityContext {
-	return &corev1.PodSecurityContext{
-		FSGroup:      ptr.To[int64](999),
-		RunAsUser:    ptr.To[int64](999),
-		RunAsGroup:   ptr.To[int64](999),
-		RunAsNonRoot: ptr.To(true),
-	}
+	return security.RestrictedPodSecurityContext(
+		security.WithPodFSGroup(999),
+		security.WithPodRunAsUser(999),
+		security.WithPodRunAsGroup(999),
+	)
 }
 
 func buildDefaultContainerSecurityContext() *corev1.SecurityContext {
@@ -1628,7 +1634,7 @@ func BuildMongosPerReplicaServices(mdbsh *mongodbv1alpha1.MongoDBSharded) []*cor
 
 // BuildMongosDeployment creates a Deployment for Mongos
 // BuildMongosStatefulSet creates a StatefulSet for Mongos when
-// Mongos.UseStatefulSet=true (cycle 18, G-12 Bitnami parity).
+// Mongos.UseStatefulSet=true (cycle 18, G-12 upstream chart parity).
 // mongos 가 stable network identity 필요한 시나리오 (외부 client 직접 routing).
 func BuildMongosStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.StatefulSet {
 	dep := BuildMongosDeployment(mdbsh)
@@ -2501,7 +2507,7 @@ func IsShardScaleDeliberate(mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
 // validation에서 차단해야 한다 — 본 함수는 변환 책임만.
 func buildHPAMetrics(metrics []mongodbv1alpha1.AutoScalingMetric) []autoscalingv2.MetricSpec {
 	if len(metrics) == 0 {
-		// 아무 metric도 없으면 cpu 80% 기본값 — Bitnami chart 등 표준 기본.
+		// 아무 metric도 없으면 cpu 80% 기본값 — upstream chart 등 표준 기본.
 		v := int32(80)
 		return []autoscalingv2.MetricSpec{{
 			Type: autoscalingv2.ResourceMetricSourceType,
@@ -2583,8 +2589,9 @@ func BuildQueryableStatefulSet(backup *mongodbv1alpha1.MongoDBBackup, spec *mong
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Name:         "mongod",
-						Image:        "mongo:8.0",
+						Name: "mongod",
+						// 이미지 SSOT: 하드코딩 "mongo:8.0" → defaultImage 일원화.
+						Image:        defaultImage,
 						Args:         []string{"--bind_ip_all", "--noauth", "--dbpath", "/data/db"},
 						Ports:        []corev1.ContainerPort{{Name: "mongodb", ContainerPort: 27017}},
 						VolumeMounts: []corev1.VolumeMount{{Name: "data", MountPath: "/data/db"}},

@@ -10,11 +10,12 @@ import (
 	"context"
 	"fmt"
 
-	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	commonscertmanager "github.com/keiailab/keiailab-commons/pkg/certmanager"
+	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
 // Pillar P7 — TLS 통합 3-phase roadmap (postgres-operator 패턴 정합).
@@ -29,12 +30,9 @@ import (
 // Certificate CR 은 cert-manager.io/v1 group. operator 는 unstructured.Unstructured 로
 // emit — cert-manager Go SDK 의존 회피 (cert-manager 미설치 cluster 도 정상 동작).
 
-// CertificateGVK 는 cert-manager Certificate CR 의 GroupVersionKind.
-var CertificateGVK = schema.GroupVersionKind{
-	Group:   "cert-manager.io",
-	Version: "v1",
-	Kind:    "Certificate",
-}
+// CertificateGVK 는 cert-manager Certificate CR 의 GroupVersionKind —
+// keiailab-commons pkg/certmanager 단일 진실원 alias (v0.11.0 승격).
+var CertificateGVK = commonscertmanager.CertificateGVK
 
 // TLSCertSecretName 은 cluster 의 server cert Secret 이름을 결정한다.
 // "<cluster>-tls" default — 사용자 customCert.secretName 이 명시되면 그것 사용.
@@ -59,65 +57,37 @@ func buildCertificate(mdbsh *mongodbv1alpha1.MongoDBSharded) *unstructured.Unstr
 		return nil
 	}
 	issuer := mdbsh.Spec.TLS.CertManager.IssuerRef
-	kind := issuer.Kind
-	if kind == "" {
-		kind = "Issuer"
-	}
 
 	// SAN: cluster.Name + mongos service + cfg/shard headless services.
-	dnsNames := []any{mdbsh.Name}
-	addSvc := func(svc string) {
-		dnsNames = append(dnsNames,
-			svc,
-			fmt.Sprintf("%s.%s", svc, mdbsh.Namespace),
-			fmt.Sprintf("%s.%s.svc", svc, mdbsh.Namespace),
-			fmt.Sprintf("%s.%s.svc.cluster.local", svc, mdbsh.Namespace),
-		)
-	}
-	addSvc(mdbsh.Name + "-mongos")
-	addSvc(mdbsh.Name + "-cfg-headless")
+	// 4단 FQDN 확장은 commons ServiceSANs 위임 (SAN 목록 조립은 도메인 책임 잔류).
+	dnsNames := []string{mdbsh.Name}
+	dnsNames = append(dnsNames, commonscertmanager.ServiceSANs(mdbsh.Name+"-mongos", mdbsh.Namespace, false)...)
+	dnsNames = append(dnsNames, commonscertmanager.ServiceSANs(mdbsh.Name+"-cfg-headless", mdbsh.Namespace, false)...)
 	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
-		addSvc(fmt.Sprintf("%s-shard-%d-headless", mdbsh.Name, i))
+		dnsNames = append(dnsNames,
+			commonscertmanager.ServiceSANs(fmt.Sprintf("%s-shard-%d-headless", mdbsh.Name, i), mdbsh.Namespace, false)...)
 	}
 
-	cert := &unstructured.Unstructured{}
-	cert.SetGroupVersionKind(CertificateGVK)
-	cert.SetName(mdbsh.Name + "-tls")
-	cert.SetNamespace(mdbsh.Namespace)
-	cert.SetLabels(map[string]string{
-		"app.kubernetes.io/name":       "mongodbsharded",
-		"app.kubernetes.io/instance":   mdbsh.Name,
-		"app.kubernetes.io/managed-by": "keiailab-mongodb-operator",
-		"mongodb.keiailab.com/role":    "server-tls",
+	// IssuerKind 빈 값 → "Issuer" fallback 은 commons BuildCertificate 내장
+	// (기존 거동과 동일 — 출력 byte-identical 보존, 운영 cert 재발급 트리거 0).
+	return commonscertmanager.BuildCertificate(commonscertmanager.CertParams{
+		Name:      mdbsh.Name + "-tls",
+		Namespace: mdbsh.Namespace,
+		Labels: map[string]string{
+			"app.kubernetes.io/name":       "mongodbsharded",
+			"app.kubernetes.io/instance":   mdbsh.Name,
+			"app.kubernetes.io/managed-by": "keiailab-mongodb-operator",
+			"mongodb.keiailab.com/role":    "server-tls",
+		},
+		SecretName:      TLSCertSecretName(mdbsh),
+		CommonName:      mdbsh.Name,
+		DNSNames:        dnsNames,
+		IssuerName:      issuer.Name,
+		IssuerKind:      issuer.Kind,
+		Duration:        mdbsh.Spec.TLS.CertManager.Duration,
+		RenewBefore:     mdbsh.Spec.TLS.CertManager.RenewBefore,
+		ECDSAPrivateKey: true,
 	})
-
-	spec := map[string]any{
-		"secretName": TLSCertSecretName(mdbsh),
-		"commonName": mdbsh.Name,
-		"dnsNames":   dnsNames,
-		"issuerRef": map[string]any{
-			"name":  issuer.Name,
-			"kind":  kind,
-			"group": "cert-manager.io",
-		},
-		"usages": []any{"server auth", "client auth"},
-		"privateKey": map[string]any{
-			"algorithm":      "ECDSA",
-			"size":           int64(256),
-			"rotationPolicy": "Always",
-		},
-	}
-	if d := mdbsh.Spec.TLS.CertManager.Duration; d != "" {
-		spec["duration"] = d
-	}
-	if rb := mdbsh.Spec.TLS.CertManager.RenewBefore; rb != "" {
-		spec["renewBefore"] = rb
-	}
-	if err := unstructured.SetNestedField(cert.Object, spec, "spec"); err != nil {
-		// programming error — spec 은 단순 map. recover 불필요.
-		return nil
-	}
-	return cert
 }
 
 // TLSCertSecretNameForRS returns the TLS cert Secret name for a MongoDB ReplicaSet.
@@ -135,61 +105,35 @@ func buildRSCertificate(mdb *mongodbv1alpha1.MongoDB) *unstructured.Unstructured
 		return nil
 	}
 	issuer := mdb.Spec.TLS.CertManager.IssuerRef
-	kind := issuer.Kind
-	if kind == "" {
-		kind = "Issuer"
-	}
 
-	dnsNames := []any{mdb.Name}
-	addSvc := func(svc string) {
-		dnsNames = append(dnsNames,
-			svc,
-			fmt.Sprintf("%s.%s", svc, mdb.Namespace),
-			fmt.Sprintf("%s.%s.svc", svc, mdb.Namespace),
-			fmt.Sprintf("%s.%s.svc.cluster.local", svc, mdb.Namespace),
-			fmt.Sprintf("*.%s.%s.svc.cluster.local", svc, mdb.Namespace),
-		)
-	}
-	addSvc(mdb.Name + "-headless")
-	addSvc(mdb.Name)
+	// SAN: cluster.Name + headless/client service. wildcard=true 로 RS
+	// per-pod DNS (`*.<svc>.<ns>.svc.cluster.local`) 까지 커버 (기존 addSvc 동일).
+	// 순서 보존: [name, headless SANs..., client SANs...] (cert 재발급 트리거 0).
+	headlessSANs := commonscertmanager.ServiceSANs(mdb.Name+"-headless", mdb.Namespace, true)
+	clientSANs := commonscertmanager.ServiceSANs(mdb.Name, mdb.Namespace, true)
+	dnsNames := make([]string, 0, 1+len(headlessSANs)+len(clientSANs))
+	dnsNames = append(dnsNames, mdb.Name)
+	dnsNames = append(dnsNames, headlessSANs...)
+	dnsNames = append(dnsNames, clientSANs...)
 
-	cert := &unstructured.Unstructured{}
-	cert.SetGroupVersionKind(CertificateGVK)
-	cert.SetName(mdb.Name + "-tls")
-	cert.SetNamespace(mdb.Namespace)
-	cert.SetLabels(map[string]string{
-		"app.kubernetes.io/name":       "mongodb",
-		"app.kubernetes.io/instance":   mdb.Name,
-		"app.kubernetes.io/managed-by": "keiailab-mongodb-operator",
-		"mongodb.keiailab.com/role":    "server-tls",
+	return commonscertmanager.BuildCertificate(commonscertmanager.CertParams{
+		Name:      mdb.Name + "-tls",
+		Namespace: mdb.Namespace,
+		Labels: map[string]string{
+			"app.kubernetes.io/name":       "mongodb",
+			"app.kubernetes.io/instance":   mdb.Name,
+			"app.kubernetes.io/managed-by": "keiailab-mongodb-operator",
+			"mongodb.keiailab.com/role":    "server-tls",
+		},
+		SecretName:      TLSCertSecretNameForRS(mdb),
+		CommonName:      mdb.Name,
+		DNSNames:        dnsNames,
+		IssuerName:      issuer.Name,
+		IssuerKind:      issuer.Kind,
+		Duration:        mdb.Spec.TLS.CertManager.Duration,
+		RenewBefore:     mdb.Spec.TLS.CertManager.RenewBefore,
+		ECDSAPrivateKey: true,
 	})
-
-	spec := map[string]any{
-		"secretName": TLSCertSecretNameForRS(mdb),
-		"commonName": mdb.Name,
-		"dnsNames":   dnsNames,
-		"issuerRef": map[string]any{
-			"name":  issuer.Name,
-			"kind":  kind,
-			"group": "cert-manager.io",
-		},
-		"usages": []any{"server auth", "client auth"},
-		"privateKey": map[string]any{
-			"algorithm":      "ECDSA",
-			"size":           int64(256),
-			"rotationPolicy": "Always",
-		},
-	}
-	if d := mdb.Spec.TLS.CertManager.Duration; d != "" {
-		spec["duration"] = d
-	}
-	if rb := mdb.Spec.TLS.CertManager.RenewBefore; rb != "" {
-		spec["renewBefore"] = rb
-	}
-	if err := unstructured.SetNestedField(cert.Object, spec, "spec"); err != nil {
-		return nil
-	}
-	return cert
 }
 
 func (r *MongoDBReconciler) reconcileTLS(

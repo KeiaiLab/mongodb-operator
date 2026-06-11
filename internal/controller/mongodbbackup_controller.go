@@ -23,6 +23,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	commonsfinalizer "github.com/keiailab/keiailab-commons/pkg/finalizer"
+	commonsreconcile "github.com/keiailab/keiailab-commons/pkg/reconcile"
+	commonsstatus "github.com/keiailab/keiailab-commons/pkg/status"
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"github.com/keiailab/mongodb-operator/internal/resources"
 )
@@ -96,7 +98,7 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				backup.Status.StartTime = &metav1.Time{Time: time.Now()}
 			}
 			applyRestoringStatus()
-			if err := updateStatusWithRetry(ctx, r.Client, backup, applyRestoringStatus); err != nil {
+			if err := commonsstatus.UpdateWithRetry(ctx, r.Client, backup, applyRestoringStatus); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -130,7 +132,7 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			backup.Status.StartTime = &metav1.Time{Time: time.Now()}
 		}
 		applyPendingStatus()
-		if err := updateStatusWithRetry(ctx, r.Client, backup, applyPendingStatus); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, backup, applyPendingStatus); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -176,7 +178,7 @@ func (r *MongoDBBackupReconciler) handleDeletion(ctx context.Context, backup *mo
 		}
 		return nil
 	}
-	return handleFinalizerCleanup(ctx, r.Client, backup, mongodbBackupFinalizer, cleanup)
+	return commonsreconcile.HandleFinalizerCleanup(ctx, r.Client, backup, mongodbBackupFinalizer, cleanup)
 }
 
 func (r *MongoDBBackupReconciler) getClusterConnectionString(ctx context.Context, backup *mongodbv1alpha1.MongoDBBackup) (string, error) {
@@ -315,7 +317,7 @@ func (r *MongoDBBackupReconciler) updateBackupStatus(ctx context.Context, backup
 	}
 	applyJobStatus()
 
-	return updateStatusWithRetry(ctx, r.Client, backup, applyJobStatus)
+	return commonsstatus.UpdateWithRetry(ctx, r.Client, backup, applyJobStatus)
 }
 
 func (r *MongoDBBackupReconciler) updateStatusError(ctx context.Context, backup *mongodbv1alpha1.MongoDBBackup, err error) (ctrl.Result, error) {
@@ -329,7 +331,7 @@ func (r *MongoDBBackupReconciler) updateStatusError(ctx context.Context, backup 
 	}
 	applyFailedStatus()
 
-	if statusErr := updateStatusWithRetry(ctx, r.Client, backup, applyFailedStatus); statusErr != nil {
+	if statusErr := commonsstatus.UpdateWithRetry(ctx, r.Client, backup, applyFailedStatus); statusErr != nil {
 		logger.Error(statusErr, "Failed to update status")
 	}
 

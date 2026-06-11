@@ -19,7 +19,7 @@ SPDX-License-Identifier: MIT
 //     / nreturned 가 ProfileDoc 로 정확히 매핑되어 MissingIndex 검출되는지
 //
 // 실행 예:
-//   docker run -d --name mdbtest -p 27077:27017 mongo:8.0
+//   docker run -d --name mdbtest -p 27077:27017 mongo:8.3.1
 //   INSIGHTS_TEST_MONGO_HOST=localhost:27077 go test -tags integration ./internal/insights/...
 
 package insights

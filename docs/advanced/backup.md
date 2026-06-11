@@ -146,7 +146,7 @@ spec:
           serviceAccountName: mongodb-backup-sa
           containers:
             - name: backup
-              image: bitnami/kubectl:latest
+              image: registry.k8s.io/kubectl:v1.31.0
               command:
                 - /bin/sh
                 - -c

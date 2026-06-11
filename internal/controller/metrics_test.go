@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
@@ -75,32 +76,69 @@ func TestMetricsCount_AtLeast30(t *testing.T) {
 
 func TestDefaultPrometheusAlertRules_Generation(t *testing.T) {
 	t.Parallel()
-	yaml := DefaultPrometheusAlertRules("default", "my-cluster")
-	for _, want := range []string{
-		"apiVersion: monitoring.coreos.com/v1",
-		"kind: PrometheusRule",
-		"name: my-cluster-alerts",
-		"namespace: default",
-		"alert: MongoDBSlowQuerySpike",
-		"alert: MongoDBHighReplicationLag",
-		"alert: MongoDBPrimaryFailover",
-		"alert: MongoDBBackupFailure",
-		"alert: MongoDBOplogUploaderDown",
-		"alert: MongoDBAuthFailureSpike",
-		"alert: MongoDBFederationDegraded",
-		"alert: MongoDBReconcileErrors",
-		`mongodb_replication_lag_seconds{name="my-cluster"}`,
-		"severity: critical",
-		"severity: warning",
-	} {
-		if !strings.Contains(yaml, want) {
-			t.Errorf("PrometheusRule YAML must contain %q, got:\n%s", want, yaml)
+	// v0.11.0: YAML 문자열 조립 → commons monitoring.NewPrometheusRule 구조화
+	// 빌더 교체. 동일 행동 검증 (CR GVK / 이름 / 15 rule / alert 내용 / severity).
+	obj := BuildDefaultPrometheusRule("default", "my-cluster")
+	if got := obj.GetAPIVersion(); got != "monitoring.coreos.com/v1" {
+		t.Errorf("apiVersion = %q, want monitoring.coreos.com/v1", got)
+	}
+	if got := obj.GetKind(); got != "PrometheusRule" {
+		t.Errorf("kind = %q, want PrometheusRule", got)
+	}
+	if got := obj.GetName(); got != "my-cluster-alerts" {
+		t.Errorf("name = %q, want my-cluster-alerts", got)
+	}
+	if got := obj.GetNamespace(); got != "default" {
+		t.Errorf("namespace = %q, want default", got)
+	}
+
+	groups, found, err := unstructured.NestedSlice(obj.Object, "spec", "groups")
+	if err != nil || !found || len(groups) != 1 {
+		t.Fatalf("spec.groups 1건 기대, found=%v err=%v len=%d", found, err, len(groups))
+	}
+	group, ok := groups[0].(map[string]any)
+	if !ok || group["name"] != "mongodb-operator-alerts" {
+		t.Fatalf("group name = %v, want mongodb-operator-alerts", group["name"])
+	}
+	rules, _ := group["rules"].([]any)
+	// 15 rule 정합 검증
+	if len(rules) < 15 {
+		t.Errorf("expected at least 15 alert rules, got %d", len(rules))
+	}
+
+	alerts := map[string]bool{}
+	severities := map[string]bool{}
+	var lagExpr string
+	for _, r := range rules {
+		rm, _ := r.(map[string]any)
+		alert, _ := rm["alert"].(string)
+		alerts[alert] = true
+		if labels, ok := rm["labels"].(map[string]any); ok {
+			if sev, ok := labels["severity"].(string); ok {
+				severities[sev] = true
+			}
+		}
+		if alert == "MongoDBHighReplicationLag" {
+			lagExpr, _ = rm["expr"].(string)
+		}
+		if f, _ := rm["for"].(string); f != "5m" {
+			t.Errorf("rule %s for = %q, want 5m", alert, f)
 		}
 	}
-	// 15 rule 정합 검증
-	ruleCount := strings.Count(yaml, "    - alert: ")
-	if ruleCount < 15 {
-		t.Errorf("expected at least 15 alert rules, got %d", ruleCount)
+	for _, want := range []string{
+		"MongoDBSlowQuerySpike", "MongoDBHighReplicationLag", "MongoDBPrimaryFailover",
+		"MongoDBBackupFailure", "MongoDBOplogUploaderDown", "MongoDBAuthFailureSpike",
+		"MongoDBFederationDegraded", "MongoDBReconcileErrors",
+	} {
+		if !alerts[want] {
+			t.Errorf("PrometheusRule must contain alert %q", want)
+		}
+	}
+	if !strings.Contains(lagExpr, `mongodb_replication_lag_seconds{name="my-cluster"}`) {
+		t.Errorf("MongoDBHighReplicationLag expr = %q, want mongodb_replication_lag_seconds selector", lagExpr)
+	}
+	if !severities["critical"] || !severities["warning"] {
+		t.Errorf("severity critical+warning 모두 필요, got %v", severities)
 	}
 }
 

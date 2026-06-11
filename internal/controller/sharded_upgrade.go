@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	commonsstatus "github.com/keiailab/keiailab-commons/pkg/status"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,7 +29,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgrade(ctx context.Context, 
 				mdbsh.Status.UpgradeStartTime = nil
 			}
 			applyStatus()
-			if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
+			if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 				return ctrl.Result{}, false, err
 			}
 		}
@@ -50,7 +52,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgrade(ctx context.Context, 
 		}
 		applyStatus()
 
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
@@ -112,7 +114,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeBackup(ctx context.Con
 			mdbsh.Status.UpgradePhase = UpgradePhaseUpgrading
 		}
 		applyStatus()
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
@@ -125,7 +127,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeBackup(ctx context.Con
 				"BackupFailed", "Pre-upgrade backup failed, upgrade aborted")
 		}
 		applyStatus()
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -167,7 +169,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeValidation(ctx context
 				"Upgraded", fmt.Sprintf("Successfully upgraded to %s", desiredVersion))
 		}
 		applyStatus()
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -185,7 +187,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeValidation(ctx context
 			mdbsh.Status.UpgradePhase = UpgradePhaseRollingBack
 		}
 		applyStatus()
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
@@ -198,7 +200,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeValidation(ctx context
 		mdbsh.Status.UpgradeStartTime = nil
 	}
 	applyStatus()
-	if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
+	if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 		return ctrl.Result{}, false, err
 	}
 	return ctrl.Result{}, true, nil
@@ -213,7 +215,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeRollback(ctx context.C
 			mdbsh.Status.UpgradeStartTime = nil
 		}
 		applyStatus()
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -227,7 +229,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeRollback(ctx context.C
 				"ValidationFailed", "Upgrade validation failed, manual intervention required")
 		}
 		applyStatus()
-		if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 			return ctrl.Result{}, false, err
 		}
 		return ctrl.Result{}, true, nil
@@ -253,7 +255,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeRollback(ctx context.C
 			"RolledBack", fmt.Sprintf("Rolled back to %s", previousVersion))
 	}
 	applyStatus()
-	if err := updateStatusWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
+	if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 		return ctrl.Result{}, false, err
 	}
 	return ctrl.Result{}, true, nil

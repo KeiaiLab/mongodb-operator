@@ -3902,7 +3902,7 @@ spec:
                         type: array
                       initContainers:
                         description: |-
-                          InitContainers — F68 (cycle 10) Bitnami parity. mongod 기동 *전* 실행.
+                          InitContainers — F68 (cycle 10) upstream chart parity. mongod 기동 *전* 실행.
                           operator 의 keyfile copy init 과 *함께* 추가됨 (operator init 이 항상 먼저).
                         items:
                           description: A single application container that you want
@@ -5441,7 +5441,7 @@ spec:
                         type: array
                       initScripts:
                         description: |-
-                          InitScripts — F71 (cycle 10) Bitnami parity. /docker-entrypoint-initdb.d
+                          InitScripts — F71 (cycle 10) upstream chart parity. /docker-entrypoint-initdb.d
                           마운트 + mongod 기동 시 1회 실행. admin user 부트스트랩 후 실행.
                         properties:
                           configMapRef:
@@ -5719,7 +5719,7 @@ spec:
                         type: string
                       resourcesPreset:
                         description: |-
-                          ResourcesPreset — F73 (cycle 10) Bitnami parity. nano/micro/small/medium/
+                          ResourcesPreset — F73 (cycle 10) upstream chart parity. nano/micro/small/medium/
                           large/xlarge/2xlarge 사전 정의 리소스 묶음. 직접 Resources 가 설정되면
                           preset 은 무시 (Resources 우선).
                         enum:
@@ -5970,7 +5970,7 @@ spec:
                         type: string
                       sidecars:
                         description: |-
-                          Sidecars — F68 (cycle 10) Bitnami parity. mongod 와 *같은 pod* 에
+                          Sidecars — F68 (cycle 10) upstream chart parity. mongod 와 *같은 pod* 에
                           추가로 기동되는 컨테이너 (예: audit log forwarder, fluent-bit, oplog
                           tailer 외 custom). operator 가 관리하는 sidecar (oplog-tailer / exporter)
                           와 충돌 시 ResourceBuilder 가 *Sidecars 우선* 으로 merge.
@@ -7726,7 +7726,7 @@ spec:
                         type: array
                       volumePermissions:
                         description: |-
-                          VolumePermissions — F70 (cycle 10) Bitnami parity. PSA restricted /
+                          VolumePermissions — F70 (cycle 10) upstream chart parity. PSA restricted /
                           non-root 환경에서 mongod 가 PVC 의 ownership 을 갖지 못할 때
                           chown -R mongodb:mongodb /data/db 를 수행하는 init container.
                         properties:
@@ -11521,7 +11521,7 @@ spec:
                         type: array
                       initContainers:
                         description: |-
-                          InitContainers — F68 (cycle 10) Bitnami parity. mongod 기동 *전* 실행.
+                          InitContainers — F68 (cycle 10) upstream chart parity. mongod 기동 *전* 실행.
                           operator 의 keyfile copy init 과 *함께* 추가됨 (operator init 이 항상 먼저).
                         items:
                           description: A single application container that you want
@@ -13060,7 +13060,7 @@ spec:
                         type: array
                       initScripts:
                         description: |-
-                          InitScripts — F71 (cycle 10) Bitnami parity. /docker-entrypoint-initdb.d
+                          InitScripts — F71 (cycle 10) upstream chart parity. /docker-entrypoint-initdb.d
                           마운트 + mongod 기동 시 1회 실행. admin user 부트스트랩 후 실행.
                         properties:
                           configMapRef:
@@ -13338,7 +13338,7 @@ spec:
                         type: string
                       resourcesPreset:
                         description: |-
-                          ResourcesPreset — F73 (cycle 10) Bitnami parity. nano/micro/small/medium/
+                          ResourcesPreset — F73 (cycle 10) upstream chart parity. nano/micro/small/medium/
                           large/xlarge/2xlarge 사전 정의 리소스 묶음. 직접 Resources 가 설정되면
                           preset 은 무시 (Resources 우선).
                         enum:
@@ -13589,7 +13589,7 @@ spec:
                         type: string
                       sidecars:
                         description: |-
-                          Sidecars — F68 (cycle 10) Bitnami parity. mongod 와 *같은 pod* 에
+                          Sidecars — F68 (cycle 10) upstream chart parity. mongod 와 *같은 pod* 에
                           추가로 기동되는 컨테이너 (예: audit log forwarder, fluent-bit, oplog
                           tailer 외 custom). operator 가 관리하는 sidecar (oplog-tailer / exporter)
                           와 충돌 시 ResourceBuilder 가 *Sidecars 우선* 으로 merge.
@@ -15345,7 +15345,7 @@ spec:
                         type: array
                       volumePermissions:
                         description: |-
-                          VolumePermissions — F70 (cycle 10) Bitnami parity. PSA restricted /
+                          VolumePermissions — F70 (cycle 10) upstream chart parity. PSA restricted /
                           non-root 환경에서 mongod 가 PVC 의 ownership 을 갖지 못할 때
                           chown -R mongodb:mongodb /data/db 를 수행하는 init container.
                         properties:
@@ -15473,7 +15473,8 @@ spec:
                         type: object
                       sessionAffinity:
                         default: None
-                        description: SessionAffinity — F72 (cycle 10) Bitnami parity.
+                        description: SessionAffinity — F72 (cycle 10) upstream chart
+                          parity.
                         enum:
                         - None
                         - ClientIP
@@ -15506,7 +15507,7 @@ spec:
                   useStatefulSet:
                     default: false
                     description: |-
-                      UseStatefulSet — G-12 Bitnami parity. true 시 mongos 를 StatefulSet 으로
+                      UseStatefulSet — G-12 upstream chart parity. true 시 mongos 를 StatefulSet 으로
                       배포 (각 mongos pod 가 stable network identity 보유). 외부 client 가
                       특정 mongos 를 직접 지정해야 하는 시나리오 (e.g. service-per-replica).
                       기본 false: Deployment (rolling update + horizontal scale 우수).
@@ -15530,7 +15531,7 @@ spec:
                       sidecar 정적 정의로 cover.
                     properties:
                       image:
-                        default: percona/mongodb_exporter:0.40
+                        default: percona/mongodb_exporter:0.51.0
                         description: Image is the exporter image
                         type: string
                       resources:
@@ -19175,7 +19176,7 @@ spec:
                         type: array
                       initContainers:
                         description: |-
-                          InitContainers — F68 (cycle 10) Bitnami parity. mongod 기동 *전* 실행.
+                          InitContainers — F68 (cycle 10) upstream chart parity. mongod 기동 *전* 실행.
                           operator 의 keyfile copy init 과 *함께* 추가됨 (operator init 이 항상 먼저).
                         items:
                           description: A single application container that you want
@@ -20714,7 +20715,7 @@ spec:
                         type: array
                       initScripts:
                         description: |-
-                          InitScripts — F71 (cycle 10) Bitnami parity. /docker-entrypoint-initdb.d
+                          InitScripts — F71 (cycle 10) upstream chart parity. /docker-entrypoint-initdb.d
                           마운트 + mongod 기동 시 1회 실행. admin user 부트스트랩 후 실행.
                         properties:
                           configMapRef:
@@ -20992,7 +20993,7 @@ spec:
                         type: string
                       resourcesPreset:
                         description: |-
-                          ResourcesPreset — F73 (cycle 10) Bitnami parity. nano/micro/small/medium/
+                          ResourcesPreset — F73 (cycle 10) upstream chart parity. nano/micro/small/medium/
                           large/xlarge/2xlarge 사전 정의 리소스 묶음. 직접 Resources 가 설정되면
                           preset 은 무시 (Resources 우선).
                         enum:
@@ -21243,7 +21244,7 @@ spec:
                         type: string
                       sidecars:
                         description: |-
-                          Sidecars — F68 (cycle 10) Bitnami parity. mongod 와 *같은 pod* 에
+                          Sidecars — F68 (cycle 10) upstream chart parity. mongod 와 *같은 pod* 에
                           추가로 기동되는 컨테이너 (예: audit log forwarder, fluent-bit, oplog
                           tailer 외 custom). operator 가 관리하는 sidecar (oplog-tailer / exporter)
                           와 충돌 시 ResourceBuilder 가 *Sidecars 우선* 으로 merge.
@@ -22999,7 +23000,7 @@ spec:
                         type: array
                       volumePermissions:
                         description: |-
-                          VolumePermissions — F70 (cycle 10) Bitnami parity. PSA restricted /
+                          VolumePermissions — F70 (cycle 10) upstream chart parity. PSA restricted /
                           non-root 환경에서 mongod 가 PVC 의 ownership 을 갖지 못할 때
                           chown -R mongodb:mongodb /data/db 를 수행하는 init container.
                         properties:
@@ -27748,7 +27749,7 @@ spec:
                         type: array
                       initContainers:
                         description: |-
-                          InitContainers — F68 (cycle 10) Bitnami parity. mongod 기동 *전* 실행.
+                          InitContainers — F68 (cycle 10) upstream chart parity. mongod 기동 *전* 실행.
                           operator 의 keyfile copy init 과 *함께* 추가됨 (operator init 이 항상 먼저).
                         items:
                           description: A single application container that you want
@@ -29287,7 +29288,7 @@ spec:
                         type: array
                       initScripts:
                         description: |-
-                          InitScripts — F71 (cycle 10) Bitnami parity. /docker-entrypoint-initdb.d
+                          InitScripts — F71 (cycle 10) upstream chart parity. /docker-entrypoint-initdb.d
                           마운트 + mongod 기동 시 1회 실행. admin user 부트스트랩 후 실행.
                         properties:
                           configMapRef:
@@ -29565,7 +29566,7 @@ spec:
                         type: string
                       resourcesPreset:
                         description: |-
-                          ResourcesPreset — F73 (cycle 10) Bitnami parity. nano/micro/small/medium/
+                          ResourcesPreset — F73 (cycle 10) upstream chart parity. nano/micro/small/medium/
                           large/xlarge/2xlarge 사전 정의 리소스 묶음. 직접 Resources 가 설정되면
                           preset 은 무시 (Resources 우선).
                         enum:
@@ -29816,7 +29817,7 @@ spec:
                         type: string
                       sidecars:
                         description: |-
-                          Sidecars — F68 (cycle 10) Bitnami parity. mongod 와 *같은 pod* 에
+                          Sidecars — F68 (cycle 10) upstream chart parity. mongod 와 *같은 pod* 에
                           추가로 기동되는 컨테이너 (예: audit log forwarder, fluent-bit, oplog
                           tailer 외 custom). operator 가 관리하는 sidecar (oplog-tailer / exporter)
                           와 충돌 시 ResourceBuilder 가 *Sidecars 우선* 으로 merge.
@@ -31572,7 +31573,7 @@ spec:
                         type: array
                       volumePermissions:
                         description: |-
-                          VolumePermissions — F70 (cycle 10) Bitnami parity. PSA restricted /
+                          VolumePermissions — F70 (cycle 10) upstream chart parity. PSA restricted /
                           non-root 환경에서 mongod 가 PVC 의 ownership 을 갖지 못할 때
                           chown -R mongodb:mongodb /data/db 를 수행하는 init container.
                         properties:
@@ -35367,7 +35368,7 @@ spec:
                         type: array
                       initContainers:
                         description: |-
-                          InitContainers — F68 (cycle 10) Bitnami parity. mongod 기동 *전* 실행.
+                          InitContainers — F68 (cycle 10) upstream chart parity. mongod 기동 *전* 실행.
                           operator 의 keyfile copy init 과 *함께* 추가됨 (operator init 이 항상 먼저).
                         items:
                           description: A single application container that you want
@@ -36906,7 +36907,7 @@ spec:
                         type: array
                       initScripts:
                         description: |-
-                          InitScripts — F71 (cycle 10) Bitnami parity. /docker-entrypoint-initdb.d
+                          InitScripts — F71 (cycle 10) upstream chart parity. /docker-entrypoint-initdb.d
                           마운트 + mongod 기동 시 1회 실행. admin user 부트스트랩 후 실행.
                         properties:
                           configMapRef:
@@ -37184,7 +37185,7 @@ spec:
                         type: string
                       resourcesPreset:
                         description: |-
-                          ResourcesPreset — F73 (cycle 10) Bitnami parity. nano/micro/small/medium/
+                          ResourcesPreset — F73 (cycle 10) upstream chart parity. nano/micro/small/medium/
                           large/xlarge/2xlarge 사전 정의 리소스 묶음. 직접 Resources 가 설정되면
                           preset 은 무시 (Resources 우선).
                         enum:
@@ -37435,7 +37436,7 @@ spec:
                         type: string
                       sidecars:
                         description: |-
-                          Sidecars — F68 (cycle 10) Bitnami parity. mongod 와 *같은 pod* 에
+                          Sidecars — F68 (cycle 10) upstream chart parity. mongod 와 *같은 pod* 에
                           추가로 기동되는 컨테이너 (예: audit log forwarder, fluent-bit, oplog
                           tailer 외 custom). operator 가 관리하는 sidecar (oplog-tailer / exporter)
                           와 충돌 시 ResourceBuilder 가 *Sidecars 우선* 으로 merge.
@@ -39191,7 +39192,7 @@ spec:
                         type: array
                       volumePermissions:
                         description: |-
-                          VolumePermissions — F70 (cycle 10) Bitnami parity. PSA restricted /
+                          VolumePermissions — F70 (cycle 10) upstream chart parity. PSA restricted /
                           non-root 환경에서 mongod 가 PVC 의 ownership 을 갖지 못할 때
                           chown -R mongodb:mongodb /data/db 를 수행하는 init container.
                         properties:
@@ -39319,7 +39320,8 @@ spec:
                         type: object
                       sessionAffinity:
                         default: None
-                        description: SessionAffinity — F72 (cycle 10) Bitnami parity.
+                        description: SessionAffinity — F72 (cycle 10) upstream chart
+                          parity.
                         enum:
                         - None
                         - ClientIP
@@ -39352,7 +39354,7 @@ spec:
                   useStatefulSet:
                     default: false
                     description: |-
-                      UseStatefulSet — G-12 Bitnami parity. true 시 mongos 를 StatefulSet 으로
+                      UseStatefulSet — G-12 upstream chart parity. true 시 mongos 를 StatefulSet 으로
                       배포 (각 mongos pod 가 stable network identity 보유). 외부 client 가
                       특정 mongos 를 직접 지정해야 하는 시나리오 (e.g. service-per-replica).
                       기본 false: Deployment (rolling update + horizontal scale 우수).
@@ -39376,7 +39378,7 @@ spec:
                       sidecar 정적 정의로 cover.
                     properties:
                       image:
-                        default: percona/mongodb_exporter:0.40
+                        default: percona/mongodb_exporter:0.51.0
                         description: Image is the exporter image
                         type: string
                       resources:
@@ -43021,7 +43023,7 @@ spec:
                         type: array
                       initContainers:
                         description: |-
-                          InitContainers — F68 (cycle 10) Bitnami parity. mongod 기동 *전* 실행.
+                          InitContainers — F68 (cycle 10) upstream chart parity. mongod 기동 *전* 실행.
                           operator 의 keyfile copy init 과 *함께* 추가됨 (operator init 이 항상 먼저).
                         items:
                           description: A single application container that you want
@@ -44560,7 +44562,7 @@ spec:
                         type: array
                       initScripts:
                         description: |-
-                          InitScripts — F71 (cycle 10) Bitnami parity. /docker-entrypoint-initdb.d
+                          InitScripts — F71 (cycle 10) upstream chart parity. /docker-entrypoint-initdb.d
                           마운트 + mongod 기동 시 1회 실행. admin user 부트스트랩 후 실행.
                         properties:
                           configMapRef:
@@ -44838,7 +44840,7 @@ spec:
                         type: string
                       resourcesPreset:
                         description: |-
-                          ResourcesPreset — F73 (cycle 10) Bitnami parity. nano/micro/small/medium/
+                          ResourcesPreset — F73 (cycle 10) upstream chart parity. nano/micro/small/medium/
                           large/xlarge/2xlarge 사전 정의 리소스 묶음. 직접 Resources 가 설정되면
                           preset 은 무시 (Resources 우선).
                         enum:
@@ -45089,7 +45091,7 @@ spec:
                         type: string
                       sidecars:
                         description: |-
-                          Sidecars — F68 (cycle 10) Bitnami parity. mongod 와 *같은 pod* 에
+                          Sidecars — F68 (cycle 10) upstream chart parity. mongod 와 *같은 pod* 에
                           추가로 기동되는 컨테이너 (예: audit log forwarder, fluent-bit, oplog
                           tailer 외 custom). operator 가 관리하는 sidecar (oplog-tailer / exporter)
                           와 충돌 시 ResourceBuilder 가 *Sidecars 우선* 으로 merge.
@@ -46845,7 +46847,7 @@ spec:
                         type: array
                       volumePermissions:
                         description: |-
-                          VolumePermissions — F70 (cycle 10) Bitnami parity. PSA restricted /
+                          VolumePermissions — F70 (cycle 10) upstream chart parity. PSA restricted /
                           non-root 환경에서 mongod 가 PVC 의 ownership 을 갖지 못할 때
                           chown -R mongodb:mongodb /data/db 를 수행하는 init container.
                         properties:

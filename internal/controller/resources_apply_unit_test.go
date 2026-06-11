@@ -13,6 +13,8 @@ import (
 	"context"
 	"testing"
 
+	commonsapply "github.com/keiailab/keiailab-commons/pkg/apply"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,7 +83,7 @@ func TestApplyStatefulSet_PreserveReplicas_True(t *testing.T) {
 		},
 	}
 
-	if err := applyStatefulSet(context.Background(), cl, s, owner, desired, true); err != nil {
+	if err := commonsapply.StatefulSet(context.Background(), cl, s, owner, desired, true); err != nil {
 		t.Fatalf("applyStatefulSet: %v", err)
 	}
 
@@ -125,7 +127,7 @@ func TestApplyStatefulSet_PreserveReplicas_False(t *testing.T) {
 		},
 	}
 
-	if err := applyStatefulSet(context.Background(), cl, s, owner, desired, false); err != nil {
+	if err := commonsapply.StatefulSet(context.Background(), cl, s, owner, desired, false); err != nil {
 		t.Fatalf("applyStatefulSet: %v", err)
 	}
 
@@ -167,7 +169,7 @@ func TestApplyDeployment_PreserveReplicas_True(t *testing.T) {
 		},
 	}
 
-	if err := applyDeployment(context.Background(), cl, s, owner, desired, true); err != nil {
+	if err := commonsapply.Deployment(context.Background(), cl, s, owner, desired, true); err != nil {
 		t.Fatalf("applyDeployment: %v", err)
 	}
 
@@ -218,7 +220,7 @@ func TestApplyDeployment_IdempotentWithServerDefaults(t *testing.T) {
 	}
 
 	// 1차 apply: 서버 기본값 보존되어야 함.
-	if err := applyDeployment(context.Background(), cl, s, owner, desired, false); err != nil {
+	if err := commonsapply.Deployment(context.Background(), cl, s, owner, desired, false); err != nil {
 		t.Fatalf("applyDeployment 1: %v", err)
 	}
 	got := &appsv1.Deployment{}
@@ -234,7 +236,7 @@ func TestApplyDeployment_IdempotentWithServerDefaults(t *testing.T) {
 
 	// 2차 apply: 멱등 — spec 변동 없어야 함 (generation-bump 시뮬레이션).
 	rv1 := got.ResourceVersion
-	if err := applyDeployment(context.Background(), cl, s, owner, desired, false); err != nil {
+	if err := commonsapply.Deployment(context.Background(), cl, s, owner, desired, false); err != nil {
 		t.Fatalf("applyDeployment 2: %v", err)
 	}
 	got2 := &appsv1.Deployment{}
@@ -286,7 +288,7 @@ func TestApplyDeployment_PreservesDeploymentControllerRevisionAnnotation(t *test
 		},
 	}
 
-	if err := applyDeployment(context.Background(), cl, s, owner, desired, false); err != nil {
+	if err := commonsapply.Deployment(context.Background(), cl, s, owner, desired, false); err != nil {
 		t.Fatalf("applyDeployment: %v", err)
 	}
 	got := &appsv1.Deployment{}
@@ -373,7 +375,7 @@ func TestApplyDeployment_IdempotentWithPodTemplateServerDefaults(t *testing.T) {
 		},
 	}
 
-	if err := applyDeployment(context.Background(), cl, s, owner, desired, false); err != nil {
+	if err := commonsapply.Deployment(context.Background(), cl, s, owner, desired, false); err != nil {
 		t.Fatalf("applyDeployment 1: %v", err)
 	}
 	got := &appsv1.Deployment{}
@@ -397,7 +399,7 @@ func TestApplyDeployment_IdempotentWithPodTemplateServerDefaults(t *testing.T) {
 	}
 
 	rv1 := got.ResourceVersion
-	if err := applyDeployment(context.Background(), cl, s, owner, desired, false); err != nil {
+	if err := commonsapply.Deployment(context.Background(), cl, s, owner, desired, false); err != nil {
 		t.Fatalf("applyDeployment 2: %v", err)
 	}
 	got2 := &appsv1.Deployment{}
