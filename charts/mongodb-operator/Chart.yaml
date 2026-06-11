@@ -2,7 +2,7 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.12.4
+version: 1.12.5
 appVersion: "1.12.2"
 kubeVersion: ">=1.26.0-0"
 
@@ -144,6 +144,8 @@ annotations:
       image: percona/mongodb_exporter:0.51.0
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
+    - kind: fixed
+      description: "Publish a fresh signed OCI chart version after Artifact Hub cached the 1.12.4 unsigned metadata."
     - kind: changed
       description: "Add opt-in ExternalSecret rendering for MongoDB admin/app/S3 credentials while keeping operator appVersion/image at v1.12.2."
   artifacthub.io/recommendations: |
