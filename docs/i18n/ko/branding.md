@@ -30,14 +30,15 @@
 
 | 자산 | URL | 용도 |
 |---|---|---|
-| Primary logo (현재) | `https://github.com/keiailab.png` | README header (전 리포), 슬라이드 |
-| Primary logo (SVG, 예정) | `https://keiailab.com/assets/logo.svg` *(아직 미공개)* | GitHub avatar 의 향후 대체 |
-| Mono mark (예정) | `https://keiailab.com/assets/mark.svg` *(아직 미공개)* | Favicon, 소셜 카드 |
+| Primary logo (현재) | `docs/branding/symbol.png` | README header (전 리포), 슬라이드 |
+| Repository wordmark | `docs/branding/logo.png` | Project page |
+| Social cover | `docs/branding/cover.png` | Social cards 및 launch posts |
+| Current favicon | `https://keiailab.com/favicon.ico` | Favicon, social cards |
 | Wordmark (예정) | `https://keiailab.com/assets/wordmark.svg` *(아직 미공개)* | Footer, 어두운 배경 |
 
-**Logo placement**: README 의 상단 중앙, 너비 120px. 항상 https://github.com/keiailab 으로 링크.
+**Logo placement**: README 의 상단 중앙, 너비 96px. 항상 https://keiailab.com 으로 링크.
 
-**Migration note (2026-05-21)**: `keiailab.com/assets/*.svg` 가 게시되기 전까지, family 전 리포는 GitHub avatar (`https://github.com/keiailab.png`) 를 canonical primary logo 로 사용. SVG 행은 향후 마이그레이션용 예약.
+**Symbol note (2026-06-11)**: primary symbol 은 Keiailab rotating-arrow mark 를 유지하고, 제거된 중앙 구 위치에만 service icon 을 둔다.
 
 **Clear space**: 로고 주위 최소 여백 = 로고 너비의 25%.
 
@@ -89,7 +90,7 @@ GitHub README 의 shield.io badge 는 위 hex 사용 권장.
 
 ```markdown
 <p align="center">
-  <img src="https://github.com/keiailab.png" alt="keiailab" width="120"/>
+  <img src="docs/branding/symbol.png" alt="keiailab" width="96"/>
 </p>
 
 # mongodb-operator
@@ -97,7 +98,7 @@ GitHub README 의 shield.io badge 는 위 hex 사용 권장.
 > **MIT MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+**
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-0EA5A8.svg" alt="License"/></a>
   <!-- 기존 shield.io badges 유지 + 정합 -->
 </p>
 

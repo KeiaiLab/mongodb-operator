@@ -28,14 +28,15 @@ This document is the canonical reference for `mongodb-operator` branding decisio
 
 | Asset | URL | Usage |
 |---|---|---|
-| Primary logo (current) | `https://github.com/keiailab.png` | README header (all repos), slides |
-| Primary logo (SVG, planned) | `https://keiailab.com/assets/logo.svg` *(not yet published)* | future replacement for GitHub avatar |
-| Mono mark (planned) | `https://keiailab.com/assets/mark.svg` *(not yet published)* | Favicon, social cards |
+| Primary logo (current) | `docs/branding/symbol.png` | README header (all repos), slides |
+| Repository wordmark | `docs/branding/logo.png` | Project pages |
+| Social cover | `docs/branding/cover.png` | Social cards and launch posts |
+| Current favicon | `https://keiailab.com/favicon.ico` | Favicon, social cards |
 | Wordmark (planned) | `https://keiailab.com/assets/wordmark.svg` *(not yet published)* | Footer, dark backgrounds |
 
-**Logo placement**: Top-center of README, width 120px. Always link to https://github.com/keiailab.
+**Logo placement**: Top-center of README, width 96px. Always link to https://keiailab.com.
 
-**Migration note (2026-05-21)**: until `keiailab.com/assets/*.svg` is published, all repos in the family use the GitHub avatar (`https://github.com/keiailab.png`) as canonical primary logo. The SVG row is reserved for the future migration.
+**Symbol note (2026-06-11)**: the primary symbol keeps the Keiailab rotating-arrow mark and replaces only the removed center sphere with the service icon.
 
 **Clear space**: Minimum padding around logo = 25% of logo width.
 
@@ -87,7 +88,7 @@ GitHub README 의 shield.io badge 는 위 hex 사용 권장.
 
 ```markdown
 <p align="center">
-  <img src="https://github.com/keiailab.png" alt="keiailab" width="120"/>
+  <img src="docs/branding/symbol.png" alt="keiailab" width="96"/>
 </p>
 
 # mongodb-operator
@@ -95,7 +96,7 @@ GitHub README 의 shield.io badge 는 위 hex 사용 권장.
 > **MIT MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+**
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-0EA5A8.svg" alt="License"/></a>
   <!-- 기존 shield.io badges 유지 + 정합 -->
 </p>
 

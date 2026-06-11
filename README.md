@@ -1,14 +1,26 @@
+<p align="center">
+  <a href="https://keiailab.com">
+    <img src="docs/branding/symbol.png" alt="keiailab" width="96"/>
+  </a>
+</p>
+
 # mongodb-operator
+
+> **Keiailab data operator family** — MongoDB replica sets and sharded clusters on Kubernetes with TLS, metrics, and declarative topology.
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-0EA5A8.svg" alt="License: MIT"/></a>
+  <a href="go.mod"><img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26"/></a>
+  <a href="#supported-mongodb-versions"><img src="https://img.shields.io/badge/MongoDB-8.0%20|%208.2%20|%208.3-47A248?logo=mongodb&logoColor=white" alt="MongoDB 8.x"/></a>
+  <a href="#requirements"><img src="https://img.shields.io/badge/Kubernetes-1.26%2B-326CE5?logo=kubernetes&logoColor=white" alt="Kubernetes 1.26+"/></a>
+  <a href="https://github.com/keiailab/mongodb-operator/pkgs/container/mongodb-operator"><img src="https://img.shields.io/badge/GHCR-mongodb--operator-0EA5A8?logo=github&logoColor=white" alt="GHCR image"/></a>
+  <a href="https://github.com/keiailab/mongodb-operator/discussions"><img src="https://img.shields.io/github/discussions/keiailab/mongodb-operator?label=discussions&logo=github" alt="GitHub Discussions"/></a>
+</p>
 
 A Kubernetes operator for running MongoDB on Kubernetes. It manages the lifecycle
 of MongoDB replica sets and sharded clusters through Custom Resources — bootstrapping
 the cluster, creating the admin user, wiring up TLS and metrics, and reconciling
 the desired topology.
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go)](go.mod)
-[![MongoDB](https://img.shields.io/badge/MongoDB-8.0%20|%208.2%20|%208.3-47A248?logo=mongodb)](#supported-mongodb-versions)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes)](#requirements)
 
 The operator does not bundle or redistribute MongoDB. It pulls the official
 `mongo` community images at runtime and orchestrates them; you remain responsible

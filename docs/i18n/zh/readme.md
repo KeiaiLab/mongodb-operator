@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/keiailab.png" alt="keiailab" width="120"/>
+  <img src="../../branding/symbol.png" alt="keiailab" width="96"/>
 </p>
 
 # mongodb-operator
@@ -7,7 +7,7 @@
 > **Kubernetes 的 MIT MongoDB Operator — ReplicaSet + Sharded Cluster + 备份,原生 MongoDB 7.0+**
 
 <p align="center">
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-0EA5A8.svg" alt="License"/></a>
   <a href="https://golang.org/"><img src="https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go" alt="Go Version"/></a>
   <a href="https://www.mongodb.com/"><img src="https://img.shields.io/badge/MongoDB-7.0%2B-47A248?logo=mongodb" alt="MongoDB"/></a>
   <a href="https://kubernetes.io/"><img src="https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes" alt="Kubernetes"/></a>

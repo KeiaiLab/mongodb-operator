@@ -28,14 +28,15 @@
 
 | 资源 | URL | 用途 |
 |---|---|---|
-| Primary logo (当前) | `https://github.com/keiailab.png` | README header (全部仓库)、幻灯片 |
-| Primary logo (SVG, 计划) | `https://keiailab.com/assets/logo.svg` *(尚未发布)* | GitHub avatar 的未来替代 |
-| Mono mark (计划) | `https://keiailab.com/assets/mark.svg` *(尚未发布)* | Favicon、社交卡片 |
+| Primary logo (当前) | `docs/branding/symbol.png` | README header (全部仓库)、幻灯片 |
+| Repository wordmark | `docs/branding/logo.png` | Project pages |
+| Social cover | `docs/branding/cover.png` | Social cards and launch posts |
+| Current favicon | `https://keiailab.com/favicon.ico` | Favicon, social cards |
 | Wordmark (计划) | `https://keiailab.com/assets/wordmark.svg` *(尚未发布)* | 页脚、深色背景 |
 
-**Logo placement**: README 顶部居中,宽度 120px。始终链接到 https://github.com/keiailab。
+**Logo placement**: README 顶部居中,宽度 96px。始终链接到 https://keiailab.com。
 
-**Migration note (2026-05-21)**: 在 `keiailab.com/assets/*.svg` 发布之前,family 全部仓库均使用 GitHub avatar (`https://github.com/keiailab.png`) 作为 canonical primary logo。SVG 行为未来迁移预留。
+**Symbol note (2026-06-11)**: primary symbol keeps the Keiailab rotating-arrow mark and places the service icon at the removed center sphere position.
 
 **Clear space**: Logo 周围最小留白 = logo 宽度的 25%。
 
@@ -87,7 +88,7 @@ GitHub README 的 shield.io badge 建议使用上述 hex。
 
 ```markdown
 <p align="center">
-  <img src="https://github.com/keiailab.png" alt="keiailab" width="120"/>
+  <img src="docs/branding/symbol.png" alt="keiailab" width="96"/>
 </p>
 
 # mongodb-operator
@@ -95,7 +96,7 @@ GitHub README 的 shield.io badge 建议使用上述 hex。
 > **MIT MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+**
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-0EA5A8.svg" alt="License"/></a>
   <!-- 기존 shield.io badges 유지 + 정합 -->
 </p>
 

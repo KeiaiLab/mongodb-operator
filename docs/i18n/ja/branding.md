@@ -28,14 +28,15 @@
 
 | アセット | URL | 用途 |
 |---|---|---|
-| Primary logo (現行) | `https://github.com/keiailab.png` | README header (全リポ)、スライド |
-| Primary logo (SVG、予定) | `https://keiailab.com/assets/logo.svg` *(未公開)* | GitHub avatar の今後の代替 |
-| Mono mark (予定) | `https://keiailab.com/assets/mark.svg` *(未公開)* | Favicon、ソーシャルカード |
+| Primary logo (現行) | `docs/branding/symbol.png` | README header (全リポ)、スライド |
+| Repository wordmark | `docs/branding/logo.png` | Project pages |
+| Social cover | `docs/branding/cover.png` | Social cards and launch posts |
+| Current favicon | `https://keiailab.com/favicon.ico` | Favicon, social cards |
 | Wordmark (予定) | `https://keiailab.com/assets/wordmark.svg` *(未公開)* | フッター、暗い背景 |
 
-**Logo placement**: README の上部中央、幅 120px。常に https://github.com/keiailab へリンクします。
+**Logo placement**: README の上部中央、幅 96px。常に https://keiailab.com へリンクします。
 
-**Migration note (2026-05-21)**: `keiailab.com/assets/*.svg` が公開されるまで、family の全リポは GitHub avatar (`https://github.com/keiailab.png`) を canonical primary logo として使用します。SVG 行は今後のマイグレーション用に予約。
+**Symbol note (2026-06-11)**: primary symbol keeps the Keiailab rotating-arrow mark and places the service icon at the removed center sphere position.
 
 **Clear space**: ロゴ周囲の最小パディング = ロゴ幅の 25%。
 
@@ -87,7 +88,7 @@ GitHub README の shield.io badge には上記 hex の利用を推奨します�
 
 ```markdown
 <p align="center">
-  <img src="https://github.com/keiailab.png" alt="keiailab" width="120"/>
+  <img src="docs/branding/symbol.png" alt="keiailab" width="96"/>
 </p>
 
 # mongodb-operator
@@ -95,7 +96,7 @@ GitHub README の shield.io badge には上記 hex の利用を推奨します�
 > **MIT MongoDB Operator for Kubernetes — ReplicaSet + Sharded Cluster + Backup, vanilla MongoDB 7.0+**
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-0EA5A8.svg" alt="License"/></a>
   <!-- 기존 shield.io badges 유지 + 정합 -->
 </p>
 
