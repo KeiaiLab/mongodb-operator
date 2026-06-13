@@ -114,9 +114,15 @@ rules:
       - update
       - watch
 
-  {{- if .Values.features.backup.enabled }}
-
-  # Batch resources (for backup jobs) — gated by features.backup.enabled
+  # Batch resources (for backup jobs) — ALWAYS granted, regardless of
+  # features.backup.enabled (issue #313). The base MongoDBReconciler (always
+  # registered, not gated by --enable-backup-controller) creates a backup
+  # CronJob via controllerutil.CreateOrUpdate whenever a MongoDB CR sets
+  # spec.backup.schedule (internal/controller/mongodb_controller.go §9.7).
+  # That write path is independent of features.backup.enabled, so gating these
+  # verbs caused a `cronjobs.batch is forbidden` reconcile loop when backup
+  # scheduling was used with the feature gate off. controller-runtime's cached
+  # client also watches owned types, so the grant must be unconditional.
   - apiGroups:
       - batch
     resources:
@@ -130,7 +136,6 @@ rules:
       - patch
       - update
       - watch
-  {{- end }}
 
   # Autoscaling (HPA) read verbs — ALWAYS granted, regardless of
   # features.autoscaling.enabled. MongoDBReconciler / MongoDBShardedReconciler
