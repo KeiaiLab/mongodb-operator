@@ -5,6 +5,18 @@
 # -- Number of operator replicas
 replicaCount: 1
 
+# -- Deployment revisionHistoryLimit (cycle 26 rule_85; k8s default 10 → 3)
+revisionHistoryLimit: 3
+
+# -- Deployment minReadySeconds for graceful rolling updates (cycle 26 rule_73)
+minReadySeconds: 10
+
+# -- Mount the ServiceAccount token into the operator pod.
+# The operator needs in-cluster config (controller-runtime), so this stays
+# true by default (incident-kb §10 / INC-0002 operator SA-token exception).
+# Set to false only if you wire credentials by another mechanism.
+automountServiceAccountToken: true
+
 # Operator image configuration
 image:
   # -- Image repository
@@ -335,9 +347,13 @@ networkPolicy:
   egress: []
 
 # Pod Disruption Budget configuration
+# default false (valkey-operator parity): the operator is a stateless,
+# leader-elected single replica (replicaCount: 1). With enabled=true +
+# minAvailable: 1 + replicaCount: 1 the PDB yields 0 ALLOWED DISRUPTIONS,
+# permanently blocking node drains. Enable only when running >1 replica.
 podDisruptionBudget:
-  # -- Enable PodDisruptionBudget (recommended for production)
-  enabled: true
+  # -- Enable PodDisruptionBudget (enable only with replicaCount > 1)
+  enabled: false
   # -- Minimum available pods
   minAvailable: 1
   # -- Maximum unavailable pods
