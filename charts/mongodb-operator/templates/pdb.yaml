@@ -1,4 +1,14 @@
-{{- if .Values.podDisruptionBudget.enabled -}}
+{{- /*
+  PodDisruptionBudget — only rendered for a genuinely multi-replica operator
+  (replicaCount > 1). A single-replica operator with `minAvailable: 1` would
+  make the lone pod un-evictable, permanently blocking voluntary node drains
+  (`kubectl drain` hangs forever). A single replica has nothing to protect
+  against voluntary disruption anyway — the Deployment reschedules it and
+  leader-election guards against split reconcile — so we skip the PDB entirely
+  rather than emit a drain-deadlocking one. For replicaCount > 1 the default
+  `maxUnavailable: 1` keeps one pod evictable while still protecting quorum.
+*/ -}}
+{{- if and .Values.podDisruptionBudget.enabled (gt (int .Values.replicaCount) 1) -}}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -9,9 +19,10 @@ metadata:
 spec:
   {{- if .Values.podDisruptionBudget.minAvailable }}
   minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
-  {{- end }}
-  {{- if .Values.podDisruptionBudget.maxUnavailable }}
+  {{- else if .Values.podDisruptionBudget.maxUnavailable }}
   maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- else }}
+  maxUnavailable: 1
   {{- end }}
   selector:
     matchLabels:

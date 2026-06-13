@@ -114,9 +114,20 @@ rules:
       - update
       - watch
 
-  {{- if .Values.features.backup.enabled }}
-
-  # Batch resources (for backup jobs) — gated by features.backup.enabled
+  # Batch resources (jobs/cronjobs) — ALWAYS granted, regardless of
+  # features.backup.enabled. The MAIN MongoDBReconciler (mongodb_controller.go
+  # 9.7 block) creates a backup CronJob whenever a MongoDB CR sets
+  # spec.backup.schedule — this path is driven by the CR, NOT by the
+  # --enable-backup-controller feature gate. CreateOrUpdate issues a cached Get
+  # which lazily starts a cluster-wide CronJob informer at first reconcile, so
+  # the ServiceAccount must hold list/watch on batch even when the backup
+  # feature gate is off. Without these verbs the manager loops on `cronjobs.batch
+  # is forbidden` (issue #313) and the CronJob is silently never created.
+  # This mirrors the autoscaling HPA read-verbs always-on rule above and the
+  # always-on config/rbac/role.yaml kubebuilder marker
+  # (mongodb_controller.go:73). Jobs are owned/watched by the gated backup
+  # controllers (MongoDBBackup / MongoDBBackupVerification, Owns(&batchv1.Job{}))
+  # but are kept here unconditionally for a single coherent batch rule.
   - apiGroups:
       - batch
     resources:
@@ -130,7 +141,6 @@ rules:
       - patch
       - update
       - watch
-  {{- end }}
 
   # Autoscaling (HPA) read verbs — ALWAYS granted, regardless of
   # features.autoscaling.enabled. MongoDBReconciler / MongoDBShardedReconciler

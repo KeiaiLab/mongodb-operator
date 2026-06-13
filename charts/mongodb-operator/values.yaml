@@ -335,12 +335,17 @@ networkPolicy:
   egress: []
 
 # Pod Disruption Budget configuration
+# NOTE: the PDB is only created when replicaCount > 1. With a single replica a
+# PDB of minAvailable:1 makes the lone pod un-evictable and permanently blocks
+# voluntary node drains (kubectl drain hangs). Default policy is drain-safe:
+# maxUnavailable:1 (one pod may always be evicted) instead of minAvailable:1.
+# Set minAvailable explicitly to override when running a larger replica count.
 podDisruptionBudget:
-  # -- Enable PodDisruptionBudget (recommended for production)
+  # -- Enable PodDisruptionBudget (only takes effect when replicaCount > 1)
   enabled: true
-  # -- Minimum available pods
-  minAvailable: 1
-  # -- Maximum unavailable pods
+  # -- Minimum available pods (overrides maxUnavailable when set; leave empty for drain-safe default)
+  minAvailable: ""
+  # -- Maximum unavailable pods (default 1 = drain-safe; ignored if minAvailable is set)
   maxUnavailable: ""
 
 # F10 (cycle 2): Grafana dashboards — operator + cluster + replicaset +
