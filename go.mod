@@ -9,7 +9,7 @@ require (
 	// 현재 v0.10.0 — API 변경 가능성 잔존.
 	github.com/keiailab/keiailab-commons v0.11.0
 	github.com/onsi/ginkgo/v2 v2.29.0
-	github.com/onsi/gomega v1.41.0
+	github.com/onsi/gomega v1.42.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
 	go.mongodb.org/mongo-driver/v2 v2.6.0
