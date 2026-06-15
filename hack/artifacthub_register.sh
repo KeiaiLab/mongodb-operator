@@ -4,7 +4,9 @@ set -euo pipefail
 artifacthub_api_url="${ARTIFACTHUB_API_URL:-https://artifacthub.io/api/v1}"
 artifacthub_org="${ARTIFACTHUB_ORG:-keiailab}"
 artifacthub_repository_name="${ARTIFACTHUB_REPOSITORY_NAME:-keiailab-mongodb-operator}"
-helm_repo_url="${HELM_REPO_URL:-https://keiailab.github.io/mongodb-operator}"
+artifacthub_package_name="${ARTIFACTHUB_PACKAGE_NAME:-mongodb-operator}"
+helm_oci_repo="${HELM_OCI_REPO:-oci://ghcr.io/keiailab/charts}"
+helm_repo_url="${HELM_REPO_URL:-${helm_oci_repo%/}/${artifacthub_package_name}}"
 
 curl_bin="${CURL_BIN:-curl}"
 jq_bin="${JQ_BIN:-jq}"

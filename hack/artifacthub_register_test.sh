@@ -47,7 +47,8 @@ chmod +x "$stubcurl"
 export ARTIFACTHUB_API_URL="https://artifacthub.test/api/v1"
 export ARTIFACTHUB_ORG="keiailab"
 export ARTIFACTHUB_REPOSITORY_NAME="keiailab-mongodb-operator"
-export HELM_REPO_URL="https://keiailab.github.io/mongodb-operator"
+export ARTIFACTHUB_PACKAGE_NAME="mongodb-operator"
+export HELM_OCI_REPO="oci://ghcr.io/keiailab/charts"
 export ARTIFACTHUB_API_KEY_ID="key-id"
 export ARTIFACTHUB_API_KEY_SECRET="key-secret"
 export ARTIFACTHUB_TEST_ARGS="$tmpdir/curl.args"
@@ -64,7 +65,7 @@ jq -e \
 	'.kind == 0
 		and .name == "keiailab-mongodb-operator"
 		and .display_name == "MongoDB Operator (Keiailab)"
-		and .url == "https://keiailab.github.io/mongodb-operator"' \
+		and .url == "oci://ghcr.io/keiailab/charts/mongodb-operator"' \
 	"$ARTIFACTHUB_TEST_BODY" >/dev/null
 grep -q "registration request accepted" "$tmpdir/register.out"
 
