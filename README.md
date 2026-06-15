@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://keiailab.com">
+    <img src="docs/branding/symbol.png" alt="keiailab" width="96"/>
+  </a>
+</p>
+
 # mongodb-operator
 
 A Kubernetes operator for running MongoDB on Kubernetes. It manages the lifecycle
@@ -9,6 +15,16 @@ the desired topology.
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go)](go.mod)
 [![MongoDB](https://img.shields.io/badge/MongoDB-8.0%20|%208.2%20|%208.3-47A248?logo=mongodb)](#supported-mongodb-versions)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes)](#requirements)
+
+## Design assets
+
+| Asset | Path | Usage |
+|---|---|---|
+| Centered service symbol | [`docs/branding/symbol.png`](docs/branding/symbol.png) | GitHub README, Artifact Hub icon/screenshot |
+| Keiailab base symbol | [`docs/branding/base-symbol.png`](docs/branding/base-symbol.png) | Source reference for the outer rotating-arrow mark |
+| Repository wordmark | [`docs/branding/logo.png`](docs/branding/logo.png) | Project pages and docs cards |
+| Social cover | [`docs/branding/cover.png`](docs/branding/cover.png) | Social cards and launch posts |
+| Branding guide | [`docs/BRANDING.md`](docs/BRANDING.md) | Public visual usage rules |
 
 The operator does not bundle or redistribute MongoDB. It pulls the official
 `mongo` community images at runtime and orchestrates them; you remain responsible

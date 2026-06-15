@@ -28,14 +28,16 @@ This document is the canonical reference for `mongodb-operator` branding decisio
 
 | Asset | URL | Usage |
 |---|---|---|
-| Primary logo (current) | `https://github.com/keiailab.png` | README header (all repos), slides |
-| Primary logo (SVG, planned) | `https://keiailab.com/assets/logo.svg` *(not yet published)* | future replacement for GitHub avatar |
-| Mono mark (planned) | `https://keiailab.com/assets/mark.svg` *(not yet published)* | Favicon, social cards |
-| Wordmark (planned) | `https://keiailab.com/assets/wordmark.svg` *(not yet published)* | Footer, dark backgrounds |
+| Current primary logo | `docs/branding/symbol.png` | README header, slides |
+| Keiailab base symbol | `docs/branding/base-symbol.png` | Source reference for the outer rotating-arrow mark |
+| Repository wordmark | `docs/branding/logo.png` | Project pages and docs cards |
+| Social cover | `docs/branding/cover.png` | Social cards and launch posts |
+| Current favicon | `https://keiailab.com/favicon.ico` | Favicon, social cards |
+| Planned SVG kit | `https://keiailab.com/assets/{logo,mark,wordmark}.svg` | Future replacement after URLs return 200 |
 
-**Logo placement**: Top-center of README, width 120px. Always link to https://github.com/keiailab.
+**Logo placement**: Top-center of README, width 96px. Always link to https://keiailab.com.
 
-**Migration note (2026-05-21)**: until `keiailab.com/assets/*.svg` is published, all repos in the family use the GitHub avatar (`https://github.com/keiailab.png`) as canonical primary logo. The SVG row is reserved for the future migration.
+**Symbol note (2026-06-15)**: the primary symbol keeps the Keiailab rotating-arrow mark and replaces only the center sphere with the service icon.
 
 **Clear space**: Minimum padding around logo = 25% of logo width.
 
@@ -87,7 +89,7 @@ GitHub README 의 shield.io badge 는 위 hex 사용 권장.
 
 ```markdown
 <p align="center">
-  <img src="https://github.com/keiailab.png" alt="keiailab" width="120"/>
+  <img src="docs/branding/symbol.png" alt="keiailab" width="96"/>
 </p>
 
 # mongodb-operator
