@@ -18,7 +18,7 @@ case "$1 $2" in
 		;;
 	"search repo")
 		printf 'NAME                               CHART VERSION      APP VERSION\n'
-		printf 'keiailab-mongodb-operator/mongodb-operator 0.3.0-alpha.16 0.3.0-alpha.16\n'
+		printf 'keiailab/mongodb-operator 0.3.0-alpha.16 0.3.0-alpha.16\n'
 		exit 0
 		;;
 	"show chart")
@@ -141,6 +141,7 @@ export ARTIFACTHUB_PACKAGE_NAME="mongodb-operator"
 export HELM_OCI_REPO="oci://ghcr.io/keiailab/charts"
 export EXPECTED_CHART_VERSION="1.12.4"
 export EXPECTED_APP_VERSION="1.12.2"
+export EXPECTED_ARTIFACTHUB_REPOSITORY_URL="https://keiailab.github.io/charts"
 export ARTIFACTHUB_SMOKE_SLEEP_SECONDS="0"
 export HELM_REPO_URL="https://keiailab.github.io/charts"
 
