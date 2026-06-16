@@ -2,6 +2,17 @@
 
 All notable changes to mongodb-operator will be documented in this file.
 
+## [1.13.1] - 2026-06-16
+
+### Features
+
+- sharded topology v2 순수 결정 함수 — zone-aware placement / pre-flight 안전검증 / balancer advisory / chunk migration throttle (`internal/topology`, #322). 모두 순수 함수 + advisory(DryRun 기본), 실 mongos 명령은 controller opt-in 시에만. 96.6% 커버리지 / 27 unit tests + envtest 전체 green + Kind 실 구동 검증(ReplicaSet reconcile→Running).
+
+### Chores
+
+- 브랜치 모델 RFC-0069 전환 — `main` 폐기, `stable`(production) + `dev`(integration) 2-브랜치, CI 트리거 재배선
+- Dependabot 비활성화 (.github/dependabot.yml 제거)
+
 ## [1.13.0] - 2026-06-11
 
 ### Refactor
