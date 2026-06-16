@@ -83,18 +83,8 @@ echo "Smoke attempts: ${smoke_attempts} (sleep ${smoke_sleep_seconds}s)"
 echo "=== Legacy Helm repository reachability (warning-only) ==="
 if "$curl_bin" -fsSL "${helm_repo_url%/}/index.yaml" -o "$tmpdir/index.yaml" 2>/dev/null; then
 	echo "Legacy Helm repository reachable: ${helm_repo_url%/}"
-	if command -v "$helm_bin" >/dev/null 2>&1; then
-		"$helm_bin" repo add "$artifacthub_repository_name" "$helm_repo_url" >/dev/null 2>&1 || true
-		"$helm_bin" repo update "$artifacthub_repository_name" >/dev/null
-		if "$helm_bin" search repo "${artifacthub_repository_name}/${artifacthub_package_name}" --versions --devel \
-			| grep -q "${artifacthub_repository_name}/${artifacthub_package_name}"; then
-			echo "Legacy Helm index package visible: ${artifacthub_repository_name}/${artifacthub_package_name}"
-		else
-			echo "::warning::legacy Helm index package not visible; Artifact Hub tracks OCI, so this is not a gate."
-		fi
-	fi
 else
-	echo "::warning::legacy Helm repository is unreachable; Artifact Hub tracks OCI, so this is not a gate."
+	echo "::warning::legacy Helm repository is unreachable; Artifact Hub package API remains the gate."
 fi
 
 require_tool "$curl_bin"
