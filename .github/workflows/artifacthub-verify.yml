@@ -21,8 +21,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: artifacthub-verify-${{ github.ref }}
-  cancel-in-progress: true
+  group: artifacthub-verify-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
   lint:
@@ -52,6 +52,19 @@ jobs:
       - uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5
         with:
           version: latest
+      - name: Ensure Artifact Hub repository registration
+        env:
+          ARTIFACTHUB_API_KEY_ID: ${{ secrets.AH_API_KEY_ID }}
+          ARTIFACTHUB_API_KEY_SECRET: ${{ secrets.AH_API_KEY_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ARTIFACTHUB_API_KEY_ID:-}" ] || [ -z "${ARTIFACTHUB_API_KEY_SECRET:-}" ]; then
+            echo "::warning::Artifact Hub API credentials are not configured; smoke will report registration state."
+            exit 0
+          fi
+          if ! bash hack/artifacthub_register.sh; then
+            echo "::notice::Artifact Hub registration request did not create a new repository; smoke will verify current state."
+          fi
       - name: Run artifacthub smoke
         env:
           AH_API_KEY_ID: ${{ secrets.AH_API_KEY_ID }}

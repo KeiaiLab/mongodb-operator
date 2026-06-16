@@ -5,7 +5,7 @@ name: Helm chart publish
 #   2. ghcr.io OCI → oci://ghcr.io/keiailab/charts/mongodb-operator  ← ArtifactHub 추적 소스
 #
 # 트리거 4종 — 어느 릴리스 방식이든 작동:
-#   - push:    main        → Chart.yaml version SSOT 기준 자동 publish
+#   - push:    stable      → Chart.yaml version SSOT 기준 자동 publish
 #   - release: published   → `gh release create vX.Y.Z` (GitHub UI/API/CLI)
 #   - push:    tags ['v*'] → `git push origin vX.Y.Z`
 #   - workflow_dispatch    → 수동 재실행 / 백필
@@ -33,7 +33,7 @@ permissions:
   pages: read
 
 concurrency:
-  group: helm-publish-${{ github.event.release.tag_name || github.event.inputs.tag || github.ref_name }}
+  group: helm-publish-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
@@ -55,7 +55,7 @@ jobs:
           CHART_VER=$(grep '^version:' charts/mongodb-operator/Chart.yaml | awk '{print $2}' | tr -d '"')
           if [ "$EVENT_NAME" = "push" ] && [ "$REF_TYPE" = "branch" ]; then
             VERSION="$CHART_VER"
-            echo "✓ main push uses Chart.yaml version ($VERSION)"
+            echo "✓ stable push uses Chart.yaml version ($VERSION)"
           else
             VERSION="${TAG#v}"
             if [ "$CHART_VER" != "$VERSION" ]; then
