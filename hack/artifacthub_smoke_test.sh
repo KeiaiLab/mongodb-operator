@@ -71,9 +71,9 @@ case "$url" in
 		;;
 	*/repositories/search*)
 		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "registered" ]]; then
-			printf '[{"repository_id":"repo-id","name":"keiailab-mongodb-operator","url":"oci://ghcr.io/keiailab/charts/mongodb-operator","last_tracking_errors":null}]' >"$out"
+			printf '[{"repository_id":"repo-id","name":"keiailab","url":"https://keiailab.github.io/charts","last_tracking_errors":null}]' >"$out"
 		elif [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "tracking_error" ]]; then
-			printf '[{"repository_id":"repo-id","name":"keiailab-mongodb-operator","url":"oci://ghcr.io/keiailab/charts/mongodb-operator","last_tracking_errors":"historical icon fetch failed"}]' >"$out"
+			printf '[{"repository_id":"repo-id","name":"keiailab","url":"https://keiailab.github.io/charts","last_tracking_errors":"historical icon fetch failed"}]' >"$out"
 		elif [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "package_fallback" ]]; then
 			printf '[]' >"$out"
 		elif [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "delayed" ]]; then
@@ -82,7 +82,7 @@ case "$url" in
 			count="$((count + 1))"
 			printf '%s' "$count" >"$count_file"
 			if [[ "$count" -ge 2 ]]; then
-				printf '[{"repository_id":"repo-id","name":"keiailab-mongodb-operator","url":"oci://ghcr.io/keiailab/charts/mongodb-operator","last_tracking_errors":null}]' >"$out"
+				printf '[{"repository_id":"repo-id","name":"keiailab","url":"https://keiailab.github.io/charts","last_tracking_errors":null}]' >"$out"
 			else
 				printf '[]' >"$out"
 			fi
@@ -90,14 +90,14 @@ case "$url" in
 			printf '[]' >"$out"
 		fi
 		;;
-	*/repositories/org/keiailab/keiailab-mongodb-operator)
+	*/repositories/org/keiailab/keiailab)
 		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "delayed" ]]; then
 			printf '{}' >"$out"
 		else
 			exit 22
 		fi
 		;;
-	*/packages/helm/keiailab-mongodb-operator/mongodb-operator)
+	*/packages/helm/keiailab/mongodb-operator)
 		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "delayed" ]]; then
 			count="$(cat "${ARTIFACTHUB_TEST_DELAY_FILE:?}" 2>/dev/null || printf '0')"
 			if [[ "$count" -lt 2 ]]; then
@@ -105,12 +105,12 @@ case "$url" in
 			fi
 		fi
 		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "registered" || "${ARTIFACTHUB_TEST_CASE:-missing}" == "delayed" || "${ARTIFACTHUB_TEST_CASE:-missing}" == "tracking_error" || "${ARTIFACTHUB_TEST_CASE:-missing}" == "package_fallback" ]]; then
-			printf '{"name":"mongodb-operator","repository":{"repository_id":"repo-id","name":"keiailab-mongodb-operator","url":"oci://ghcr.io/keiailab/charts/mongodb-operator"}}' >"$out"
+			printf '{"name":"mongodb-operator","repository":{"repository_id":"repo-id","name":"keiailab","url":"https://keiailab.github.io/charts"}}' >"$out"
 		else
 			exit 22
 		fi
 		;;
-	*/packages/helm/keiailab-mongodb-operator/mongodb-operator/1.12.4)
+	*/packages/helm/keiailab/mongodb-operator/1.12.4)
 		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "delayed" ]]; then
 			count="$(cat "${ARTIFACTHUB_TEST_DELAY_FILE:?}" 2>/dev/null || printf '0')"
 			if [[ "$count" -lt 2 ]]; then
@@ -118,7 +118,7 @@ case "$url" in
 			fi
 		fi
 		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "registered" || "${ARTIFACTHUB_TEST_CASE:-missing}" == "delayed" || "${ARTIFACTHUB_TEST_CASE:-missing}" == "tracking_error" || "${ARTIFACTHUB_TEST_CASE:-missing}" == "package_fallback" ]]; then
-			printf '{"name":"mongodb-operator","version":"1.12.4","app_version":"1.12.2","signed":true,"repository":{"url":"oci://ghcr.io/keiailab/charts/mongodb-operator"}}' >"$out"
+			printf '{"name":"mongodb-operator","version":"1.12.4","app_version":"1.12.2","signed":true,"repository":{"url":"https://keiailab.github.io/charts"}}' >"$out"
 		else
 			exit 22
 		fi
@@ -136,13 +136,13 @@ export CURL_BIN="$stubbin/curl"
 export HELM_BIN="$stubbin/helm"
 export ARTIFACTHUB_API_URL="https://artifacthub.test/api/v1"
 export ARTIFACTHUB_ORG="keiailab"
-export ARTIFACTHUB_REPOSITORY_NAME="keiailab-mongodb-operator"
+export ARTIFACTHUB_REPOSITORY_NAME="keiailab"
 export ARTIFACTHUB_PACKAGE_NAME="mongodb-operator"
 export HELM_OCI_REPO="oci://ghcr.io/keiailab/charts"
 export EXPECTED_CHART_VERSION="1.12.4"
 export EXPECTED_APP_VERSION="1.12.2"
 export ARTIFACTHUB_SMOKE_SLEEP_SECONDS="0"
-export HELM_REPO_URL="https://keiailab.github.io/mongodb-operator"
+export HELM_REPO_URL="https://keiailab.github.io/charts"
 
 if ARTIFACTHUB_TEST_CASE=missing bash "$repo_root/hack/artifacthub_smoke.sh" >"$tmpdir/missing.out" 2>&1; then
 	echo "expected missing repository case to fail" >&2
