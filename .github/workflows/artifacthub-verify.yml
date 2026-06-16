@@ -69,7 +69,7 @@ jobs:
         env:
           AH_API_KEY_ID: ${{ secrets.AH_API_KEY_ID }}
           AH_API_KEY_SECRET: ${{ secrets.AH_API_KEY_SECRET }}
-          EXPECTED_ARTIFACTHUB_REPOSITORY_URL: oci://ghcr.io/keiailab/charts/mongodb-operator
+          EXPECTED_ARTIFACTHUB_REPOSITORY_URL: https://keiailab.github.io/charts
           EXPECTED_CHART_VERSION: ${{ github.event.inputs.tag }}
           ARTIFACTHUB_SMOKE_ATTEMPTS: "90"
           ARTIFACTHUB_SMOKE_SLEEP_SECONDS: "30"
