@@ -72,6 +72,10 @@ case "$url" in
 	*/repositories/search*)
 		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "registered" ]]; then
 			printf '[{"repository_id":"repo-id","name":"keiailab-mongodb-operator","url":"oci://ghcr.io/keiailab/charts/mongodb-operator","last_tracking_errors":null}]' >"$out"
+		elif [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "tracking_error" ]]; then
+			printf '[{"repository_id":"repo-id","name":"keiailab-mongodb-operator","url":"oci://ghcr.io/keiailab/charts/mongodb-operator","last_tracking_errors":"historical icon fetch failed"}]' >"$out"
+		elif [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "package_fallback" ]]; then
+			printf '[]' >"$out"
 		elif [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "delayed" ]]; then
 			count_file="${ARTIFACTHUB_TEST_DELAY_FILE:?}"
 			count="$(cat "$count_file" 2>/dev/null || printf '0')"
@@ -93,8 +97,27 @@ case "$url" in
 			exit 22
 		fi
 		;;
+	*/packages/helm/keiailab-mongodb-operator/mongodb-operator)
+		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "delayed" ]]; then
+			count="$(cat "${ARTIFACTHUB_TEST_DELAY_FILE:?}" 2>/dev/null || printf '0')"
+			if [[ "$count" -lt 2 ]]; then
+				exit 22
+			fi
+		fi
+		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "registered" || "${ARTIFACTHUB_TEST_CASE:-missing}" == "delayed" || "${ARTIFACTHUB_TEST_CASE:-missing}" == "tracking_error" || "${ARTIFACTHUB_TEST_CASE:-missing}" == "package_fallback" ]]; then
+			printf '{"name":"mongodb-operator","repository":{"repository_id":"repo-id","name":"keiailab-mongodb-operator","url":"oci://ghcr.io/keiailab/charts/mongodb-operator"}}' >"$out"
+		else
+			exit 22
+		fi
+		;;
 	*/packages/helm/keiailab-mongodb-operator/mongodb-operator/1.12.4)
-		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "registered" || "${ARTIFACTHUB_TEST_CASE:-missing}" == "delayed" ]]; then
+		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "delayed" ]]; then
+			count="$(cat "${ARTIFACTHUB_TEST_DELAY_FILE:?}" 2>/dev/null || printf '0')"
+			if [[ "$count" -lt 2 ]]; then
+				exit 22
+			fi
+		fi
+		if [[ "${ARTIFACTHUB_TEST_CASE:-missing}" == "registered" || "${ARTIFACTHUB_TEST_CASE:-missing}" == "delayed" || "${ARTIFACTHUB_TEST_CASE:-missing}" == "tracking_error" || "${ARTIFACTHUB_TEST_CASE:-missing}" == "package_fallback" ]]; then
 			printf '{"name":"mongodb-operator","version":"1.12.4","app_version":"1.12.2","signed":true,"repository":{"url":"oci://ghcr.io/keiailab/charts/mongodb-operator"}}' >"$out"
 		else
 			exit 22
@@ -139,5 +162,13 @@ unset ARTIFACTHUB_API_KEY_ID ARTIFACTHUB_API_KEY_SECRET ARTIFACTHUB_SMOKE_ATTEMP
 
 ARTIFACTHUB_TEST_CASE=registered bash "$repo_root/hack/artifacthub_smoke.sh" >"$tmpdir/registered.out" 2>&1
 grep -q "Artifact Hub package OK" "$tmpdir/registered.out"
+
+ARTIFACTHUB_TEST_CASE=tracking_error bash "$repo_root/hack/artifacthub_smoke.sh" >"$tmpdir/tracking-error.out" 2>&1
+grep -q "Artifact Hub repository has tracking errors" "$tmpdir/tracking-error.out"
+grep -q "Artifact Hub package OK" "$tmpdir/tracking-error.out"
+
+ARTIFACTHUB_TEST_CASE=package_fallback bash "$repo_root/hack/artifacthub_smoke.sh" >"$tmpdir/package-fallback.out" 2>&1
+grep -q "Artifact Hub repository found via package API fallback" "$tmpdir/package-fallback.out"
+grep -q "Artifact Hub package OK" "$tmpdir/package-fallback.out"
 
 echo "artifacthub smoke shell test PASS"

@@ -1,7 +1,7 @@
 # MongoDB Operator Helm Chart
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/symbol.png" alt="Keiailab MongoDB Operator symbol" width="96"/>
+  <img src="https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/stable/docs/branding/symbol.png" alt="Keiailab MongoDB Operator symbol" width="96"/>
 </p>
 
 A Kubernetes Operator for deploying and managing MongoDB ReplicaSets and Sharded Clusters.
@@ -10,11 +10,11 @@ A Kubernetes Operator for deploying and managing MongoDB ReplicaSets and Sharded
 
 | Asset | URL | Usage |
 |---|---|---|
-| Centered service symbol | https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/symbol.png | Artifact Hub package icon and screenshot |
-| Keiailab base symbol | https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/base-symbol.png | Source reference for the outer rotating-arrow mark |
-| Repository wordmark | https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/logo.png | Project pages and docs cards |
-| Social cover | https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/cover.png | Social cards and launch posts |
-| Branding guide | https://github.com/KeiaiLab/mongodb-operator/blob/main/docs/BRANDING.md | GitHub visual usage rules |
+| Centered service symbol | https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/stable/docs/branding/symbol.png | Artifact Hub package icon and screenshot |
+| Keiailab base symbol | https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/stable/docs/branding/base-symbol.png | Source reference for the outer rotating-arrow mark |
+| Repository wordmark | https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/stable/docs/branding/logo.png | Project pages and docs cards |
+| Social cover | https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/stable/docs/branding/cover.png | Social cards and launch posts |
+| Branding guide | https://github.com/KeiaiLab/mongodb-operator/blob/stable/docs/BRANDING.md | GitHub visual usage rules |
 
 ## Features
 
@@ -253,12 +253,12 @@ This project is licensed under the MIT License.
 
 ## Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](https://github.com/keiailab/mongodb-operator/blob/main/docs/contributing.md) for details.
+Contributions are welcome! Please read our [Contributing Guide](https://github.com/keiailab/mongodb-operator/blob/stable/docs/contributing.md) for details.
 
 ## Support
 
 - [GitHub Issues](https://github.com/keiailab/mongodb-operator/issues)
-- [Documentation](https://github.com/keiailab/mongodb-operator/blob/main/docs/)
+- [Documentation](https://github.com/keiailab/mongodb-operator/blob/stable/docs/)
 
 ## Secure metrics scraping with Prometheus
 
