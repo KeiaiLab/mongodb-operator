@@ -15,9 +15,9 @@ on:
   # context (paths-filtered required checks stay pending forever on
   # PRs that don't match — same lesson as kube-linter #118).
   pull_request:
-    branches: [main]
+    branches: [stable, dev]
   push:
-    branches: [main]
+    branches: [stable, dev]
   schedule:
     - cron: '47 7 * * 1'
   workflow_dispatch:

@@ -6,9 +6,9 @@ name: CodeQL
 
 on:
   push:
-    branches: [main]
+    branches: [stable, dev]
   pull_request:
-    branches: [main]
+    branches: [stable, dev]
   schedule:
     # Weekly, offset from other security crons.
     - cron: '41 6 * * 1'

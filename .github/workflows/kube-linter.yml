@@ -16,9 +16,9 @@ on:
   # PRs that don't touch the filtered paths, which blocks otherwise
   # legitimate merges.
   pull_request:
-    branches: [main]
+    branches: [stable, dev]
   push:
-    branches: [main]
+    branches: [stable, dev]
   schedule:
     - cron: '53 8 * * 1'
   workflow_dispatch:

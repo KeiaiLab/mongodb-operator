@@ -13,7 +13,7 @@ on:
   release:
     types: [published]
   push:
-    branches: [main]
+    branches: [stable]
     tags: ['v*']
     paths:
       - 'charts/**'
