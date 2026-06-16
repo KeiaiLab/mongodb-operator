@@ -61,7 +61,7 @@ test: manifests generate fmt vet envtest ## Run tests.
 
 .PHONY: test-unit
 test-unit: fmt vet ## Run unit tests only (no envtest required).
-	go test -race ./internal/resources/... ./internal/mongodb/... -coverprofile cover-unit.out
+	go test -race ./internal/resources/... ./internal/mongodb/... ./internal/topology/... -coverprofile cover-unit.out
 
 .PHONY: test-mongo
 test-mongo: ## Run real-mongo integration tests (insights round-trip). 실 mongod 필요 — 미가용 시 자동 skip. 예: docker run -d -p 27077:27017 mongo:8.0 && INSIGHTS_TEST_MONGO_HOST=localhost:27077 make test-mongo
