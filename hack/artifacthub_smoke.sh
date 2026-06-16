@@ -4,10 +4,11 @@ set -euo pipefail
 artifacthub_api_url="${ARTIFACTHUB_API_URL:-https://artifacthub.io/api/v1}"
 artifacthub_org="${ARTIFACTHUB_ORG:-keiailab}"
 artifacthub_package_name="${ARTIFACTHUB_PACKAGE_NAME:-mongodb-operator}"
-artifacthub_repository_name="${ARTIFACTHUB_REPOSITORY_NAME:-keiailab-mongodb-operator}"
+artifacthub_repository_name="${ARTIFACTHUB_REPOSITORY_NAME:-keiailab}"
 helm_oci_repo="${HELM_OCI_REPO:-oci://ghcr.io/keiailab/charts}"
-artifacthub_repository_url="${EXPECTED_ARTIFACTHUB_REPOSITORY_URL:-${ARTIFACTHUB_REPOSITORY_URL:-${helm_oci_repo%/}/${artifacthub_package_name}}}"
-helm_repo_url="${HELM_REPO_URL:-https://keiailab.github.io/mongodb-operator}"
+oci_chart_ref="${HELM_OCI_CHART_REF:-${helm_oci_repo%/}/${artifacthub_package_name}}"
+artifacthub_repository_url="${EXPECTED_ARTIFACTHUB_REPOSITORY_URL:-${ARTIFACTHUB_REPOSITORY_URL:-https://keiailab.github.io/charts}}"
+helm_repo_url="${HELM_REPO_URL:-https://keiailab.github.io/charts}"
 artifacthub_api_key_id="${AH_API_KEY_ID:-${ARTIFACTHUB_API_KEY_ID:-}}"
 artifacthub_api_key_secret="${AH_API_KEY_SECRET:-${ARTIFACTHUB_API_KEY_SECRET:-}}"
 
@@ -75,7 +76,7 @@ fi
 echo "=== Expected release contract ==="
 echo "Chart version: ${expected_chart_version}"
 echo "App version:   ${expected_app_version}"
-echo "Helm OCI repository base: ${helm_oci_repo%/}"
+echo "Helm OCI chart: ${oci_chart_ref%/}"
 echo "Artifact Hub repository URL: ${artifacthub_repository_url%/}"
 echo "Smoke attempts: ${smoke_attempts} (sleep ${smoke_sleep_seconds}s)"
 
@@ -102,6 +103,7 @@ require_tool "$jq_bin"
 echo "=== Artifact Hub repository registration ==="
 org_query="$(urlencode "$artifacthub_org")"
 normalized_artifacthub_repository_url="$(normalize_url "$artifacthub_repository_url")"
+normalized_oci_chart_ref="$(normalize_url "$oci_chart_ref")"
 package_url="${artifacthub_api_url%/}/packages/helm/${artifacthub_repository_name}/${artifacthub_package_name}"
 repo_filter='
 	.[]?
@@ -176,7 +178,7 @@ echo "=== GHCR OCI chart availability ==="
 if command -v "$helm_bin" >/dev/null 2>&1; then
 	oci_chart_ready=false
 	for attempt in $(seq 1 "$smoke_attempts"); do
-		if "$helm_bin" show chart "$normalized_artifacthub_repository_url" --version "$expected_chart_version" >"$tmpdir/oci-chart.yaml" 2>"$tmpdir/oci-chart.err"; then
+		if "$helm_bin" show chart "$normalized_oci_chart_ref" --version "$expected_chart_version" >"$tmpdir/oci-chart.yaml" 2>"$tmpdir/oci-chart.err"; then
 			oci_chart_ready=true
 			break
 		fi
@@ -188,7 +190,7 @@ if command -v "$helm_bin" >/dev/null 2>&1; then
 	if [[ "$oci_chart_ready" != "true" ]]; then
 		cat "$tmpdir/oci-chart.err" >&2 || true
 		echo "ERROR: GHCR OCI chart is not published yet." >&2
-		echo "  chart: ${normalized_artifacthub_repository_url}" >&2
+		echo "  chart: ${normalized_oci_chart_ref}" >&2
 		echo "  version: ${expected_chart_version}" >&2
 		exit 4
 	fi
@@ -200,7 +202,7 @@ if command -v "$helm_bin" >/dev/null 2>&1; then
 		echo "  actual chart/app:   ${oci_chart_version}/${oci_app_version}" >&2
 		exit 5
 	fi
-	echo "GHCR OCI chart OK: ${normalized_artifacthub_repository_url}:${expected_chart_version}"
+	echo "GHCR OCI chart OK: ${normalized_oci_chart_ref}:${expected_chart_version}"
 else
 	echo "ERROR: helm not found; cannot verify GHCR OCI chart." >&2
 	exit 5
