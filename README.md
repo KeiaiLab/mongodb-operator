@@ -6,15 +6,27 @@
 
 # mongodb-operator
 
-A Kubernetes operator for running MongoDB on Kubernetes. It manages the lifecycle
-of MongoDB replica sets and sharded clusters through Custom Resources — bootstrapping
-the cluster, creating the admin user, wiring up TLS and metrics, and reconciling
-the desired topology.
+**The all-in-one MongoDB operator for Kubernetes.** Run ReplicaSets, sharded
+clusters with automatic scale-out, S3/PVC backups, authentication
+(SCRAM / X.509 / LDAP / OIDC), TLS, and bundled Prometheus + Grafana — all from
+one set of Custom Resources. *PITR and multi-region federation are in beta.*
+
+It manages the full lifecycle of MongoDB replica sets and sharded clusters through
+Custom Resources — bootstrapping the cluster, creating the admin user, wiring up
+TLS and metrics, and reconciling the desired topology.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/KeiaiLab/mongodb-operator)](https://github.com/KeiaiLab/mongodb-operator/releases)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/keiailab-mongodb-operator)](https://artifacthub.io/packages/helm/keiailab-mongodb-operator/mongodb-operator)
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go)](go.mod)
 [![MongoDB](https://img.shields.io/badge/MongoDB-8.0%20|%208.2%20|%208.3-47A248?logo=mongodb)](#supported-mongodb-versions)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-1.26+-326CE5?logo=kubernetes)](#requirements)
+
+> **Why another MongoDB operator?** Unlike the official Community Operator
+> (ReplicaSet only, no built-in backup) or Bitnami's chart (static manifests, no
+> reconciliation), mongodb-operator manages the **whole lifecycle from one CRD** —
+> for **vanilla MongoDB 8.x** under a permissive **MIT** license.
+> [See the full comparison →](docs/gap-analysis.md)
 
 ## Design assets
 
@@ -40,7 +52,8 @@ license terms.
   shard replica sets, and mongos routers, initiates each replica set, and registers
   the shards. Increasing `spec.shards.count` adds and registers new shards.
 - **TLS** — optional cert-manager integration for in-transit encryption.
-- **Authentication** — SCRAM-SHA-256 with admin credentials sourced from a Secret.
+- **Authentication** — SCRAM-SHA-256 and X.509 (GA); **LDAP** and **OIDC/OAuth2**
+  supported (e2e hardening in progress). Admin credentials sourced from a Secret.
 - **Metrics** — Prometheus metrics, an optional `ServiceMonitor`, and
   `PrometheusRule` alerts.
 - **High availability** — opt-in `PodDisruptionBudget` and `NetworkPolicy`
