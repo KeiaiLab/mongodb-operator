@@ -38,6 +38,7 @@ import (
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"github.com/keiailab/mongodb-operator/internal/mongodb"
 	"github.com/keiailab/mongodb-operator/internal/resources"
+	secv2 "github.com/keiailab/mongodb-operator/internal/security"
 )
 
 const (
@@ -350,6 +351,13 @@ func (r *MongoDBReconciler) reconcileStatefulSet(ctx context.Context, mdb *mongo
 // reconcileNetworkPolicy는 spec.networkPolicy가 enabled일 때만 NetworkPolicy를 생성한다.
 // disabled로 변경되면 기존 NetworkPolicy를 삭제(spec과 cluster 동기화).
 func (r *MongoDBReconciler) reconcileNetworkPolicy(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
+	// security v2: additionalIngressFrom 의 무효 peer(빌드 시 조용히 drop)를 로그로 surface.
+	if np := mdb.Spec.NetworkPolicy; np != nil && np.Enabled {
+		for _, f := range secv2.ValidateNetworkPolicyPeers(np.AdditionalIngressFrom) {
+			log.FromContext(ctx).Info("networkPolicy peer finding",
+				"field", f.Field, "severity", string(f.Severity), "reason", f.Reason)
+		}
+	}
 	desired := resources.BuildMongoDBNetworkPolicy(mdb)
 	if desired == nil {
 		existing := &networkingv1.NetworkPolicy{}
