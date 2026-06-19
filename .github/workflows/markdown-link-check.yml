@@ -6,7 +6,7 @@ name: Markdown link check
 
 on:
   pull_request:
-    branches: [stable, dev]
+    branches: [main]
     paths:
       - "**/*.md"
       - ".github/workflows/markdown-link-check.yml"

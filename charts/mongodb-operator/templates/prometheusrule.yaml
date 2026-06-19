@@ -27,7 +27,7 @@ spec:
           annotations:
             summary: "MongoDB Operator reconcile failure rate elevated ({{`{{ $value | humanize }}`}}/s)"
             description: "controller-runtime reconcile errors > 0.1/s 지속 — controller logs 확인 + CR events grep."
-            runbook_url: https://github.com/keiailab/mongodb-operator/blob/stable/docs/operations/runbook.md
+            runbook_url: https://github.com/keiailab/mongodb-operator/blob/main/docs/operations/runbook.md
         - alert: MongoDBOperatorLeaderElectionLost
           expr: leader_election_master_status{name="mongodb-operator-controller-manager"} == 0
           for: 5m

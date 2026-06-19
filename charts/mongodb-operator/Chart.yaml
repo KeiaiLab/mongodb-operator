@@ -2,7 +2,7 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
 type: application
-version: 1.13.1
+version: 1.13.2
 appVersion: "1.13.1"
 kubeVersion: ">=1.26.0-0"
 
@@ -27,7 +27,7 @@ maintainers:
     email: support@keiailab.com
     url: https://keiailab.com
 
-icon: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/stable/docs/branding/symbol.png
+icon: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/symbol.png
 
 annotations:
   artifacthub.io/license: MIT
@@ -36,7 +36,7 @@ annotations:
   artifacthub.io/operator: "true"
   artifacthub.io/signKey: |
     fingerprint: F1A6893583E632A757FF6767F3CC8C6AEC9CEB08
-    url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/stable/charts/keiailab-helm-signing-public.asc
+    url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/charts/keiailab-helm-signing-public.asc
   # operatorCapabilities — OperatorHub Phase V "Auto Pilot" 격상.
   # Level I-IV (45/66) 완료에 추가로 v1.10.0에서 Level V 14건 (A 5건 + B 9건) 구현:
   #   A1: HPA opt-in gate — 기존 reconcileMongosHPA 활성화 경로
@@ -57,18 +57,18 @@ annotations:
   artifacthub.io/operatorCapabilities: Auto Pilot
   artifacthub.io/links: |
     - name: Documentation
-      url: https://github.com/keiailab/mongodb-operator/blob/stable/README.md
+      url: https://github.com/keiailab/mongodb-operator/blob/main/README.md
     - name: Source Code
       url: https://github.com/keiailab/mongodb-operator
     - name: MongoDB Documentation
       url: https://www.mongodb.com/docs/
     - name: Design Assets
-      url: https://github.com/KeiaiLab/mongodb-operator/blob/stable/docs/BRANDING.md
+      url: https://github.com/KeiaiLab/mongodb-operator/blob/main/docs/BRANDING.md
   artifacthub.io/screenshots: |
     - title: Keiailab MongoDB Operator centered service symbol
-      url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/stable/docs/branding/symbol.png
+      url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/symbol.png
     - title: Keiailab MongoDB Operator social cover
-      url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/stable/docs/branding/cover.png
+      url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/cover.png
   artifacthub.io/crds: |
     - kind: MongoDB
       version: v1alpha1

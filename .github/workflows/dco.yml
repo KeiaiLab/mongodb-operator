@@ -8,7 +8,7 @@ name: DCO
 
 on:
   pull_request:
-    branches: [stable, dev]
+    branches: [main]
 
 permissions:
   contents: read
