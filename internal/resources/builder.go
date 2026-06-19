@@ -27,7 +27,6 @@ import (
 	commonslabels "github.com/keiailab/keiailab-commons/pkg/labels"
 	commonsnp "github.com/keiailab/keiailab-commons/pkg/networkpolicy"
 	"github.com/keiailab/keiailab-commons/pkg/probes"
-	"github.com/keiailab/keiailab-commons/pkg/security"
 	commonstopology "github.com/keiailab/keiailab-commons/pkg/topology"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
@@ -35,6 +34,7 @@ import (
 	auditpkg "github.com/keiailab/mongodb-operator/internal/controller/audit"
 	authpkg "github.com/keiailab/mongodb-operator/internal/controller/auth"
 	encryptionpkg "github.com/keiailab/mongodb-operator/internal/controller/encryption"
+	secv2 "github.com/keiailab/mongodb-operator/internal/security"
 )
 
 const (
@@ -233,18 +233,11 @@ func buildResourceRequirements(spec mongodbv1alpha1.ResourcesSpec) corev1.Resour
 // container-level 은 RestrictedContainer 로 이미 적용 중이라 의미 변화 없음.
 // 단 pod template hash 변경으로 operator 업그레이드 시 1회 rolling restart).
 func buildDefaultSecurityContext() *corev1.PodSecurityContext {
-	return security.RestrictedPodSecurityContext(
-		security.WithPodFSGroup(999),
-		security.WithPodRunAsUser(999),
-		security.WithPodRunAsGroup(999),
-	)
+	return secv2.DefaultPodSecurityContext()
 }
 
 func buildDefaultContainerSecurityContext() *corev1.SecurityContext {
-	return security.RestrictedContainer(
-		security.WithRunAsUser(999),
-		security.WithReadOnlyRootFilesystem(false),
-	)
+	return secv2.DefaultContainerSecurityContext()
 }
 
 // PodSecurity "restricted" 정책을 만족하는 init container용 SecurityContext.
@@ -254,10 +247,7 @@ func buildDefaultContainerSecurityContext() *corev1.SecurityContext {
 // seccompProfile 누락으로 PodSecurity restricted 위반 → StatefulSet pod 생성 거부.
 // iteration 8: keiailab-commons/pkg/security 로 통합 — 3 operator 가 동일 패턴 채택.
 func buildKeyfileInitContainerSecurityContext() *corev1.SecurityContext {
-	return security.RestrictedContainer(
-		security.WithRunAsUser(999),
-		security.WithRunAsGroup(999),
-	)
+	return secv2.KeyfileInitSecurityContext()
 }
 
 // BuildKeyfileSecret creates a keyfile secret for MongoDB internal auth
