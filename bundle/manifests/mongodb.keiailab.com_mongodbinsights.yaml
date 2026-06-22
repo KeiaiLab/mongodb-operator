@@ -1,9 +1,9 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.0
-  creationTimestamp: null
   name: mongodbinsights.mongodb.keiailab.com
 spec:
   group: mongodb.keiailab.com
@@ -29,66 +29,35 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: MongoDBInsights is the Schema for advisory analysis.
         properties:
           apiVersion:
-            description: |-
-              APIVersion defines the versioned schema of this representation of an object.
-              Servers should convert recognized schemas to the latest internal value, and
-              may reject unrecognized values.
-              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: |-
-              Kind is a string value representing the REST resource this object represents.
-              Servers may infer this from the endpoint the client submits requests to.
-              Cannot be updated.
-              In CamelCase.
-              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
           spec:
-            description: MongoDBInsightsSpec — F51 (cycle 7) 분석 정책.
             properties:
               analysisCredentialsSecretRef:
-                description: |-
-                  AnalysisCredentialsSecretRef — system.profile 읽기 권한 user.
-                  미설정 시 cluster 의 admin credentials 재사용.
                 properties:
                   name:
                     default: ""
-                    description: |-
-                      Name of the referent.
-                      This field is effectively required, but due to backwards compatibility is
-                      allowed to be empty. Instances of this type with an empty value here are
-                      almost certainly wrong.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
               analysisInterval:
                 default: 15m
-                description: AnalysisInterval — reconcile 간격.
                 type: string
               autoIndex:
-                description: |-
-                  AutoIndex — MissingIndex 권장에 대한 Auto Pilot 인덱스 조치 정책.
-                  기본 dry-run (표면화만, 실행 없음 — DryRun 기본 true). nil 이면 비활성.
                 properties:
                   dryRun:
                     default: true
-                    description: DryRun reports recommendations as conditions without
-                      creating indexes.
                     type: boolean
                   enabled:
                     default: false
-                    description: Enabled toggles automatic index creation.
                     type: boolean
                   minSeverity:
                     default: warning
-                    description: MinSeverity is the minimum recommendation severity
-                      to act on (info|warning|critical).
                     enum:
                     - info
                     - warning
@@ -98,38 +67,28 @@ spec:
                 - enabled
                 type: object
               autoQueryHint:
-                description: |-
-                  AutoQueryHint — SlowQueryPattern 권장에 대한 Auto Pilot hint 정책.
-                  기본 dry-run. nil 이면 비활성.
                 properties:
                   dryRun:
                     default: true
-                    description: DryRun reports without applying hints.
                     type: boolean
                   enabled:
                     default: false
-                    description: Enabled toggles automatic query hint.
                     type: boolean
                   slowQueryThresholdMs:
                     default: 1000
-                    description: SlowQueryThresholdMs queries above this latency trigger
-                      hint suggestion.
                     format: int32
                     type: integer
                 required:
                 - enabled
                 type: object
               clusterRef:
-                description: ClusterRef references the target MongoDB or MongoDBSharded.
                 properties:
                   kind:
-                    description: Kind is the cluster kind (MongoDB or MongoDBSharded)
                     enum:
                     - MongoDB
                     - MongoDBSharded
                     type: string
                   name:
-                    description: Name is the cluster name
                     type: string
                 required:
                 - kind
@@ -137,12 +96,9 @@ spec:
                 type: object
               enabled:
                 default: true
-                description: Enabled toggles the insights collector. 기본 true.
                 type: boolean
               profilingLevel:
                 default: 1
-                description: ProfilingLevel = 0 (off) | 1 (slow only) | 2 (all). 기본
-                  1.
                 enum:
                 - 0
                 - 1
@@ -151,21 +107,14 @@ spec:
                 type: integer
               sampleSize:
                 default: 500
-                description: SampleSize — 각 reconcile cycle 당 분석할 system.profile 문서
-                  수.
                 format: int32
                 type: integer
               slowQueryThresholdMs:
                 default: 100
-                description: SlowQueryThresholdMs — system.profile 에 기록될 최소 latency.
                 format: int32
                 type: integer
               targetKind:
                 default: MongoDB
-                description: |-
-                  TargetKind 는 분석 대상 CRD 종류. MongoDB 또는 MongoDBSharded.
-                  #226: MongoDBSharded 지원 — sharded cluster 의 각 shard + mongos 의
-                  system.profile 을 수집하여 통합 분석.
                 enum:
                 - MongoDB
                 - MongoDBSharded
@@ -174,34 +123,19 @@ spec:
             - clusterRef
             type: object
           status:
-            description: MongoDBInsightsStatus — 분석 결과.
             properties:
               autoPilotActions:
-                description: |-
-                  AutoPilotActions — Auto Pilot 가 Recommendations 기반으로 계획한 조치.
-                  기본 DryRun=true (표면화만 — 비가역 운영 자동 실행 방지). Spec.AutoIndex /
-                  AutoQueryHint 활성 시에만 채워짐.
                 items:
-                  description: |-
-                    AutoPilotAction — Auto Pilot 가 Recommendation 으로부터 계획한 자동 조치 1건.
-                    DryRun=true (기본) 면 표면화만 하고 실행하지 않는다 — 비가역 운영 안전 기본값
-                    (AutoIndexSpec/AutoQueryHintSpec 의 DryRun 기본 true 정합).
                   properties:
                     detail:
-                      description: Detail human-readable 조치 근거.
                       type: string
                     dryRun:
-                      description: DryRun true 면 표면화만 (실행 안 함). 기본 정책.
                       type: boolean
                     ns:
-                      description: NS = "db.collection" 대상 (파싱 가능 시).
                       type: string
                     severity:
-                      description: Severity = info | warning | critical
                       type: string
                     type:
-                      description: Type = MissingIndex (인덱스 생성 계획) | SlowQueryHint
-                        (쿼리 hint 계획)
                       enum:
                       - MissingIndex
                       - SlowQueryHint
@@ -213,51 +147,30 @@ spec:
                   type: object
                 type: array
               conditions:
-                description: Conditions follow standard k8s convention.
                 items:
-                  description: Condition contains details for one aspect of the current
-                    state of this API Resource.
                   properties:
                     lastTransitionTime:
-                      description: |-
-                        lastTransitionTime is the last time the condition transitioned from one status to another.
-                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
-                      description: |-
-                        message is a human readable message indicating details about the transition.
-                        This may be an empty string.
                       maxLength: 32768
                       type: string
                     observedGeneration:
-                      description: |-
-                        observedGeneration represents the .metadata.generation that the condition was set based upon.
-                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
-                        with respect to the current state of the instance.
                       format: int64
                       minimum: 0
                       type: integer
                     reason:
-                      description: |-
-                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
-                        Producers of specific condition types may define expected values and meanings for this field,
-                        and whether the values are considered a guaranteed API.
-                        The value should be a CamelCase string.
-                        This field may not be empty.
                       maxLength: 1024
                       minLength: 1
                       pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
                       type: string
                     status:
-                      description: status of the condition, one of True, False, Unknown.
                       enum:
                       - "True"
                       - "False"
                       - Unknown
                       type: string
                     type:
-                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
@@ -270,11 +183,9 @@ spec:
                   type: object
                 type: array
               lastAnalysisTime:
-                description: LastAnalysisTime 마지막 분석 완료 시점.
                 format: date-time
                 type: string
               phase:
-                description: 'Phase: Pending | Analyzing | Ready | Failed'
                 enum:
                 - Pending
                 - Analyzing
@@ -282,44 +193,31 @@ spec:
                 - Failed
                 type: string
               recommendations:
-                description: Recommendations — 인덱스 추가 / schema 개선 / slow query 패턴.
                 items:
-                  description: Recommendation — 분석 결과 1건.
                   properties:
                     avgLatencyMs:
-                      description: AvgLatencyMs 권장 근거 latency.
                       format: int32
                       type: integer
                     collection:
                       type: string
                     db:
-                      description: DB + Collection (optional — schema-level hint 시
-                        비어있음).
                       type: string
                     detail:
-                      description: Detail human-readable 권장. e.g. "create compound
-                        index on (status, createdAt)"
                       type: string
                     indexSuggestion:
-                      description: IndexSuggestion BSON-style key spec (MissingIndex
-                        시).
                       type: string
                     querySamples:
-                      description: QuerySamples — sample query string (max 3).
                       items:
                         type: string
                       type: array
                     severity:
                       default: info
-                      description: Severity = info | warning | critical
                       enum:
                       - info
                       - warning
                       - critical
                       type: string
                     type:
-                      description: Type = MissingIndex | UnusedIndex | SlowQueryPattern
-                        | SchemaHint
                       enum:
                       - MissingIndex
                       - UnusedIndex
@@ -332,7 +230,6 @@ spec:
                   type: object
                 type: array
               slowQueriesSampled:
-                description: SlowQueriesSampled — 마지막 cycle 에 분석된 slow query 수.
                 format: int32
                 type: integer
             type: object
@@ -354,59 +251,33 @@ spec:
     name: v1beta1
     schema:
       openAPIV3Schema:
-        description: MongoDBInsights is the Schema for advisory analysis.
         properties:
           apiVersion:
-            description: |-
-              APIVersion defines the versioned schema of this representation of an object.
-              Servers should convert recognized schemas to the latest internal value, and
-              may reject unrecognized values.
-              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: |-
-              Kind is a string value representing the REST resource this object represents.
-              Servers may infer this from the endpoint the client submits requests to.
-              Cannot be updated.
-              In CamelCase.
-              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
           spec:
-            description: MongoDBInsightsSpec — F51 (cycle 7) 분석 정책.
             properties:
               analysisCredentialsSecretRef:
-                description: |-
-                  AnalysisCredentialsSecretRef — system.profile 읽기 권한 user.
-                  미설정 시 cluster 의 admin credentials 재사용.
                 properties:
                   name:
                     default: ""
-                    description: |-
-                      Name of the referent.
-                      This field is effectively required, but due to backwards compatibility is
-                      allowed to be empty. Instances of this type with an empty value here are
-                      almost certainly wrong.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
               analysisInterval:
                 default: 15m
-                description: AnalysisInterval — reconcile 간격.
                 type: string
               clusterRef:
-                description: ClusterRef references the target MongoDB or MongoDBSharded.
                 properties:
                   kind:
-                    description: Kind is the cluster kind (MongoDB or MongoDBSharded)
                     enum:
                     - MongoDB
                     - MongoDBSharded
                     type: string
                   name:
-                    description: Name is the cluster name
                     type: string
                 required:
                 - kind
@@ -414,12 +285,9 @@ spec:
                 type: object
               enabled:
                 default: true
-                description: Enabled toggles the insights collector. 기본 true.
                 type: boolean
               profilingLevel:
                 default: 1
-                description: ProfilingLevel = 0 (off) | 1 (slow only) | 2 (all). 기본
-                  1.
                 enum:
                 - 0
                 - 1
@@ -428,67 +296,42 @@ spec:
                 type: integer
               sampleSize:
                 default: 500
-                description: SampleSize — 각 reconcile cycle 당 분석할 system.profile 문서
-                  수.
                 format: int32
                 type: integer
               slowQueryThresholdMs:
                 default: 100
-                description: SlowQueryThresholdMs — system.profile 에 기록될 최소 latency.
                 format: int32
                 type: integer
             required:
             - clusterRef
             type: object
           status:
-            description: MongoDBInsightsStatus — 분석 결과.
             properties:
               conditions:
-                description: Conditions follow standard k8s convention.
                 items:
-                  description: Condition contains details for one aspect of the current
-                    state of this API Resource.
                   properties:
                     lastTransitionTime:
-                      description: |-
-                        lastTransitionTime is the last time the condition transitioned from one status to another.
-                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
                       format: date-time
                       type: string
                     message:
-                      description: |-
-                        message is a human readable message indicating details about the transition.
-                        This may be an empty string.
                       maxLength: 32768
                       type: string
                     observedGeneration:
-                      description: |-
-                        observedGeneration represents the .metadata.generation that the condition was set based upon.
-                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
-                        with respect to the current state of the instance.
                       format: int64
                       minimum: 0
                       type: integer
                     reason:
-                      description: |-
-                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
-                        Producers of specific condition types may define expected values and meanings for this field,
-                        and whether the values are considered a guaranteed API.
-                        The value should be a CamelCase string.
-                        This field may not be empty.
                       maxLength: 1024
                       minLength: 1
                       pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
                       type: string
                     status:
-                      description: status of the condition, one of True, False, Unknown.
                       enum:
                       - "True"
                       - "False"
                       - Unknown
                       type: string
                     type:
-                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
                       maxLength: 316
                       pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
                       type: string
@@ -501,11 +344,9 @@ spec:
                   type: object
                 type: array
               lastAnalysisTime:
-                description: LastAnalysisTime 마지막 분석 완료 시점.
                 format: date-time
                 type: string
               phase:
-                description: 'Phase: Pending | Analyzing | Ready | Failed'
                 enum:
                 - Pending
                 - Analyzing
@@ -513,44 +354,31 @@ spec:
                 - Failed
                 type: string
               recommendations:
-                description: Recommendations — 인덱스 추가 / schema 개선 / slow query 패턴.
                 items:
-                  description: Recommendation — 분석 결과 1건.
                   properties:
                     avgLatencyMs:
-                      description: AvgLatencyMs 권장 근거 latency.
                       format: int32
                       type: integer
                     collection:
                       type: string
                     db:
-                      description: DB + Collection (optional — schema-level hint 시
-                        비어있음).
                       type: string
                     detail:
-                      description: Detail human-readable 권장. e.g. "create compound
-                        index on (status, createdAt)"
                       type: string
                     indexSuggestion:
-                      description: IndexSuggestion BSON-style key spec (MissingIndex
-                        시).
                       type: string
                     querySamples:
-                      description: QuerySamples — sample query string (max 3).
                       items:
                         type: string
                       type: array
                     severity:
                       default: info
-                      description: Severity = info | warning | critical
                       enum:
                       - info
                       - warning
                       - critical
                       type: string
                     type:
-                      description: Type = MissingIndex | UnusedIndex | SlowQueryPattern
-                        | SchemaHint
                       enum:
                       - MissingIndex
                       - UnusedIndex
@@ -563,7 +391,6 @@ spec:
                   type: object
                 type: array
               slowQueriesSampled:
-                description: SlowQueriesSampled — 마지막 cycle 에 분석된 slow query 수.
                 format: int32
                 type: integer
             type: object
@@ -572,9 +399,3 @@ spec:
     storage: false
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null

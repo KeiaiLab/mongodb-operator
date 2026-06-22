@@ -187,9 +187,18 @@ bundle: ## OperatorHub.io bundle 생성 — operator-sdk + kustomize. VERSION �
 		--channels stable,alpha \
 		--default-channel stable \
 		--package mongodb-operator
+	@echo "=== shrink bundle CRDs (maxDescLen=0) — OLM v1 helm-release-secret 1MiB 한도 (ADR-0038) ==="
+	# OLM v1 (operator-controller) 은 번들 전체를 helm release Secret (etcd 1MiB 한도) 에 저장한다.
+	# full-description CRD (mongodbshardeds 3.2MB 등, 합계 4.5MB) 는 gzip 후에도 한도를 초과해
+	# ClusterExtension 설치가 "Secret ... Too long: may not be more than 1048576 bytes" 로 실패한다.
+	# (kind e2e 실증, 2026-06-22.) config/crd/bases · charts/ 는 full description 을 유지해
+	# Helm / kubectl explain UX 를 보존하고, *번들 CRD 만* maxDescLen=0 으로 축소한다 (합계 ~1.5MB).
+	@tmp=$$(mktemp -d); $(CONTROLLER_GEN) crd:maxDescLen=0 paths="./..." output:crd:artifacts:config=$$tmp; \
+		for f in $$tmp/mongodb.keiailab.com_*.yaml; do cp "$$f" "bundle/manifests/$$(basename "$$f")"; done; \
+		rm -rf "$$tmp"
 	@echo "=== operator-sdk bundle validate (operatorhub + community suite) ==="
 	operator-sdk bundle validate ./bundle --select-optional suite=operatorframework
-	@echo "✓ bundle: ./bundle/ ($(VERSION), channels=stable+alpha, default=stable)"
+	@echo "✓ bundle: ./bundle/ ($(VERSION), channels=stable+alpha, default=stable, CRD maxDescLen=0)"
 
 .PHONY: bundle-build
 bundle-build: bundle ## bundle image 빌드 — registry push 는 community-operators PR 시점에 별.
@@ -238,6 +247,10 @@ verify-bundle-parity: ## OLM bundle ↔ chart 정합 가드 (ADR-0038). bundle C
 	if [ "$$BUNDLE_CRDS" != "$$BASE_CRDS" ]; then \
 	  echo "::error:: bundle CRD 개수 ($$BUNDLE_CRDS) != config/crd/bases ($$BASE_CRDS) — config/crd/kustomization.yaml 누락 또는 'make bundle' 미실행"; fail=1; \
 	else echo "✓ bundle CRD 개수 == config/crd/bases ($$BASE_CRDS)"; fi; \
+	BUNDLE_CRD_BYTES=$$(cat bundle/manifests/*mongodb.keiailab.com*.yaml 2>/dev/null | wc -c | tr -d ' '); \
+	if [ "$${BUNDLE_CRD_BYTES:-0}" -gt 2621440 ]; then \
+	  echo "::error:: bundle CRD 합계 $${BUNDLE_CRD_BYTES}B > 2.5MiB — OLM v1 helm release Secret(1MiB) 초과 위험. 'make bundle' 의 maxDescLen=0 축소 누락 (ADR-0038, kind e2e 실증)"; fail=1; \
+	else echo "✓ bundle CRD 합계 $${BUNDLE_CRD_BYTES}B (< 2.5MiB — OLM helm-release-secret 한도 안전)"; fi; \
 	[ "$$fail" = "0" ] || { echo "✗ verify-bundle-parity FAIL"; exit 1; }
 	@echo "✓ verify-bundle-parity PASS"
 

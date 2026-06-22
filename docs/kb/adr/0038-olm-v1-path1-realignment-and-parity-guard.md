@@ -62,6 +62,15 @@
    *컷오버*(Helm 릴리스 선 제거)는 비가역 운영 작업으로 별도 결정/승인 대상이다(Autonomy
    Constitution).
 
+6. **번들 CRD `maxDescLen=0` 축소 (kind e2e 후속, 2026-06-22)** — OLM v1(operator-controller)
+   은 번들 전체를 helm release Secret(etcd **1MiB 한도**)에 저장한다. full-description CRD
+   (mongodbshardeds 3.2MB 등, 합계 4.56MB)는 gzip 후에도 한도를 초과해 ClusterExtension 설치가
+   `Secret … Too long: may not be more than 1048576 bytes` 로 실패한다(kind e2e 실증). `make bundle`
+   에 `controller-gen crd:maxDescLen=0` 단계를 추가해 ***번들 CRD 만*** description 을 제거(합계
+   ~1.5MB) — `config/crd/bases`·`charts/` 는 full description 을 유지해 Helm/`kubectl explain` UX
+   를 보존한다. `verify-bundle-parity` 에 번들 CRD 합계 `< 2.5MiB` 가드 추가. 부수효과: OLM 설치
+   클러스터의 `kubectl explain` 은 field description 미표시(Go types 주석·docs 로 대체).
+
 ## Consequences
 
 **긍정적**:
