@@ -26,6 +26,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
+	mongodbv1beta1 "github.com/keiailab/mongodb-operator/api/v1beta1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -74,6 +75,9 @@ var _ = BeforeSuite(func() {
 	err = mongodbv1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = mongodbv1beta1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:scheme
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
@@ -102,6 +106,11 @@ var _ = BeforeSuite(func() {
 	}).SetupWithManager(k8sManager)).To(Succeed())
 
 	Expect((&MongoDBBackupReconciler{
+		Client: k8sManager.GetClient(),
+		Scheme: k8sManager.GetScheme(),
+	}).SetupWithManager(k8sManager)).To(Succeed())
+
+	Expect((&MongoDBSearchReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
 	}).SetupWithManager(k8sManager)).To(Succeed())

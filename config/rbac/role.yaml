@@ -124,6 +124,7 @@ rules:
   - mongodbfederations
   - mongodbinsights
   - mongodbs
+  - mongodbsearches
   - mongodbshardeds
   verbs:
   - create
@@ -151,6 +152,7 @@ rules:
   - mongodbfederations/status
   - mongodbinsights/status
   - mongodbs/status
+  - mongodbsearches/status
   - mongodbshardeds/status
   verbs:
   - get

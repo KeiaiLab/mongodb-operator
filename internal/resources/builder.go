@@ -608,6 +608,13 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 		args = append(args, auditpkg.MongodArgs(mdb.Spec.AuditLog)...)
 	}
 
+	// mongot(MongoDB Search) 연동: MongoDBSearch controller 가 설정한 endpoint
+	// annotation 이 있을 때만 setParameter 주입. annotation 부재 시 빈 args →
+	// mongod template 무변경 = search opt-in 무롤링(컷오버 교훈, mongot_test 검증).
+	if ep := mdb.Annotations[MongotSearchEndpointAnnotation]; ep != "" {
+		args = append(args, MongotSetParameterArgs(ep, mdb.Annotations[MongotTLSModeAnnotation])...)
+	}
+
 	// Init container to copy keyfile with correct permissions
 	// Runs as mongodb user (999) and uses FSGroup for proper file ownership
 	initContainers := []corev1.Container{
