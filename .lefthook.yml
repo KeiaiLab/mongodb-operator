@@ -100,6 +100,10 @@ pre-push:
           exit 1
         fi
         rm -f /tmp/.go.mod.lefthook.bak /tmp/.go.sum.lefthook.bak
+    bundle-parity:
+      # ADR-0038: OLM bundle CSV version == Chart.yaml appVersion + CRD 개수 정합.
+      # appVersion bump 시 'make bundle' 누락(Path 1 stale 재발)을 push 전 차단.
+      run: make verify-bundle-parity
     kube-linter:
       # K8s 리소스 보안/best-practice 검사 (구 .github/workflows/kube-linter.yml 대체).
       # helm template default values 로 lint.

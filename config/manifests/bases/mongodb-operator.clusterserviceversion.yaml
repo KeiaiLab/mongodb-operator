@@ -312,12 +312,12 @@ metadata:
       ]
     capabilities: Seamless Upgrades
     categories: Database, Storage
-    containerImage: ghcr.io/keiailab/mongodb-operator:v1.5.0
-    createdAt: "2026-05-10T00:00:00Z"
-    # ADR-0028 (외부 사용자 운영 수준): OperatorHub.io 0.3.0 + 본 repo v1.0.0~v1.4.x 모든 사용자가
-    # `stable` channel 구독 시 v1.5.0 으로 자동 업그레이드 가능하도록 광 범위 skipRange.
-    # `replaces:` (spec) 는 직전 정식 OLM bundle (v1.4.23) 와 연결 — 점진 업그레이드 경로 보존.
-    olm.skipRange: '>=0.3.0 <1.5.0'
+    containerImage: ghcr.io/keiailab/mongodb-operator:v1.13.1
+    createdAt: "2026-06-22T00:00:00Z"
+    # ADR-0038 (Path 1 재정렬): OperatorHub.io 0.3.0 + 본 repo v1.0.0~v1.13.0 모든 사용자가
+    # `stable` channel 구독 시 v1.13.1 으로 자동 업그레이드 가능하도록 광 범위 skipRange.
+    # `replaces:` (spec) 는 직전 정식 OLM bundle (v1.9.0) 와 연결 — 점진 업그레이드 경로 보존.
+    olm.skipRange: '>=0.3.0 <1.13.1'
     description: |
       Kubernetes operator for MongoDB — manages MongoDB (ReplicaSet) and
       MongoDBSharded (config server + shards + mongos) CRDs with K8s Lease
@@ -331,21 +331,79 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    # 7 CRD × 2 served version (v1alpha1 + v1beta1). operator-sdk 가 served 버전마다 owned 항목을
+    # 생성하므로 두 버전 모두 description 보유 (empty-description lint 회피). storage 버전은 CRD 별 상이
+    # (mongodbs/shardeds/backups=v1beta1, federations/clustergroups/insights/backupverifications=v1alpha1).
     - description: MongoDB 는 ReplicaSet 토폴로지의 단일 클러스터를 선언적으로 관리하는 CRD 다 (primary + secondaries + optional arbiter).
       displayName: MongoDB
       kind: MongoDB
       name: mongodbs.mongodb.keiailab.com
       version: v1alpha1
+    - description: MongoDB 는 ReplicaSet 토폴로지의 단일 클러스터를 선언적으로 관리하는 CRD 다 (primary + secondaries + optional arbiter).
+      displayName: MongoDB
+      kind: MongoDB
+      name: mongodbs.mongodb.keiailab.com
+      version: v1beta1
     - description: MongoDBSharded 는 sharded cluster 를 선언적으로 관리하는 CRD 다 (config server replica set + N shards × replica set + mongos router).
       displayName: MongoDB Sharded
       kind: MongoDBSharded
       name: mongodbshardeds.mongodb.keiailab.com
       version: v1alpha1
+    - description: MongoDBSharded 는 sharded cluster 를 선언적으로 관리하는 CRD 다 (config server replica set + N shards × replica set + mongos router).
+      displayName: MongoDB Sharded
+      kind: MongoDBSharded
+      name: mongodbshardeds.mongodb.keiailab.com
+      version: v1beta1
     - description: MongoDBBackup 은 mongodump 기반 backup Job 추상이다 (PVC 또는 외부 storage target).
       displayName: MongoDB Backup
       kind: MongoDBBackup
       name: mongodbbackups.mongodb.keiailab.com
       version: v1alpha1
+    - description: MongoDBBackup 은 mongodump 기반 backup Job 추상이다 (PVC 또는 외부 storage target).
+      displayName: MongoDB Backup
+      kind: MongoDBBackup
+      name: mongodbbackups.mongodb.keiailab.com
+      version: v1beta1
+    - description: MongoDBBackupVerification 은 backup restore drill 로 백업 복원 가능성과 데이터 무결성을 검증하는 CRD 다.
+      displayName: MongoDB Backup Verification
+      kind: MongoDBBackupVerification
+      name: mongodbbackupverifications.mongodb.keiailab.com
+      version: v1alpha1
+    - description: MongoDBBackupVerification 은 backup restore drill 로 백업 복원 가능성과 데이터 무결성을 검증하는 CRD 다.
+      displayName: MongoDB Backup Verification
+      kind: MongoDBBackupVerification
+      name: mongodbbackupverifications.mongodb.keiailab.com
+      version: v1beta1
+    - description: MongoDBClusterGroup 은 다수 MongoDB 클러스터를 그룹으로 묶어 공유 인증·정책·중앙 모니터링을 일괄 관리하는 CRD 다.
+      displayName: MongoDB Cluster Group
+      kind: MongoDBClusterGroup
+      name: mongodbclustergroups.mongodb.keiailab.com
+      version: v1alpha1
+    - description: MongoDBClusterGroup 은 다수 MongoDB 클러스터를 그룹으로 묶어 공유 인증·정책·중앙 모니터링을 일괄 관리하는 CRD 다.
+      displayName: MongoDB Cluster Group
+      kind: MongoDBClusterGroup
+      name: mongodbclustergroups.mongodb.keiailab.com
+      version: v1beta1
+    - description: MongoDBFederation 은 멀티 리전에 걸친 federation 토폴로지를 선언적으로 관리하는 CRD 다.
+      displayName: MongoDB Federation
+      kind: MongoDBFederation
+      name: mongodbfederations.mongodb.keiailab.com
+      version: v1alpha1
+    - description: MongoDBFederation 은 멀티 리전에 걸친 federation 토폴로지를 선언적으로 관리하는 CRD 다.
+      displayName: MongoDB Federation
+      kind: MongoDBFederation
+      name: mongodbfederations.mongodb.keiailab.com
+      version: v1beta1
+    - description: MongoDBInsights 는 slow query·index 권고 등 advisory 분석을 수행하는 CRD 다.
+      displayName: MongoDB Insights
+      kind: MongoDBInsights
+      name: mongodbinsights.mongodb.keiailab.com
+      version: v1alpha1
+    - description: MongoDBInsights 는 slow query·index 권고 등 advisory 분석을 수행하는 CRD 다.
+      displayName: MongoDB Insights
+      kind: MongoDBInsights
+      name: mongodbinsights.mongodb.keiailab.com
+      version: v1beta1
   description: |
     # MongoDB Operator
 
@@ -426,7 +484,7 @@ spec:
   provider:
     name: Keiailab
     url: https://github.com/keiailab
-  # ADR-0028: OLM upgrade graph 정식 진입점. 본 base 의 version 은 `operator-sdk generate bundle --version $VERSION` 가 덮어쓴다.
-  # `replaces` 는 직전 정식 OLM bundle 명. v1.5.0 의 직전 = v1.4.23.
-  replaces: mongodb-operator.v1.4.23
+  # ADR-0028/0038: OLM upgrade graph 정식 진입점. 본 base 의 version 은 `operator-sdk generate bundle --version $VERSION` 가 덮어쓴다.
+  # `replaces` 는 직전 정식 OLM bundle 명. v1.13.1 의 직전 = v1.9.0.
+  replaces: mongodb-operator.v1.9.0
   version: 0.0.0

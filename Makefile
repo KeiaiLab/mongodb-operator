@@ -38,10 +38,11 @@ manifests: controller-gen sync-crds ## Generate WebhookConfiguration, ClusterRol
 .PHONY: sync-crds
 sync-crds: ## Sync config/crd/bases → charts/mongodb-operator/crds (release 전 의무 — drift 차단).
 	@echo "=== sync CRD bundles (config/crd/bases → charts/mongodb-operator/crds) ==="
-	@cp config/crd/bases/mongodb.keiailab.com_mongodbs.yaml charts/mongodb-operator/crds/
-	@cp config/crd/bases/mongodb.keiailab.com_mongodbshardeds.yaml charts/mongodb-operator/crds/
-	@cp config/crd/bases/mongodb.keiailab.com_mongodbbackups.yaml charts/mongodb-operator/crds/
-	@echo "✓ CRD bundles synced"
+	# v1.13.x — 명시 파일 목록은 신규 CRD 추가 시 누락 위험 (mongodbfederations/clustergroups/
+	# insights/backupverifications 가 chart 에 미관리로 남았던 ADR-0038 RCA). bases 의 모든 CRD 를
+	# wildcard 로 동기화하여 향후 CRD 추가에도 자동 정합.
+	@cp config/crd/bases/mongodb.keiailab.com_*.yaml charts/mongodb-operator/crds/
+	@echo "✓ CRD bundles synced ($$(ls config/crd/bases/mongodb.keiailab.com_*.yaml | wc -l | tr -d ' ') CRDs)"
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -221,6 +222,24 @@ catalog-push: ## catalog image push to ghcr.io. OLM v1 ClusterCatalog 의 image:
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
 	docker push ghcr.io/keiailab/mongodb-operator-catalog:v$(VERSION)
 	@echo "✓ catalog pushed: ghcr.io/keiailab/mongodb-operator-catalog:v$(VERSION)"
+
+.PHONY: verify-bundle-parity
+verify-bundle-parity: ## OLM bundle ↔ chart 정합 가드 (ADR-0038). bundle CSV version == Chart.yaml appVersion + CRD 개수 일치. release CI / pre-push 게이트.
+	@echo "=== verify-bundle-parity (ADR-0038 drift 가드) ==="
+	@CSV=bundle/manifests/mongodb-operator.clusterserviceversion.yaml; \
+	BUNDLE_VER=$$(grep -E '^  version: [0-9]' $$CSV | head -1 | awk '{print $$2}'); \
+	APP_VER=$$(grep -E '^appVersion:' charts/mongodb-operator/Chart.yaml | awk '{print $$2}' | tr -d '"'); \
+	BUNDLE_CRDS=$$(ls bundle/manifests/*mongodb.keiailab.com*.yaml 2>/dev/null | wc -l | tr -d ' '); \
+	BASE_CRDS=$$(ls config/crd/bases/mongodb.keiailab.com_*.yaml 2>/dev/null | wc -l | tr -d ' '); \
+	fail=0; \
+	if [ "$$BUNDLE_VER" != "$$APP_VER" ]; then \
+	  echo "::error:: bundle CSV version ($$BUNDLE_VER) != Chart.yaml appVersion ($$APP_VER) — 'make bundle VERSION=$$APP_VER' 후 commit 필요 (Path 1 stale 방지)"; fail=1; \
+	else echo "✓ bundle CSV version == appVersion ($$APP_VER)"; fi; \
+	if [ "$$BUNDLE_CRDS" != "$$BASE_CRDS" ]; then \
+	  echo "::error:: bundle CRD 개수 ($$BUNDLE_CRDS) != config/crd/bases ($$BASE_CRDS) — config/crd/kustomization.yaml 누락 또는 'make bundle' 미실행"; fail=1; \
+	else echo "✓ bundle CRD 개수 == config/crd/bases ($$BASE_CRDS)"; fi; \
+	[ "$$fail" = "0" ] || { echo "✗ verify-bundle-parity FAIL"; exit 1; }
+	@echo "✓ verify-bundle-parity PASS"
 
 .PHONY: sbom
 sbom: ## syft 로 SBOM (SPDX-2.3) 생성 — image 의 binary + Go modules. SLSA / EU CRA 표준.

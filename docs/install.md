@@ -62,7 +62,7 @@ spec:
   source:
     type: Image
     image:
-      ref: ghcr.io/keiailab/mongodb-operator-catalog:v1.5.0
+      ref: ghcr.io/keiailab/mongodb-operator-catalog:v1.13.1
       pollIntervalMinutes: 10
 ```
 
@@ -116,7 +116,7 @@ spec:
     sourceType: Catalog
     catalog:
       packageName: mongodb-operator
-      version: 1.5.0  # 또는 channel-based: channels: [stable]
+      version: 1.13.1  # 또는 channel-based: channels: [stable]
 ```
 
 ```bash
@@ -132,7 +132,7 @@ kubectl get pod -n mongodb-system -l app.kubernetes.io/name=mongodb-operator
 ```bash
 # Version pin → 새 version 으로 직접 점프
 kubectl patch clusterextension mongodb-operator --type=merge \
-  -p '{"spec":{"source":{"catalog":{"version":"1.6.0"}}}}'
+  -p '{"spec":{"source":{"catalog":{"version":"1.14.0"}}}}'
 
 # 또는 channel-based — catalog 가 stable 채널의 새 version publish 시 자동 upgrade
 kubectl patch clusterextension mongodb-operator --type=merge \
@@ -164,7 +164,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/keiailab/mongodb-operator
-    targetRevision: v1.5.0
+    targetRevision: v1.13.1
     path: deploy/olm-v1
   destination:
     server: https://kubernetes.default.svc
@@ -189,7 +189,7 @@ helm repo update
 helm install mongodb-operator mongodb-operator/mongodb-operator \
   --namespace mongodb-operator-system \
   --create-namespace \
-  --version 1.5.0
+  --version 1.13.1
 ```
 
 ### §3.2 values.yaml customization
@@ -200,7 +200,7 @@ helm install mongodb-operator mongodb-operator/mongodb-operator \
 replicaCount: 1
 image:
   repository: ghcr.io/keiailab/mongodb-operator
-  tag: v1.5.0
+  tag: v1.13.1
 resources:
   requests: { cpu: 100m, memory: 128Mi }
   limits: { cpu: 500m, memory: 512Mi }
@@ -216,17 +216,17 @@ webhook:
 ### §3.3 Day-2 — Upgrade / Rollback
 
 ```bash
-helm upgrade mongodb-operator mongodb-operator/mongodb-operator --version 1.6.0
+helm upgrade mongodb-operator mongodb-operator/mongodb-operator --version 1.14.0
 helm rollback mongodb-operator 1   # 이전 revision 으로
 helm uninstall mongodb-operator    # 완전 제거 (CRDs 는 별도)
 ```
 
 ## §4 Private Registry (모든 path 공통)
 
-본 v1.5.0 release 의 GHCR images:
-- `ghcr.io/keiailab/mongodb-operator:v1.5.0` (public)
-- `ghcr.io/keiailab/mongodb-operator-bundle:v1.5.0` (private, internal — public 화 진행 중)
-- `ghcr.io/keiailab/mongodb-operator-catalog:v1.5.0` (private, internal — public 화 진행 중)
+본 v1.13.1 release 의 GHCR images:
+- `ghcr.io/keiailab/mongodb-operator:v1.13.1` (public)
+- `ghcr.io/keiailab/mongodb-operator-bundle:v1.13.1` (private, internal — public 화 진행 중)
+- `ghcr.io/keiailab/mongodb-operator-catalog:v1.13.1` (private, internal — public 화 진행 중)
 
 private image 사용 시:
 
@@ -253,11 +253,12 @@ helm install ... --set imagePullSecrets[0].name=ghcr-mongodb-operator-pull
 ```bash
 # CRDs
 kubectl get crd | grep mongodb.keiailab.com
-# 기대: mongodbs, mongodbbackups, mongodbshardeds (3개)
+# 기대: mongodbs, mongodbshardeds, mongodbbackups, mongodbbackupverifications,
+#       mongodbclustergroups, mongodbfederations, mongodbinsights (7개)
 
 # operator pod
 kubectl get pod -A -l app.kubernetes.io/name=mongodb-operator
-# 기대: Running, image v1.5.0
+# 기대: Running, image v1.13.1
 
 # operator logs
 kubectl logs -A -l app.kubernetes.io/name=mongodb-operator --tail=20

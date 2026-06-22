@@ -5,3 +5,7 @@ resources:
   - bases/mongodb.keiailab.com_mongodbs.yaml
   - bases/mongodb.keiailab.com_mongodbshardeds.yaml
   - bases/mongodb.keiailab.com_mongodbbackups.yaml
+  - bases/mongodb.keiailab.com_mongodbbackupverifications.yaml
+  - bases/mongodb.keiailab.com_mongodbclustergroups.yaml
+  - bases/mongodb.keiailab.com_mongodbfederations.yaml
+  - bases/mongodb.keiailab.com_mongodbinsights.yaml

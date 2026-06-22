@@ -1,0 +1,20 @@
+---
+# MongoDBBackupVerification 샘플 — backup restore drill (복원 검증)
+apiVersion: mongodb.keiailab.com/v1alpha1
+kind: MongoDBBackupVerification
+metadata:
+  name: my-mongodb-backup-verify
+  namespace: database
+spec:
+  # 검증 대상 MongoDBBackup 참조
+  backupRef:
+    name: my-mongodb-backup-manual
+
+  # 복원 성공 시 임시 검증 리소스 정리 (기본값: true)
+  cleanupOnSuccess: true
+
+  # 샘플 쿼리로 복원 데이터 무결성 확인
+  sampleQueries:
+    - db: myapp
+      collection: users
+      filterJSON: "{}"

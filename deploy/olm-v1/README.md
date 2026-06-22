@@ -13,14 +13,17 @@
 | security-by-default | 별 NetworkPolicy 필수 (OPRUN-3923) | architecture 차원 (single installer SA + RBAC) |
 | maintenance | OLM v0 = maintenance mode | OLM v1 = 활성 development |
 
-## §2 라이브 적용 (2026-05-15, KeiaiLab Cluster)
+## §2 라이브 상태 (KeiaiLab Cluster)
+
+### 현재 (2026-06-22, ADR-0038 Path 1 재정렬)
+
+- 활성 operator 경로 = **Helm** (`data` ns, `ghcr.io/keiailab/mongodb-operator:v1.13.1`).
+- OLM v1 `keiailab-operators` ClusterCatalog = **v1.13.1 로 정렬** (catalog/bundle 정합 복구). SERVING.
+- mongodb-operator **ClusterExtension 은 미설치** — Helm 과 동시 운영 시 cluster-scoped CRD 이중 reconcile 충돌이 나므로, §4 Helm→OLM *컷오버* 시점에 설치한다.
+
+### PoC 검증 (2026-05-15, v1.5.0) — OLM v1 메커니즘 라이브 확인 (historical)
 
 ```
-$ kubectl get deployment -n olmv1-system
-NAME                                     READY   UP-TO-DATE   AVAILABLE
-catalogd-controller-manager              1/1     1            1
-operator-controller-controller-manager   1/1     1            1
-
 $ kubectl get clustercatalog
 NAME                 LASTUNPACKED   SERVING   AGE
 keiailab-operators   6m28s          True      6m56s
@@ -28,13 +31,9 @@ keiailab-operators   6m28s          True      6m56s
 $ kubectl get clusterextension
 NAME               INSTALLED BUNDLE          VERSION   INSTALLED   PROGRESSING
 mongodb-operator   mongodb-operator.v1.5.0   1.5.0     True        True
-
-$ kubectl get pod -n mongodb-system
-NAME                                                   READY   STATUS    RESTARTS
-mongodb-operator-controller-manager-6b65567bd8-wq8n5   1/1     Running   0
 ```
 
-`<!-- live-verified: 2026-05-15 -->`
+`<!-- live-verified: 2026-05-15 (PoC, v1.5.0); catalog realigned: 2026-06-22 (v1.13.1, ADR-0038) -->`
 
 ## §3 적용 절차
 
@@ -92,10 +91,10 @@ kubectl apply -k deploy/olm-v1/
 ### 3.4 CRD adopt (기존 helm CRD takeover, 일회성)
 
 ```fish
-# 본 cluster 에 기존 helm chart mongodb-operator v1.4.20 의 CRD 가 라이브 → OLM v1 가 takeover.
+# 본 cluster 에 기존 helm chart mongodb-operator v1.13.1 의 CRD 가 라이브 → OLM v1 가 takeover.
 # helm v3 의 adopt mechanism (meta.helm.sh annotation + managed-by=Helm label) 으로 ownership transfer.
 # OLM v1 의 ClusterExtension `mongodb-operator` 의 internal helm release name 정합.
-for crd in mongodbs.mongodb.keiailab.com mongodbbackups.mongodb.keiailab.com mongodbshardeds.mongodb.keiailab.com; do
+for crd in mongodbs.mongodb.keiailab.com mongodbshardeds.mongodb.keiailab.com mongodbbackups.mongodb.keiailab.com mongodbbackupverifications.mongodb.keiailab.com mongodbclustergroups.mongodb.keiailab.com mongodbfederations.mongodb.keiailab.com mongodbinsights.mongodb.keiailab.com; do
   kubectl annotate crd $crd \
     meta.helm.sh/release-name=mongodb-operator \
     meta.helm.sh/release-namespace=mongodb-system \
@@ -121,7 +120,7 @@ kubectl get pod -n mongodb-system -l app.kubernetes.io/name=mongodb-operator
 
 ## §4 helm chart 영구 cutover (사용자 git PR)
 
-본 cluster 에 helm chart mongodb-operator v1.4.20 (data ns) 와 OLM v1 mongodb-operator v1.5.0 (mongodb-system ns) 가 *공존* — CR 0건이라 race 없음. *영구 cutover* 는 git PR 으로만:
+본 cluster 의 활성 경로는 helm chart mongodb-operator v1.13.1 (data ns). OLM v1 catalog 는 v1.13.1 로 정렬되어 *cutover 준비 완료* 이나 ClusterExtension 은 미설치 (Helm 과 동시 운영 시 이중 reconcile 충돌 회피). *영구 cutover* 는 git PR 으로만 — Helm 제거와 OLM ClusterExtension 설치를 *원자적으로*:
 
 ### PR 1: `keiailab/platform/data` (helm chart 제거)
 
@@ -144,7 +143,7 @@ kubectl get deployment -n data platform-data-mongodb-mongodb-operator
 # 기대: NotFound
 
 # helm.sh annotation 정리 (helm release 없으므로 더 이상 필요 없음).
-for crd in mongodbs.mongodb.keiailab.com mongodbbackups.mongodb.keiailab.com mongodbshardeds.mongodb.keiailab.com; do
+for crd in mongodbs.mongodb.keiailab.com mongodbshardeds.mongodb.keiailab.com mongodbbackups.mongodb.keiailab.com mongodbbackupverifications.mongodb.keiailab.com mongodbclustergroups.mongodb.keiailab.com mongodbfederations.mongodb.keiailab.com mongodbinsights.mongodb.keiailab.com; do
   kubectl annotate crd $crd meta.helm.sh/release-name- meta.helm.sh/release-namespace-
   kubectl label crd $crd app.kubernetes.io/managed-by-
 done
@@ -181,7 +180,7 @@ kubectl get networkpolicy -n olmv1-system
 
 - **upgrade 정책** — channel-based upgrade (ClusterExtension 의 catalog.channels) 또는 version range
 - **PoC CR** — `database` ns 에 test-mongodb CR 1건 reconcile 검증 (helm chart 영구 제거 후 race 회피)
-- **community-operators upstream PR** — 0.3.0 → 1.5.0 sync (ADR-0027 자동화 deferred)
+- **community-operators upstream sync** — ADR-0028 Phase D 로 영구 폐기 (해당 없음)
 
 ## §6 참조
 
