@@ -1253,4 +1253,14 @@ func TestBuildPEMMergeInitContainer_SecurityContext(t *testing.T) {
 		"chown 금지 — fsGroup=999 가 emptyDir ownership 처리")
 	assert.Contains(t, cmdJoined, "chmod 0400 /tls-pem/server.pem",
 		"mongod read-only 권한")
+
+	// 멱등성 회귀 가드 — init 재실행(pod/kubelet 재기동) 시 기존 0400 server.pem 을
+	// 안전 교체해야 한다. 직접 `> /tls-pem/server.pem` 은 0400 파일 덮어쓰기 실패
+	// (Permission denied → CrashLoopBackOff, 2026-06-22 사고). temp + atomic mv 필수.
+	assert.Contains(t, cmdJoined, "/tls-pem/server.pem.tmp",
+		"멱등: temp 파일 경유 (재실행 시 0400 server.pem 덮어쓰기 실패 방지)")
+	assert.Contains(t, cmdJoined, "mv -f /tls-pem/server.pem.tmp /tls-pem/server.pem",
+		"멱등: atomic mv 로 교체 (rename 은 dir write 만 필요, 대상 0400 무관)")
+	assert.NotContains(t, cmdJoined, "> /tls-pem/server.pem ",
+		"비멱등 직접 truncate 금지 — 재실행 시 기존 0400 파일에서 Permission denied")
 }
