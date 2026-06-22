@@ -15,25 +15,25 @@ schema: olm.channel
 package: mongodb-operator
 name: stable
 entries:
-  - name: mongodb-operator.v1.13.3
-    skipRange: '>=0.3.0 <1.13.3'
+  - name: mongodb-operator.v1.14.0
+    skipRange: '>=0.3.0 <1.14.0'
 ---
 schema: olm.channel
 package: mongodb-operator
 name: alpha
 entries:
-  - name: mongodb-operator.v1.13.3
-    skipRange: '>=0.3.0 <1.13.3'
+  - name: mongodb-operator.v1.14.0
+    skipRange: '>=0.3.0 <1.14.0'
 ---
 schema: olm.bundle
-name: mongodb-operator.v1.13.3
+name: mongodb-operator.v1.14.0
 package: mongodb-operator
-image: ghcr.io/keiailab/mongodb-operator-bundle@sha256:5ae514db0742b16c9476bbcae56b768b383fcbfb08b8b4e78d3dc998033686fd
+image: ghcr.io/keiailab/mongodb-operator-bundle@sha256:bfb107e77b6415fbdbdfae3984861d9c03ec033491d9e03ee7f2b5ec72a29c2c
 properties:
   - type: olm.package
     value:
       packageName: mongodb-operator
-      version: 1.13.3
+      version: 1.14.0
   - type: olm.gvk
     value:
       group: mongodb.keiailab.com
@@ -103,4 +103,14 @@ properties:
     value:
       group: mongodb.keiailab.com
       kind: MongoDBInsights
+      version: v1beta1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBSearch
+      version: v1beta1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBSearchIndex
       version: v1beta1
