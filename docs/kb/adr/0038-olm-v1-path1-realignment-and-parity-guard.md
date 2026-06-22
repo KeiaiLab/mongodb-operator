@@ -71,6 +71,19 @@
    를 보존한다. `verify-bundle-parity` 에 번들 CRD 합계 `< 2.5MiB` 가드 추가. 부수효과: OLM 설치
    클러스터의 `kubectl explain` 은 field description 미표시(Go types 주석·docs 로 대체).
 
+7. **라이브 무중단 컷오버 완료 (2026-06-22)** — keiailab 5-shard 프로덕션을 Helm→OLM 으로 무중단
+   전환(operator v1.13.3, `tls-pem-merge` 멱등 fix 포함). 절차: (a) 라이브 CRD drift 를
+   `kubectl apply --server-side --force-conflicts -f config/crd/bases/` 로 일회성 정렬 →
+   operator-controller **Strict CRD-safety preflight 그대로** 통과(우회 None 불요). (b) 7 CRD 에
+   helm adoption 메타데이터 선부여 → adopt. (c) platform/system!251(enable) → 검증 게이트
+   (Installed=True + currentRevision 6 STS 불변=무롤링 + mongosh) → platform/data!152(Helm operator
+   제거). **신규 발견 2종**: (i) **catalog bundle image 는 digest-only 의무** — `bundle:vX@sha256`
+   (tag+digest) 는 operator-controller 가 거부(`references with both a tag and digest are currently
+   not supported`), `make catalog-build` 수정(#348). `opm validate` 미검출(resolution-time 규칙).
+   (ii) CRD drift 는 served-but-unused 버전의 default/field(mongodbshardeds v1alpha1 exporter.image
+   default 0.40 등)도 포함 — 라이브 객체가 v1beta1 이라 무영향이나 preflight 는 보수적으로 flag →
+   전 CRD 정렬로 해소. dual-operator 윈도우는 동일 바이너리 + STS ownerRef=CR 이라 무롤링.
+
 ## Consequences
 
 **긍정적**:
