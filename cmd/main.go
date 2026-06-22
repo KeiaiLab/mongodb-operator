@@ -246,6 +246,16 @@ func main() {
 		setupLog.Info("MongoDBClusterGroup controller disabled by feature gate (--enable-clustergroup-controller=false)")
 	}
 
+	// Phase 1 (Atlas 갭 클로징): MongoDBSearch (mongot) reconciler. CR 존재 시에만
+	// mongot 배포 — opt-in 이라 게이트 없이 상시 등록(MongoDBSearch CR 부재 시 inert).
+	if err = (&controller.MongoDBSearchReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "MongoDBSearch")
+		os.Exit(1)
+	}
+
 	// Autoscaling 게이트는 reconciler 내부에서 enableAutoscaling 검사 — 현재 cmd 단에서는
 	// log 표시만. (HPA reconcile 로직 자체는 mongodb_controller / mongodbsharded_controller 내부에 있음)
 	if !enableAutoscaling {
