@@ -1,6 +1,6 @@
 apiVersion: v2
 name: mongodb-operator
-description: A Kubernetes Operator for managing MongoDB ReplicaSets and Sharded Clusters (v1.0.0 GA Release)
+description: A Kubernetes Operator for MongoDB — ReplicaSets, Sharded Clusters with auto scale-out, S3/PVC Backup, TLS, and LDAP. MIT licensed.
 type: application
 version: 1.13.2
 appVersion: "1.13.1"
@@ -16,6 +16,13 @@ keywords:
   - backup
   - kubernetes
   - external-secrets
+  - mongodb-operator
+  - kubernetes-operator
+  - mongodb-backup
+  - pitr
+  - ldap
+  - mongos
+  - helm
 
 home: https://github.com/keiailab/mongodb-operator
 
