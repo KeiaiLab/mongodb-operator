@@ -72,14 +72,10 @@ func mongotResources(spec mongodbv1beta1.ResourcesSpec) corev1.ResourceRequireme
 	return corev1.ResourceRequirements{Requests: spec.Requests, Limits: spec.Limits}
 }
 
-// mongotLabels — mongot 리소스 라벨(component=mongot).
+// mongotLabels — mongot 리소스 라벨(component=mongot). operator buildLabels 위임
+// (commonslabels — 라벨 리터럴 중복 회피, goconst).
 func mongotLabels(searchName string) map[string]string {
-	return map[string]string{
-		"app.kubernetes.io/name":       "mongodb",
-		"app.kubernetes.io/instance":   searchName,
-		"app.kubernetes.io/component":  "mongot",
-		"app.kubernetes.io/managed-by": "mongodb-operator",
-	}
+	return buildLabels(searchName, "mongot")
 }
 
 // MongotServiceName — mongot headless service 이름.
@@ -253,16 +249,13 @@ func storageClassPtr(s string) *string {
 }
 
 // sourceMongodSelector — mongot netpol peer 로 쓸 source mongod RS pod selector.
-// instance+component 로 *해당 source* mongod 만 한정(cluster-wide 노출 회피).
+// buildLabels(replicaset) 로 *해당 source* mongod 만 한정(cluster-wide 노출 회피 + goconst).
 func sourceMongodSelector(search *mongodbv1beta1.MongoDBSearch) map[string]string {
-	sel := map[string]string{
-		"app.kubernetes.io/name":      "mongodb",
-		"app.kubernetes.io/component": "replicaset",
-	}
+	name := ""
 	if search.Spec.Source.MongoDBResourceRef != nil {
-		sel["app.kubernetes.io/instance"] = search.Spec.Source.MongoDBResourceRef.Name
+		name = search.Spec.Source.MongoDBResourceRef.Name
 	}
-	return sel
+	return buildLabels(name, "replicaset")
 }
 
 // BuildMongotNetworkPolicy — mongot 의 ingress/egress allow(peer 제한).

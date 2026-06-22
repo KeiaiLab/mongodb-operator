@@ -35,7 +35,14 @@ import (
 	"github.com/keiailab/mongodb-operator/internal/resources"
 )
 
-const defaultSyncUser = "search-sync"
+const (
+	defaultSyncUser         = "search-sync"
+	kindMongoDBSharded      = "MongoDBSharded"
+	searchPhasePending      = "Pending"
+	searchPhaseProvisioning = "Provisioning"
+	searchPhaseReady        = "Ready"
+	searchPhaseFailed       = "Failed"
+)
 
 // MongoDBSearchReconciler reconciles MongoDBSearch — mongot deployment.
 type MongoDBSearchReconciler struct {
@@ -60,7 +67,7 @@ func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// MVP: source = MongoDB(ReplicaSet). Sharded 는 후속(shard 별 mongot).
-	if search.Spec.Source.MongoDBResourceRef == nil || search.Spec.Source.Kind == "MongoDBSharded" {
+	if search.Spec.Source.MongoDBResourceRef == nil || search.Spec.Source.Kind == kindMongoDBSharded {
 		return r.fail(ctx, search, "source.mongodbResourceRef(Kind=MongoDB) required (Sharded not yet supported)")
 	}
 	source := &mongodbv1alpha1.MongoDB{}
@@ -114,9 +121,9 @@ func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err := r.Get(ctx, types.NamespacedName{Name: search.Name + "-mongot", Namespace: search.Namespace}, sts); err == nil {
 		ready = sts.Status.ReadyReplicas
 	}
-	phase := "Provisioning"
+	phase := searchPhaseProvisioning
 	if ready > 0 {
-		phase = "Ready"
+		phase = searchPhaseReady
 	}
 	search.Status.Phase = phase
 	search.Status.MongotEndpoint = endpoint
@@ -176,14 +183,14 @@ func (r *MongoDBSearchReconciler) annotateSource(ctx context.Context, source *mo
 }
 
 func (r *MongoDBSearchReconciler) pending(ctx context.Context, search *mongodbv1beta1.MongoDBSearch, msg string) (ctrl.Result, error) {
-	search.Status.Phase = "Pending"
+	search.Status.Phase = searchPhasePending
 	search.Status.Error = msg
 	_ = r.Status().Update(ctx, search)
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
 func (r *MongoDBSearchReconciler) fail(ctx context.Context, search *mongodbv1beta1.MongoDBSearch, msg string) (ctrl.Result, error) {
-	search.Status.Phase = "Failed"
+	search.Status.Phase = searchPhaseFailed
 	search.Status.Error = msg
 	_ = r.Status().Update(ctx, search)
 	return ctrl.Result{RequeueAfter: time.Minute}, nil
