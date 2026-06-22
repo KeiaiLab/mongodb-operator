@@ -42,6 +42,16 @@ spec:
             - --health-probe-bind-address=:8081
             - --metrics-bind-address=:8443
             - --metrics-secure=true
+            - --zap-log-level=info
+            # Feature gates — keiailab 라이브 Helm operator 와 정합 (OLM cutover 무회귀, ADR-0038).
+            # cmd/main.go 기본값은 모두 false 이므로 OLM 으로 배포된 operator 가 sharded/insights/
+            # federation/clustergroup/autoscaling controller 를 운영하려면 번들 CSV 에서 명시 활성 필수.
+            # (raw `make deploy` 경로도 동일 적용; Helm chart 는 자체 values 게이트로 별도 제어.)
+            - --enable-sharded-controller=true
+            - --enable-insights-controller=true
+            - --enable-federation-controller=true
+            - --enable-clustergroup-controller=true
+            - --enable-autoscaling=true
           ports:
             - name: https
               containerPort: 8443

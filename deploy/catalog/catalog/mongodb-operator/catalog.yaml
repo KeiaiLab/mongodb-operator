@@ -28,7 +28,7 @@ entries:
 schema: olm.bundle
 name: mongodb-operator.v1.13.1
 package: mongodb-operator
-image: ghcr.io/keiailab/mongodb-operator-bundle:v1.13.1@sha256:add62ee85cb3d9911a4b901b330a749939d6bafb09450c26288baa691de976fd
+image: ghcr.io/keiailab/mongodb-operator-bundle:v1.13.1@sha256:52c611ada56a2a50c61a9ac327da2df39cf846a475a6ae3521fe8b299bfc7b74
 properties:
   - type: olm.package
     value:
