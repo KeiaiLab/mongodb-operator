@@ -92,7 +92,14 @@ func BuildPEMMergeInitContainer() corev1.Container {
 		Image: keyfileInitImage, // busybox:1.37 const 단일화 정합
 		Command: []string{
 			"sh", "-c",
-			"cat /tls-input/tls.crt /tls-input/tls.key > /tls-pem/server.pem && " +
+			// 멱등(idempotent) — pod/init 재시작 시 emptyDir 의 기존 server.pem(0400)을
+			// `> server.pem` 으로 덮어쓰면 owner write 권한 부재로 "Permission denied" 크래시.
+			// (실 사고 2026-06-22: node/kubelet 재기동 후 init 재실행 → tls-pem-merge
+			// CrashLoopBackOff → pod not-ready → 클러스터 회복 정체.) temp 파일에 쓴 뒤
+			// atomic `mv -f` 로 교체 — rename 은 dir write(fsGroup=999)만 필요, 대상 파일 0400
+			// 무관. .tmp 는 chmod 하지 않아 재실행 시 항상 overwrite 가능.
+			"cat /tls-input/tls.crt /tls-input/tls.key > /tls-pem/server.pem.tmp && " +
+				"mv -f /tls-pem/server.pem.tmp /tls-pem/server.pem && " +
 				"chmod 0400 /tls-pem/server.pem",
 		},
 		SecurityContext: buildKeyfileInitContainerSecurityContext(),
