@@ -48,6 +48,7 @@ type MongoDBSearchReconciler struct {
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services;configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 
 func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -74,9 +75,10 @@ func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if search.Spec.SyncUserSecretRef == nil {
 		return r.fail(ctx, search, "spec.syncUserSecretRef required (searchCoordinator user secret with username/password)")
 	}
-	syncUser, syncSecret := defaultSyncUser, search.Spec.SyncUserSecretRef.Name
-	if u := r.secretUsername(ctx, syncSecret, search.Namespace); u != "" {
-		syncUser = u
+	syncSecret := search.Spec.SyncUserSecretRef.Name
+	syncUser, err := r.resolveSyncUser(ctx, syncSecret, search.Namespace)
+	if err != nil {
+		return r.fail(ctx, search, fmt.Sprintf("sync secret invalid: %v", err))
 	}
 
 	hosts := sourceReplicaSetHosts(source)
@@ -144,12 +146,19 @@ func sourceReplicaSetHosts(mdb *mongodbv1alpha1.MongoDB) []string {
 	return hosts
 }
 
-func (r *MongoDBSearchReconciler) secretUsername(ctx context.Context, name, ns string) string {
+// resolveSyncUser — syncUserSecretRef 검증 + username 결정.
+// secret GET 실패(필수 secret 부재/접근불가) → error(reconcile 실패 — mongot STS 가
+// 마운트할 secret 이 없으므로 fail-fast). secret 존재하나 username 키 부재 →
+// defaultSyncUser(username 은 선택적). silent 폴백 금지(cross-review).
+func (r *MongoDBSearchReconciler) resolveSyncUser(ctx context.Context, name, ns string) (string, error) {
 	s := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: ns}, s); err != nil {
-		return ""
+		return "", fmt.Errorf("get sync secret %s: %w", name, err)
 	}
-	return string(s.Data["username"])
+	if u := string(s.Data["username"]); u != "" {
+		return u, nil
+	}
+	return defaultSyncUser, nil
 }
 
 func (r *MongoDBSearchReconciler) annotateSource(ctx context.Context, source *mongodbv1alpha1.MongoDB, endpoint, tlsMode string) error {

@@ -55,6 +55,7 @@ func main() {
 	var enableFederationController bool
 	var enableInsightsController bool
 	var enableClusterGroupController bool
+	var enableSearchController bool
 	var leaderElectionNamespace string
 	var tlsOpts []func(*tls.Config)
 
@@ -90,6 +91,8 @@ func main() {
 		"Enable MongoDBInsights advisory reconciler (cycle 7, skeleton). Default false — analysis engine cycle 9 강화 후.")
 	flag.BoolVar(&enableClusterGroupController, "enable-clustergroup-controller", false,
 		"Enable MongoDBClusterGroup reconciler (cycle 8, skeleton). Default false — cross-cluster propagation cycle 9+ 강화 후.")
+	flag.BoolVar(&enableSearchController, "enable-search-controller", false,
+		"Enable MongoDBSearch (mongot) reconciler. Public preview — default false (GA 후 활성).")
 
 	// 운영 기본값은 production 모드(JSON 구조화 로그 + sampling). 개발 시에는
 	// --zap-devel flag 로 console encoder 를 활성화할 수 있다(BindFlags 로 노출).
@@ -246,14 +249,18 @@ func main() {
 		setupLog.Info("MongoDBClusterGroup controller disabled by feature gate (--enable-clustergroup-controller=false)")
 	}
 
-	// Phase 1 (Atlas 갭 클로징): MongoDBSearch (mongot) reconciler. CR 존재 시에만
-	// mongot 배포 — opt-in 이라 게이트 없이 상시 등록(MongoDBSearch CR 부재 시 inert).
-	if err = (&controller.MongoDBSearchReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "MongoDBSearch")
-		os.Exit(1)
+	// Phase 1 (Atlas 갭 클로징): MongoDBSearch (mongot) reconciler. public preview —
+	// feature gate(default false)로 보호. 다른 선택적 컨트롤러 carve-out 패턴 정합(cross-review).
+	if enableSearchController {
+		if err = (&controller.MongoDBSearchReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MongoDBSearch")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("MongoDBSearch controller disabled by feature gate (--enable-search-controller=false, public preview)")
 	}
 
 	// Autoscaling 게이트는 reconciler 내부에서 enableAutoscaling 검사 — 현재 cmd 단에서는

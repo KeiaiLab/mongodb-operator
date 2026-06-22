@@ -12,8 +12,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	mongodbv1beta1 "github.com/keiailab/mongodb-operator/api/v1beta1"
 )
 
@@ -126,4 +129,40 @@ func TestMongotSetParameterArgs(t *testing.T) {
 
 func TestMongotEndpoint(t *testing.T) {
 	assert.Equal(t, "ks-mongot.data.svc.cluster.local:27028", MongotEndpoint("ks", "data"))
+}
+
+// TestMongod_SearchAnnotation_NoRoll — 무롤링 계약(cross-review 역방향): annotation 부재
+// 시 mongod STS args 에 mongotHost 없음(기존 프로덕션 mongod 무변경) + annotation 존재 시 주입.
+func TestMongod_SearchAnnotation_NoRoll(t *testing.T) {
+	mdb := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "ks", Namespace: "data"},
+		Spec: mongodbv1alpha1.MongoDBSpec{
+			Members:        3,
+			ReplicaSetName: "rs0",
+			Version:        mongodbv1alpha1.MongoDBVersion{Version: "8.3"},
+			Storage:        mongodbv1alpha1.StorageSpec{Size: resource.MustParse("1Gi")},
+		},
+	}
+	// annotation 부재 → mongotHost 없음(무롤링 baseline).
+	assert.False(t, stsHasMongotHost(BuildReplicaSetStatefulSet(mdb)),
+		"MongoDBSearch 부재 시 mongod STS 에 mongotHost 없어야 함(무롤링)")
+
+	// annotation 존재 → mongotHost 주입.
+	mdb.Annotations = map[string]string{
+		MongotSearchEndpointAnnotation: "ks-mongot.data.svc.cluster.local:27028",
+		MongotTLSModeAnnotation:        "disabled",
+	}
+	assert.True(t, stsHasMongotHost(BuildReplicaSetStatefulSet(mdb)),
+		"annotation 존재 시 mongotHost setParameter 주입")
+}
+
+func stsHasMongotHost(sts *appsv1.StatefulSet) bool {
+	for _, c := range sts.Spec.Template.Spec.Containers {
+		for _, a := range c.Args {
+			if strings.Contains(a, "mongotHost=") {
+				return true
+			}
+		}
+	}
+	return false
 }

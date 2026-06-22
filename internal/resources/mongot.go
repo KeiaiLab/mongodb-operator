@@ -50,6 +50,9 @@ const (
 	MongotSearchEndpointAnnotation = "search.mongodb.keiailab.com/mongot-endpoint"
 	// MongotTLSModeAnnotation — mongod 의 searchTLSMode(disabled|requireTLS).
 	MongotTLSModeAnnotation = "search.mongodb.keiailab.com/tls-mode"
+	// setParameterFlag / mongotDataVolume — 반복 리터럴 const 화(goconst, CI cross-review).
+	setParameterFlag = "--setParameter"
+	mongotDataVolume = "data"
 )
 
 // mongotImage — spec.version 에서 mongot 이미지 결정.
@@ -141,7 +144,7 @@ func BuildMongotService(search *mongodbv1beta1.MongoDBSearch) *corev1.Service {
 			Labels:    mongotLabels(search.Name),
 		},
 		Spec: corev1.ServiceSpec{
-			ClusterIP:                "None",
+			ClusterIP:                corev1.ClusterIPNone,
 			Selector:                 mongotLabels(search.Name),
 			PublishNotReadyAddresses: true,
 			Ports: []corev1.ServicePort{
@@ -169,7 +172,7 @@ func BuildMongotStatefulSet(search *mongodbv1beta1.MongoDBSearch, syncSecretName
 	}
 	volumeMounts := []corev1.VolumeMount{
 		{Name: "config", MountPath: mongotConfigPath, ReadOnly: true},
-		{Name: "data", MountPath: mongotDataPath},
+		{Name: mongotDataVolume, MountPath: mongotDataPath},
 	}
 	if syncSecretName != "" {
 		volumes = append(volumes, corev1.Volume{Name: "sync-secret", VolumeSource: corev1.VolumeSource{
@@ -213,7 +216,7 @@ func BuildMongotStatefulSet(search *mongodbv1beta1.MongoDBSearch, syncSecretName
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{{
-				ObjectMeta: metav1.ObjectMeta{Name: "data"},
+				ObjectMeta: metav1.ObjectMeta{Name: mongotDataVolume},
 				Spec: corev1.PersistentVolumeClaimSpec{
 					AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 					StorageClassName: storageClassPtr(search.Spec.Storage.StorageClassName),
@@ -234,10 +237,10 @@ func MongotSetParameterArgs(endpoint, tlsMode string) []string {
 		tlsMode = "disabled"
 	}
 	return []string{
-		"--setParameter", "mongotHost=" + endpoint,
-		"--setParameter", "searchIndexManagementHostAndPort=" + endpoint,
-		"--setParameter", "searchTLSMode=" + tlsMode,
-		"--setParameter", "useGrpcForSearch=true",
+		setParameterFlag, "mongotHost=" + endpoint,
+		setParameterFlag, "searchIndexManagementHostAndPort=" + endpoint,
+		setParameterFlag, "searchTLSMode=" + tlsMode,
+		setParameterFlag, "useGrpcForSearch=true",
 	}
 }
 
@@ -249,10 +252,23 @@ func storageClassPtr(s string) *string {
 	return &s
 }
 
-// BuildMongotNetworkPolicy — mongot 의 ingress/egress allow.
+// sourceMongodSelector — mongot netpol peer 로 쓸 source mongod RS pod selector.
+// instance+component 로 *해당 source* mongod 만 한정(cluster-wide 노출 회피).
+func sourceMongodSelector(search *mongodbv1beta1.MongoDBSearch) map[string]string {
+	sel := map[string]string{
+		"app.kubernetes.io/name":      "mongodb",
+		"app.kubernetes.io/component": "replicaset",
+	}
+	if search.Spec.Source.MongoDBResourceRef != nil {
+		sel["app.kubernetes.io/instance"] = search.Spec.Source.MongoDBResourceRef.Name
+	}
+	return sel
+}
+
+// BuildMongotNetworkPolicy — mongot 의 ingress/egress allow(peer 제한).
 // 컷오버 교훈(default-deny namespace 가 워크로드 차단) 정합 — data ns 가 default-deny
-// 여도 mongot 가 mongod 와 통신 가능하게 명시 allow. ingress: 27028/27029(mongod→mongot),
-// egress: 27017(mongot→mongod 동기) + 53(DNS).
+// 여도 mongot↔mongod 통신만 명시 allow. ingress: source mongod → 27028/27029,
+// egress: source mongod 27017(동기) + 53(DNS). peer 없는 전체 허용 금지(cross-review).
 func BuildMongotNetworkPolicy(search *mongodbv1beta1.MongoDBSearch) *netv1.NetworkPolicy {
 	tcp := corev1.ProtocolTCP
 	udp := corev1.ProtocolUDP
@@ -260,6 +276,9 @@ func BuildMongotNetworkPolicy(search *mongodbv1beta1.MongoDBSearch) *netv1.Netwo
 	healthPort := intstr.FromInt(mongotHealthPort)
 	mongodPort := intstr.FromInt(mongoDBPort)
 	dnsPort := intstr.FromInt(53)
+	mongodPeer := []netv1.NetworkPolicyPeer{{
+		PodSelector: &metav1.LabelSelector{MatchLabels: sourceMongodSelector(search)},
+	}}
 	return &netv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      search.Name + "-mongot",
@@ -270,13 +289,14 @@ func BuildMongotNetworkPolicy(search *mongodbv1beta1.MongoDBSearch) *netv1.Netwo
 			PodSelector: metav1.LabelSelector{MatchLabels: mongotLabels(search.Name)},
 			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeIngress, netv1.PolicyTypeEgress},
 			Ingress: []netv1.NetworkPolicyIngressRule{{
+				From: mongodPeer,
 				Ports: []netv1.NetworkPolicyPort{
 					{Protocol: &tcp, Port: &grpcPort},
 					{Protocol: &tcp, Port: &healthPort},
 				},
 			}},
 			Egress: []netv1.NetworkPolicyEgressRule{
-				{Ports: []netv1.NetworkPolicyPort{{Protocol: &tcp, Port: &mongodPort}}},
+				{To: mongodPeer, Ports: []netv1.NetworkPolicyPort{{Protocol: &tcp, Port: &mongodPort}}},
 				{Ports: []netv1.NetworkPolicyPort{{Protocol: &udp, Port: &dnsPort}, {Protocol: &tcp, Port: &dnsPort}}},
 			},
 		},
