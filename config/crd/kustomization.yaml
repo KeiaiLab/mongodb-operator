@@ -9,3 +9,5 @@ resources:
   - bases/mongodb.keiailab.com_mongodbclustergroups.yaml
   - bases/mongodb.keiailab.com_mongodbfederations.yaml
   - bases/mongodb.keiailab.com_mongodbinsights.yaml
+  - bases/mongodb.keiailab.com_mongodbsearches.yaml
+  - bases/mongodb.keiailab.com_mongodbsearchindices.yaml
