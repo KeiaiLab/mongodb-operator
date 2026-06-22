@@ -217,11 +217,14 @@ bundle-push: ## bundle image push to ghcr.io. ADR-0028 외부 사용자 운영 �
 .PHONY: catalog-build
 catalog-build: ## FBC catalog image 빌드. deploy/catalog/ 의 plain YAML 을 opm serve image 로 wrap. ADR-0028 Phase D.
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
-	# bundle 의 라이브 digest 를 catalog.yaml 의 image 필드에 자동 주입 (mutable tag 보호).
+	# bundle 의 라이브 digest 를 catalog.yaml 의 image 필드에 digest-only 로 자동 주입.
+	# operator-controller(OLM v1) 는 tag+digest 동시 참조를 거부한다
+	# ("Docker references with both a tag and digest are currently not supported") →
+	# 반드시 digest-only (tag 없음). mutable tag 보호 목적도 digest 가 이미 충족.
 	@BUNDLE_DIGEST=$$(docker manifest inspect ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) 2>/dev/null | python3 -c "import sys,json; m=json.load(sys.stdin); print(m.get('config',{}).get('digest') or m['manifests'][0]['digest'])"); \
 	if [ -z "$$BUNDLE_DIGEST" ]; then echo "ERROR: bundle image v$(VERSION) 의 GHCR 의 digest 가져오지 못함 — bundle-push 먼저 실행"; exit 1; fi; \
 	echo "=== bundle digest: $$BUNDLE_DIGEST"; \
-	sed -i.bak -E "s|image: ghcr.io/keiailab/mongodb-operator-bundle:v[0-9.]+(@sha256:[a-f0-9]+)?|image: ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION)@$$BUNDLE_DIGEST|g" deploy/catalog/catalog/mongodb-operator/catalog.yaml; \
+	sed -i.bak -E "s|image: ghcr.io/keiailab/mongodb-operator-bundle(:v[0-9.]+)?(@sha256:[a-f0-9]+)?|image: ghcr.io/keiailab/mongodb-operator-bundle@$$BUNDLE_DIGEST|g" deploy/catalog/catalog/mongodb-operator/catalog.yaml; \
 	rm -f deploy/catalog/catalog/mongodb-operator/catalog.yaml.bak
 	cd deploy/catalog && docker buildx build --platform linux/amd64 -t ghcr.io/keiailab/mongodb-operator-catalog:v$(VERSION) --load .
 	@echo "✓ catalog image: ghcr.io/keiailab/mongodb-operator-catalog:v$(VERSION)"
