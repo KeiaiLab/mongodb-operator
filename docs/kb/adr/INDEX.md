@@ -35,6 +35,7 @@
 | [ADR-0034](0034-sprint-1-commons-pvc-topology-adoption.md) | Sprint 1 — keiailab-commons pkg/pvc + pkg/topology 채택 (-327 LOC, mongodb callsite 1 + pvc 1 교체) | Accepted | 2026-05-21 |
 | [ADR-0036](0036-v3x-stable-baseline.md) | v3.x-stable baseline 인정 (audit ❌ 0 충족, CLAUDE.md §7 v3.x-stable 조건) | Accepted | 2026-05-21 |
 | [ADR-0037](0037-gitops-artifacthub-standardization.md) | GitOps overlay + ArtifactHub 검증 파이프라인 표준화 (operator 4종 2-layer 표준, examples/gitops → deploy/overlays/prod 이전, signingKey, GH Actions OSS 정당화) | Accepted | 2026-06-02 |
+| [ADR-0038](0038-olm-v1-path1-realignment-and-parity-guard.md) | OLM v1 (Path 1) 재정렬 + 7-CRD parity + drift 가드 (bundle/catalog/ClusterExtension → appVersion 1.13.1 정렬, sync-crds wildcard, verify-bundle-parity CI/pre-push 게이트, ClusterExtension 컷오버 보류) | Accepted | 2026-06-22 |
 
 ## 작성 가이드
 

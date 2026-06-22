@@ -1,0 +1,15 @@
+---
+# MongoDBClusterGroup 샘플 — 다중 클러스터 그룹 (정책/중앙 모니터링 일괄 관리)
+apiVersion: mongodb.keiailab.com/v1alpha1
+kind: MongoDBClusterGroup
+metadata:
+  name: my-cluster-group
+  namespace: database
+spec:
+  # 그룹 멤버 클러스터 목록
+  members:
+    - name: primary-cluster
+      kind: MongoDB
+      namespacedName:
+        name: my-mongodb
+        namespace: database

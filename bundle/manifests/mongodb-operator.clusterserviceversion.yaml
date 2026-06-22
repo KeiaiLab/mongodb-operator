@@ -153,6 +153,98 @@ metadata:
         },
         {
           "apiVersion": "mongodb.keiailab.com/v1alpha1",
+          "kind": "MongoDBBackupVerification",
+          "metadata": {
+            "name": "my-mongodb-backup-verify",
+            "namespace": "database"
+          },
+          "spec": {
+            "backupRef": {
+              "name": "my-mongodb-backup-manual"
+            },
+            "cleanupOnSuccess": true,
+            "sampleQueries": [
+              {
+                "collection": "users",
+                "db": "myapp",
+                "filterJSON": "{}"
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "mongodb.keiailab.com/v1alpha1",
+          "kind": "MongoDBClusterGroup",
+          "metadata": {
+            "name": "my-cluster-group",
+            "namespace": "database"
+          },
+          "spec": {
+            "members": [
+              {
+                "kind": "MongoDB",
+                "name": "primary-cluster",
+                "namespacedName": {
+                  "name": "my-mongodb",
+                  "namespace": "database"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "mongodb.keiailab.com/v1alpha1",
+          "kind": "MongoDBFederation",
+          "metadata": {
+            "name": "my-mongodb-federation",
+            "namespace": "database"
+          },
+          "spec": {
+            "auth": {
+              "adminCredentialsSecretRef": {
+                "name": "mongodb-admin-credentials"
+              },
+              "mechanism": "SCRAM-SHA-256"
+            },
+            "regions": [
+              {
+                "clusterKubeConfigRef": {
+                  "name": "us-east-kubeconfig"
+                },
+                "name": "us-east"
+              },
+              {
+                "clusterKubeConfigRef": {
+                  "name": "eu-west-kubeconfig"
+                },
+                "name": "eu-west"
+              }
+            ],
+            "version": {
+              "version": "8.3.1"
+            }
+          }
+        },
+        {
+          "apiVersion": "mongodb.keiailab.com/v1alpha1",
+          "kind": "MongoDBInsights",
+          "metadata": {
+            "name": "my-mongodb-insights",
+            "namespace": "database"
+          },
+          "spec": {
+            "analysisInterval": "15m",
+            "clusterRef": {
+              "kind": "MongoDB",
+              "name": "my-mongodb"
+            },
+            "enabled": true,
+            "profilingLevel": 1,
+            "slowQueryThresholdMs": 100
+          }
+        },
+        {
+          "apiVersion": "mongodb.keiailab.com/v1alpha1",
           "kind": "MongoDBSharded",
           "metadata": {
             "name": "my-sharded",
@@ -312,19 +404,19 @@ metadata:
       ]
     capabilities: Seamless Upgrades
     categories: Database, Storage
-    containerImage: ghcr.io/keiailab/mongodb-operator:v1.9.0
-    createdAt: "2026-05-14T13:55:42Z"
+    containerImage: ghcr.io/keiailab/mongodb-operator:v1.13.1
+    createdAt: "2026-06-22T02:39:32Z"
     description: |
       Kubernetes operator for MongoDB — manages MongoDB (ReplicaSet) and
       MongoDBSharded (config server + shards + mongos) CRDs with K8s Lease
       distributed lock for race-free admin bootstrap, mongos HPA, and shard
       drain backoff.
-    olm.skipRange: '>=0.3.0 <1.9.0'
+    olm.skipRange: '>=0.3.0 <1.13.1'
     operators.operatorframework.io/builder: operator-sdk-v1.42.2
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/keiailab/mongodb-operator
     support: https://github.com/keiailab/mongodb-operator/issues
-  name: mongodb-operator.v1.9.0
+  name: mongodb-operator.v1.13.1
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -336,18 +428,80 @@ spec:
       kind: MongoDBBackup
       name: mongodbbackups.mongodb.keiailab.com
       version: v1alpha1
+    - description: MongoDBBackup 은 mongodump 기반 backup Job 추상이다 (PVC 또는 외부 storage
+        target).
+      displayName: MongoDB Backup
+      kind: MongoDBBackup
+      name: mongodbbackups.mongodb.keiailab.com
+      version: v1beta1
+    - description: MongoDBBackupVerification 은 backup restore drill 로 백업 복원 가능성과 데이터
+        무결성을 검증하는 CRD 다.
+      displayName: MongoDB Backup Verification
+      kind: MongoDBBackupVerification
+      name: mongodbbackupverifications.mongodb.keiailab.com
+      version: v1alpha1
+    - description: MongoDBBackupVerification 은 backup restore drill 로 백업 복원 가능성과 데이터
+        무결성을 검증하는 CRD 다.
+      displayName: MongoDB Backup Verification
+      kind: MongoDBBackupVerification
+      name: mongodbbackupverifications.mongodb.keiailab.com
+      version: v1beta1
+    - description: MongoDBClusterGroup 은 다수 MongoDB 클러스터를 그룹으로 묶어 공유 인증·정책·중앙 모니터링을
+        일괄 관리하는 CRD 다.
+      displayName: MongoDB Cluster Group
+      kind: MongoDBClusterGroup
+      name: mongodbclustergroups.mongodb.keiailab.com
+      version: v1alpha1
+    - description: MongoDBClusterGroup 은 다수 MongoDB 클러스터를 그룹으로 묶어 공유 인증·정책·중앙 모니터링을
+        일괄 관리하는 CRD 다.
+      displayName: MongoDB Cluster Group
+      kind: MongoDBClusterGroup
+      name: mongodbclustergroups.mongodb.keiailab.com
+      version: v1beta1
+    - description: MongoDBFederation 은 멀티 리전에 걸친 federation 토폴로지를 선언적으로 관리하는 CRD 다.
+      displayName: MongoDB Federation
+      kind: MongoDBFederation
+      name: mongodbfederations.mongodb.keiailab.com
+      version: v1alpha1
+    - description: MongoDBFederation 은 멀티 리전에 걸친 federation 토폴로지를 선언적으로 관리하는 CRD 다.
+      displayName: MongoDB Federation
+      kind: MongoDBFederation
+      name: mongodbfederations.mongodb.keiailab.com
+      version: v1beta1
+    - description: MongoDBInsights 는 slow query·index 권고 등 advisory 분석을 수행하는 CRD 다.
+      displayName: MongoDB Insights
+      kind: MongoDBInsights
+      name: mongodbinsights.mongodb.keiailab.com
+      version: v1alpha1
+    - description: MongoDBInsights 는 slow query·index 권고 등 advisory 분석을 수행하는 CRD 다.
+      displayName: MongoDB Insights
+      kind: MongoDBInsights
+      name: mongodbinsights.mongodb.keiailab.com
+      version: v1beta1
     - description: MongoDB 는 ReplicaSet 토폴로지의 단일 클러스터를 선언적으로 관리하는 CRD 다 (primary +
         secondaries + optional arbiter).
       displayName: MongoDB
       kind: MongoDB
       name: mongodbs.mongodb.keiailab.com
       version: v1alpha1
+    - description: MongoDB 는 ReplicaSet 토폴로지의 단일 클러스터를 선언적으로 관리하는 CRD 다 (primary +
+        secondaries + optional arbiter).
+      displayName: MongoDB
+      kind: MongoDB
+      name: mongodbs.mongodb.keiailab.com
+      version: v1beta1
     - description: MongoDBSharded 는 sharded cluster 를 선언적으로 관리하는 CRD 다 (config server
         replica set + N shards × replica set + mongos router).
       displayName: MongoDB Sharded
       kind: MongoDBSharded
       name: mongodbshardeds.mongodb.keiailab.com
       version: v1alpha1
+    - description: MongoDBSharded 는 sharded cluster 를 선언적으로 관리하는 CRD 다 (config server
+        replica set + N shards × replica set + mongos router).
+      displayName: MongoDB Sharded
+      kind: MongoDBSharded
+      name: mongodbshardeds.mongodb.keiailab.com
+      version: v1beta1
   description: |
     # MongoDB Operator
 
@@ -396,7 +550,6 @@ spec:
           - ""
           resources:
           - configmaps
-          - secrets
           - services
           verbs:
           - create
@@ -422,6 +575,17 @@ spec:
           - list
           - watch
         - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
           - apps
           resources:
           - deployments
@@ -441,6 +605,17 @@ spec:
           verbs:
           - create
           - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - batch
+          resources:
+          - cronjobs
+          verbs:
+          - create
           - get
           - list
           - patch
@@ -486,6 +661,7 @@ spec:
           - mongodb.keiailab.com
           resources:
           - mongodbbackups
+          - mongodbbackupverifications
           - mongodbclustergroups
           - mongodbfederations
           - mongodbinsights
@@ -512,6 +688,7 @@ spec:
           - mongodb.keiailab.com
           resources:
           - mongodbbackups/status
+          - mongodbbackupverifications/status
           - mongodbclustergroups/status
           - mongodbfederations/status
           - mongodbinsights/status
@@ -572,7 +749,7 @@ spec:
                 - --health-probe-bind-address=:8081
                 - --metrics-bind-address=:8443
                 - --metrics-secure=true
-                image: ghcr.io/keiailab/mongodb-operator:v1.9.0
+                image: ghcr.io/keiailab/mongodb-operator:v1.13.1
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -681,5 +858,5 @@ spec:
   provider:
     name: Keiailab
     url: https://github.com/keiailab
-  replaces: mongodb-operator.v1.4.23
-  version: 1.9.0
+  replaces: mongodb-operator.v1.9.0
+  version: 1.13.1

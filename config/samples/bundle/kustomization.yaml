@@ -9,3 +9,7 @@ resources:
   - mongodb_replicaset.yaml
   - mongodb_sharded.yaml
   - mongodb_backup.yaml
+  - mongodb_backupverification.yaml
+  - mongodb_clustergroup.yaml
+  - mongodb_federation.yaml
+  - mongodb_insights.yaml

@@ -1,0 +1,24 @@
+---
+# MongoDBInsights 샘플 — advisory 분석 (slow query / index 권고)
+apiVersion: mongodb.keiailab.com/v1alpha1
+kind: MongoDBInsights
+metadata:
+  name: my-mongodb-insights
+  namespace: database
+spec:
+  # 분석 대상 클러스터 참조
+  clusterRef:
+    name: my-mongodb
+    kind: MongoDB
+
+  # 프로파일링 레벨 (기본값: 1)
+  profilingLevel: 1
+
+  # 느린 쿼리 임계값 ms (기본값: 100)
+  slowQueryThresholdMs: 100
+
+  # 분석 주기 (기본값: 15m)
+  analysisInterval: "15m"
+
+  # advisory 분석 활성 (기본값: true)
+  enabled: true

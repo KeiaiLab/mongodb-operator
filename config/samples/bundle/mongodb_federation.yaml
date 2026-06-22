@@ -1,0 +1,26 @@
+---
+# MongoDBFederation 샘플 — 멀티 리전 federation (리전별 kubeconfig 참조)
+apiVersion: mongodb.keiailab.com/v1alpha1
+kind: MongoDBFederation
+metadata:
+  name: my-mongodb-federation
+  namespace: database
+spec:
+  # MongoDB 버전
+  version:
+    version: "8.3.1"
+
+  # 리전 정의 — 각 리전의 kubeconfig Secret 참조
+  regions:
+    - name: us-east
+      clusterKubeConfigRef:
+        name: us-east-kubeconfig
+    - name: eu-west
+      clusterKubeConfigRef:
+        name: eu-west-kubeconfig
+
+  # 인증 설정
+  auth:
+    mechanism: SCRAM-SHA-256
+    adminCredentialsSecretRef:
+      name: mongodb-admin-credentials

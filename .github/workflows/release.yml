@@ -61,6 +61,10 @@ jobs:
             echo "app_version=$APP_VER"
             echo "image_release=$IMAGE_RELEASE"
           } >> "$GITHUB_OUTPUT"
+      - name: OLM bundle ↔ appVersion parity (ADR-0038)
+        # bundle CSV spec.version 이 Chart.yaml appVersion 과 어긋나면(=Path 1 stale) 릴리스 차단.
+        # CRD 개수(bundle == config/crd/bases)도 함께 검증. 단일 진실 소스 = Makefile verify-bundle-parity.
+        run: make verify-bundle-parity
 
   chart-only-summary:
     name: Chart-only release summary
