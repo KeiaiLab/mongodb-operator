@@ -102,6 +102,9 @@ spec:
             {{- if .Values.features.autoscaling.enabled }}
             - --enable-autoscaling=true
             {{- end }}
+            {{- if .Values.features.search.enabled }}
+            - --enable-search-controller=true
+            {{- end }}
             {{- if .Values.webhook.enabled }}
             - --enable-webhooks=true
             {{- end }}
