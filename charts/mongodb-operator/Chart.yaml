@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for MongoDB — ReplicaSets, Sharded Clusters with auto scale-out, S3/PVC Backup, TLS, and LDAP. MIT licensed.
 type: application
-version: 1.15.1
-appVersion: "1.15.1"
+version: 1.15.2
+appVersion: "1.15.2"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -151,7 +151,7 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:v1.13.1
+      image: ghcr.io/keiailab/mongodb-operator:v1.15.2
     - name: mongodb
       image: mongo:8.3.1
     - name: mongodb-exporter
@@ -159,9 +159,9 @@ annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
     - kind: fixed
-      description: "Publish a fresh signed OCI chart version after Artifact Hub cached the 1.12.4 unsigned metadata."
-    - kind: changed
-      description: "Add opt-in ExternalSecret rendering for MongoDB admin/app/S3 credentials while keeping operator appVersion/image at v1.12.2."
+      description: "Zero-downtime upgrade now triggers on adopted clusters (Helm→OLM): Status.Version is seeded on reconcile entry so a later spec.Version bump is detected as an upgrade instead of being permanently skipped (sharded clusters had no Status.Version backfill at all)."
+    - kind: fixed
+      description: "Sync UpgradeStrategy.maxRetries into the packaged Helm CRDs — it was added to the OLM bundle/API in 1.15.1 but the chart CRDs were left stale."
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
