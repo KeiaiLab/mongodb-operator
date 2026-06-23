@@ -23701,14 +23701,12 @@ spec:
                 description: ConnectionString is the MongoDB connection URI (via mongos)
                 type: string
               effectiveVersion:
-                description: |-
-                  EffectiveVersion is the version the operator actually deploys (무중단 업그레이드/롤백 SSOT).
-                  빈 값이면 spec.Version으로 fallback(기존 클러스터 무롤링 호환). 롤백 중에는
-                  PreviousVersion으로 설정(spec.Version 불변=GitOps SSOT 보존).
+                description: 'EffectiveVersion: operator가 실제 배포하는 버전(무중단 업그레이드/롤백
+                  SSOT). 빈 값=spec.Version fallback.'
                 type: string
               fcvVersion:
-                description: FCVVersion is the committed featureCompatibilityVersion
-                  (검증 통과 시 자동 상향).
+                description: 'FCVVersion: commit된 featureCompatibilityVersion(검증 통과
+                  시 자동 상향).'
                 type: string
               lastBackup:
                 description: LastBackup contains information about the last backup
@@ -23803,9 +23801,8 @@ spec:
                 format: int64
                 type: integer
               observedUpgradeGeneration:
-                description: |-
-                  ObservedUpgradeGeneration is the spec generation of the last terminal upgrade outcome
-                  (같은 generation 재업그레이드 차단).
+                description: 'ObservedUpgradeGeneration: 마지막 terminal 업그레이드 결과의 spec
+                  generation(재시도 차단).'
                 format: int64
                 type: integer
               phase:
@@ -23822,8 +23819,7 @@ spec:
                   upgrade.
                 type: string
               rollbackActive:
-                description: RollbackActive indicates a rollback is in effect (EffectiveVersion
-                  != spec.Version).
+                description: 'RollbackActive: 롤백 진행 중 여부(EffectiveVersion != spec.Version).'
                 type: boolean
               shardedCollections:
                 description: ShardedCollections lists sharded collections
@@ -23881,9 +23877,7 @@ spec:
                 - RollingBack
                 type: string
               upgradeRetryCount:
-                description: |-
-                  UpgradeRetryCount counts upgrade attempts for the current spec generation
-                  (MaxRetries 초과 시 terminal — 루프 안정성).
+                description: 'UpgradeRetryCount: 현 generation 업그레이드 시도 횟수(루프 안정성).'
                 format: int32
                 type: integer
               upgradeStartTime:

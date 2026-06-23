@@ -17096,6 +17096,14 @@ spec:
               currentPrimary:
                 description: CurrentPrimary is the current primary member
                 type: string
+              effectiveVersion:
+                description: 'EffectiveVersion: operator가 실제 배포하는 버전(무중단 업그레이드/롤백
+                  SSOT). 빈 값=spec.Version fallback.'
+                type: string
+              fcvVersion:
+                description: 'FCVVersion: commit된 featureCompatibilityVersion(검증 통과
+                  시 자동 상향).'
+                type: string
               hpa:
                 description: HPA는 RS HorizontalPodAutoscaler 상태(opt-in 시 노출).
                 properties:
@@ -17174,6 +17182,11 @@ spec:
                 description: ObservedGeneration is the most recent generation observed
                 format: int64
                 type: integer
+              observedUpgradeGeneration:
+                description: 'ObservedUpgradeGeneration: 마지막 terminal 업그레이드 결과의 spec
+                  generation(재시도 차단).'
+                format: int64
+                type: integer
               pendingScale:
                 description: |-
                   PendingScale은 ScalePolicy.Deliberate=false 가드 때문에 보류된 멤버 수
@@ -17218,6 +17231,9 @@ spec:
                 description: ReplicaSetInitialized indicates if the replica set has
                   been initialized
                 type: boolean
+              rollbackActive:
+                description: 'RollbackActive: 롤백 진행 중 여부(EffectiveVersion != spec.Version).'
+                type: boolean
               tlsSecretName:
                 description: TLSSecretName is the name of the TLS secret
                 type: string
@@ -17231,6 +17247,10 @@ spec:
                 - Validating
                 - RollingBack
                 type: string
+              upgradeRetryCount:
+                description: 'UpgradeRetryCount: 현 generation 업그레이드 시도 횟수(루프 안정성).'
+                format: int32
+                type: integer
               upgradeStartTime:
                 description: UpgradeStartTime is when the current upgrade was initiated.
                 format: date-time

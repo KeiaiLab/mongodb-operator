@@ -163,7 +163,13 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeBackup(ctx context.Con
 func (r *MongoDBShardedReconciler) reconcileShardedUpgradeValidation(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, desiredVersion string) (ctrl.Result, bool, error) {
 	logger := log.FromContext(ctx)
 	interval := parseValidationInterval(mdbsh.Spec.UpgradeStrategy)
-	validationTimeout := interval * 3
+	// validationTimeout = interval + 총멤버×budget(갭3 fix — 정상 rollout이 느려도 오판
+	// rollback 방지). sharded 총멤버 = config + shards×membersPerShard(컴포넌트 다수).
+	totalMembers := mdbsh.Spec.ConfigServer.Members + mdbsh.Spec.Shards.Count*mdbsh.Spec.Shards.MembersPerShard
+	if totalMembers < 1 {
+		totalMembers = 1
+	}
+	validationTimeout := interval + time.Duration(totalMembers)*perMemberRolloutBudget
 
 	if mdbsh.Status.UpgradeStartTime == nil {
 		return ctrl.Result{RequeueAfter: upgradeRequeueInterval}, true, nil
@@ -187,20 +193,22 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeValidation(ctx context
 		logger.Info("sharded upgrade validation passed", "version", desiredVersion)
 		// FCV 자동 commit(갭5): sharded는 mongos를 통해 setFCV하면 config+shards 전체에
 		// 전파된다. 검증 통과 후이므로 안전(point-of-no-return). mongos 연결로 commit.
-		if err := r.commitShardedFCV(ctx, mdbsh, desiredVersion); err != nil {
+		fcv, err := r.commitShardedFCV(ctx, mdbsh, desiredVersion)
+		if err != nil {
 			logger.Error(err, "sharded FCV commit failed, will retry (upgrade not yet complete)")
 			return ctrl.Result{RequeueAfter: upgradeRequeueInterval}, true, nil
 		}
 		applyStatus := func() {
 			mdbsh.Status.Version = desiredVersion
 			mdbsh.Status.EffectiveVersion = desiredVersion
+			mdbsh.Status.FCVVersion = fcv // 클로저 안에서 설정(UpdateWithRetry refetch 덮어쓰기 방지).
 			mdbsh.Status.RollbackActive = false
 			mdbsh.Status.UpgradePhase = ""
 			mdbsh.Status.UpgradeStartTime = nil
 			mdbsh.Status.UpgradeRetryCount = 0
 			mdbsh.Status.ObservedUpgradeGeneration = mdbsh.Generation
 			setShardedUpgradeCondition(mdbsh, "UpgradeComplete", metav1.ConditionTrue,
-				"Upgraded", fmt.Sprintf("Successfully upgraded to %s (FCV committed)", desiredVersion))
+				"Upgraded", fmt.Sprintf("Successfully upgraded to %s (FCV %s committed)", desiredVersion, fcv))
 		}
 		applyStatus()
 		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
@@ -301,31 +309,30 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeRollback(ctx context.C
 // mongos setFCV는 config server + 모든 shard에 전파된다(sharded 클러스터 전체 commit).
 // point-of-no-return — 이후 바이너리 다운그레이드 불가. 검증 통과 후이므로 안전.
 // 이미 같은 FCV면 SetFCV가 idempotent no-op.
-func (r *MongoDBShardedReconciler) commitShardedFCV(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, desiredVersion string) error {
+func (r *MongoDBShardedReconciler) commitShardedFCV(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, desiredVersion string) (string, error) {
 	fcv := fcvMajorMinor(desiredVersion)
 	if fcv == "" {
-		return fmt.Errorf("cannot derive FCV from version %q", desiredVersion)
+		return "", fmt.Errorf("cannot derive FCV from version %q", desiredVersion)
 	}
 	if mdbsh.Status.FCVVersion == fcv {
-		return nil
+		return fcv, nil
 	}
 	adminPassword, err := r.getAdminPassword(ctx, mdbsh)
 	if err != nil {
-		return fmt.Errorf("get admin password for FCV commit: %w", err)
+		return "", fmt.Errorf("get admin password for FCV commit: %w", err)
 	}
 	mongosPod, err := r.getMongosPodName(ctx, mdbsh)
 	if err != nil {
-		return fmt.Errorf("get mongos pod for FCV commit: %w", err)
+		return "", fmt.Errorf("get mongos pod for FCV commit: %w", err)
 	}
-	// mongos(27017) 경유 setFCV — 클러스터 전체 전파.
+	// mongos(27017) 경유 setFCV — 클러스터 전체 전파. status 기록은 호출자 클로저가 담당.
 	mgr := mongodb.NewReplicaSetManagerWithFactory(
 		mongodb.NewServiceConnectFactory(mdbsh.Name+"-mongos", mdbsh.Namespace, 27017, "admin", adminPassword, "admin"),
 	)
 	if err := mgr.SetFCV(ctx, mongosPod, mdbsh.Namespace, fcv); err != nil {
-		return err
+		return "", err
 	}
-	mdbsh.Status.FCVVersion = fcv
-	return nil
+	return fcv, nil
 }
 
 //nolint:unparam // status param reserved for future ConditionFalse cases
