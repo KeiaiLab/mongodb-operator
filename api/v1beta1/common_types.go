@@ -604,6 +604,12 @@ type UpgradeStrategySpec struct {
 	// false 시 사용자 수동 개입 필요.
 	// +kubebuilder:default=false
 	RollbackOnFailure bool `json:"rollbackOnFailure,omitempty"`
+
+	// MaxRetries — 동일 spec generation에서 허용하는 업그레이드 시도 횟수(루프 안정성).
+	// v1alpha1과 동일(CRD storage version 변환 호환 — OLM crdUpgradeSafety). 0 = generation당 1회.
+	// +kubebuilder:default=0
+	// +kubebuilder:validation:Minimum=0
+	MaxRetries int32 `json:"maxRetries,omitempty"`
 }
 
 // IsValidUpgradePath — F11 (cycle 7) 버전 업그레이드 path 검증.

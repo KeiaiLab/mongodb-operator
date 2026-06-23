@@ -312,12 +312,12 @@ metadata:
       ]
     capabilities: Seamless Upgrades
     categories: Database, Storage
-    containerImage: ghcr.io/keiailab/mongodb-operator:v1.15.0
+    containerImage: ghcr.io/keiailab/mongodb-operator:v1.15.1
     createdAt: "2026-06-23T00:00:00Z"
     # ADR-0038 (Path 1 재정렬): OperatorHub.io 0.3.0 + 본 repo v1.0.0~v1.13.2 모든 사용자가
-    # `stable` channel 구독 시 v1.15.0 으로 자동 업그레이드 가능하도록 광 범위 skipRange.
+    # `stable` channel 구독 시 v1.15.1 으로 자동 업그레이드 가능하도록 광 범위 skipRange.
     # `replaces:` (spec) 는 직전 정식 OLM bundle (v1.9.0) 와 연결 — 점진 업그레이드 경로 보존.
-    olm.skipRange: '>=0.3.0 <1.15.0'
+    olm.skipRange: '>=0.3.0 <1.15.1'
     description: |
       Kubernetes operator for MongoDB — manages MongoDB (ReplicaSet) and
       MongoDBSharded (config server + shards + mongos) CRDs with K8s Lease
