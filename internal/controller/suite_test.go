@@ -67,6 +67,13 @@ var _ = BeforeSuite(func() {
 		BinaryAssetsDirectory: binaryAssetsDir,
 	}
 
+	// etcd --max-request-bytes 증가: mongodbshardeds CRD(3.27MB)가 etcd 기본
+	// request limit(1.5MB)을 초과하므로 명시적으로 키운다(거대 CRD install 시
+	// "etcdserver: request is too large" 방지). production은 kubectl --server-side
+	// apply로 우회하지만 envtest는 직접 install이라 etcd limit 필수.
+	testEnv.ControlPlane.Etcd = &envtest.Etcd{}
+	testEnv.ControlPlane.Etcd.Configure().Set("max-request-bytes", "33554432") // 32MiB
+
 	var err error
 	cfg, err = testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())

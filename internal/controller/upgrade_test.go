@@ -70,3 +70,19 @@ func TestUpgradePhaseConstants(t *testing.T) {
 		}
 	}
 }
+
+// TestFCVMajorMinor — FCV 자동 commit(갭5)이 버전에서 major.minor만 추출하는지 검증.
+func TestFCVMajorMinor(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"8.2.1", "8.2"},
+		{"8.0", "8.0"},
+		{"8.2.13", "8.2"},
+		{"8", ""}, // major만 → FCV 도출 불가
+		{"", ""},  // 빈 값
+	}
+	for _, c := range cases {
+		if got := fcvMajorMinor(c.in); got != c.want {
+			t.Errorf("fcvMajorMinor(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

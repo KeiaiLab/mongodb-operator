@@ -434,27 +434,23 @@ type MongoDBShardedStatus struct {
 	// +optional
 	UpgradeStartTime *metav1.Time `json:"upgradeStartTime,omitempty"`
 
-	// EffectiveVersion is the version the operator actually deploys (무중단 업그레이드/롤백 SSOT).
-	// 빈 값이면 spec.Version으로 fallback(기존 클러스터 무롤링 호환). 롤백 중에는
-	// PreviousVersion으로 설정(spec.Version 불변=GitOps SSOT 보존).
+	// EffectiveVersion: operator가 실제 배포하는 버전(무중단 업그레이드/롤백 SSOT). 빈 값=spec.Version fallback.
 	// +optional
 	EffectiveVersion string `json:"effectiveVersion,omitempty"`
 
-	// RollbackActive indicates a rollback is in effect (EffectiveVersion != spec.Version).
+	// RollbackActive: 롤백 진행 중 여부(EffectiveVersion != spec.Version).
 	// +optional
 	RollbackActive bool `json:"rollbackActive,omitempty"`
 
-	// UpgradeRetryCount counts upgrade attempts for the current spec generation
-	// (MaxRetries 초과 시 terminal — 루프 안정성).
+	// UpgradeRetryCount: 현 generation 업그레이드 시도 횟수(루프 안정성).
 	// +optional
 	UpgradeRetryCount int32 `json:"upgradeRetryCount,omitempty"`
 
-	// ObservedUpgradeGeneration is the spec generation of the last terminal upgrade outcome
-	// (같은 generation 재업그레이드 차단).
+	// ObservedUpgradeGeneration: 마지막 terminal 업그레이드 결과의 spec generation(재시도 차단).
 	// +optional
 	ObservedUpgradeGeneration int64 `json:"observedUpgradeGeneration,omitempty"`
 
-	// FCVVersion is the committed featureCompatibilityVersion (검증 통과 시 자동 상향).
+	// FCVVersion: commit된 featureCompatibilityVersion(검증 통과 시 자동 상향).
 	// +optional
 	FCVVersion string `json:"fcvVersion,omitempty"`
 }
