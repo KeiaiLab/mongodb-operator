@@ -41,17 +41,30 @@ func (r *MongoDBReconciler) reconcileUpgrade(ctx context.Context, mdb *mongodbv1
 	logger := log.FromContext(ctx)
 
 	desiredVersion := mdb.Spec.Version.Version
-	currentVersion := mdb.Status.Version
 
-	// EffectiveVersion 초기화: 빈 값(신규/기존 클러스터)이면 desired로 seed(첫 reconcile
-	// 시 spec.Version과 동일 → 무롤링). 이후 업그레이드/롤백이 이 값을 SSOT로 조작한다.
-	if mdb.Status.EffectiveVersion == "" {
-		seed := func() { mdb.Status.EffectiveVersion = desiredVersion }
+	// Status.EffectiveVersion + Status.Version 초기화 (무중단 업그레이드 SSOT).
+	// EffectiveVersion = operator가 실제 배포한 버전(빈 값이면 desired로 seed → 첫 reconcile
+	// 시 spec.Version과 동일 → 무롤링). Version = 현재 배포된 버전(EffectiveVersion과 동기).
+	// **adopt된 기존 클러스터 버그 fix**: Helm→OLM 등으로 operator가 인수한 기존 클러스터는
+	// Status.Version 이 비어 있어(completeUpgrade에서만 set) reconcile 진입 시 currentVersion=""
+	// → 업그레이드 orchestration 영구 skip + EffectiveVersion stale 고착. Version을 EffectiveVersion
+	// 으로 초기화해 spec.Version 변경을 업그레이드로 감지 가능하게 한다.
+	if mdb.Status.EffectiveVersion == "" || mdb.Status.Version == "" {
+		seed := func() {
+			if mdb.Status.EffectiveVersion == "" {
+				mdb.Status.EffectiveVersion = desiredVersion
+			}
+			if mdb.Status.Version == "" {
+				mdb.Status.Version = mdb.Status.EffectiveVersion
+			}
+		}
 		seed()
 		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, seed); err != nil {
 			return ctrl.Result{}, false, err
 		}
 	}
+
+	currentVersion := mdb.Status.Version // seed 후 읽음(adopt 클러스터 초기화 반영).
 
 	if currentVersion == "" || currentVersion == desiredVersion {
 		if mdb.Status.UpgradePhase != "" {

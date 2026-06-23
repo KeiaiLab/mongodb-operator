@@ -2,6 +2,13 @@
 
 All notable changes to mongodb-operator will be documented in this file.
 
+## [1.15.2] - 2026-06-23
+
+### Fixed
+
+- **[CRITICAL] adopt된 클러스터 무중단 업그레이드 영구 skip** — Helm→OLM 등으로 operator 가 인수(adopt)한 기존 클러스터는 `Status.Version` 이 비어 있어(완료 시 `completeUpgrade` 에서만 set) reconcile 진입 시 `currentVersion=""` → 업그레이드 orchestration 이 영구 skip 됐다. 특히 **Sharded 컨트롤러는 `Status.Version` 백필 경로가 전혀 없어**(RS 의 `updateStatus` 보강 부재) 사용자가 `spec.Version` 을 올려도 업그레이드가 감지되지 않았다(keiailab-mongo 8.3.4 패치 사고). reconcile 진입부에서 `Status.Version` 을 `EffectiveVersion`(=desired)으로 seed 해 이후 spec 변경이 업그레이드로 감지되게 한다(`upgrade.go` + `sharded_upgrade.go`). builder 는 `EffectiveVersion` 만 사용하므로 무롤링 유지. fake-client 회귀 테스트 3건 추가(`adopted_upgrade_unit_test.go`).
+- **chart CRD `UpgradeStrategy.maxRetries` 누락 sync** — 1.15.1 이 `maxRetries` 를 v1beta1 API + OLM 번들 CRD 에는 추가했으나 packaged Helm CRD(`charts/mongodb-operator/crds/`)는 stale 하게 남아 ArtifactHub 차트가 불완전한 CRD 를 배포했다. `make manifests` 의 `sync-crds` 로 정합.
+
 ## [1.13.1] - 2026-06-16
 
 ### Features
