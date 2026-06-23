@@ -23503,6 +23503,16 @@ spec:
                 description: UpgradeStrategy defines version upgrade automation policy
                   (cycle 7).
                 properties:
+                  maxRetries:
+                    default: 0
+                    description: |-
+                      MaxRetries — 동일 spec generation에서 허용하는 업그레이드 시도 횟수(루프 안정성).
+                      검증 실패→롤백 후 같은 generation 재시도를 막아 검증실패↔롤백 무한루프를 차단한다.
+                      현재 구현은 generation당 1회 시도 후 terminal(사용자 spec 변경 시 리셋)이 기본이며,
+                      본 필드는 향후 자동 재시도 횟수 확장용. 0 = generation당 1회(기본).
+                    format: int32
+                    minimum: 0
+                    type: integer
                   preUpgradeBackup:
                     default: false
                     description: |-
@@ -23690,6 +23700,14 @@ spec:
               connectionString:
                 description: ConnectionString is the MongoDB connection URI (via mongos)
                 type: string
+              effectiveVersion:
+                description: 'EffectiveVersion: operator가 실제 배포하는 버전(무중단 업그레이드/롤백
+                  SSOT). 빈 값=spec.Version fallback.'
+                type: string
+              fcvVersion:
+                description: 'FCVVersion: commit된 featureCompatibilityVersion(검증 통과
+                  시 자동 상향).'
+                type: string
               lastBackup:
                 description: LastBackup contains information about the last backup
                 properties:
@@ -23782,6 +23800,11 @@ spec:
                 description: ObservedGeneration is the most recent generation observed
                 format: int64
                 type: integer
+              observedUpgradeGeneration:
+                description: 'ObservedUpgradeGeneration: 마지막 terminal 업그레이드 결과의 spec
+                  generation(재시도 차단).'
+                format: int64
+                type: integer
               phase:
                 description: Phase represents the current phase
                 enum:
@@ -23795,6 +23818,9 @@ spec:
                 description: PreviousVersion is the version before an in-progress
                   upgrade.
                 type: string
+              rollbackActive:
+                description: 'RollbackActive: 롤백 진행 중 여부(EffectiveVersion != spec.Version).'
+                type: boolean
               shardedCollections:
                 description: ShardedCollections lists sharded collections
                 items:
@@ -23850,6 +23876,10 @@ spec:
                 - Validating
                 - RollingBack
                 type: string
+              upgradeRetryCount:
+                description: 'UpgradeRetryCount: 현 generation 업그레이드 시도 횟수(루프 안정성).'
+                format: int32
+                type: integer
               upgradeStartTime:
                 description: UpgradeStartTime is when the current upgrade was initiated.
                 format: date-time

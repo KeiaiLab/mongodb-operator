@@ -1264,3 +1264,98 @@ func TestBuildPEMMergeInitContainer_SecurityContext(t *testing.T) {
 	assert.NotContains(t, cmdJoined, "> /tls-pem/server.pem ",
 		"비멱등 직접 truncate 금지 — 재실행 시 기존 0400 파일에서 Permission denied")
 }
+
+// --- 무중단 업그레이드 (zero-downtime upgrade) 테스트 ---
+
+// TestEffectiveMongoDBVersion — EffectiveVersion SSOT 로직 + 기존 클러스터 무롤링 회귀 가드.
+func TestEffectiveMongoDBVersion(t *testing.T) {
+	// EffectiveVersion 빈 값 → spec.Version fallback (기존 클러스터 무롤링 호환, byte-identical).
+	v := effectiveMongoDBVersion(mongodbv1alpha1.MongoDBVersion{Version: "8.0"}, "")
+	assert.Equal(t, "8.0", v.Version, "EffectiveVersion 빈 값이면 spec.Version 사용(무롤링)")
+
+	// EffectiveVersion 설정(롤백 중) → EffectiveVersion 우선.
+	v = effectiveMongoDBVersion(mongodbv1alpha1.MongoDBVersion{Version: "8.2"}, "8.0")
+	assert.Equal(t, "8.0", v.Version, "EffectiveVersion 설정 시 그것을 우선(롤백)")
+
+	// spec.Image override는 EffectiveVersion보다 우선 보존.
+	v = effectiveMongoDBVersion(mongodbv1alpha1.MongoDBVersion{Image: "custom:x", Version: "8.2"}, "8.0")
+	assert.Equal(t, "custom:x", v.Image, "spec.Image override는 effective version보다 우선")
+}
+
+// TestMongod_NoRoll_EffectiveVersionEmpty — 회귀 가드: EffectiveVersion 빈 값(기존 클러스터)일 때
+// STS 이미지가 spec.Version 기반과 정확히 동일해야(무롤링). EffectiveVersion 도입이 기존 배포에 영향 0.
+func TestMongod_NoRoll_EffectiveVersionEmpty(t *testing.T) {
+	mdb := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "ks", Namespace: "data"},
+		Spec: mongodbv1alpha1.MongoDBSpec{
+			Members: 3, ReplicaSetName: "rs0",
+			Version: mongodbv1alpha1.MongoDBVersion{Version: "8.3"},
+			Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("1Gi")},
+		},
+	}
+	// EffectiveVersion 빈 값(기존 클러스터)
+	sts := BuildReplicaSetStatefulSet(mdb)
+	img := mongodContainerImage(t, sts)
+	assert.Equal(t, "mongo:8.3", img, "EffectiveVersion 빈 값 → spec.Version 기반 image(기존 무롤링)")
+
+	// EffectiveVersion=8.0(롤백) → image도 8.0
+	mdb.Status.EffectiveVersion = "8.0"
+	sts = BuildReplicaSetStatefulSet(mdb)
+	assert.Equal(t, "mongo:8.0", mongodContainerImage(t, sts), "롤백 시 EffectiveVersion 기반 image")
+}
+
+// TestShardedStatefulSets_RollingUpdate — 갭4: Shard/ConfigServer STS가 RollingUpdate 전략(무중단)
+// 이어야 함. OnDelete면 image 변경 시 pod 재생성 안 되어 업그레이드 불가.
+func TestShardedStatefulSets_RollingUpdate(t *testing.T) {
+	mdbsh := shardedWithAuth()
+
+	cfg := BuildConfigServerStatefulSet(mdbsh)
+	assert.Equal(t, appsv1.RollingUpdateStatefulSetStrategyType, cfg.Spec.UpdateStrategy.Type,
+		"ConfigServer STS는 RollingUpdate(무중단 업그레이드)")
+
+	shard := BuildShardStatefulSet(mdbsh, 0)
+	assert.Equal(t, appsv1.RollingUpdateStatefulSetStrategyType, shard.Spec.UpdateStrategy.Type,
+		"Shard STS는 RollingUpdate(무중단 업그레이드)")
+}
+
+// TestMongod_PreStopStepDown — 갭7: mongod 컨테이너에 preStop stepDown hook(끊김없이)이 있어야 함.
+func TestMongod_PreStopStepDown(t *testing.T) {
+	mdb := &mongodbv1alpha1.MongoDB{
+		ObjectMeta: metav1.ObjectMeta{Name: "ks", Namespace: "data"},
+		Spec: mongodbv1alpha1.MongoDBSpec{
+			Members: 3, ReplicaSetName: "rs0",
+			Version: mongodbv1alpha1.MongoDBVersion{Version: "8.3"},
+			Storage: mongodbv1alpha1.StorageSpec{Size: resource.MustParse("1Gi")},
+			Auth:    mongodbv1alpha1.AuthSpec{AdminCredentialsSecretRef: corev1.LocalObjectReference{Name: "ks-admin"}},
+		},
+	}
+	sts := BuildReplicaSetStatefulSet(mdb)
+	var mongod *corev1.Container
+	for i := range sts.Spec.Template.Spec.Containers {
+		if sts.Spec.Template.Spec.Containers[i].Name == "mongodb" {
+			mongod = &sts.Spec.Template.Spec.Containers[i]
+		}
+	}
+	require.NotNil(t, mongod)
+	require.NotNil(t, mongod.Lifecycle, "mongod lifecycle 존재")
+	require.NotNil(t, mongod.Lifecycle.PreStop, "preStop stepDown hook 존재(끊김없이)")
+	require.NotNil(t, mongod.Lifecycle.PreStop.Exec)
+	assert.Contains(t, mongod.Lifecycle.PreStop.Exec.Command, "/scripts/prestop-stepdown.sh",
+		"preStop이 stepDown 스크립트 실행")
+	// scripts ConfigMap에 stepdown 스크립트 포함
+	cm := BuildMongoDBConfigMap(mdb)
+	assert.Contains(t, cm.Data, "prestop-stepdown.sh")
+	assert.Contains(t, cm.Data["prestop-stepdown.sh"], "stepDown", "stepDown 호출 포함")
+}
+
+// mongodContainerImage는 STS의 mongod 컨테이너 이미지를 반환(테스트 헬퍼).
+func mongodContainerImage(t *testing.T, sts *appsv1.StatefulSet) string {
+	t.Helper()
+	for _, c := range sts.Spec.Template.Spec.Containers {
+		if c.Name == "mongodb" {
+			return c.Image
+		}
+	}
+	t.Fatal("mongod container not found")
+	return ""
+}

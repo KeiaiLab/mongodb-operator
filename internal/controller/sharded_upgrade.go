@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
+	"github.com/keiailab/mongodb-operator/internal/mongodb"
 )
 
 func (r *MongoDBShardedReconciler) reconcileShardedUpgrade(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) (ctrl.Result, bool, error) {
@@ -21,6 +22,16 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgrade(ctx context.Context, 
 
 	desiredVersion := mdbsh.Spec.Version.Version
 	currentVersion := mdbsh.Status.Version
+
+	// EffectiveVersion 초기화(무중단 업그레이드/롤백 SSOT) — 빈 값이면 desired로 seed
+	// (첫 reconcile 시 spec.Version과 동일 → 무롤링). builder가 이 값으로 STS 빌드.
+	if mdbsh.Status.EffectiveVersion == "" {
+		seed := func() { mdbsh.Status.EffectiveVersion = desiredVersion }
+		seed()
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, seed); err != nil {
+			return ctrl.Result{}, false, err
+		}
+	}
 
 	if currentVersion == "" || currentVersion == desiredVersion {
 		if mdbsh.Status.UpgradePhase != "" {
@@ -36,11 +47,24 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgrade(ctx context.Context, 
 		return ctrl.Result{}, false, nil
 	}
 
+	// 루프 안정성(갭6): 같은 generation에서 이미 terminal 결과면 재업그레이드 skip
+	// (검증실패↔롤백 무한루프 차단). 사용자 spec 변경(generation++) 시에만 retry 리셋.
+	if mdbsh.Status.UpgradePhase == "" &&
+		mdbsh.Status.ObservedUpgradeGeneration == mdbsh.Generation &&
+		mdbsh.Status.ObservedUpgradeGeneration != 0 {
+		logger.Info("sharded upgrade already terminal for this generation, awaiting spec change",
+			"generation", mdbsh.Generation, "retries", mdbsh.Status.UpgradeRetryCount)
+		return ctrl.Result{}, false, nil
+	}
+
 	switch mdbsh.Status.UpgradePhase {
 	case "":
-		logger.Info("sharded upgrade detected", "from", currentVersion, "to", desiredVersion)
+		logger.Info("sharded upgrade detected", "from", currentVersion, "to", desiredVersion,
+			"attempt", mdbsh.Status.UpgradeRetryCount+1)
 		applyStatus := func() {
 			mdbsh.Status.PreviousVersion = currentVersion
+			mdbsh.Status.EffectiveVersion = desiredVersion
+			mdbsh.Status.RollbackActive = false
 			now := metav1.Now()
 			mdbsh.Status.UpgradeStartTime = &now
 
@@ -139,7 +163,13 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeBackup(ctx context.Con
 func (r *MongoDBShardedReconciler) reconcileShardedUpgradeValidation(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, desiredVersion string) (ctrl.Result, bool, error) {
 	logger := log.FromContext(ctx)
 	interval := parseValidationInterval(mdbsh.Spec.UpgradeStrategy)
-	validationTimeout := interval * 3
+	// validationTimeout = interval + 총멤버×budget(갭3 fix — 정상 rollout이 느려도 오판
+	// rollback 방지). sharded 총멤버 = config + shards×membersPerShard(컴포넌트 다수).
+	totalMembers := mdbsh.Spec.ConfigServer.Members + mdbsh.Spec.Shards.Count*mdbsh.Spec.Shards.MembersPerShard
+	if totalMembers < 1 {
+		totalMembers = 1
+	}
+	validationTimeout := interval + time.Duration(totalMembers)*perMemberRolloutBudget
 
 	if mdbsh.Status.UpgradeStartTime == nil {
 		return ctrl.Result{RequeueAfter: upgradeRequeueInterval}, true, nil
@@ -161,12 +191,24 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeValidation(ctx context
 
 	if allReady {
 		logger.Info("sharded upgrade validation passed", "version", desiredVersion)
+		// FCV 자동 commit(갭5): sharded는 mongos를 통해 setFCV하면 config+shards 전체에
+		// 전파된다. 검증 통과 후이므로 안전(point-of-no-return). mongos 연결로 commit.
+		fcv, err := r.commitShardedFCV(ctx, mdbsh, desiredVersion)
+		if err != nil {
+			logger.Error(err, "sharded FCV commit failed, will retry (upgrade not yet complete)")
+			return ctrl.Result{RequeueAfter: upgradeRequeueInterval}, true, nil
+		}
 		applyStatus := func() {
 			mdbsh.Status.Version = desiredVersion
+			mdbsh.Status.EffectiveVersion = desiredVersion
+			mdbsh.Status.FCVVersion = fcv // 클로저 안에서 설정(UpdateWithRetry refetch 덮어쓰기 방지).
+			mdbsh.Status.RollbackActive = false
 			mdbsh.Status.UpgradePhase = ""
 			mdbsh.Status.UpgradeStartTime = nil
+			mdbsh.Status.UpgradeRetryCount = 0
+			mdbsh.Status.ObservedUpgradeGeneration = mdbsh.Generation
 			setShardedUpgradeCondition(mdbsh, "UpgradeComplete", metav1.ConditionTrue,
-				"Upgraded", fmt.Sprintf("Successfully upgraded to %s", desiredVersion))
+				"Upgraded", fmt.Sprintf("Successfully upgraded to %s (FCV %s committed)", desiredVersion, fcv))
 		}
 		applyStatus()
 		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
@@ -198,6 +240,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeValidation(ctx context
 			"ValidationTimeout", fmt.Sprintf("Upgrade to %s timed out, manual intervention required", desiredVersion))
 		mdbsh.Status.UpgradePhase = ""
 		mdbsh.Status.UpgradeStartTime = nil
+		mdbsh.Status.ObservedUpgradeGeneration = mdbsh.Generation
 	}
 	applyStatus()
 	if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
@@ -225,6 +268,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeRollback(ctx context.C
 		applyStatus := func() {
 			mdbsh.Status.UpgradePhase = ""
 			mdbsh.Status.UpgradeStartTime = nil
+			mdbsh.Status.ObservedUpgradeGeneration = mdbsh.Generation
 			setShardedUpgradeCondition(mdbsh, "UpgradeFailed", metav1.ConditionTrue,
 				"ValidationFailed", "Upgrade validation failed, manual intervention required")
 		}
@@ -235,30 +279,60 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeRollback(ctx context.C
 		return ctrl.Result{}, true, nil
 	}
 
-	logger.Info("rolling back sharded cluster to previous version", "version", mdbsh.Status.PreviousVersion)
-
-	// Spec→Status 순서 안전: 먼저 Spec(Version)을 Update한다. r.Update는 성공 시 서버가
-	// 발급한 최신 ResourceVersion으로 mdbsh를 in-place 갱신하므로, 이후 status 갱신은
-	// 그 최신 RV 위에서 시작한다. 즉 Spec update 이전의 stale RV로 status를 덮어쓰지 않는다.
+	// 롤백 GitOps화(갭3): spec.Version 직접 Update 제거(webhook downgrade 차단 + Flux SSOT
+	// 충돌 회피). Status.EffectiveVersion=PreviousVersion → builder가 STS를 이전 버전으로
+	// 재빌드 → 무중단 롤링 복귀. spec.Version(git SSOT) 불변. FCV는 검증 통과 전이라 미commit.
 	previousVersion := mdbsh.Status.PreviousVersion
-	mdbsh.Spec.Version.Version = previousVersion
-	if err := r.Update(ctx, mdbsh); err != nil {
-		return ctrl.Result{}, false, err
-	}
+	logger.Info("rolling back sharded cluster (status-based, spec preserved)",
+		"effectiveVersion", previousVersion, "specVersion", mdbsh.Spec.Version.Version)
 
-	// Spec update로 갱신된 mdbsh(최신 RV) 위에서 status를 갱신한다. conflict가 나더라도
-	// updateStatusWithRetry가 refetch 후 applyStatus를 재적용하므로 stale 덮어쓰기가 없다.
 	applyStatus := func() {
+		mdbsh.Status.EffectiveVersion = previousVersion
+		mdbsh.Status.RollbackActive = true
 		mdbsh.Status.UpgradePhase = ""
 		mdbsh.Status.UpgradeStartTime = nil
+		// 루프 안정성(갭6): 롤백도 terminal — 같은 generation 재업그레이드 차단.
+		mdbsh.Status.UpgradeRetryCount++
+		mdbsh.Status.ObservedUpgradeGeneration = mdbsh.Generation
 		setShardedUpgradeCondition(mdbsh, "UpgradeRolledBack", metav1.ConditionTrue,
-			"RolledBack", fmt.Sprintf("Rolled back to %s", previousVersion))
+			"RolledBack", fmt.Sprintf("Rolled back to %s (spec.Version %s preserved; change spec to retry)",
+				previousVersion, mdbsh.Spec.Version.Version))
 	}
 	applyStatus()
 	if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
 		return ctrl.Result{}, false, err
 	}
 	return ctrl.Result{}, true, nil
+}
+
+// commitShardedFCV는 검증 통과 후 mongos를 통해 featureCompatibilityVersion을 상향한다(갭5).
+// mongos setFCV는 config server + 모든 shard에 전파된다(sharded 클러스터 전체 commit).
+// point-of-no-return — 이후 바이너리 다운그레이드 불가. 검증 통과 후이므로 안전.
+// 이미 같은 FCV면 SetFCV가 idempotent no-op.
+func (r *MongoDBShardedReconciler) commitShardedFCV(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, desiredVersion string) (string, error) {
+	fcv := fcvMajorMinor(desiredVersion)
+	if fcv == "" {
+		return "", fmt.Errorf("cannot derive FCV from version %q", desiredVersion)
+	}
+	if mdbsh.Status.FCVVersion == fcv {
+		return fcv, nil
+	}
+	adminPassword, err := r.getAdminPassword(ctx, mdbsh)
+	if err != nil {
+		return "", fmt.Errorf("get admin password for FCV commit: %w", err)
+	}
+	mongosPod, err := r.getMongosPodName(ctx, mdbsh)
+	if err != nil {
+		return "", fmt.Errorf("get mongos pod for FCV commit: %w", err)
+	}
+	// mongos(27017) 경유 setFCV — 클러스터 전체 전파. status 기록은 호출자 클로저가 담당.
+	mgr := mongodb.NewReplicaSetManagerWithFactory(
+		mongodb.NewServiceConnectFactory(mdbsh.Name+"-mongos", mdbsh.Namespace, 27017, "admin", adminPassword, "admin"),
+	)
+	if err := mgr.SetFCV(ctx, mongosPod, mdbsh.Namespace, fcv); err != nil {
+		return "", err
+	}
+	return fcv, nil
 }
 
 //nolint:unparam // status param reserved for future ConditionFalse cases

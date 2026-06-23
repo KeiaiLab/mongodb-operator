@@ -175,7 +175,11 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 		return r.updateStatusError(ctx, mdb, "StatefulSet", err)
 	}
 
-	// 5.0.1. Transition to Validating after StatefulSet update
+	// 5.0.1. Transition to Validating after StatefulSet update.
+	// reconcileStatefulSet이 EffectiveVersion(=desired)으로 STS를 apply한 직후이므로
+	// k8s RollingUpdate가 시작됨. Validating의 stsRolloutComplete(CurrentRevision==
+	// UpdateRevision)가 rollout 완료를 버전-aware로 게이트하므로(갭1+갭2), 전이 직후
+	// stale status로 인한 즉시 완료 오판은 방지된다(rollout 중엔 revision 불일치 → false).
 	if mdb.Status.UpgradePhase == UpgradePhaseUpgrading {
 		setValidating := func() {
 			mdb.Status.UpgradePhase = UpgradePhaseValidating

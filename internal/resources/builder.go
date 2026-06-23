@@ -47,6 +47,11 @@ const (
 	// keyfileInitImage 는 copy-keyfile init container (4곳: replicaset / cfg / shard / mongos)
 	// 의 단일 진실원. busybox 만 사용 (chmod + cp), CVE 패치 시 본 const 만 갱신.
 	keyfileInitImage = "busybox:1.37"
+
+	// scripts ConfigMap key 이름 (RS/cfg/shard 3 ConfigMap 공용 — goconst).
+	scriptReadiness = "readiness-probe.sh"
+	scriptBootstrap = "bootstrap-admin.sh"
+	scriptStepDown  = "prestop-stepdown.sh"
 )
 
 // Helper functions
@@ -61,6 +66,17 @@ func getMongoDBImage(version mongodbv1alpha1.MongoDBVersion) string {
 		return version.Image
 	}
 	return fmt.Sprintf("mongo:%s", version.Version)
+}
+
+// effectiveMongoDBVersion은 STS가 실제 배포할 버전을 결정한다(무중단 업그레이드/롤백 SSOT).
+// status.EffectiveVersion이 비어있지 않으면 그것을 우선(롤백 중 PreviousVersion), 비어있으면
+// spec.Version으로 fallback(기존 클러스터 무롤링 호환 — byte-identical). spec.Version.Image
+// override는 보존한다(version string만 effective로 치환).
+func effectiveMongoDBVersion(spec mongodbv1alpha1.MongoDBVersion, statusEffective string) mongodbv1alpha1.MongoDBVersion {
+	if statusEffective == "" || spec.Image != "" {
+		return spec
+	}
+	return mongodbv1alpha1.MongoDBVersion{Version: statusEffective}
 }
 
 // MongoTLSMountPath 는 cert-manager 발급 Secret 의 raw mount 경로.
@@ -335,6 +351,16 @@ func buildAdminBootstrapScript(port int) string {
 	return out
 }
 
+// buildStepDownScript은 preStop에서 PRIMARY 이양(rs.stepDown)을 수행하는 스크립트를
+// 반환한다(무중단 업그레이드). assets/scripts/prestop-stepdown.sh.tpl로 외부화.
+func buildStepDownScript(port int) string {
+	out, err := assets.RenderStepDown(port)
+	if err != nil {
+		panic(fmt.Sprintf("render stepdown script: %v", err))
+	}
+	return out
+}
+
 // buildAdminCredentialsVolume은 admin password Secret을 0400으로 mount하는 Volume을
 // 만든다. 호출자는 secretName이 비어있지 않은지 미리 검증해야 한다.
 func buildAdminCredentialsVolume(secretName string) corev1.Volume {
@@ -406,13 +432,24 @@ func buildBootstrapEnv(stsName, headlessSvc, namespace, replSetName string, repl
 	}
 }
 
-// buildAdminBootstrapLifecycle은 /scripts/bootstrap-admin.sh를 postStart로 실행하는
-// Lifecycle hook을 반환한다. ReplicaSet/ConfigServer/Shard StatefulSet 공용.
+// buildAdminBootstrapLifecycle은 /scripts/bootstrap-admin.sh를 postStart로 실행하고
+// /scripts/prestop-stepdown.sh를 preStop으로 실행하는 Lifecycle hook을 반환한다.
+// ReplicaSet/ConfigServer/Shard StatefulSet 공용.
+//
+// preStop stepDown(무중단 업그레이드): pod 종료(롤링 업데이트 등) 직전 자기 mongod가
+// primary면 rs.stepDown()으로 secondary에 primary 이양 → election 끊김(~10s) 회피.
+// primary가 아니면 no-op(스크립트가 에러 무시). RollingUpdate 가 primary pod 를
+// 재시작할 때 쓰기 단절을 최소화한다.
 func buildAdminBootstrapLifecycle() *corev1.Lifecycle {
 	return &corev1.Lifecycle{
 		PostStart: &corev1.LifecycleHandler{
 			Exec: &corev1.ExecAction{
 				Command: []string{"/scripts/bootstrap-admin.sh"},
+			},
+		},
+		PreStop: &corev1.LifecycleHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"/scripts/prestop-stepdown.sh"},
 			},
 		},
 	}
@@ -432,8 +469,9 @@ func BuildMongoDBConfigMap(mdb *mongodbv1alpha1.MongoDB) *corev1.ConfigMap {
 			Labels:    buildLabels(mdb.Name, "scripts"),
 		},
 		Data: map[string]string{
-			"readiness-probe.sh": buildReadinessScript(mongoDBPort),
-			"bootstrap-admin.sh": buildAdminBootstrapScript(mongoDBPort),
+			scriptReadiness: buildReadinessScript(mongoDBPort),
+			scriptBootstrap: buildAdminBootstrapScript(mongoDBPort),
+			scriptStepDown:  buildStepDownScript(mongoDBPort),
 		},
 	}
 }
@@ -466,8 +504,9 @@ func BuildConfigServerScriptsConfigMap(mdbsh *mongodbv1alpha1.MongoDBSharded) *c
 			Labels:    buildLabels(mdbsh.Name, "configsvr"),
 		},
 		Data: map[string]string{
-			"readiness-probe.sh": buildReadinessScript(27019),
-			"bootstrap-admin.sh": buildAdminBootstrapScript(27019),
+			scriptReadiness: buildReadinessScript(27019),
+			scriptBootstrap: buildAdminBootstrapScript(27019),
+			scriptStepDown:  buildStepDownScript(27019),
 		},
 	}
 }
@@ -482,8 +521,9 @@ func BuildShardScriptsConfigMap(mdbsh *mongodbv1alpha1.MongoDBSharded, shardInde
 			Labels:    buildLabels(mdbsh.Name, fmt.Sprintf("shard-%d", shardIndex)),
 		},
 		Data: map[string]string{
-			"readiness-probe.sh": buildReadinessScript(27018),
-			"bootstrap-admin.sh": buildAdminBootstrapScript(27018),
+			scriptReadiness: buildReadinessScript(27018),
+			scriptBootstrap: buildAdminBootstrapScript(27018),
+			scriptStepDown:  buildStepDownScript(27018),
 		},
 	}
 }
@@ -660,7 +700,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 	containers := []corev1.Container{
 		{
 			Name:  "mongodb",
-			Image: getMongoDBImage(mdb.Spec.Version),
+			Image: getMongoDBImage(effectiveMongoDBVersion(mdb.Spec.Version, mdb.Status.EffectiveVersion)),
 			Ports: []corev1.ContainerPort{
 				{Name: "mongodb", ContainerPort: mongoDBPort, Protocol: corev1.ProtocolTCP},
 			},
@@ -1143,6 +1183,11 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 				MatchLabels: labels,
 			},
 			PodManagementPolicy: appsv1.ParallelPodManagement,
+			// RollingUpdate 명시 — 무중단 버전 업그레이드(이미지 변경 시 k8s 자동 순차 롤링).
+			// 미지정 시 OnDelete 기본값이라 STS image 변경해도 pod 재생성 안 됨(업그레이드 불가).
+			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
+				Type: appsv1.RollingUpdateStatefulSetStrategyType,
+			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
@@ -1167,7 +1212,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 					Containers: []corev1.Container{
 						{
 							Name:  "mongodb",
-							Image: getMongoDBImage(mdbsh.Spec.Version),
+							Image: getMongoDBImage(effectiveMongoDBVersion(mdbsh.Spec.Version, mdbsh.Status.EffectiveVersion)),
 							Ports: []corev1.ContainerPort{
 								{Name: "mongodb", ContainerPort: mongoDBPort},
 							},
@@ -1394,6 +1439,11 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 				MatchLabels: labels,
 			},
 			PodManagementPolicy: appsv1.ParallelPodManagement,
+			// RollingUpdate 명시 — 무중단 버전 업그레이드(이미지 변경 시 k8s 자동 순차 롤링).
+			// 미지정 시 OnDelete 기본값이라 STS image 변경해도 pod 재생성 안 됨(업그레이드 불가).
+			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
+				Type: appsv1.RollingUpdateStatefulSetStrategyType,
+			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
@@ -1418,7 +1468,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 					Containers: []corev1.Container{
 						{
 							Name:  "mongodb",
-							Image: getMongoDBImage(mdbsh.Spec.Version),
+							Image: getMongoDBImage(effectiveMongoDBVersion(mdbsh.Spec.Version, mdbsh.Status.EffectiveVersion)),
 							Ports: []corev1.ContainerPort{
 								{Name: "mongodb", ContainerPort: mongoDBPort},
 							},
@@ -1732,7 +1782,7 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 	containers := []corev1.Container{
 		{
 			Name:    "mongos",
-			Image:   getMongoDBImage(mdbsh.Spec.Version),
+			Image:   getMongoDBImage(effectiveMongoDBVersion(mdbsh.Spec.Version, mdbsh.Status.EffectiveVersion)),
 			Command: []string{"mongos"},
 			Args:    args,
 			Ports: []corev1.ContainerPort{

@@ -4020,6 +4020,11 @@ spec:
                 type: object
               upgradeStrategy:
                 properties:
+                  maxRetries:
+                    default: 0
+                    format: int32
+                    minimum: 0
+                    type: integer
                   preUpgradeBackup:
                     default: false
                     type: boolean
@@ -4095,6 +4100,10 @@ spec:
                 type: string
               currentPrimary:
                 type: string
+              effectiveVersion:
+                type: string
+              fcvVersion:
+                type: string
               hpa:
                 properties:
                   currentReplicas:
@@ -4151,6 +4160,9 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              observedUpgradeGeneration:
+                format: int64
+                type: integer
               pendingScale:
                 properties:
                   currentMembers:
@@ -4182,6 +4194,8 @@ spec:
                 type: integer
               replicaSetInitialized:
                 type: boolean
+              rollbackActive:
+                type: boolean
               tlsSecretName:
                 type: string
               upgradePhase:
@@ -4192,6 +4206,9 @@ spec:
                 - Validating
                 - RollingBack
                 type: string
+              upgradeRetryCount:
+                format: int32
+                type: integer
               upgradeStartTime:
                 format: date-time
                 type: string
@@ -8282,6 +8299,10 @@ spec:
                 type: string
               currentPrimary:
                 type: string
+              effectiveVersion:
+                type: string
+              fcvVersion:
+                type: string
               hpa:
                 properties:
                   currentReplicas:
@@ -8338,6 +8359,9 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              observedUpgradeGeneration:
+                format: int64
+                type: integer
               pendingScale:
                 properties:
                   currentMembers:
@@ -8369,6 +8393,8 @@ spec:
                 type: integer
               replicaSetInitialized:
                 type: boolean
+              rollbackActive:
+                type: boolean
               tlsSecretName:
                 type: string
               upgradePhase:
@@ -8379,6 +8405,9 @@ spec:
                 - Validating
                 - RollingBack
                 type: string
+              upgradeRetryCount:
+                format: int32
+                type: integer
               upgradeStartTime:
                 format: date-time
                 type: string

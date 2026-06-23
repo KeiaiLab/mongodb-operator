@@ -78,6 +78,12 @@ var _ = BeforeSuite(func() {
 		testEnv.BinaryAssetsDirectory = getFirstFoundEnvTestBinaryDir()
 	}
 
+	// etcd --max-request-bytes 증가: mongodbshardeds CRD(3.27MB)가 etcd 기본 request
+	// limit(1.5MB) 초과로 install 시 "etcdserver: request is too large" 실패 방지
+	// (controller suite_test와 동일 — 거대 CRD envtest 게이트).
+	testEnv.ControlPlane.Etcd = &envtest.Etcd{}
+	testEnv.ControlPlane.Etcd.Configure().Set("max-request-bytes", "33554432") // 32MiB
+
 	cfg, err = testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
