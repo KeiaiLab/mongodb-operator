@@ -74,6 +74,12 @@ func BootstrapAdminUser(ctx context.Context, firstHost, username, password strin
 // MongoDB 표준 server error codes (참고: replicaset.go의 notYetInitializedCode와
 // 같은 분류). string match는 mongo-driver 메시지 포맷이 minor release에서
 // 바뀌면 silent break가 발생하므로 typed mongo.ServerError 우선으로 검사한다.
+// SCRAM mechanism 이름. mongot 은 SCRAM-SHA-1 을 쓰므로 searchCoordinator user 는 둘 다 보유해야 함.
+const (
+	scramSHA1   = "SCRAM-SHA-1"
+	scramSHA256 = "SCRAM-SHA-256"
+)
+
 const (
 	mongoErrUnauthorized         = 13
 	mongoErrAuthenticationFailed = 18
@@ -139,7 +145,7 @@ func EnsureSearchCoordinatorUser(ctx context.Context, c *mongo.Client, username,
 	if ok, _ := userHasDualSCRAMAndRole(ctx, c, username); ok {
 		return nil
 	}
-	mechanisms := bson.A{"SCRAM-SHA-1", "SCRAM-SHA-256"}
+	mechanisms := bson.A{scramSHA1, scramSHA256}
 	roles := bson.A{bson.M{"role": "searchCoordinator", "db": adminUserDB}}
 	var res bson.M
 	err := c.Database(adminUserDB).RunCommand(ctx, bson.D{
@@ -189,9 +195,9 @@ func userHasDualSCRAMAndRole(ctx context.Context, c *mongo.Client, username stri
 	var sha1, sha256, hasRole bool
 	for _, m := range u.Mechanisms {
 		switch m {
-		case "SCRAM-SHA-1":
+		case scramSHA1:
 			sha1 = true
-		case "SCRAM-SHA-256":
+		case scramSHA256:
 			sha256 = true
 		}
 	}
