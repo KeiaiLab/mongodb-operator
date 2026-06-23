@@ -10973,6 +10973,11 @@ spec:
                 type: object
               upgradeStrategy:
                 properties:
+                  maxRetries:
+                    default: 0
+                    format: int32
+                    minimum: 0
+                    type: integer
                   preUpgradeBackup:
                     default: false
                     type: boolean
@@ -11098,6 +11103,10 @@ spec:
                 type: boolean
               connectionString:
                 type: string
+              effectiveVersion:
+                type: string
+              fcvVersion:
+                type: string
               lastBackup:
                 properties:
                   location:
@@ -11163,6 +11172,9 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              observedUpgradeGeneration:
+                format: int64
+                type: integer
               phase:
                 enum:
                 - Pending
@@ -11173,6 +11185,8 @@ spec:
                 type: string
               previousVersion:
                 type: string
+              rollbackActive:
+                type: boolean
               shardedCollections:
                 items:
                   type: string
@@ -11214,6 +11228,9 @@ spec:
                 - Validating
                 - RollingBack
                 type: string
+              upgradeRetryCount:
+                format: int32
+                type: integer
               upgradeStartTime:
                 format: date-time
                 type: string
@@ -22307,6 +22324,10 @@ spec:
                 type: boolean
               connectionString:
                 type: string
+              effectiveVersion:
+                type: string
+              fcvVersion:
+                type: string
               lastBackup:
                 properties:
                   location:
@@ -22372,6 +22393,9 @@ spec:
               observedGeneration:
                 format: int64
                 type: integer
+              observedUpgradeGeneration:
+                format: int64
+                type: integer
               phase:
                 enum:
                 - Pending
@@ -22382,6 +22406,8 @@ spec:
                 type: string
               previousVersion:
                 type: string
+              rollbackActive:
+                type: boolean
               shardedCollections:
                 items:
                   type: string
@@ -22423,6 +22449,9 @@ spec:
                 - Validating
                 - RollingBack
                 type: string
+              upgradeRetryCount:
+                format: int32
+                type: integer
               upgradeStartTime:
                 format: date-time
                 type: string
