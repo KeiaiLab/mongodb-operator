@@ -4,25 +4,25 @@ Copyright 2026 Keiailab.
 Licensed under the MIT License. See the LICENSE file for details.
 */
 
-// mongot.go — Phase 1 (Atlas 갭 클로징): MongoDB Search/Vector Search 엔진(mongot)
-// 배포 빌더. MongoDBSearch CR 1건 당 mongot StatefulSet + headless Service +
-// config ConfigMap + NetworkPolicy 를 생성하고, source mongod 에 주입할
-// setParameter 인자를 제공한다.
+// mongot.go — Phase 1.1 (Atlas 갭 클로징): MongoDB Search/Vector Search 엔진(mongot)
+// **sidecar** 배포. Community mongot(mongodb-community-search)의 topology monitor 는
+// localhost:27017(로컬 mongod)에 연결하므로 mongot 은 mongod pod 의 sidecar 여야 한다
+// (별도 StatefulSet 비호환 — kind e2e 실증, memory mongot-search-e2e-findings).
 //
-// mongot 은 gRPC 27028(검색 쿼리 + 인덱스 관리) + 27029(health) 를 listen 하고,
-// source replica set(mongod)을 sync source 로 색인을 빌드한다. mongo 8.2+ 필요.
+// MongoDBSearch CR → search controller 가 mongot ConfigMap(localhost syncSource) 생성 +
+// source MongoDB 에 sidecar annotation 설정 → mongod builder(BuildReplicaSetStatefulSet)가
+// annotation 있을 때만 mongot sidecar 컨테이너 + init(password 0400) + volumes + mongod
+// setParameter(mongotHost=localhost:27028) 주입. annotation 부재 시 무변경 = 무롤링.
 //
-// ⚠ MongoDB Search self-managed 는 public preview — config.yml schema / 이미지
-// 태그는 GA 시 변동 가능. spec.version.Image 로 override 가능하게 둔다.
+// mongot: gRPC 27028(쿼리+인덱스관리) + 8080(health). mongo 8.2+ 필요.
+// ⚠ public preview — config schema/이미지 태그 GA 시 변동 가능(spec.version.Image override).
 
 package resources
 
 import (
 	"fmt"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -31,32 +31,50 @@ import (
 )
 
 const (
-	// mongotGRPCPort — mongod ↔ mongot 검색 쿼리 + 인덱스 관리(gRPC).
+	// mongotGRPCPort — mongod ↔ mongot 검색 쿼리 + 인덱스 관리(gRPC, localhost intra-pod).
 	mongotGRPCPort = 27028
-	// mongotHealthPort — health/status.
-	mongotHealthPort = 27029
-	// mongotDataPath — 인덱스 스토어 PVC mount.
-	mongotDataPath = "/var/lib/mongot/data"
+	// mongotHealthPort — mongot healthCheck(config.default.yml 기본 8080).
+	mongotHealthPort = 8080
+	// mongotBasePath — mongot data dir(serverId.txt + 인덱스 스토어). mongod data PVC 의
+	// subPath 로 mount(노드 루트 디스크 종속 제거 — kind e2e 근본 원인: emptyDir 가 노드
+	// 디스크 공유 → 노드 압박 시 mongot replication pause → 검색 silent 정지).
+	mongotBasePath = "/var/lib/mongot"
+	// mongodDataVolume — mongod data PVC VCT 이름(builder.go VolumeClaimTemplates). mongot 이
+	// subPath 로 공유 → 별도 VCT 추가 불필요(commonsapply VCT immutable → 기존 MongoDB search
+	// 활성화 호환) + 전용 스토리지(production 별도 볼륨) → 노드 디스크 독립 + 영속.
+	mongodDataVolume = "data"
+	// mongotDataSubPath — mongod data PVC 내 mongot 인덱스 subPath(mongod dbpath 와 분리).
+	mongotDataSubPath = "search-index"
 	// mongotConfigPath — config.yml mount dir.
 	mongotConfigPath = "/etc/mongot/config"
 	// mongotConfigFile — config 파일명.
 	mongotConfigFile = "config.yml"
+	// mongotSecretsPath — password(0400) mount dir(init container 복사 대상).
+	mongotSecretsPath = "/etc/mongot/secrets"
+	// mongotSyncRawPath — 원본 sync secret mount(init container 입력).
+	mongotSyncRawPath = "/tmp/mongot-sync"
 	// defaultMongotImage — Community self-managed mongot(검증: hub.docker.com).
-	// override: spec.version.Image. (preview — GA 시 태그 확정.)
 	defaultMongotImage = "mongodb/mongodb-community-search:latest"
-	// MongotSearchEndpointAnnotation — source MongoDB CR 에 search controller 가
-	// 설정하는 mongot endpoint. mongod builder 가 읽어 setParameter 주입(있을 때만 →
-	// search 미사용 시 mongod template 무변경 = 무롤링).
-	MongotSearchEndpointAnnotation = "search.mongodb.keiailab.com/mongot-endpoint"
-	// MongotTLSModeAnnotation — mongod 의 searchTLSMode(disabled|requireTLS).
-	MongotTLSModeAnnotation = "search.mongodb.keiailab.com/tls-mode"
-	// setParameterFlag / mongotDataVolume — 반복 리터럴 const 화(goconst, CI cross-review).
+	// mongotBinary — 이미지 내 mongot 바이너리. 이미지 ENTRYPOINT 가 config.default.yml 을
+	// 하드코딩(sh -c "/mongot-community/mongot --config /mongot-community/config.default.yml")
+	// 하므로, 컨테이너 Command 로 override 해야 operator 생성 config 가 적용됨(kind e2e 실증).
+	mongotBinary = "/mongot-community/mongot"
+	// setParameterFlag — 반복 리터럴 const(goconst).
 	setParameterFlag = "--setParameter"
-	mongotDataVolume = "data"
+	// mongotSecretsVolume — password emptyDir volume 이름(반복 const, goconst).
+	mongotSecretsVolume = "mongot-secrets"
+
+	// MongotSidecarImageAnnotation — search controller 가 source MongoDB 에 설정(존재=sidecar 활성).
+	// 값 = mongot 이미지. mongod builder 가 읽어 sidecar 주입(부재 시 무변경=무롤링).
+	MongotSidecarImageAnnotation = "search.mongodb.keiailab.com/mongot-image"
+	// MongotSyncSecretAnnotation — searchCoordinator sync secret 이름.
+	MongotSyncSecretAnnotation = "search.mongodb.keiailab.com/sync-secret"
+	// MongotTLSModeAnnotation — mongod searchTLSMode + mongot config tls(disabled|requireTLS).
+	MongotTLSModeAnnotation = "search.mongodb.keiailab.com/tls-mode"
 )
 
-// mongotImage — spec.version 에서 mongot 이미지 결정.
-func mongotImage(v mongodbv1beta1.MongotVersion) string {
+// MongotImage — spec.version 에서 mongot 이미지 결정(controller 가 annotation 설정에 사용).
+func MongotImage(v mongodbv1beta1.MongotVersion) string {
 	if v.Image != "" {
 		return v.Image
 	}
@@ -66,165 +84,113 @@ func mongotImage(v mongodbv1beta1.MongotVersion) string {
 	return defaultMongotImage
 }
 
-// mongotResources — v1beta1.ResourcesSpec → corev1 (builder.go 의 v1alpha1
-// buildResourceRequirements 와 별개 — version mismatch 회피).
+// mongotResources — v1beta1.ResourcesSpec → corev1.
 func mongotResources(spec mongodbv1beta1.ResourcesSpec) corev1.ResourceRequirements {
 	return corev1.ResourceRequirements{Requests: spec.Requests, Limits: spec.Limits}
 }
 
-// mongotLabels — mongot 리소스 라벨(component=mongot). operator buildLabels 위임
-// (commonslabels — 라벨 리터럴 중복 회피, goconst).
+// mongotLabels — mongot ConfigMap 라벨(component=mongot).
 func mongotLabels(searchName string) map[string]string {
 	return buildLabels(searchName, "mongot")
 }
 
-// MongotServiceName — mongot headless service 이름.
-func MongotServiceName(searchName string) string { return searchName + "-mongot" }
+// MongotConfigMapName — mongot config ConfigMap 이름(mdb 기준 — sidecar 가 마운트).
+func MongotConfigMapName(mdbName string) string { return mdbName + "-mongot-config" }
 
-// MongotEndpoint — mongod 가 연결할 mongot endpoint(host:27028, in-cluster DNS).
-func MongotEndpoint(searchName, namespace string) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local:%d", MongotServiceName(searchName), namespace, mongotGRPCPort)
-}
-
-// BuildMongotConfigMap — mongot config.yml(operator 생성). source mongod 를 sync
-// source 로, searchCoordinator 사용자로 인증. (preview schema — kind PoC 에서 검증.)
-func BuildMongotConfigMap(search *mongodbv1beta1.MongoDBSearch, sourceHosts []string, syncUser string, tlsEnabled bool) *corev1.ConfigMap {
-	hostsYAML := ""
-	for _, h := range sourceHosts {
-		hostsYAML += fmt.Sprintf("      - host: %q\n", h)
-	}
+// BuildMongotConfigMap — mongot config.yml(sidecar). syncSource=localhost:27017(로컬 mongod).
+// schema SSOT = mongot config.default.yml(kind e2e 실측): hostAndPort 단수 / dataPath=base /
+// server.grpc.tls / healthCheck.address / password owner-only.
+func BuildMongotConfigMap(mdbName, namespace, searchName, syncUser string, tlsEnabled bool) *corev1.ConfigMap {
 	tlsMode := "disabled"
 	if tlsEnabled {
 		tlsMode = "requireTLS"
 	}
-	cfg := fmt.Sprintf(`# operator-generated — MongoDBSearch %s/%s (preview)
+	cfg := fmt.Sprintf(`# operator-generated mongot sidecar config — %s/%s (preview)
 syncSource:
   replicaSet:
-    hostAndPorts:
-%s    username: %q
-    authSource: admin
-    passwordFile: /etc/mongot/secret/password
+    hostAndPort: "localhost:27017"
+    username: %q
+    passwordFile: %s/passwordFile
     tls: %t
 storage:
   dataPath: %q
 server:
   grpc:
     address: "0.0.0.0:%d"
-  health:
-    address: "0.0.0.0:%d"
-  tls:
-    mode: %s
+    tls:
+      mode: %q
 metrics:
   enabled: true
+  address: "0.0.0.0:9946"
+healthCheck:
+  address: "0.0.0.0:%d"
 logging:
   verbosity: INFO
-`, search.Namespace, search.Name, hostsYAML, syncUser, tlsEnabled, mongotDataPath,
-		mongotGRPCPort, mongotHealthPort, tlsMode)
+`, namespace, searchName, syncUser, mongotSecretsPath, tlsEnabled, mongotBasePath,
+		mongotGRPCPort, tlsMode, mongotHealthPort)
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      search.Name + "-mongot-config",
-			Namespace: search.Namespace,
-			Labels:    mongotLabels(search.Name),
+			Name:      MongotConfigMapName(mdbName),
+			Namespace: namespace,
+			Labels:    mongotLabels(searchName),
 		},
 		Data: map[string]string{mongotConfigFile: cfg},
 	}
 }
 
-// BuildMongotService — mongot headless service(gRPC 27028 + health 27029).
-func BuildMongotService(search *mongodbv1beta1.MongoDBSearch) *corev1.Service {
-	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      MongotServiceName(search.Name),
-			Namespace: search.Namespace,
-			Labels:    mongotLabels(search.Name),
-		},
-		Spec: corev1.ServiceSpec{
-			ClusterIP:                corev1.ClusterIPNone,
-			Selector:                 mongotLabels(search.Name),
-			PublishNotReadyAddresses: true,
-			Ports: []corev1.ServicePort{
-				{Name: "grpc", Port: mongotGRPCPort, TargetPort: intstr.FromInt(mongotGRPCPort)},
-				{Name: "health", Port: mongotHealthPort, TargetPort: intstr.FromInt(mongotHealthPort)},
-			},
-		},
-	}
-}
-
-// BuildMongotStatefulSet — mongot StatefulSet(인덱스 스토어 PVC 전용).
-func BuildMongotStatefulSet(search *mongodbv1beta1.MongoDBSearch, syncSecretName string) *appsv1.StatefulSet {
-	labels := mongotLabels(search.Name)
-	replicas := search.Spec.Replicas
-	if replicas < 1 {
-		replicas = 1
-	}
-
+// MongotSidecar — mongod pod 에 주입할 mongot sidecar: (mongot 컨테이너, init 컨테이너, volumes).
+// init(999)가 sync secret 의 password 를 emptyDir 로 cp+chmod 0400(mongot owner-only 요구).
+// mongot data(인덱스 스토어) = mongod data PVC 의 subPath(search-index) 공유 — 노드 루트
+// 디스크 종속 제거(kind e2e 근본 원인: emptyDir 가 노드 디스크 공유 → 노드 압박 시 mongot
+// disk-usage pause → 검색 silent 정지). 별도 VCT 불가(commonsapply VCT immutable → 기존
+// MongoDB search 활성화 시 pod 기동 실패) → 기존 data VCT 재사용. 영속(pod 재시작 인덱스 보존).
+func MongotSidecar(mdbName, image, syncSecretName string) (corev1.Container, corev1.Container, []corev1.Volume) {
+	// "data" volume 은 mongod STS VolumeClaimTemplates 가 제공(여기서 추가 X — 중복 방지).
 	volumes := []corev1.Volume{
-		{Name: "config", VolumeSource: corev1.VolumeSource{
-			ConfigMap: &corev1.ConfigMapVolumeSource{
-				LocalObjectReference: corev1.LocalObjectReference{Name: search.Name + "-mongot-config"},
-			},
+		{Name: "mongot-config", VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: MongotConfigMapName(mdbName)}},
 		}},
-	}
-	volumeMounts := []corev1.VolumeMount{
-		{Name: "config", MountPath: mongotConfigPath, ReadOnly: true},
-		{Name: mongotDataVolume, MountPath: mongotDataPath},
-	}
-	if syncSecretName != "" {
-		volumes = append(volumes, corev1.Volume{Name: "sync-secret", VolumeSource: corev1.VolumeSource{
+		{Name: "mongot-sync-raw", VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{SecretName: syncSecretName, DefaultMode: ptr.To[int32](0400)},
-		}})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "sync-secret", MountPath: "/etc/mongot/secret", ReadOnly: true})
+		}},
+		{Name: mongotSecretsVolume, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 	}
-
-	return &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      search.Name + "-mongot",
-			Namespace: search.Namespace,
-			Labels:    labels,
-		},
-		Spec: appsv1.StatefulSetSpec{
-			ServiceName: MongotServiceName(search.Name),
-			Replicas:    ptr.To(replicas),
-			Selector:    &metav1.LabelSelector{MatchLabels: labels},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
-				Spec: corev1.PodSpec{
-					SecurityContext:              buildDefaultSecurityContext(),
-					AutomountServiceAccountToken: ptr.To(false),
-					Volumes:                      volumes,
-					Containers: []corev1.Container{{
-						Name:  "mongot",
-						Image: mongotImage(search.Spec.Version),
-						Args:  []string{"--config", mongotConfigPath + "/" + mongotConfigFile},
-						Ports: []corev1.ContainerPort{
-							{Name: "grpc", ContainerPort: mongotGRPCPort},
-							{Name: "health", ContainerPort: mongotHealthPort},
-						},
-						Resources:       mongotResources(search.Spec.Resources),
-						SecurityContext: buildDefaultContainerSecurityContext(),
-						VolumeMounts:    volumeMounts,
-						ReadinessProbe: &corev1.Probe{
-							ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(mongotGRPCPort)}},
-							InitialDelaySeconds: 10, PeriodSeconds: 10,
-						},
-					}},
-				},
-			},
-			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{{
-				ObjectMeta: metav1.ObjectMeta{Name: mongotDataVolume},
-				Spec: corev1.PersistentVolumeClaimSpec{
-					AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-					StorageClassName: storageClassPtr(search.Spec.Storage.StorageClassName),
-					Resources:        corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: search.Spec.Storage.Size}},
-				},
-			}},
+	initC := corev1.Container{
+		Name:            "copy-mongot-password",
+		Image:           keyfileInitImage,
+		Command:         []string{"sh", "-c", "cp " + mongotSyncRawPath + "/password " + mongotSecretsPath + "/passwordFile && chmod 0400 " + mongotSecretsPath + "/passwordFile"},
+		SecurityContext: buildKeyfileInitContainerSecurityContext(),
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "mongot-sync-raw", MountPath: mongotSyncRawPath, ReadOnly: true},
+			{Name: mongotSecretsVolume, MountPath: mongotSecretsPath},
 		},
 	}
+	mongotC := corev1.Container{
+		Name:    "mongot",
+		Image:   image,
+		Command: []string{mongotBinary, "--config", mongotConfigPath + "/" + mongotConfigFile},
+		Ports: []corev1.ContainerPort{
+			{Name: "mongot-grpc", ContainerPort: mongotGRPCPort},
+			{Name: "mongot-health", ContainerPort: mongotHealthPort},
+		},
+		SecurityContext: buildDefaultContainerSecurityContext(),
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "mongot-config", MountPath: mongotConfigPath, ReadOnly: true},
+			// mongod data PVC 공유(subPath) — 노드 디스크 독립 + 영속.
+			{Name: mongodDataVolume, MountPath: mongotBasePath, SubPath: mongotDataSubPath},
+			{Name: mongotSecretsVolume, MountPath: mongotSecretsPath, ReadOnly: true},
+		},
+		ReadinessProbe: &corev1.Probe{
+			ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(mongotGRPCPort)}},
+			InitialDelaySeconds: 15, PeriodSeconds: 10,
+		},
+	}
+	return mongotC, initC, volumes
 }
 
 // MongotSetParameterArgs — source mongod 에 주입할 mongot 연동 setParameter.
-// endpoint 비어있으면 빈 slice → mongod template 무변경(무롤링).
+// endpoint 비어있으면 nil → mongod template 무변경(무롤링). sidecar 는 endpoint=localhost:27028.
 func MongotSetParameterArgs(endpoint, tlsMode string) []string {
 	if endpoint == "" {
 		return nil
@@ -237,61 +203,5 @@ func MongotSetParameterArgs(endpoint, tlsMode string) []string {
 		setParameterFlag, "searchIndexManagementHostAndPort=" + endpoint,
 		setParameterFlag, "searchTLSMode=" + tlsMode,
 		setParameterFlag, "useGrpcForSearch=true",
-	}
-}
-
-// storageClassPtr — 빈 문자열이면 nil(기본 StorageClass).
-func storageClassPtr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
-// sourceMongodSelector — mongot netpol peer 로 쓸 source mongod RS pod selector.
-// buildLabels(replicaset) 로 *해당 source* mongod 만 한정(cluster-wide 노출 회피 + goconst).
-func sourceMongodSelector(search *mongodbv1beta1.MongoDBSearch) map[string]string {
-	name := ""
-	if search.Spec.Source.MongoDBResourceRef != nil {
-		name = search.Spec.Source.MongoDBResourceRef.Name
-	}
-	return buildLabels(name, "replicaset")
-}
-
-// BuildMongotNetworkPolicy — mongot 의 ingress/egress allow(peer 제한).
-// 컷오버 교훈(default-deny namespace 가 워크로드 차단) 정합 — data ns 가 default-deny
-// 여도 mongot↔mongod 통신만 명시 allow. ingress: source mongod → 27028/27029,
-// egress: source mongod 27017(동기) + 53(DNS). peer 없는 전체 허용 금지(cross-review).
-func BuildMongotNetworkPolicy(search *mongodbv1beta1.MongoDBSearch) *netv1.NetworkPolicy {
-	tcp := corev1.ProtocolTCP
-	udp := corev1.ProtocolUDP
-	grpcPort := intstr.FromInt(mongotGRPCPort)
-	healthPort := intstr.FromInt(mongotHealthPort)
-	mongodPort := intstr.FromInt(mongoDBPort)
-	dnsPort := intstr.FromInt(53)
-	mongodPeer := []netv1.NetworkPolicyPeer{{
-		PodSelector: &metav1.LabelSelector{MatchLabels: sourceMongodSelector(search)},
-	}}
-	return &netv1.NetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      search.Name + "-mongot",
-			Namespace: search.Namespace,
-			Labels:    mongotLabels(search.Name),
-		},
-		Spec: netv1.NetworkPolicySpec{
-			PodSelector: metav1.LabelSelector{MatchLabels: mongotLabels(search.Name)},
-			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeIngress, netv1.PolicyTypeEgress},
-			Ingress: []netv1.NetworkPolicyIngressRule{{
-				From: mongodPeer,
-				Ports: []netv1.NetworkPolicyPort{
-					{Protocol: &tcp, Port: &grpcPort},
-					{Protocol: &tcp, Port: &healthPort},
-				},
-			}},
-			Egress: []netv1.NetworkPolicyEgressRule{
-				{To: mongodPeer, Ports: []netv1.NetworkPolicyPort{{Protocol: &tcp, Port: &mongodPort}}},
-				{Ports: []netv1.NetworkPolicyPort{{Protocol: &udp, Port: &dnsPort}, {Protocol: &tcp, Port: &dnsPort}}},
-			},
-		},
 	}
 }

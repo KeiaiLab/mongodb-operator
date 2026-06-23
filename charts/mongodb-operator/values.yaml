@@ -335,6 +335,11 @@ features:
   # Auto-scaling (HPA) — RS/cfg drift 방지 mutex 부재(P1). 베타 미지원.
   autoscaling:
     enabled: false
+  # MongoDBSearch (mongot) — self-managed Search/Vector Search. sidecar+PVC fix 검증 완료
+  # (kind e2e: 인덱스 READY + $vectorSearch). default-on. mongot 엔진은 MongoDB upstream
+  # public preview. MongoDBSearch CR opt-in이라 CR 없으면 기존 mongod 무영향(무롤링).
+  search:
+    enabled: true
 
 # Network Policy configuration
 # ⚠ Production: set enabled=true for deny-by-default network isolation

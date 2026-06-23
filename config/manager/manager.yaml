@@ -52,6 +52,9 @@ spec:
             - --enable-federation-controller=true
             - --enable-clustergroup-controller=true
             - --enable-autoscaling=true
+            # MongoDBSearch (mongot) — sidecar+PVC fix 검증 완료(kind e2e). mongot 엔진은
+            # MongoDB upstream public preview. MongoDBSearch CR opt-in(CR 없으면 mongod 무영향).
+            - --enable-search-controller=true
           ports:
             - name: https
               containerPort: 8443

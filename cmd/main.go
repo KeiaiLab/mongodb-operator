@@ -92,7 +92,8 @@ func main() {
 	flag.BoolVar(&enableClusterGroupController, "enable-clustergroup-controller", false,
 		"Enable MongoDBClusterGroup reconciler (cycle 8, skeleton). Default false — cross-cluster propagation cycle 9+ 강화 후.")
 	flag.BoolVar(&enableSearchController, "enable-search-controller", false,
-		"Enable MongoDBSearch (mongot) reconciler. Public preview — default false (GA 후 활성).")
+		"Enable MongoDBSearch (mongot) reconciler. 검증 완료(kind e2e) — 배포 레이어(chart/manager/CSV)에서 활성. "+
+			"mongot 엔진은 MongoDB upstream public preview. MongoDBSearch CR opt-in(CR 없으면 mongod 무영향).")
 
 	// 운영 기본값은 production 모드(JSON 구조화 로그 + sampling). 개발 시에는
 	// --zap-devel flag 로 console encoder 를 활성화할 수 있다(BindFlags 로 노출).
@@ -249,8 +250,9 @@ func main() {
 		setupLog.Info("MongoDBClusterGroup controller disabled by feature gate (--enable-clustergroup-controller=false)")
 	}
 
-	// Phase 1 (Atlas 갭 클로징): MongoDBSearch (mongot) reconciler. public preview —
-	// feature gate(default false)로 보호. 다른 선택적 컨트롤러 carve-out 패턴 정합(cross-review).
+	// Phase 1 (Atlas 갭 클로징): MongoDBSearch (mongot) reconciler. sidecar+PVC fix 검증 완료
+	// (kind e2e) — 배포 레이어(chart values.features.search/manager/CSV)에서 활성. feature gate
+	// 유지(끄기 가능). mongot 엔진은 MongoDB upstream public preview.
 	if enableSearchController {
 		if err = (&controller.MongoDBSearchReconciler{
 			Client: mgr.GetClient(),
@@ -260,7 +262,7 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		setupLog.Info("MongoDBSearch controller disabled by feature gate (--enable-search-controller=false, public preview)")
+		setupLog.Info("MongoDBSearch controller disabled by feature gate (--enable-search-controller=false)")
 	}
 
 	// Autoscaling 게이트는 reconciler 내부에서 enableAutoscaling 검사 — 현재 cmd 단에서는

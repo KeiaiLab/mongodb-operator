@@ -4,12 +4,14 @@ Copyright 2026 Keiailab.
 Licensed under the MIT License. See the LICENSE file for details.
 */
 
-// mongodbsearch_controller.go — Phase 1: MongoDBSearch reconcile.
+// mongodbsearch_controller.go — Phase 1.1: MongoDBSearch reconcile (sidecar 모델).
 //
-// source MongoDB 옆에 mongot(검색 엔진) StatefulSet/Service/ConfigMap/NetworkPolicy 를
-// 배포하고, source MongoDB CR 에 mongot endpoint annotation 을 설정한다(mongod builder 가
-// 읽어 setParameter 주입 — 없으면 무변경=무롤링). searchCoordinator sync 사용자는 MVP 에서
-// spec.syncUserSecretRef 로 사용자가 제공(secret: username/password). auto-create 는 후속.
+// Community mongot 은 localhost mongod 로 topology 연결 → mongod pod 의 sidecar 여야 한다
+// (별도 StatefulSet 비호환, kind e2e 실증). 따라서 search controller 는 mongot 을 *직접
+// 배포하지 않고*: ① mongot config ConfigMap(localhost syncSource) 생성 ② source MongoDB 에
+// sidecar annotation(image/sync-secret/tls) 설정 → mongod builder 가 mongot sidecar 컨테이너 +
+// init + setParameter 를 mongod pod 에 주입. searchCoordinator sync 사용자는 spec.syncUserSecretRef
+// 로 사용자 제공(secret: username/password). auto-create 는 후속.
 
 package controller
 
@@ -26,9 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	appsv1 "k8s.io/api/apps/v1"
-	netv1 "k8s.io/api/networking/v1"
-
 	commonsapply "github.com/keiailab/keiailab-commons/pkg/apply"
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	mongodbv1beta1 "github.com/keiailab/mongodb-operator/api/v1beta1"
@@ -42,9 +41,11 @@ const (
 	searchPhaseProvisioning = "Provisioning"
 	searchPhaseReady        = "Ready"
 	searchPhaseFailed       = "Failed"
+	mongodbPhaseRunning     = "Running"
+	mongotSidecarEndpoint   = "localhost:27028" // sidecar — mongod 와 동일 pod localhost
 )
 
-// MongoDBSearchReconciler reconciles MongoDBSearch — mongot deployment.
+// MongoDBSearchReconciler reconciles MongoDBSearch — mongot sidecar 활성화.
 type MongoDBSearchReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -53,10 +54,8 @@ type MongoDBSearchReconciler struct {
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbsearches,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbsearches/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs,verbs=get;list;watch;update;patch
-// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=services;configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 
 func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("mongodbsearch", req.NamespacedName)
@@ -66,7 +65,7 @@ func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// MVP: source = MongoDB(ReplicaSet). Sharded 는 후속(shard 별 mongot).
+	// MVP: source = MongoDB(ReplicaSet). Sharded 는 후속(shard 별 sidecar).
 	if search.Spec.Source.MongoDBResourceRef == nil || search.Spec.Source.Kind == kindMongoDBSharded {
 		return r.fail(ctx, search, "source.mongodbResourceRef(Kind=MongoDB) required (Sharded not yet supported)")
 	}
@@ -88,75 +87,45 @@ func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return r.fail(ctx, search, fmt.Sprintf("sync secret invalid: %v", err))
 	}
 
-	hosts := sourceReplicaSetHosts(source)
 	tlsEnabled := source.Spec.TLS != nil && source.Spec.TLS.Enabled
-
-	// mongot 리소스 apply(owner=search → CR 삭제 시 GC).
-	if err := commonsapply.ConfigMap(ctx, r.Client, r.Scheme, search, resources.BuildMongotConfigMap(search, hosts, syncUser, tlsEnabled)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("apply mongot configmap: %w", err)
-	}
-	if err := commonsapply.Service(ctx, r.Client, r.Scheme, search, resources.BuildMongotService(search)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("apply mongot service: %w", err)
-	}
-	if err := commonsapply.StatefulSet(ctx, r.Client, r.Scheme, search, resources.BuildMongotStatefulSet(search, syncSecret), false); err != nil {
-		return ctrl.Result{}, fmt.Errorf("apply mongot statefulset: %w", err)
-	}
-	if err := commonsapply.NetworkPolicy(ctx, r.Client, r.Scheme, search, resources.BuildMongotNetworkPolicy(search)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("apply mongot networkpolicy: %w", err)
-	}
-
-	// source mongod 에 mongot endpoint annotation → mongod builder 가 setParameter 주입.
-	endpoint := resources.MongotEndpoint(search.Name, search.Namespace)
 	tlsMode := "disabled"
 	if tlsEnabled {
 		tlsMode = "requireTLS"
 	}
-	if err := r.annotateSource(ctx, source, endpoint, tlsMode); err != nil {
+	image := resources.MongotImage(search.Spec.Version)
+
+	// mongot config ConfigMap(sidecar, localhost syncSource). owner=search → CR 삭제 시 GC.
+	cm := resources.BuildMongotConfigMap(source.Name, search.Namespace, search.Name, syncUser, tlsEnabled)
+	if err := commonsapply.ConfigMap(ctx, r.Client, r.Scheme, search, cm); err != nil {
+		return ctrl.Result{}, fmt.Errorf("apply mongot configmap: %w", err)
+	}
+
+	// source mongod 에 sidecar annotation → mongod builder 가 mongot sidecar + setParameter 주입.
+	if err := r.annotateSource(ctx, source, image, syncSecret, tlsMode); err != nil {
 		return ctrl.Result{}, fmt.Errorf("annotate source mongodb: %w", err)
 	}
 
-	// status: mongot STS ready 여부.
-	sts := &appsv1.StatefulSet{}
-	ready := int32(0)
-	if err := r.Get(ctx, types.NamespacedName{Name: search.Name + "-mongot", Namespace: search.Namespace}, sts); err == nil {
-		ready = sts.Status.ReadyReplicas
-	}
+	// status: source mongod Running 이면 sidecar 도 running pod 에 포함 → Ready.
 	phase := searchPhaseProvisioning
-	if ready > 0 {
+	if source.Status.Phase == mongodbPhaseRunning {
 		phase = searchPhaseReady
 	}
 	search.Status.Phase = phase
-	search.Status.MongotEndpoint = endpoint
-	search.Status.ReadyReplicas = ready
+	search.Status.MongotEndpoint = mongotSidecarEndpoint
 	search.Status.ObservedGeneration = search.Generation
 	search.Status.Error = ""
 	if err := r.Status().Update(ctx, search); err != nil {
 		return ctrl.Result{}, err
 	}
-	logger.Info("reconciled", "phase", phase, "endpoint", endpoint, "ready", ready)
-	if phase != "Ready" {
+	logger.Info("reconciled (sidecar)", "phase", phase, "image", image)
+	if phase != searchPhaseReady {
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 	return ctrl.Result{RequeueAfter: 2 * time.Minute}, nil
 }
 
-// sourceReplicaSetHosts — source MongoDB RS 멤버 host:27017 목록(mongot syncSource).
-func sourceReplicaSetHosts(mdb *mongodbv1alpha1.MongoDB) []string {
-	n := mdb.Spec.Members
-	if n < 1 {
-		n = 1
-	}
-	hosts := make([]string, 0, n)
-	for i := int32(0); i < n; i++ {
-		hosts = append(hosts, fmt.Sprintf("%s-%d.%s-headless.%s.svc.cluster.local:27017", mdb.Name, i, mdb.Name, mdb.Namespace))
-	}
-	return hosts
-}
-
-// resolveSyncUser — syncUserSecretRef 검증 + username 결정.
-// secret GET 실패(필수 secret 부재/접근불가) → error(reconcile 실패 — mongot STS 가
-// 마운트할 secret 이 없으므로 fail-fast). secret 존재하나 username 키 부재 →
-// defaultSyncUser(username 은 선택적). silent 폴백 금지(cross-review).
+// resolveSyncUser — syncUserSecretRef 검증 + username 결정. secret GET 실패 → error(fail-fast).
+// secret 존재하나 username 키 부재 → defaultSyncUser. silent 폴백 금지(cross-review).
 func (r *MongoDBSearchReconciler) resolveSyncUser(ctx context.Context, name, ns string) (string, error) {
 	s := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: ns}, s); err != nil {
@@ -168,8 +137,10 @@ func (r *MongoDBSearchReconciler) resolveSyncUser(ctx context.Context, name, ns 
 	return defaultSyncUser, nil
 }
 
-func (r *MongoDBSearchReconciler) annotateSource(ctx context.Context, source *mongodbv1alpha1.MongoDB, endpoint, tlsMode string) error {
-	if source.Annotations[resources.MongotSearchEndpointAnnotation] == endpoint &&
+// annotateSource — source MongoDB 에 sidecar annotation 설정(idempotent — 동일 값이면 skip).
+func (r *MongoDBSearchReconciler) annotateSource(ctx context.Context, source *mongodbv1alpha1.MongoDB, image, syncSecret, tlsMode string) error {
+	if source.Annotations[resources.MongotSidecarImageAnnotation] == image &&
+		source.Annotations[resources.MongotSyncSecretAnnotation] == syncSecret &&
 		source.Annotations[resources.MongotTLSModeAnnotation] == tlsMode {
 		return nil
 	}
@@ -177,7 +148,8 @@ func (r *MongoDBSearchReconciler) annotateSource(ctx context.Context, source *mo
 	if patched.Annotations == nil {
 		patched.Annotations = map[string]string{}
 	}
-	patched.Annotations[resources.MongotSearchEndpointAnnotation] = endpoint
+	patched.Annotations[resources.MongotSidecarImageAnnotation] = image
+	patched.Annotations[resources.MongotSyncSecretAnnotation] = syncSecret
 	patched.Annotations[resources.MongotTLSModeAnnotation] = tlsMode
 	return r.Patch(ctx, patched, client.MergeFrom(source))
 }
@@ -199,9 +171,6 @@ func (r *MongoDBSearchReconciler) fail(ctx context.Context, search *mongodbv1bet
 func (r *MongoDBSearchReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mongodbv1beta1.MongoDBSearch{}).
-		Owns(&appsv1.StatefulSet{}).
-		Owns(&corev1.Service{}).
 		Owns(&corev1.ConfigMap{}).
-		Owns(&netv1.NetworkPolicy{}).
 		Complete(r)
 }

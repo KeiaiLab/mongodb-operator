@@ -40,7 +40,9 @@ type MongoDBSearchSpec struct {
 	// +optional
 	Resources ResourcesSpec `json:"resources,omitempty"`
 
-	// Storage — mongot 인덱스 스토어 PVC(전용·비공유). 인덱스 메타데이터는 mongod 에 저장.
+	// Storage — Deprecated(sidecar 모델 미사용). mongot 인덱스는 mongod data PVC 의
+	// subPath(search-index)에 저장된다(노드 디스크 종속 제거 + commonsapply VCT immutable
+	// 호환). search 활성 시 source MongoDB 의 spec.storage.size 를 인덱스 용량만큼 키울 것.
 	// +optional
 	Storage StorageSpec `json:"storage,omitempty"`
 

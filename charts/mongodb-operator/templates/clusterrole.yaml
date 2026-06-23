@@ -27,6 +27,10 @@ rules:
       {{- if .Values.features.clustergroup.enabled }}
       - mongodbclustergroups
       {{- end }}
+      {{- if .Values.features.search.enabled }}
+      - mongodbsearches
+      - mongodbsearchindices
+      {{- end }}
     verbs:
       - create
       - delete
@@ -54,6 +58,10 @@ rules:
       {{- end }}
       {{- if .Values.features.clustergroup.enabled }}
       - mongodbclustergroups/status
+      {{- end }}
+      {{- if .Values.features.search.enabled }}
+      - mongodbsearches/status
+      - mongodbsearchindices/status
       {{- end }}
     verbs:
       - get

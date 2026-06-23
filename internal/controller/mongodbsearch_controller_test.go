@@ -14,8 +14,6 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -24,9 +22,9 @@ import (
 	"github.com/keiailab/mongodb-operator/internal/resources"
 )
 
-var _ = Describe("MongoDBSearch Controller", func() {
+var _ = Describe("MongoDBSearch Controller (sidecar)", func() {
 	Context("When a MongoDBSearch references a MongoDB", func() {
-		It("deploys mongot resources and wires the source mongod via annotation", func() {
+		It("creates mongot config + annotates source → mongod gets mongot sidecar", func() {
 			ctx := context.Background()
 			const name = "search-src"
 
@@ -48,50 +46,44 @@ var _ = Describe("MongoDBSearch Controller", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: mongoDBTestNS},
 				Spec: mongodbv1beta1.MongoDBSearchSpec{
 					Source:            mongodbv1beta1.SearchSource{MongoDBResourceRef: &corev1.LocalObjectReference{Name: name}, Kind: "MongoDB"},
-					Replicas:          1,
-					Storage:           mongodbv1beta1.StorageSpec{Size: resource.MustParse("2Gi")},
 					SyncUserSecretRef: &corev1.LocalObjectReference{Name: name + "-sync"},
 				},
 			}
 			Expect(k8sClient.Create(ctx, search)).To(Succeed())
 			DeferCleanup(func() { _ = k8sClient.Delete(ctx, search) })
 
-			// mongot StatefulSet/Service/ConfigMap/NetworkPolicy 생성 확인.
+			// 1. mongot config ConfigMap 생성(sidecar — localhost syncSource).
 			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{Name: name + "-mongot", Namespace: mongoDBTestNS}, &appsv1.StatefulSet{})
-			}, mongoDBTestTimeout, mongoDBTestInterval).Should(Succeed(), "mongot StatefulSet")
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{Name: name + "-mongot", Namespace: mongoDBTestNS}, &corev1.Service{})
-			}, mongoDBTestTimeout, mongoDBTestInterval).Should(Succeed(), "mongot Service")
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{Name: name + "-mongot-config", Namespace: mongoDBTestNS}, &corev1.ConfigMap{})
+				return k8sClient.Get(ctx, types.NamespacedName{Name: resources.MongotConfigMapName(name), Namespace: mongoDBTestNS}, &corev1.ConfigMap{})
 			}, mongoDBTestTimeout, mongoDBTestInterval).Should(Succeed(), "mongot ConfigMap")
-			Eventually(func() error {
-				return k8sClient.Get(ctx, types.NamespacedName{Name: name + "-mongot", Namespace: mongoDBTestNS}, &netv1.NetworkPolicy{})
-			}, mongoDBTestTimeout, mongoDBTestInterval).Should(Succeed(), "mongot NetworkPolicy")
 
-			// source MongoDB 에 mongot endpoint annotation 설정 확인.
+			// 2. source MongoDB 에 sidecar image annotation 설정.
 			Eventually(func() string {
 				m := &mongodbv1alpha1.MongoDB{}
 				_ = k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: mongoDBTestNS}, m)
-				return m.Annotations[resources.MongotSearchEndpointAnnotation]
-			}, mongoDBTestTimeout, mongoDBTestInterval).Should(Equal(resources.MongotEndpoint(name, mongoDBTestNS)), "source annotation")
+				return m.Annotations[resources.MongotSidecarImageAnnotation]
+			}, mongoDBTestTimeout, mongoDBTestInterval).ShouldNot(BeEmpty(), "source sidecar annotation")
 
-			// 전체 통합: annotation 으로 source mongod STS args 에 mongotHost setParameter 주입.
+			// 3. 전체 통합: MongoDB controller 가 annotation reconcile → mongod STS 에
+			//    mongot sidecar 컨테이너 + mongotHost(localhost) setParameter 주입.
 			Eventually(func() bool {
 				sts := &appsv1.StatefulSet{}
 				if err := k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: mongoDBTestNS}, sts); err != nil {
 					return false
 				}
+				hasSidecar, hasHost := false, false
 				for _, c := range sts.Spec.Template.Spec.Containers {
+					if c.Name == "mongot" {
+						hasSidecar = true
+					}
 					for _, a := range c.Args {
-						if strings.Contains(a, "mongotHost=") {
-							return true
+						if strings.Contains(a, "mongotHost=localhost:") {
+							hasHost = true
 						}
 					}
 				}
-				return false
-			}, mongoDBTestTimeout, mongoDBTestInterval).Should(BeTrue(), "mongod STS gets mongotHost setParameter")
+				return hasSidecar && hasHost
+			}, mongoDBTestTimeout, mongoDBTestInterval).Should(BeTrue(), "mongod STS 에 mongot sidecar + localhost mongotHost")
 		})
 	})
 })
