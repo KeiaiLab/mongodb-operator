@@ -47,6 +47,10 @@ const (
 	mongotSyncRawPath = "/tmp/mongot-sync"
 	// defaultMongotImage — Community self-managed mongot(검증: hub.docker.com).
 	defaultMongotImage = "mongodb/mongodb-community-search:latest"
+	// mongotBinary — 이미지 내 mongot 바이너리. 이미지 ENTRYPOINT 가 config.default.yml 을
+	// 하드코딩(sh -c "/mongot-community/mongot --config /mongot-community/config.default.yml")
+	// 하므로, 컨테이너 Command 로 override 해야 operator 생성 config 가 적용됨(kind e2e 실증).
+	mongotBinary = "/mongot-community/mongot"
 	// setParameterFlag — 반복 리터럴 const(goconst).
 	setParameterFlag = "--setParameter"
 	// mongotSecretsVolume — password emptyDir volume 이름(반복 const, goconst).
@@ -152,9 +156,9 @@ func MongotSidecar(mdbName, image, syncSecretName string) (corev1.Container, cor
 		},
 	}
 	mongotC := corev1.Container{
-		Name:  "mongot",
-		Image: image,
-		Args:  []string{"--config", mongotConfigPath + "/" + mongotConfigFile},
+		Name:    "mongot",
+		Image:   image,
+		Command: []string{mongotBinary, "--config", mongotConfigPath + "/" + mongotConfigFile},
 		Ports: []corev1.ContainerPort{
 			{Name: "mongot-grpc", ContainerPort: mongotGRPCPort},
 			{Name: "mongot-health", ContainerPort: mongotHealthPort},

@@ -608,11 +608,16 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 		args = append(args, auditpkg.MongodArgs(mdb.Spec.AuditLog)...)
 	}
 
-	// mongot(MongoDB Search) 연동: MongoDBSearch controller 가 설정한 endpoint
-	// annotation 이 있을 때만 setParameter 주입. annotation 부재 시 빈 args →
-	// mongod template 무변경 = search opt-in 무롤링(컷오버 교훈, mongot_test 검증).
-	if ep := mdb.Annotations[MongotSearchEndpointAnnotation]; ep != "" {
-		args = append(args, MongotSetParameterArgs(ep, mdb.Annotations[MongotTLSModeAnnotation])...)
+	// mongot(MongoDB Search) sidecar 연동: image annotation 있을 때만 sidecar 컨테이너 +
+	// init(password 0400) + volumes + setParameter(mongotHost=localhost:27028) 주입.
+	// annotation 부재 시 무변경 = search opt-in 무롤링(mongot_test 검증). Community mongot 은
+	// localhost mongod 로 topology 연결 → mongod pod sidecar 필수(별도 STS 비호환, kind e2e 실증).
+	var mongotSidecar, mongotInit *corev1.Container
+	if img := mdb.Annotations[MongotSidecarImageAnnotation]; img != "" {
+		mc, ic, mvols := MongotSidecar(mdb.Name, img, mdb.Annotations[MongotSyncSecretAnnotation])
+		mongotSidecar, mongotInit = &mc, &ic
+		volumes = append(volumes, mvols...)
+		args = append(args, MongotSetParameterArgs(fmt.Sprintf("localhost:%d", mongotGRPCPort), mdb.Annotations[MongotTLSModeAnnotation])...)
 	}
 
 	// Init container to copy keyfile with correct permissions
@@ -645,6 +650,10 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 	// cycle 13: PodSpec.InitContainers (user-provided) chain — operator init 다음.
 	if mdb.Spec.Pod != nil && len(mdb.Spec.Pod.InitContainers) > 0 {
 		initContainers = append(initContainers, mdb.Spec.Pod.InitContainers...)
+	}
+	// mongot sidecar init(password 0400 복사) — 위 mongot 블록에서 수집(annotation 시).
+	if mongotInit != nil {
+		initContainers = append(initContainers, *mongotInit)
 	}
 
 	// MongoDB container
@@ -789,6 +798,10 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 		storageSize = resource.MustParse("10Gi")
 	}
 
+	// mongot sidecar 컨테이너 추가(annotation 시) — 위 mongot 블록에서 수집(Phase 1.1).
+	if mongotSidecar != nil {
+		containers = append(containers, *mongotSidecar)
+	}
 	// cycle 13: PodSpec Sidecars / ExtraVolumes / InitScripts volume append.
 	containers, volumes = appendPodSpecPodLevel(containers, volumes, mdb.Spec.Pod)
 
