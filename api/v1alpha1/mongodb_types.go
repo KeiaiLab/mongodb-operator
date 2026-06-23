@@ -195,6 +195,34 @@ type MongoDBStatus struct {
 	// UpgradeStartTime is when the current upgrade was initiated.
 	// +optional
 	UpgradeStartTime *metav1.Time `json:"upgradeStartTime,omitempty"`
+
+	// EffectiveVersion is the version the operator actually deploys to StatefulSets.
+	// 무중단 업그레이드/롤백의 SSOT — 평상시 spec.Version과 동일하나, 롤백 중에는
+	// PreviousVersion으로 설정되어(spec.Version 불변=GitOps SSOT 보존) STS가 이전
+	// 버전으로 무중단 롤링 복귀한다. 빈 값이면 builder가 spec.Version으로 fallback
+	// (기존 클러스터 무롤링 호환).
+	// +optional
+	EffectiveVersion string `json:"effectiveVersion,omitempty"`
+
+	// RollbackActive indicates a rollback is in effect (EffectiveVersion != spec.Version).
+	// +optional
+	RollbackActive bool `json:"rollbackActive,omitempty"`
+
+	// UpgradeRetryCount counts upgrade attempts for the current spec generation.
+	// MaxRetries 초과 시 terminal UpgradeFailed로 전이(검증실패↔롤백 무한루프 차단).
+	// +optional
+	UpgradeRetryCount int32 `json:"upgradeRetryCount,omitempty"`
+
+	// ObservedUpgradeGeneration is the spec generation of the last terminal upgrade
+	// outcome. 같은 generation에서는 재업그레이드를 시도하지 않는다(루프 안정성).
+	// 사용자가 spec을 변경(generation 증가)해야 retry가 리셋된다.
+	// +optional
+	ObservedUpgradeGeneration int64 `json:"observedUpgradeGeneration,omitempty"`
+
+	// FCVVersion is the featureCompatibilityVersion the operator has committed.
+	// 업그레이드 검증 통과 시 자동 상향(point-of-no-return — 이후 바이너리 다운그레이드 불가).
+	// +optional
+	FCVVersion string `json:"fcvVersion,omitempty"`
 }
 
 // MemberStatus represents the status of a replica set member

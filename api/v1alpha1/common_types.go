@@ -605,6 +605,14 @@ type UpgradeStrategySpec struct {
 	// false 시 사용자 수동 개입 필요.
 	// +kubebuilder:default=false
 	RollbackOnFailure bool `json:"rollbackOnFailure,omitempty"`
+
+	// MaxRetries — 동일 spec generation에서 허용하는 업그레이드 시도 횟수(루프 안정성).
+	// 검증 실패→롤백 후 같은 generation 재시도를 막아 검증실패↔롤백 무한루프를 차단한다.
+	// 현재 구현은 generation당 1회 시도 후 terminal(사용자 spec 변경 시 리셋)이 기본이며,
+	// 본 필드는 향후 자동 재시도 횟수 확장용. 0 = generation당 1회(기본).
+	// +kubebuilder:default=0
+	// +kubebuilder:validation:Minimum=0
+	MaxRetries int32 `json:"maxRetries,omitempty"`
 }
 
 // IsValidUpgradePath — F11 (cycle 7) 버전 업그레이드 path 검증.

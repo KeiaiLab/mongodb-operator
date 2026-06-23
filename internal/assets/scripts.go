@@ -30,6 +30,9 @@ type readinessData struct{ Port int }
 // bootstrapData는 bootstrap-admin.sh.tpl 렌더 컨텍스트.
 type bootstrapData struct{ Port int }
 
+// stepDownData는 prestop-stepdown.sh.tpl 렌더 컨텍스트.
+type stepDownData struct{ Port int }
+
 // backupData는 backup-{s3,pvc}.sh.tpl 렌더 컨텍스트.
 type backupData struct {
 	ClusterName     string
@@ -46,6 +49,13 @@ func RenderReadiness(port int) (string, error) {
 // 스크립트를 반환. localhost-exception을 활용해 첫 user 생성 deadlock을 회피.
 func RenderBootstrap(port int) (string, error) {
 	return render("scripts/bootstrap-admin.sh.tpl", bootstrapData{Port: port})
+}
+
+// RenderStepDown은 lifecycle.preStop에서 PRIMARY면 rs.stepDown()으로 primary를
+// 이양하는 스크립트를 반환(무중단 업그레이드). PRIMARY가 아니면 no-op. 모든 에러 무시.
+// port는 RS=27017 / cfg=27019 / shard=27018.
+func RenderStepDown(port int) (string, error) {
+	return render("scripts/prestop-stepdown.sh.tpl", stepDownData{Port: port})
 }
 
 // RenderBackup는 mongodump → S3 또는 PVC 분기로 백업 스크립트를 반환.

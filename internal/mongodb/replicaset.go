@@ -177,6 +177,50 @@ func (r *ReplicaSetManager) GetStatus(ctx context.Context, podName, namespace st
 	return &status, nil
 }
 
+// GetFCV는 현재 featureCompatibilityVersion을 반환한다(예: "8.0").
+// 무중단 업그레이드 후 FCV 자동 commit 전 현재 상태 확인용.
+func (r *ReplicaSetManager) GetFCV(ctx context.Context, podName, namespace string) (string, error) {
+	c, err := r.connect(ctx, podName, namespace, true)
+	if err != nil {
+		return "", fmt.Errorf("connect for GetFCV: %w", err)
+	}
+	defer disconnectQuiet(c)
+
+	var res struct {
+		FeatureCompatibilityVersion struct {
+			Version string `bson:"version"`
+		} `bson:"featureCompatibilityVersion"`
+	}
+	if err := c.Database(adminUserDB).RunCommand(ctx, bson.D{
+		{Key: "getParameter", Value: 1},
+		{Key: "featureCompatibilityVersion", Value: 1},
+	}).Decode(&res); err != nil {
+		return "", fmt.Errorf("getParameter featureCompatibilityVersion: %w", err)
+	}
+	return res.FeatureCompatibilityVersion.Version, nil
+}
+
+// SetFCV는 featureCompatibilityVersion을 version(major.minor, 예 "8.2")으로 상향한다.
+// 무중단 업그레이드 검증 통과 후 자동 commit(point-of-no-return — 이후 바이너리 다운그레이드 불가).
+// MongoDB 7.0+ 는 setFeatureCompatibilityVersion에 confirm:true 가 필수다.
+// 이미 같은 FCV면 no-op(idempotent). primary로 라우팅되어야 하므로 direct=false.
+func (r *ReplicaSetManager) SetFCV(ctx context.Context, podName, namespace, version string) error {
+	c, err := r.connect(ctx, podName, namespace, false)
+	if err != nil {
+		return fmt.Errorf("connect for SetFCV: %w", err)
+	}
+	defer disconnectQuiet(c)
+
+	var result bson.M
+	if err := c.Database(adminUserDB).RunCommand(ctx, bson.D{
+		{Key: "setFeatureCompatibilityVersion", Value: version},
+		{Key: "confirm", Value: true},
+	}).Decode(&result); err != nil {
+		return fmt.Errorf("setFeatureCompatibilityVersion=%s: %w", version, err)
+	}
+	return nil
+}
+
 // GetPrimaryPod returns the pod name of the primary member.
 // host 형식 "<pod>.<service>.<ns>.svc.cluster.local:<port>"의 첫 segment를 pod name으로 본다.
 func (r *ReplicaSetManager) GetPrimaryPod(ctx context.Context, podName, namespace string) (string, error) {

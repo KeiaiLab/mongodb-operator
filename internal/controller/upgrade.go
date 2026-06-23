@@ -3,10 +3,12 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	commonsstatus "github.com/keiailab/keiailab-commons/pkg/status"
 
+	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -33,6 +35,16 @@ func (r *MongoDBReconciler) reconcileUpgrade(ctx context.Context, mdb *mongodbv1
 	desiredVersion := mdb.Spec.Version.Version
 	currentVersion := mdb.Status.Version
 
+	// EffectiveVersion 초기화: 빈 값(신규/기존 클러스터)이면 desired로 seed(첫 reconcile
+	// 시 spec.Version과 동일 → 무롤링). 이후 업그레이드/롤백이 이 값을 SSOT로 조작한다.
+	if mdb.Status.EffectiveVersion == "" {
+		seed := func() { mdb.Status.EffectiveVersion = desiredVersion }
+		seed()
+		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, seed); err != nil {
+			return ctrl.Result{}, false, err
+		}
+	}
+
 	if currentVersion == "" || currentVersion == desiredVersion {
 		if mdb.Status.UpgradePhase != "" {
 			clearUpgrade := func() {
@@ -47,11 +59,25 @@ func (r *MongoDBReconciler) reconcileUpgrade(ctx context.Context, mdb *mongodbv1
 		return ctrl.Result{}, false, nil
 	}
 
+	// 루프 안정성(갭6): 같은 spec generation에서 이미 terminal 결과(실패/롤백)에
+	// 도달했으면 재업그레이드를 시도하지 않는다. 사용자가 spec을 변경(generation 증가)
+	// 해야 retry가 리셋된다 → 검증실패↔롤백 무한루프 구조적 차단.
+	if mdb.Status.UpgradePhase == "" &&
+		mdb.Status.ObservedUpgradeGeneration == mdb.Generation &&
+		mdb.Status.ObservedUpgradeGeneration != 0 {
+		logger.Info("upgrade already terminal for this generation, awaiting spec change",
+			"generation", mdb.Generation, "retries", mdb.Status.UpgradeRetryCount)
+		return ctrl.Result{}, false, nil
+	}
+
 	switch mdb.Status.UpgradePhase {
 	case "":
-		logger.Info("upgrade detected", "from", currentVersion, "to", desiredVersion)
+		logger.Info("upgrade detected", "from", currentVersion, "to", desiredVersion,
+			"attempt", mdb.Status.UpgradeRetryCount+1)
 		initUpgrade := func() {
 			mdb.Status.PreviousVersion = currentVersion
+			mdb.Status.EffectiveVersion = desiredVersion
+			mdb.Status.RollbackActive = false
 			now := metav1.Now()
 			mdb.Status.UpgradeStartTime = &now
 
@@ -150,20 +176,37 @@ func (r *MongoDBReconciler) reconcileUpgradeValidation(ctx context.Context, mdb 
 	}
 
 	elapsed := time.Since(mdb.Status.UpgradeStartTime.Time)
-
 	if elapsed < interval {
 		return ctrl.Result{RequeueAfter: interval - elapsed}, true, nil
 	}
 
-	ready := mdb.Status.ReadyMembers >= mdb.Spec.Members
-	if ready {
-		logger.Info("upgrade validation passed", "version", desiredVersion)
+	// 버전-aware 검증(갭2): ReadyMembers 수만 보지 않고, STS rollout이 완료되어
+	// 모든 pod가 desired 버전으로 교체됐는지 확인한다(UpdatedReplicas==Replicas &&
+	// CurrentRevision==UpdateRevision && ReadyReplicas==Replicas).
+	rolloutDone, err := r.stsRolloutComplete(ctx, mdb.Name, mdb.Namespace, mdb.Spec.Members)
+	if err != nil {
+		logger.Error(err, "failed to read STS rollout status during validation")
+		return ctrl.Result{RequeueAfter: upgradeRequeueInterval}, true, nil
+	}
+
+	if rolloutDone {
+		logger.Info("upgrade validation passed (STS rollout complete)", "version", desiredVersion)
+		// FCV 자동 commit(갭5, point-of-no-return): 검증 통과 후 FCV 상향 → 새 기능 활성.
+		// 이 시점 이후 바이너리 다운그레이드(롤백) 불가. 검증 통과 후이므로 안전.
+		if err := r.commitFCV(ctx, mdb, desiredVersion); err != nil {
+			logger.Error(err, "FCV commit failed, will retry (upgrade not yet complete)")
+			return ctrl.Result{RequeueAfter: upgradeRequeueInterval}, true, nil
+		}
 		completeUpgrade := func() {
 			mdb.Status.Version = desiredVersion
+			mdb.Status.EffectiveVersion = desiredVersion
+			mdb.Status.RollbackActive = false
 			mdb.Status.UpgradePhase = ""
 			mdb.Status.UpgradeStartTime = nil
+			mdb.Status.UpgradeRetryCount = 0
+			mdb.Status.ObservedUpgradeGeneration = mdb.Generation
 			setUpgradeCondition(mdb, "UpgradeComplete", metav1.ConditionTrue,
-				"Upgraded", fmt.Sprintf("Successfully upgraded to %s", desiredVersion))
+				"Upgraded", fmt.Sprintf("Successfully upgraded to %s (FCV committed)", desiredVersion))
 		}
 		completeUpgrade()
 		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, completeUpgrade); err != nil {
@@ -173,7 +216,7 @@ func (r *MongoDBReconciler) reconcileUpgradeValidation(ctx context.Context, mdb 
 	}
 
 	if elapsed < validationTimeout {
-		logger.Info("upgrade validation pending, pods not ready yet",
+		logger.Info("upgrade validation pending, STS rollout not complete yet",
 			"readyMembers", mdb.Status.ReadyMembers, "expected", mdb.Spec.Members,
 			"elapsed", elapsed.String(), "timeout", validationTimeout.String())
 		return ctrl.Result{RequeueAfter: upgradeRequeueInterval}, true, nil
@@ -183,6 +226,8 @@ func (r *MongoDBReconciler) reconcileUpgradeValidation(ctx context.Context, mdb 
 		"readyMembers", mdb.Status.ReadyMembers, "expected", mdb.Spec.Members,
 		"elapsed", elapsed.String())
 
+	// 검증 실패 → 롤백(RollbackOnFailure) 또는 terminal 실패. FCV는 아직 commit 전이라
+	// 롤백(바이너리 다운그레이드) 안전.
 	if mdb.Spec.UpgradeStrategy != nil && mdb.Spec.UpgradeStrategy.RollbackOnFailure {
 		logger.Info("initiating rollback due to validation timeout")
 		setRollingBack := func() {
@@ -195,17 +240,31 @@ func (r *MongoDBReconciler) reconcileUpgradeValidation(ctx context.Context, mdb 
 		return ctrl.Result{RequeueAfter: 1 * time.Second}, true, nil
 	}
 
+	// RollbackOnFailure=false → terminal 실패(루프 안정성: generation 기록).
 	failUpgrade := func() {
 		setUpgradeCondition(mdb, "UpgradeFailed", metav1.ConditionTrue,
 			"ValidationTimeout", fmt.Sprintf("Upgrade to %s timed out after %s, manual intervention required", desiredVersion, validationTimeout))
 		mdb.Status.UpgradePhase = ""
 		mdb.Status.UpgradeStartTime = nil
+		mdb.Status.ObservedUpgradeGeneration = mdb.Generation
 	}
 	failUpgrade()
 	if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, failUpgrade); err != nil {
 		return ctrl.Result{}, false, err
 	}
 	return ctrl.Result{}, true, nil
+}
+
+// stsRolloutComplete는 StatefulSet의 rollout이 완료(모든 pod가 최신 revision으로 ready)
+// 됐는지 판정한다. 버전-aware 업그레이드 검증의 핵심(ReadyMembers 수만 보는 것보다 정확).
+func (r *MongoDBReconciler) stsRolloutComplete(ctx context.Context, name, namespace string, members int32) (bool, error) {
+	sts := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, sts); err != nil {
+		return false, err
+	}
+	return sts.Status.UpdatedReplicas == members &&
+		sts.Status.ReadyReplicas == members &&
+		sts.Status.CurrentRevision == sts.Status.UpdateRevision, nil
 }
 
 func (r *MongoDBReconciler) reconcileUpgradeRollback(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) (ctrl.Result, bool, error) {
@@ -229,6 +288,7 @@ func (r *MongoDBReconciler) reconcileUpgradeRollback(ctx context.Context, mdb *m
 		failUpgrade := func() {
 			mdb.Status.UpgradePhase = ""
 			mdb.Status.UpgradeStartTime = nil
+			mdb.Status.ObservedUpgradeGeneration = mdb.Generation
 			setUpgradeCondition(mdb, "UpgradeFailed", metav1.ConditionTrue,
 				"ValidationFailed", "Upgrade validation failed, manual intervention required")
 		}
@@ -239,24 +299,62 @@ func (r *MongoDBReconciler) reconcileUpgradeRollback(ctx context.Context, mdb *m
 		return ctrl.Result{}, true, nil
 	}
 
-	logger.Info("rolling back to previous version", "version", mdb.Status.PreviousVersion)
-
-	mdb.Spec.Version.Version = mdb.Status.PreviousVersion
-	if err := r.Update(ctx, mdb); err != nil {
-		return ctrl.Result{}, false, err
-	}
+	// 롤백 GitOps화(갭3): spec.Version을 직접 Update하지 않는다(webhook downgrade 차단 +
+	// Flux SSOT 충돌 회피). 대신 Status.EffectiveVersion=PreviousVersion으로 설정 →
+	// builder가 EffectiveVersion으로 STS를 재빌드 → 무중단 롤링으로 이전 버전 복귀.
+	// 사용자 spec.Version(git SSOT)은 불변. FCV는 검증 통과 전이므로 미commit → 안전.
+	logger.Info("rolling back to previous version (status-based, spec preserved)",
+		"effectiveVersion", mdb.Status.PreviousVersion, "specVersion", mdb.Spec.Version.Version)
 
 	finishRollback := func() {
+		mdb.Status.EffectiveVersion = mdb.Status.PreviousVersion
+		mdb.Status.RollbackActive = true
 		mdb.Status.UpgradePhase = ""
 		mdb.Status.UpgradeStartTime = nil
+		// 루프 안정성(갭6): 롤백도 terminal. 같은 generation 재업그레이드 차단 →
+		// 검증실패↔롤백 무한루프 방지. 사용자가 spec.Version을 고쳐야(generation++) 재시도.
+		mdb.Status.UpgradeRetryCount++
+		mdb.Status.ObservedUpgradeGeneration = mdb.Generation
 		setUpgradeCondition(mdb, "UpgradeRolledBack", metav1.ConditionTrue,
-			"RolledBack", fmt.Sprintf("Rolled back to %s", mdb.Status.PreviousVersion))
+			"RolledBack", fmt.Sprintf("Rolled back to %s (spec.Version %s preserved; change spec to retry)",
+				mdb.Status.PreviousVersion, mdb.Spec.Version.Version))
 	}
 	finishRollback()
 	if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdb, finishRollback); err != nil {
 		return ctrl.Result{}, false, err
 	}
 	return ctrl.Result{}, true, nil
+}
+
+// commitFCV는 업그레이드 검증 통과 후 featureCompatibilityVersion을 desired major.minor로
+// 자동 상향한다(갭5, point-of-no-return). 이미 같은 FCV면 SetFCV가 idempotent no-op.
+// 실패 시 error 반환 → 호출자가 업그레이드 미완료로 처리(롤백 가능 상태 유지).
+func (r *MongoDBReconciler) commitFCV(ctx context.Context, mdb *mongodbv1alpha1.MongoDB, desiredVersion string) error {
+	fcv := fcvMajorMinor(desiredVersion)
+	if fcv == "" {
+		return fmt.Errorf("cannot derive FCV from version %q", desiredVersion)
+	}
+	if mdb.Status.FCVVersion == fcv {
+		return nil // 이미 commit됨
+	}
+	mgr, err := r.newRSManager(ctx, mdb)
+	if err != nil {
+		return fmt.Errorf("rs manager for FCV commit: %w", err)
+	}
+	if err := mgr.SetFCV(ctx, mdb.Name+"-0", mdb.Namespace, fcv); err != nil {
+		return err
+	}
+	mdb.Status.FCVVersion = fcv
+	return nil
+}
+
+// fcvMajorMinor는 "8.2.1" → "8.2" 로 major.minor만 추출한다(FCV 형식).
+func fcvMajorMinor(version string) string {
+	parts := strings.Split(version, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[0] + "." + parts[1]
 }
 
 func parseValidationInterval(strategy *mongodbv1alpha1.UpgradeStrategySpec) time.Duration {
