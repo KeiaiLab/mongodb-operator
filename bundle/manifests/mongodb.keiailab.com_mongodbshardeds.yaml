@@ -22199,6 +22199,11 @@ spec:
                 type: object
               upgradeStrategy:
                 properties:
+                  maxRetries:
+                    default: 0
+                    format: int32
+                    minimum: 0
+                    type: integer
                   preUpgradeBackup:
                     default: false
                     type: boolean
