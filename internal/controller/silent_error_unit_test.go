@@ -23,6 +23,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
+	mongodbv1beta1 "github.com/keiailab/mongodb-operator/api/v1beta1"
 )
 
 func newTestScheme(t *testing.T) *runtime.Scheme {
@@ -33,6 +34,9 @@ func newTestScheme(t *testing.T) *runtime.Scheme {
 	}
 	if err := mongodbv1alpha1.AddToScheme(s); err != nil {
 		t.Fatalf("add mongodb scheme: %v", err)
+	}
+	if err := mongodbv1beta1.AddToScheme(s); err != nil {
+		t.Fatalf("add mongodb v1beta1 scheme: %v", err)
 	}
 	return s
 }
