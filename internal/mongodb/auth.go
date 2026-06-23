@@ -124,6 +124,85 @@ func isUserAlreadyExistsErr(err error) bool {
 	return strings.Contains(s, "already exists")
 }
 
+// EnsureSearchCoordinatorUser — mongot sync 용 searchCoordinator user 를 admin 인증된 client 로
+// 생성/보정한다. mongot 은 SCRAM-SHA-1 을 쓰므로 SCRAM-SHA-1 + SCRAM-SHA-256 두 mechanism 모두로
+// 만들어야 한다(SHA-256 단독이면 mongot 인증 실패). 멱등: 이미 존재하면 updateUser 로 pwd +
+// mechanisms 를 보정한다(self-heal — 기존이 SHA-256 단독이어도 SHA-1 추가). mechanisms *확장* 은
+// server 가 credential 을 재계산하므로 pwd 동반 필수. client 는 호출자가 disconnect 한다.
+func EnsureSearchCoordinatorUser(ctx context.Context, c *mongo.Client, username, password string) error {
+	if password == "" {
+		return fmt.Errorf("searchCoordinator user %q: 빈 password — passwordless user 생성 거부", username)
+	}
+	// precheck: 이미 dual SCRAM + searchCoordinator role 보유 시 skip — 매 reconcile 마다
+	// updateUser(credential 재계산 write + oplog)를 무조건 재실행하던 낭비 제거. precheck 실패
+	// (조회 에러)는 무시하고 create/update 경로로 진행(보수적 self-heal).
+	if ok, _ := userHasDualSCRAMAndRole(ctx, c, username); ok {
+		return nil
+	}
+	mechanisms := bson.A{"SCRAM-SHA-1", "SCRAM-SHA-256"}
+	roles := bson.A{bson.M{"role": "searchCoordinator", "db": adminUserDB}}
+	var res bson.M
+	err := c.Database(adminUserDB).RunCommand(ctx, bson.D{
+		{Key: "createUser", Value: username},
+		{Key: "pwd", Value: password},
+		{Key: "mechanisms", Value: mechanisms},
+		{Key: "roles", Value: roles},
+	}).Decode(&res)
+	if err == nil {
+		return nil
+	}
+	if !isUserAlreadyExistsErr(err) {
+		return fmt.Errorf("createUser %q (searchCoordinator): %w", username, err)
+	}
+	// 이미 존재하나 precheck 불충족(SHA-1 누락 / role 누락 등) → pwd+mechanisms+roles 보정.
+	// createUser 는 mechanisms/roles 를 갱신 못하므로 updateUser 로 self-heal. mechanisms 확장은
+	// server 가 credential 을 재계산하므로 pwd 동반 필수. roles 는 searchCoordinator 단일로 정규화.
+	if err := c.Database(adminUserDB).RunCommand(ctx, bson.D{
+		{Key: "updateUser", Value: username},
+		{Key: "pwd", Value: password},
+		{Key: "mechanisms", Value: mechanisms},
+		{Key: "roles", Value: roles},
+	}).Decode(&res); err != nil {
+		return fmt.Errorf("updateUser %q (searchCoordinator 보정): %w", username, err)
+	}
+	return nil
+}
+
+// userHasDualSCRAMAndRole — usersInfo 로 user 가 SCRAM-SHA-1 + SCRAM-SHA-256 + searchCoordinator
+// role 을 모두 보유하는지 확인한다(EnsureSearchCoordinatorUser 의 매-reconcile write 방지 precheck).
+func userHasDualSCRAMAndRole(ctx context.Context, c *mongo.Client, username string) (bool, error) {
+	var res struct {
+		Users []struct {
+			Mechanisms []string `bson:"mechanisms"`
+			Roles      []struct {
+				Role string `bson:"role"`
+			} `bson:"roles"`
+		} `bson:"users"`
+	}
+	if err := c.Database(adminUserDB).RunCommand(ctx, bson.D{{Key: "usersInfo", Value: username}}).Decode(&res); err != nil {
+		return false, err
+	}
+	if len(res.Users) == 0 {
+		return false, nil
+	}
+	u := res.Users[0]
+	var sha1, sha256, hasRole bool
+	for _, m := range u.Mechanisms {
+		switch m {
+		case "SCRAM-SHA-1":
+			sha1 = true
+		case "SCRAM-SHA-256":
+			sha256 = true
+		}
+	}
+	for _, role := range u.Roles {
+		if role.Role == "searchCoordinator" {
+			hasRole = true
+		}
+	}
+	return sha1 && sha256 && hasRole, nil
+}
+
 // UserRole represents a MongoDB role assignment
 type UserRole struct {
 	Role string `json:"role" bson:"role"`
