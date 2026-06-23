@@ -63,7 +63,9 @@ func TestBuildMongotStatefulSet(t *testing.T) {
 		volNames[v.Name] = true
 	}
 	assert.True(t, volNames["config"], "config 볼륨")
-	assert.True(t, volNames["sync-secret"], "sync-secret 볼륨(syncSecretName 제공 시)")
+	assert.True(t, volNames["sync-secret-raw"], "sync-secret-raw 볼륨(원본 secret)")
+	assert.True(t, volNames["mongot-secrets"], "mongot-secrets emptyDir(0400 password 복사 대상)")
+	require.Len(t, sts.Spec.Template.Spec.InitContainers, 1, "copy-password init container(0400 owner-only)")
 
 	// 보안: non-root + automountSAToken=false (cluster hardening 정합).
 	require.NotNil(t, sts.Spec.Template.Spec.AutomountServiceAccountToken)

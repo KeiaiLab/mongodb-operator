@@ -35,8 +35,11 @@ const (
 	mongotGRPCPort = 27028
 	// mongotHealthPort — health/status.
 	mongotHealthPort = 27029
-	// mongotDataPath — 인덱스 스토어 PVC mount.
-	mongotDataPath = "/var/lib/mongot/data"
+	// mongotBasePath — PVC mount 경로(=mongot base data dir). mongot 는 serverId.txt 등을
+	// base 에 쓰므로 PVC 를 base 에 마운트해야 non-root(fsGroup) 쓰기 가능(kind e2e 실증).
+	mongotBasePath = "/var/lib/mongot"
+	// mongotDataPath — config storage.dataPath(인덱스 스토어, base 하위 subdir, PVC 내).
+	mongotDataPath = mongotBasePath + "/data"
 	// mongotConfigPath — config.yml mount dir.
 	mongotConfigPath = "/etc/mongot/config"
 	// mongotConfigFile — config 파일명.
@@ -89,37 +92,39 @@ func MongotEndpoint(searchName, namespace string) string {
 // BuildMongotConfigMap — mongot config.yml(operator 생성). source mongod 를 sync
 // source 로, searchCoordinator 사용자로 인증. (preview schema — kind PoC 에서 검증.)
 func BuildMongotConfigMap(search *mongodbv1beta1.MongoDBSearch, sourceHosts []string, syncUser string, tlsEnabled bool) *corev1.ConfigMap {
-	hostsYAML := ""
-	for _, h := range sourceHosts {
-		hostsYAML += fmt.Sprintf("      - host: %q\n", h)
+	host := "localhost:27017"
+	if len(sourceHosts) > 0 {
+		host = sourceHosts[0] // mongot hostAndPort 는 단수 — seed mongod 1개로 RS 발견.
 	}
 	tlsMode := "disabled"
 	if tlsEnabled {
 		tlsMode = "requireTLS"
 	}
+	// 스키마 SSOT = mongot config.default.yml(kind e2e 실측): hostAndPort(단수 string) /
+	// storage.dataPath=PVC base / server.grpc.tls / healthCheck.address(server.health 아님).
 	cfg := fmt.Sprintf(`# operator-generated — MongoDBSearch %s/%s (preview)
 syncSource:
   replicaSet:
-    hostAndPorts:
-%s    username: %q
-    authSource: admin
-    passwordFile: /etc/mongot/secret/password
+    hostAndPort: %q
+    username: %q
+    passwordFile: /etc/mongot/secrets/passwordFile
     tls: %t
 storage:
   dataPath: %q
 server:
   grpc:
     address: "0.0.0.0:%d"
-  health:
-    address: "0.0.0.0:%d"
-  tls:
-    mode: %s
+    tls:
+      mode: %q
 metrics:
   enabled: true
+  address: "0.0.0.0:9946"
+healthCheck:
+  address: "0.0.0.0:%d"
 logging:
   verbosity: INFO
-`, search.Namespace, search.Name, hostsYAML, syncUser, tlsEnabled, mongotDataPath,
-		mongotGRPCPort, mongotHealthPort, tlsMode)
+`, search.Namespace, search.Name, host, syncUser, tlsEnabled, mongotBasePath,
+		mongotGRPCPort, tlsMode, mongotHealthPort)
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -168,13 +173,30 @@ func BuildMongotStatefulSet(search *mongodbv1beta1.MongoDBSearch, syncSecretName
 	}
 	volumeMounts := []corev1.VolumeMount{
 		{Name: "config", MountPath: mongotConfigPath, ReadOnly: true},
-		{Name: mongotDataVolume, MountPath: mongotDataPath},
+		{Name: mongotDataVolume, MountPath: mongotBasePath},
 	}
+	var initContainers []corev1.Container
 	if syncSecretName != "" {
-		volumes = append(volumes, corev1.Volume{Name: "sync-secret", VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{SecretName: syncSecretName, DefaultMode: ptr.To[int32](0400)},
-		}})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "sync-secret", MountPath: "/etc/mongot/secret", ReadOnly: true})
+		// mongot 는 passwordFile 이 owner-only(0400) 여야 한다. K8s secret volume 은 fsGroup
+		// 때문에 group-readable(0440) → "too permissive" 거부. init container(999)가 emptyDir 로
+		// 복사 + chmod 0400(mongod keyfile 패턴, kind e2e 실증).
+		volumes = append(volumes,
+			corev1.Volume{Name: "sync-secret-raw", VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: syncSecretName, DefaultMode: ptr.To[int32](0400)},
+			}},
+			corev1.Volume{Name: "mongot-secrets", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		)
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "mongot-secrets", MountPath: "/etc/mongot/secrets", ReadOnly: true})
+		initContainers = append(initContainers, corev1.Container{
+			Name:            "copy-password",
+			Image:           keyfileInitImage,
+			Command:         []string{"sh", "-c", "cp /tmp/sync-secret/password /etc/mongot/secrets/passwordFile && chmod 0400 /etc/mongot/secrets/passwordFile"},
+			SecurityContext: buildKeyfileInitContainerSecurityContext(),
+			VolumeMounts: []corev1.VolumeMount{
+				{Name: "sync-secret-raw", MountPath: "/tmp/sync-secret", ReadOnly: true},
+				{Name: "mongot-secrets", MountPath: "/etc/mongot/secrets"},
+			},
+		})
 	}
 
 	return &appsv1.StatefulSet{
@@ -192,6 +214,7 @@ func BuildMongotStatefulSet(search *mongodbv1beta1.MongoDBSearch, syncSecretName
 				Spec: corev1.PodSpec{
 					SecurityContext:              buildDefaultSecurityContext(),
 					AutomountServiceAccountToken: ptr.To(false),
+					InitContainers:               initContainers,
 					Volumes:                      volumes,
 					Containers: []corev1.Container{{
 						Name:  "mongot",
