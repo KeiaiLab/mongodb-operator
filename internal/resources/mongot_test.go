@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -57,17 +58,25 @@ func TestMongotSidecar(t *testing.T) {
 	assert.Equal(t, "copy-mongot-password", initC.Name)
 	assert.Contains(t, strings.Join(initC.Command, " "), "chmod 0400", "owner-only password")
 
-	// volumes: config + data(emptyDir) + sync-raw + secrets(emptyDir).
+	// volumes: config + sync-raw + secrets(emptyDir). data 는 mongod data PVC(STS VCT) 공유 →
+	// 여기서 추가 X(노드 디스크 종속 제거 — kind e2e 근본 원인).
 	volNames := map[string]bool{}
-	dataIsEmptyDir := false
 	for _, v := range vols {
 		volNames[v.Name] = true
-		if v.Name == "mongot-data" {
-			dataIsEmptyDir = v.EmptyDir != nil
+	}
+	assert.True(t, volNames["mongot-config"] && volNames["mongot-sync-raw"] && volNames["mongot-secrets"])
+	assert.False(t, volNames["mongot-data"], "mongot-data emptyDir 제거 — mongod data PVC subPath 공유로 대체")
+
+	// mongot 인덱스 스토어 = mongod data PVC("data") 의 subPath(search-index) — 노드 디스크 독립 + 영속.
+	var dataMount *corev1.VolumeMount
+	for i := range mongotC.VolumeMounts {
+		if mongotC.VolumeMounts[i].Name == mongodDataVolume {
+			dataMount = &mongotC.VolumeMounts[i]
 		}
 	}
-	assert.True(t, volNames["mongot-config"] && volNames["mongot-data"] && volNames["mongot-sync-raw"] && volNames["mongot-secrets"])
-	assert.True(t, dataIsEmptyDir, "mongot-data = emptyDir(oplog 재구축 — STS VCT immutable 회피)")
+	require.NotNil(t, dataMount, "mongot 이 mongod data PVC 를 mount")
+	assert.Equal(t, mongotBasePath, dataMount.MountPath)
+	assert.Equal(t, mongotDataSubPath, dataMount.SubPath, "subPath 로 mongod dbpath 와 분리")
 }
 
 func TestMongotSetParameterArgs(t *testing.T) {

@@ -35,8 +35,16 @@ const (
 	mongotGRPCPort = 27028
 	// mongotHealthPort — mongot healthCheck(config.default.yml 기본 8080).
 	mongotHealthPort = 8080
-	// mongotBasePath — mongot data dir(emptyDir mount; serverId.txt + 인덱스 스토어).
+	// mongotBasePath — mongot data dir(serverId.txt + 인덱스 스토어). mongod data PVC 의
+	// subPath 로 mount(노드 루트 디스크 종속 제거 — kind e2e 근본 원인: emptyDir 가 노드
+	// 디스크 공유 → 노드 압박 시 mongot replication pause → 검색 silent 정지).
 	mongotBasePath = "/var/lib/mongot"
+	// mongodDataVolume — mongod data PVC VCT 이름(builder.go VolumeClaimTemplates). mongot 이
+	// subPath 로 공유 → 별도 VCT 추가 불필요(commonsapply VCT immutable → 기존 MongoDB search
+	// 활성화 호환) + 전용 스토리지(production 별도 볼륨) → 노드 디스크 독립 + 영속.
+	mongodDataVolume = "data"
+	// mongotDataSubPath — mongod data PVC 내 mongot 인덱스 subPath(mongod dbpath 와 분리).
+	mongotDataSubPath = "search-index"
 	// mongotConfigPath — config.yml mount dir.
 	mongotConfigPath = "/etc/mongot/config"
 	// mongotConfigFile — config 파일명.
@@ -133,13 +141,16 @@ logging:
 
 // MongotSidecar — mongod pod 에 주입할 mongot sidecar: (mongot 컨테이너, init 컨테이너, volumes).
 // init(999)가 sync secret 의 password 를 emptyDir 로 cp+chmod 0400(mongot owner-only 요구).
-// mongot data 는 emptyDir(oplog 재구축 가능 — mongod STS VCT immutable 회피).
+// mongot data(인덱스 스토어) = mongod data PVC 의 subPath(search-index) 공유 — 노드 루트
+// 디스크 종속 제거(kind e2e 근본 원인: emptyDir 가 노드 디스크 공유 → 노드 압박 시 mongot
+// disk-usage pause → 검색 silent 정지). 별도 VCT 불가(commonsapply VCT immutable → 기존
+// MongoDB search 활성화 시 pod 기동 실패) → 기존 data VCT 재사용. 영속(pod 재시작 인덱스 보존).
 func MongotSidecar(mdbName, image, syncSecretName string) (corev1.Container, corev1.Container, []corev1.Volume) {
+	// "data" volume 은 mongod STS VolumeClaimTemplates 가 제공(여기서 추가 X — 중복 방지).
 	volumes := []corev1.Volume{
 		{Name: "mongot-config", VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: MongotConfigMapName(mdbName)}},
 		}},
-		{Name: "mongot-data", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 		{Name: "mongot-sync-raw", VolumeSource: corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{SecretName: syncSecretName, DefaultMode: ptr.To[int32](0400)},
 		}},
@@ -166,7 +177,8 @@ func MongotSidecar(mdbName, image, syncSecretName string) (corev1.Container, cor
 		SecurityContext: buildDefaultContainerSecurityContext(),
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "mongot-config", MountPath: mongotConfigPath, ReadOnly: true},
-			{Name: "mongot-data", MountPath: mongotBasePath},
+			// mongod data PVC 공유(subPath) — 노드 디스크 독립 + 영속.
+			{Name: mongodDataVolume, MountPath: mongotBasePath, SubPath: mongotDataSubPath},
 			{Name: mongotSecretsVolume, MountPath: mongotSecretsPath, ReadOnly: true},
 		},
 		ReadinessProbe: &corev1.Probe{
