@@ -47380,6 +47380,14 @@ spec:
                 description: UpgradeStrategy defines version upgrade automation policy
                   (cycle 7).
                 properties:
+                  maxRetries:
+                    default: 0
+                    description: |-
+                      MaxRetries — 동일 spec generation에서 허용하는 업그레이드 시도 횟수(루프 안정성).
+                      v1alpha1과 동일(CRD storage version 변환 호환 — OLM crdUpgradeSafety). 0 = generation당 1회.
+                    format: int32
+                    minimum: 0
+                    type: integer
                   preUpgradeBackup:
                     default: false
                     description: |-

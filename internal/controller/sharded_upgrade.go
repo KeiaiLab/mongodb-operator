@@ -21,17 +21,28 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgrade(ctx context.Context, 
 	logger := log.FromContext(ctx)
 
 	desiredVersion := mdbsh.Spec.Version.Version
-	currentVersion := mdbsh.Status.Version
 
-	// EffectiveVersion 초기화(무중단 업그레이드/롤백 SSOT) — 빈 값이면 desired로 seed
-	// (첫 reconcile 시 spec.Version과 동일 → 무롤링). builder가 이 값으로 STS 빌드.
-	if mdbsh.Status.EffectiveVersion == "" {
-		seed := func() { mdbsh.Status.EffectiveVersion = desiredVersion }
+	// Status.EffectiveVersion + Status.Version 초기화(무중단 업그레이드 SSOT).
+	// **adopt된 기존 클러스터 버그 fix**: Helm→OLM 인수 클러스터는 Status.Version 이 비어 있어
+	// (completeUpgrade에서만 set) reconcile 진입 시 currentVersion="" → 업그레이드 orchestration
+	// 영구 skip + EffectiveVersion stale 고착(keiailab-mongo 8.3.4 패치 사고). Version을
+	// EffectiveVersion 으로 초기화해 spec.Version 변경을 업그레이드로 감지 가능하게 한다.
+	if mdbsh.Status.EffectiveVersion == "" || mdbsh.Status.Version == "" {
+		seed := func() {
+			if mdbsh.Status.EffectiveVersion == "" {
+				mdbsh.Status.EffectiveVersion = desiredVersion
+			}
+			if mdbsh.Status.Version == "" {
+				mdbsh.Status.Version = mdbsh.Status.EffectiveVersion
+			}
+		}
 		seed()
 		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, seed); err != nil {
 			return ctrl.Result{}, false, err
 		}
 	}
+
+	currentVersion := mdbsh.Status.Version // seed 후 읽음(adopt 클러스터 초기화 반영).
 
 	if currentVersion == "" || currentVersion == desiredVersion {
 		if mdbsh.Status.UpgradePhase != "" {
