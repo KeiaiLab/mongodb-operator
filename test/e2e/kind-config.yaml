@@ -1,0 +1,17 @@
+# kind cluster config — mongodb-operator e2e.
+#
+# mongodbshardeds CRD 의 OpenAPI schema 가 ~3.3MB 로 기본 etcd max-request-bytes(1.5MB)를
+# 초과한다 → CRD 설치(서버사이드 apply)가 "etcdserver: request is too large" 로 실패.
+# etcd 한계를 8MB 로 상향한다(make deploy/install 의 server-side apply 와 병행). 발견: PR5 e2e.
+# 근본적으로는 mongodbshardeds CRD schema 축소가 필요(별도 backlog).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: ClusterConfiguration
+        etcd:
+          local:
+            extraArgs:
+              max-request-bytes: "8388608"
