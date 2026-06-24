@@ -36,6 +36,7 @@
 | [ADR-0036](0036-v3x-stable-baseline.md) | v3.x-stable baseline 인정 (audit ❌ 0 충족, CLAUDE.md §7 v3.x-stable 조건) | Accepted | 2026-05-21 |
 | [ADR-0037](0037-gitops-artifacthub-standardization.md) | GitOps overlay + ArtifactHub 검증 파이프라인 표준화 (operator 4종 2-layer 표준, examples/gitops → deploy/overlays/prod 이전, signingKey, GH Actions OSS 정당화) | Accepted | 2026-06-02 |
 | [ADR-0038](0038-olm-v1-path1-realignment-and-parity-guard.md) | OLM v1 (Path 1) 재정렬 + 7-CRD parity + drift 가드 (bundle/catalog/ClusterExtension → appVersion 1.13.1 정렬, sync-crds wildcard, verify-bundle-parity CI/pre-push 게이트, ClusterExtension 컷오버 보류) | Accepted | 2026-06-22 |
+| [ADR-0039](0039-sharded-search-mongot-fanout-limit.md) | sharded MongoDB Search multi-shard 검색 = Community mongot 0.69.1 upstream 한계 (mongos 단일 endpoint 직접 라우팅=broadcast 아님, mongot localhost 하드코딩=StatefulSet 불가) + config server search-sync 비번 drift fix (precheck 비번 미검증 → 제거, v1.16.3) | Accepted | 2026-06-24 |
 
 ## 작성 가이드
 

@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for MongoDB — ReplicaSets, Sharded Clusters with auto scale-out, S3/PVC Backup, TLS, and LDAP. MIT licensed.
 type: application
-version: 1.16.2
-appVersion: "1.16.2"
+version: 1.16.3
+appVersion: "1.16.3"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -151,7 +151,7 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:v1.16.1
+      image: ghcr.io/keiailab/mongodb-operator:v1.16.3
     - name: mongodb
       image: mongo:8.3.1
     - name: mongodb-exporter
@@ -159,7 +159,7 @@ annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
     - kind: fixed
-      description: "MongoDB Search on TLS clusters no longer crashes the mongot sidecar on config parse. The mongod↔mongot in-pod gRPC and the mongot→mongod syncSource now use plaintext localhost (server.grpc.tls.mode=DISABLED + syncSource tls=false) instead of the invalid 'requireTLS' value; cluster TLS still applies to client and replication paths."
+      description: "Sharded MongoDB Search: the config-server search-sync user password is now reconciled on every loop. The previous precheck only verified SCRAM mechanisms and role, so a drifted config-server password was skipped and the mongot router authentication to the index catalog failed (shard-local password matched, so replicaSet data sync still worked). Note: multi-shard $search/$vectorSearch fan-out is a Community mongot 0.69.1 upstream limitation (mongos routes to a single endpoint, not per-shard) — see ADR-0039."
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
