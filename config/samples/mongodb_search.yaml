@@ -1,0 +1,57 @@
+---
+# MongoDBSearch — mongot sidecar 를 source MongoDB(ReplicaSet)에 활성화.
+# syncUserSecretRef 미지정 → operator 가 searchCoordinator user(dual SCRAM) + secret 자동 생성·관리.
+apiVersion: mongodb.keiailab.com/v1beta1
+kind: MongoDBSearch
+metadata:
+  name: my-mongodb
+  namespace: database
+spec:
+  source:
+    kind: MongoDB
+    mongodbResourceRef:
+      name: my-mongodb
+  # version 미지정 → operator 기본 mongot 이미지. override 시:
+  # version:
+  #   version: "1.0.0"
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+---
+# MongoDBSearchIndex — $search(full-text) 인덱스 선언.
+apiVersion: mongodb.keiailab.com/v1beta1
+kind: MongoDBSearchIndex
+metadata:
+  name: movies-fulltext
+  namespace: database
+spec:
+  searchRef:
+    name: my-mongodb
+  database: sample_mflix
+  collection: movies
+  indexName: default
+  type: search
+  # full-text: dynamic mapping(모든 필드 인덱싱).
+  definitionJSON: |
+    {"mappings": {"dynamic": true}}
+---
+# MongoDBSearchIndex — $vectorSearch(AI 임베딩) 인덱스 선언.
+apiVersion: mongodb.keiailab.com/v1beta1
+kind: MongoDBSearchIndex
+metadata:
+  name: movies-vector
+  namespace: database
+spec:
+  searchRef:
+    name: my-mongodb
+  database: sample_mflix
+  collection: movies
+  indexName: vector_index
+  type: vectorSearch
+  # vectorSearch: fields 배열 필수(임베딩 path/유사도/차원).
+  definitionJSON: |
+    {"fields": [{"type": "vector", "path": "plot_embedding", "numDimensions": 1536, "similarity": "cosine"}]}

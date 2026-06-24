@@ -29,6 +29,7 @@ import (
 	mongodbv1beta1 "github.com/keiailab/mongodb-operator/api/v1beta1"
 	"github.com/keiailab/mongodb-operator/internal/controller"
 	webhookv1alpha1 "github.com/keiailab/mongodb-operator/internal/webhook/v1alpha1"
+	webhookv1beta1 "github.com/keiailab/mongodb-operator/internal/webhook/v1beta1"
 )
 
 var (
@@ -261,6 +262,15 @@ func main() {
 			setupLog.Error(err, "unable to create controller", "controller", "MongoDBSearch")
 			os.Exit(1)
 		}
+		// MongoDBSearchIndex — 선언적 $search/$vectorSearch 인덱스 lifecycle. search gate 재사용
+		// (인덱스 관리는 mongot 배포의 자연 연장 — 별도 플래그 불필요).
+		if err = (&controller.MongoDBSearchIndexReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MongoDBSearchIndex")
+			os.Exit(1)
+		}
 	} else {
 		setupLog.Info("MongoDBSearch controller disabled by feature gate (--enable-search-controller=false)")
 	}
@@ -281,7 +291,12 @@ func main() {
 			setupLog.Error(err, "unable to create webhook", "webhook", "MongoDBSharded")
 			os.Exit(1)
 		}
-		setupLog.Info("admission webhooks enabled (MongoDB / MongoDBSharded)")
+		// MongoDBSearchIndex(v1beta1) validating webhook — DefinitionJSON + 불변 필드.
+		if err = webhookv1beta1.SetupMongoDBSearchIndexWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "MongoDBSearchIndex")
+			os.Exit(1)
+		}
+		setupLog.Info("admission webhooks enabled (MongoDB / MongoDBSharded / MongoDBSearchIndex)")
 	} else {
 		setupLog.Info("admission webhooks disabled by feature gate (--enable-webhooks=false)")
 	}
