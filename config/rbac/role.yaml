@@ -135,6 +135,7 @@ rules:
   - mongodbinsights
   - mongodbs
   - mongodbsearches
+  - mongodbsearchindices
   - mongodbshardeds
   verbs:
   - create
@@ -150,6 +151,7 @@ rules:
   - mongodbbackups/finalizers
   - mongodbfederations/finalizers
   - mongodbs/finalizers
+  - mongodbsearchindices/finalizers
   - mongodbshardeds/finalizers
   verbs:
   - update
@@ -163,6 +165,7 @@ rules:
   - mongodbinsights/status
   - mongodbs/status
   - mongodbsearches/status
+  - mongodbsearchindices/status
   - mongodbshardeds/status
   verbs:
   - get

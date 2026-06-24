@@ -27,4 +27,8 @@ const (
 	// FinalizerMongoDBBackup — MongoDBBackup CR 삭제 시 cleanup.
 	// backup job + S3 storage credential secret cleanup.
 	FinalizerMongoDBBackup = "mongodbbackup.keiailab.com/finalizer"
+
+	// FinalizerMongoDBSearchIndex — MongoDBSearchIndex CR 삭제 시 cleanup.
+	// source mongod 에서 dropSearchIndex 로 mongot 인덱스 제거 의무.
+	FinalizerMongoDBSearchIndex = "mongodbsearchindex.keiailab.com/finalizer"
 )
