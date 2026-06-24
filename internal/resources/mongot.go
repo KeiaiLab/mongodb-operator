@@ -111,10 +111,13 @@ func MongotConfigMapName(mdbName string) string { return mdbName + "-mongot-conf
 // schema SSOT = mongot config.default.yml(kind e2e 실측): hostAndPort 단수 / dataPath=base /
 // server.grpc.tls / healthCheck.address / password owner-only.
 func BuildMongotConfigMap(mdbName, namespace, searchName, syncUser string, tlsEnabled bool, mongodPort int) *corev1.ConfigMap {
-	tlsMode := "disabled"
-	if tlsEnabled {
-		tlsMode = "requireTLS"
-	}
+	// mongod↔mongot gRPC 는 in-pod localhost(같은 pod) → 평문(DISABLED). cluster TLS 는
+	// mongot→mongod syncSource(아래 `tls: %t` = tlsEnabled)에만 적용된다. mongot
+	// `server.grpc.tls.mode` enum = DISABLED|TLS|MTLS 이고 mongod searchTLSMode enum
+	// (disabled|requireTLS)과 다르며, 본 config 에 gRPC cert 필드가 없어 TLS/MTLS 불가.
+	// (구버전: tlsEnabled 시 "requireTLS" 주입 → mongot "must be one of [DISABLED, MTLS, TLS]"
+	//  config-parse crash. 발견: prod sharded(TLS) search 활성화 2026-06-24.)
+	grpcTLSMode := "DISABLED"
 	cfg := fmt.Sprintf(`# operator-generated mongot sidecar config — %s/%s (preview)
 syncSource:
   replicaSet:
@@ -137,7 +140,7 @@ healthCheck:
 logging:
   verbosity: INFO
 `, namespace, searchName, mongodPort, syncUser, mongotSecretsPath, tlsEnabled, mongotBasePath,
-		mongotGRPCPort, tlsMode, mongotHealthPort)
+		mongotGRPCPort, grpcTLSMode, mongotHealthPort)
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

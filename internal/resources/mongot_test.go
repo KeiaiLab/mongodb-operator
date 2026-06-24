@@ -36,7 +36,13 @@ func TestBuildMongotConfigMap(t *testing.T) {
 	require.NotEmpty(t, cfg)
 	assert.Contains(t, cfg, `hostAndPort: "localhost:27017"`, "RS sidecar — localhost mongod 27017 (단수 hostAndPort)")
 	assert.Contains(t, cfg, "search-sync", "searchCoordinator user")
-	assert.Contains(t, cfg, "requireTLS", "tlsEnabled=true → requireTLS")
+	// gRPC(mongod↔mongot)는 in-pod localhost 평문 → server.grpc.tls.mode 는 항상 유효 enum
+	// "DISABLED" 여야 한다. mongod searchTLSMode 값 "requireTLS" 가 grpc.tls.mode 로 새면
+	// mongot 이 "must be one of [DISABLED, MTLS, TLS]" 로 config-parse crash 한다
+	// (prod sharded(TLS) search 활성화 2026-06-24 회귀 가드). cluster TLS 는 syncSource 만.
+	assert.Contains(t, cfg, `mode: "DISABLED"`, "grpc.tls.mode = DISABLED (localhost 평문)")
+	assert.NotContains(t, cfg, "requireTLS", "grpc.tls.mode 에 mongod enum requireTLS 누출 금지")
+	assert.Contains(t, cfg, "tls: true", "tlsEnabled=true → syncSource(mongot→mongod) TLS 유지")
 	assert.Contains(t, cfg, `dataPath: "/var/lib/mongot"`, "data dir = base (serverId 영속)")
 	assert.Contains(t, cfg, "/etc/mongot/secrets/passwordFile", "owner-only password 경로")
 }
