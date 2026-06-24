@@ -44,6 +44,11 @@ const (
 	// 그대로 사용됨. `:latest` 는 Always 라 매번 Docker Hub 를 치고, 1.3GB pull 이 spec 의 6분
 	// Eventually 를 초과해 실패한다(발견: PR5 e2e 콜드런). MongoDBSearch.spec.version.version 과 일치.
 	mongotImage = "mongodb/mongodb-community-search:0.69.1"
+	// mongodImage — mongod 도 동일하게 노드 pre-cache 한다. 콜드 클러스터에서 mongo:8.2(~700MB)
+	// 콜드 pull 이 spec 의 6분 Eventually 를 초과해 MongoDB 가 Initializing 에 머물러 첫 It 가 실패한다
+	// (mongot 과 동일 클래스 — 발견: PR5 콜드런). community operator 는 spec.version.version="8.2" 를
+	// Docker Hub 공식 `mongo:8.2` 로 매핑(라이브 events 확인). pinned 태그라 IfNotPresent → 캐시 사용.
+	mongodImage = "mongo:8.2"
 )
 
 var _ = Describe("MongoDBSearch $vectorSearch Round-Trip (PR5)", Ordered, func() {
@@ -65,6 +70,9 @@ var _ = Describe("MongoDBSearch $vectorSearch Round-Trip (PR5)", Ordered, func()
 		}
 		_, _ = utils.Run(exec.Command("docker", "exec", kindCluster+"-control-plane",
 			"crictl", "pull", mongotImage))
+		// mongod 이미지도 노드에 미리 적재(위 mongodImage 주석 — 콜드 pull 6분 초과 실패 회피).
+		_, _ = utils.Run(exec.Command("docker", "exec", kindCluster+"-control-plane",
+			"crictl", "pull", mongodImage))
 
 		_, _ = utils.Run(exec.Command("kubectl", "create", "ns", searchNS))
 		ensureAdminSecret(searchNS)
@@ -106,8 +114,12 @@ spec:
 	})
 
 	AfterAll(func() {
-		_, _ = utils.Run(exec.Command("kubectl", "delete", "ns", searchNS, "--ignore-not-found"))
-		_, _ = utils.Run(exec.Command("make", "undeploy", "ignore-not-found=true"))
+		// 네임스페이스만 정리한다. make undeploy 는 공유 operator/CRD 를 제거해 같은 스위트의 후속
+		// Describe(sharded/version_upgrade/webhook_reject 등)를 깨뜨리므로 호출하지 않는다
+		// (operator 는 다른 테스트도 공유 — kind 클러스터는 make test-e2e 종료 시 통째 삭제).
+		// --wait=false: 실패 시 MongoDB finalizer 로 namespace 가 Terminating 에 멈춰 suite 가 30분
+		// 글로벌 타임아웃까지 hang 하던 문제 회피(클러스터 통째 삭제되므로 비대기 안전).
+		_, _ = utils.Run(exec.Command("kubectl", "delete", "ns", searchNS, "--ignore-not-found", "--wait=false"))
 	})
 
 	It("MongoDB Running + MongoDBSearch Ready (mongot sidecar)", func() {
@@ -158,21 +170,29 @@ spec:
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "MongoDBSearchIndex apply")
 
+		By("mongod pod Ready 대기 (portForward 가 auth 부트스트랩 완료 전 TCP 만 열리는 레이스 차단)")
+		_, err = utils.Run(exec.Command("kubectl", "wait", "pod", searchMongoName+"-0", "-n", searchNS,
+			"--for=condition=Ready", "--timeout=3m"))
+		Expect(err).NotTo(HaveOccurred(), "mongod pod Ready")
+
 		By("port-forward 127.0.0.1:47017 → mongod headless:27017")
 		cancel, err := portForward(searchMongoName+"-headless", searchNS, 47017, 27017)
 		Expect(err).NotTo(HaveOccurred())
 		defer cancel()
 
-		ctx, ccancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer ccancel()
+		// 연결 수명 ctx 는 넉넉히(SearchIndex Ready 대기 + $vectorSearch 재시도 전체 포괄). 단일 5분
+		// ctx 를 Aggregate 까지 공유하면 SearchIndex 대기가 길 때 ctx 가 먼저 만료돼 $vectorSearch 가
+		// deadline-exceeded 로 hard-fail 한다 → 연결용(connCtx)/조회용(agCtx, 시도별) 분리.
+		connCtx, connCancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer connCancel()
 		uri := fmt.Sprintf("mongodb://admin:%s@127.0.0.1:47017/?directConnection=true", searchAdminPw)
 		client, err := mongo.Connect(options.Client().ApplyURI(uri))
 		Expect(err).NotTo(HaveOccurred(), "mongo connect")
-		defer func() { _ = client.Disconnect(ctx) }()
+		defer func() { _ = client.Disconnect(connCtx) }()
 		coll := client.Database("testdb").Collection("items")
 
 		By("문서 insert (3차원 embedding)")
-		_, err = coll.InsertMany(ctx, []interface{}{
+		_, err = coll.InsertMany(connCtx, []interface{}{
 			bson.M{"_id": 1, "name": "alpha", "embedding": bson.A{1.0, 0.0, 0.0}},
 			bson.M{"_id": 2, "name": "beta", "embedding": bson.A{0.0, 1.0, 0.0}},
 			bson.M{"_id": 3, "name": "gamma", "embedding": bson.A{0.9, 0.1, 0.0}},
@@ -197,12 +217,14 @@ spec:
 					{Key: "limit", Value: 2},
 				}}},
 			}
-			cur, e := coll.Aggregate(ctx, pipeline)
+			agCtx, agCancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer agCancel()
+			cur, e := coll.Aggregate(agCtx, pipeline)
 			if e != nil {
 				return "", e
 			}
 			var results []bson.M
-			if e := cur.All(ctx, &results); e != nil {
+			if e := cur.All(agCtx, &results); e != nil {
 				return "", e
 			}
 			if len(results) == 0 {
