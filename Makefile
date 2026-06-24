@@ -211,7 +211,7 @@ bundle-build: bundle ## bundle image 빌드 — registry push 는 community-oper
 bundle-push: ## bundle image push to ghcr.io. ADR-0028 외부 사용자 운영 수준 + community-operators PR 입력.
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
 	docker push ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION)
-	@DIGEST=$$(docker manifest inspect ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) | python3 -c "import sys,json; m=json.load(sys.stdin); print(m['manifests'][0]['digest']) if 'manifests' in m else print(m.get('config',{}).get('digest',''))"); \
+	@DIGEST=$$(docker buildx imagetools inspect ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) --format '{{.Manifest.Digest}}'); \
 	echo "✓ bundle pushed: ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION)@$$DIGEST"
 
 .PHONY: catalog-build
@@ -221,7 +221,10 @@ catalog-build: ## FBC catalog image 빌드. deploy/catalog/ 의 plain YAML 을 o
 	# operator-controller(OLM v1) 는 tag+digest 동시 참조를 거부한다
 	# ("Docker references with both a tag and digest are currently not supported") →
 	# 반드시 digest-only (tag 없음). mutable tag 보호 목적도 digest 가 이미 충족.
-	@BUNDLE_DIGEST=$$(docker manifest inspect ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) 2>/dev/null | python3 -c "import sys,json; m=json.load(sys.stdin); print(m.get('config',{}).get('digest') or m['manifests'][0]['digest'])"); \
+	# imagetools '{{.Manifest.Digest}}' 는 단일 manifest·manifest-list 모두 *정규 이미지 ref digest* 반환.
+	# (구 `docker manifest inspect | config.digest` 는 단일 manifest 에서 config blob digest 를 잘못
+	#  반환 — default 빌더 --provenance=false 단일 manifest 빌드 시 OLM 이 못 pull. 발견: v1.16.0 릴리스.)
+	@BUNDLE_DIGEST=$$(docker buildx imagetools inspect ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) --format '{{.Manifest.Digest}}' 2>/dev/null); \
 	if [ -z "$$BUNDLE_DIGEST" ]; then echo "ERROR: bundle image v$(VERSION) 의 GHCR 의 digest 가져오지 못함 — bundle-push 먼저 실행"; exit 1; fi; \
 	echo "=== bundle digest: $$BUNDLE_DIGEST"; \
 	sed -i.bak -E "s|image: ghcr.io/keiailab/mongodb-operator-bundle(:v[0-9.]+)?(@sha256:[a-f0-9]+)?|image: ghcr.io/keiailab/mongodb-operator-bundle@$$BUNDLE_DIGEST|g" deploy/catalog/catalog/mongodb-operator/catalog.yaml; \
