@@ -135,8 +135,8 @@ func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	image := resources.MongotImage(search.Spec.Version)
 
 	// mongot config ConfigMap(sidecar, localhost syncSource). owner=search → CR 삭제 시 GC.
-	// RS source → mongod 27017.
-	cm := resources.BuildMongotConfigMap(source.Name, search.Namespace, search.Name, syncUser, tlsEnabled, resources.MongodReplicaSetPort)
+	// RS source → mongod 27017. ReplicaSet 토폴로지 — router(mongos) 없음(routerHostPort="").
+	cm := resources.BuildMongotConfigMap(source.Name, search.Namespace, search.Name, syncUser, tlsEnabled, resources.MongodReplicaSetPort, "")
 	if err := commonsapply.ConfigMap(ctx, r.Client, r.Scheme, search, cm); err != nil {
 		return ctrl.Result{}, fmt.Errorf("apply mongot configmap: %w", err)
 	}
@@ -444,9 +444,12 @@ func (r *MongoDBSearchReconciler) reconcileSharded(ctx context.Context, search *
 	image := resources.MongotImage(search.Spec.Version)
 
 	// shard 별 mongot ConfigMap(port 27018 — shard mongod listen). owner=search → GC.
+	// Sharded: mongot 은 router(mongos)로 cluster topology, replicaSet(로컬 shard)로 데이터 sync.
+	// router 부재 시 mongot 이 "cluster is sharded but syncSource.router is not configured" 로 정지.
+	routerHostPort := fmt.Sprintf("%s-mongos.%s.svc.cluster.local:%d", mdbsh.Name, search.Namespace, resources.MongosPort)
 	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
 		shardName := fmt.Sprintf("%s-shard-%d", mdbsh.Name, i)
-		cm := resources.BuildMongotConfigMap(shardName, search.Namespace, search.Name, syncUser, tlsEnabled, resources.MongodShardPort)
+		cm := resources.BuildMongotConfigMap(shardName, search.Namespace, search.Name, syncUser, tlsEnabled, resources.MongodShardPort, routerHostPort)
 		if err := commonsapply.ConfigMap(ctx, r.Client, r.Scheme, search, cm); err != nil {
 			return ctrl.Result{}, fmt.Errorf("apply shard mongot configmap %s: %w", shardName, err)
 		}
@@ -542,8 +545,14 @@ func (r *MongoDBSearchReconciler) annotateShardedSource(ctx context.Context, mdb
 	return r.Patch(ctx, patched, client.MergeFrom(mdbsh))
 }
 
-// ensureSyncMongoUserSharded — sharded source 의 searchCoordinator user 를 mongos 경유로 생성·보정한다
-// (mongos 가 config+shards 로 전파). SyncUserSecretRef 제공 또는 cluster 미Running 시 no-op. best-effort.
+// ensureSyncMongoUserSharded — sharded source 의 searchCoordinator user 를 *두 경로* 모두에 생성한다:
+// ① mongos 경유(config server 저장) — mongot syncSource.router(mongos) 인증용
+// ② 각 shard RS mongod 직접(:27018) — mongot syncSource.replicaSet(로컬 shard) 인증용
+// mongos 경유 생성 user 는 config server 에만 저장되어 *shard-direct SCRAM 인증에는 부재*하다(MongoDB
+// sharded 동작 — direct shard 연결은 shard-local admin.system.users 만 인증). mongot 은 per-shard
+// replicaSet 에 shard mongod 로 *직접* 인증하므로 각 shard 에도 user 가 필요하다(admin 은 shard
+// postStart hook 이 로컬 생성 → shard-direct 연결 가능). ①만 했던 구버전 = mongot AuthenticationFailed
+// (prod sharded search 활성화 2026-06-24 실측). SyncUserSecretRef 제공/cluster 미Running 시 no-op. best-effort.
 func (r *MongoDBSearchReconciler) ensureSyncMongoUserSharded(ctx context.Context, search *mongodbv1beta1.MongoDBSearch, mdbsh *mongodbv1alpha1.MongoDBSharded, secretName string) error {
 	if search.Spec.SyncUserSecretRef != nil {
 		return nil
@@ -568,13 +577,35 @@ func (r *MongoDBSearchReconciler) ensureSyncMongoUserSharded(ctx context.Context
 	if adminPw == "" {
 		return fmt.Errorf("admin secret %s 에 password 키 없음", adminSecretName)
 	}
-	factory := mongodb.NewServiceConnectFactory(mdbsh.Name+"-mongos", mdbsh.Namespace, 27017, "admin", adminPw, "admin")
+	// ① mongos 경유 — config server 저장, mongot syncSource.router(mongos) 인증용.
+	factory := mongodb.NewServiceConnectFactory(mdbsh.Name+"-mongos", mdbsh.Namespace, resources.MongosPort, "admin", adminPw, "admin")
 	conn, err := factory(ctx, "", mdbsh.Namespace, false) // service connect — podName 무시, mongos 가 라우팅
 	if err != nil {
 		return fmt.Errorf("connect mongos: %w", err)
 	}
-	defer func() { _ = conn.Disconnect(ctx) }()
-	return mongodb.EnsureSearchCoordinatorUser(ctx, conn, defaultSyncUser, pw)
+	rerr := mongodb.EnsureSearchCoordinatorUser(ctx, conn, defaultSyncUser, pw)
+	_ = conn.Disconnect(ctx)
+	if rerr != nil {
+		return fmt.Errorf("ensure search-sync via mongos(router): %w", rerr)
+	}
+	// ② 각 shard RS mongod 직접(:27018) — mongot syncSource.replicaSet(로컬 shard) 인증용.
+	// NewPodConnectFactory(headless, 27018) + shard-<i>-0 seed + direct=false → shard RS primary 라우팅
+	// (RS 경로 ensureSyncMongoUser 와 동일 패턴). EnsureSearchCoordinatorUser 멱등(usersInfo precheck).
+	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
+		shardSvc := fmt.Sprintf("%s-shard-%d-headless", mdbsh.Name, i)
+		shardSeed := fmt.Sprintf("%s-shard-%d-0", mdbsh.Name, i)
+		sf := mongodb.NewPodConnectFactory(shardSvc, resources.MongodShardPort, "admin", adminPw, "admin")
+		sconn, serr := sf(ctx, shardSeed, mdbsh.Namespace, false)
+		if serr != nil {
+			return fmt.Errorf("connect shard %d mongod: %w", i, serr)
+		}
+		serr = mongodb.EnsureSearchCoordinatorUser(ctx, sconn, defaultSyncUser, pw)
+		_ = sconn.Disconnect(ctx)
+		if serr != nil {
+			return fmt.Errorf("ensure search-sync on shard %d: %w", i, serr)
+		}
+	}
+	return nil
 }
 
 func (r *MongoDBSearchReconciler) pending(ctx context.Context, search *mongodbv1beta1.MongoDBSearch, msg string) (ctrl.Result, error) {

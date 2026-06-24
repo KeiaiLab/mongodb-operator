@@ -30,12 +30,14 @@ func TestMongotImage_Default(t *testing.T) {
 }
 
 func TestBuildMongotConfigMap(t *testing.T) {
-	cm := BuildMongotConfigMap("ks", "data", "ks-search", "search-sync", true, MongodReplicaSetPort)
+	cm := BuildMongotConfigMap("ks", "data", "ks-search", "search-sync", true, MongodReplicaSetPort, "")
 	assert.Equal(t, "ks-mongot-config", cm.Name)
 	cfg := cm.Data["config.yml"]
 	require.NotEmpty(t, cfg)
 	assert.Contains(t, cfg, `hostAndPort: "localhost:27017"`, "RS sidecar — localhost mongod 27017 (단수 hostAndPort)")
 	assert.Contains(t, cfg, "search-sync", "searchCoordinator user")
+	// ReplicaSet 토폴로지(routerHostPort="") — router 블록 없음(Sharded 전용).
+	assert.NotContains(t, cfg, "router:", "RS sidecar 에 syncSource.router 누출 금지(Sharded 전용)")
 	// gRPC(mongod↔mongot)는 in-pod localhost 평문 → server.grpc.tls.mode 는 항상 유효 enum
 	// "DISABLED" 여야 한다. mongod searchTLSMode 값 "requireTLS" 가 grpc.tls.mode 로 새면
 	// mongot 이 "must be one of [DISABLED, MTLS, TLS]" 로 config-parse crash 한다
@@ -50,10 +52,26 @@ func TestBuildMongotConfigMap(t *testing.T) {
 
 // TestBuildMongotConfigMap_ShardPort — Sharded shard mongot 은 27018 로 sync(27017 하드코딩 버그 가드).
 func TestBuildMongotConfigMap_ShardPort(t *testing.T) {
-	cm := BuildMongotConfigMap("ks-shard-0", "data", "ks-search", "search-sync", false, MongodShardPort)
+	cm := BuildMongotConfigMap("ks-shard-0", "data", "ks-search", "search-sync", false, MongodShardPort, "")
 	cfg := cm.Data["config.yml"]
 	assert.Contains(t, cfg, `hostAndPort: "localhost:27018"`, "shard sidecar — localhost mongod 27018(RS 27017 와 다름)")
 	assert.NotContains(t, cfg, `localhost:27017`, "shard config 에 27017 누출 금지")
+}
+
+// TestBuildMongotConfigMap_ShardedRouter — Sharded mongot 은 syncSource.router(mongos) 필수.
+// router 부재 시 mongot 0.69.1 이 "cluster is sharded but syncSource.router is not configured" 로
+// CommunityConfigUpdater 정지(검색 silent 미동작) — prod sharded search 활성화 2026-06-24 회귀 가드.
+func TestBuildMongotConfigMap_ShardedRouter(t *testing.T) {
+	router := "ks-mongos.data.svc.cluster.local:27017"
+	cm := BuildMongotConfigMap("ks-shard-0", "data", "ks-search", "search-sync", false, MongodShardPort, router)
+	cfg := cm.Data["config.yml"]
+	// replicaSet(로컬 shard) + router(mongos) 두 블록 모두 존재.
+	assert.Contains(t, cfg, `hostAndPort: "localhost:27018"`, "replicaSet — 로컬 shard mongod 27018")
+	assert.Contains(t, cfg, "router:", "Sharded — syncSource.router(mongos) 블록 필수")
+	assert.Contains(t, cfg, `hostAndPort: "ks-mongos.data.svc.cluster.local:27017"`, "router hostAndPort = mongos(단수 키)")
+	// router 도 동일 syncUser + 평문(mongos preferTLS 수락, CAFile 부재 회피).
+	assert.Contains(t, cfg, "tls: false", "router/replicaSet 평문(localhost + mongos preferTLS)")
+	assert.NotContains(t, cfg, "requireTLS", "tls enum 누출 금지")
 }
 
 func TestMongotSidecar(t *testing.T) {
