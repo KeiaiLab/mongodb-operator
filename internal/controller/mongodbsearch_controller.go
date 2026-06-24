@@ -11,12 +11,15 @@ Licensed under the MIT License. See the LICENSE file for details.
 // 배포하지 않고*: ① mongot config ConfigMap(localhost syncSource) 생성 ② source MongoDB 에
 // sidecar annotation(image/sync-secret/tls) 설정 → mongod builder 가 mongot sidecar 컨테이너 +
 // init + setParameter 를 mongod pod 에 주입. searchCoordinator sync 사용자는 spec.syncUserSecretRef
-// 로 사용자 제공(secret: username/password). auto-create 는 후속.
+// 로 사용자 제공(secret: username/password), 미지정 시 operator 가 searchCoordinator user
+// (dual SCRAM-SHA-1+256) + <name>-search-sync secret 을 자동 생성·관리(ensureSyncUser).
 
 package controller
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -29,12 +32,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	commonsapply "github.com/keiailab/keiailab-commons/pkg/apply"
 	commonsstatus "github.com/keiailab/keiailab-commons/pkg/status"
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	mongodbv1beta1 "github.com/keiailab/mongodb-operator/api/v1beta1"
+	"github.com/keiailab/mongodb-operator/internal/mongodb"
 	"github.com/keiailab/mongodb-operator/internal/resources"
 )
 
@@ -55,6 +60,9 @@ const (
 	conditionTypeSearchAvailable   = "Available"
 	conditionTypeSearchProgressing = "Progressing"
 	conditionTypeSearchDegraded    = "Degraded"
+
+	labelManagedBy = "app.kubernetes.io/managed-by"
+	managedByValue = "mongodb-operator"
 )
 
 // MongoDBSearchReconciler reconciles MongoDBSearch — mongot sidecar 활성화.
@@ -67,7 +75,7 @@ type MongoDBSearchReconciler struct {
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbsearches/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch
 
@@ -91,14 +99,26 @@ func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	// MVP: syncUserSecretRef 필수(searchCoordinator 사용자 — 사용자 선생성).
-	if search.Spec.SyncUserSecretRef == nil {
-		return r.fail(ctx, search, "spec.syncUserSecretRef required (searchCoordinator user secret with username/password)")
-	}
-	syncSecret := search.Spec.SyncUserSecretRef.Name
-	syncUser, err := r.resolveSyncUser(ctx, syncSecret, search.Namespace)
+	// searchCoordinator sync 사용자 secret: spec.SyncUserSecretRef 제공 시 그 이름(사용자 관리),
+	// 미지정 시 operator 가 <name>-search-sync secret 생성. mongod user 생성과 분리(secret 은
+	// cluster 무관 eager) — sidecar 주입(annotate)이 mongod 연결 가용성에 의존하지 않게 한다.
+	syncSecret, err := r.ensureSyncSecret(ctx, search)
 	if err != nil {
-		return r.fail(ctx, search, fmt.Sprintf("sync secret invalid: %v", err))
+		return r.fail(ctx, search, fmt.Sprintf("ensure sync secret: %v", err)) // secret 생성 실패 = 영구
+	}
+	var syncUser string
+	if search.Spec.SyncUserSecretRef != nil {
+		// 사용자 제공 secret — username 키 존중(사용자가 secret 전체를 신뢰 관리).
+		syncUser, err = r.resolveSyncUser(ctx, syncSecret, search.Namespace)
+		if err != nil {
+			return r.fail(ctx, search, fmt.Sprintf("sync secret invalid: %v", err))
+		}
+	} else {
+		// 보안: auto-create 경로는 mongot config 의 syncUser 도 고정 defaultSyncUser 로 강제한다
+		// (secret username 키 불신뢰 — ensureSyncMongoUser 의 mongod user 이름과 일관). 공격자가
+		// <name>-search-sync secret 을 pre-stage 해 username 을 바꿔도 mongot 은 search-sync 로만
+		// 인증 시도하고 operator 도 search-sync user 만 관리 → privilege escalation 차단.
+		syncUser = defaultSyncUser
 	}
 
 	tlsEnabled := source.Spec.TLS != nil && source.Spec.TLS.Enabled
@@ -117,6 +137,13 @@ func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// source mongod 에 sidecar annotation → mongod builder 가 mongot sidecar + setParameter 주입.
 	if err := r.annotateSource(ctx, source, image, syncSecret, tlsMode); err != nil {
 		return ctrl.Result{}, fmt.Errorf("annotate source mongodb: %w", err)
+	}
+
+	// searchCoordinator user 보장(auto-create 경로, source Running 시 best-effort). annotate 뒤라
+	// user 생성이 transient 실패해도 sidecar 주입은 진행되고, user 부재는 mongot readiness 가
+	// Degraded 로 반영(아래 status) + 다음 reconcile 재시도(EnsureSearchCoordinatorUser 멱등).
+	if err := r.ensureSyncMongoUser(ctx, search, source, syncSecret); err != nil {
+		logger.Error(err, "searchCoordinator user ensure 실패 — sidecar 진행, 다음 reconcile 재시도")
 	}
 
 	// status: mongot 은 별도 워크로드가 아니라 source mongod pod 의 sidecar 컨테이너 —
@@ -230,6 +257,134 @@ func (r *MongoDBSearchReconciler) resolveSyncUser(ctx context.Context, name, ns 
 		return u, nil
 	}
 	return defaultSyncUser, nil
+}
+
+// ensureSyncUser — searchCoordinator sync 사용자 secret 이름을 반환한다. spec.SyncUserSecretRef
+// 제공 시 그 이름(사용자 관리, operator 미개입). 미지정 시 operator 가 <name>-search-sync secret
+// 을 생성(password 보존)하고, source mongod 가 Running 이면 searchCoordinator user(dual SCRAM)를
+// 생성·보정한다. secret 은 cluster 의존 없이 eager 생성(annotate→sidecar 주입 트리거를 막지 않기
+// 위함), mongod user 생성은 SCRAM 인증 가능한 Running gate 안에서만(미Running 이면 다음 reconcile).
+func (r *MongoDBSearchReconciler) ensureSyncSecret(ctx context.Context, search *mongodbv1beta1.MongoDBSearch) (string, error) {
+	if search.Spec.SyncUserSecretRef != nil {
+		return search.Spec.SyncUserSecretRef.Name, nil // 사용자 제공 — operator 미관리
+	}
+	secretName := search.Name + "-search-sync"
+	// 보안(privilege escalation 차단) + self-heal 균형: auto-create secret 은 operator 소유여야
+	// 신뢰한다. 공격자가 <name>-search-sync 를 pre-staging 해 password 를 심으면 operator(admin
+	// 권한)가 그 password 로 searchCoordinator 특권 user 를 만들어 자격증명을 넘기게 되므로, 신뢰
+	// 판정은 3-way:
+	//   ① owner-ref(IsControlledBy) 일치 → operator 소유 확정, password 보존(rotate 사고 방지).
+	//   ② owner-ref 없으나 managed-by 라벨 보유 → operator 가 만들었으나 ref 유실(velero restore /
+	//      kubectl apply / --cascade=orphan). re-adopt: owner-ref 복구 + password 재생성(공격자가
+	//      라벨을 위조했더라도 operator 가 password 를 새로 써서 심어둔 값을 무효화 → escalation 불가).
+	//   ③ owner-ref 도 managed-by 도 없음 → 진짜 foreign/pre-staged. adopt 거부(fail).
+	// 없으면 owner-ref + managed-by 라벨 + operator 생성 random password 로 Create.
+	existing := &corev1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: search.Namespace}, existing)
+	switch {
+	case err == nil:
+		if metav1.IsControlledBy(existing, search) {
+			return secretName, nil // ① operator 소유 — password 보존
+		}
+		if existing.Labels[labelManagedBy] != managedByValue {
+			return "", fmt.Errorf("sync secret %q 가 이미 존재하나 operator 소유 아님(owner-ref/managed-by 부재) — "+
+				"foreign/pre-staged secret adopt 거부(privilege escalation 방지). 삭제하거나 spec.syncUserSecretRef 로 명시 지정", secretName)
+		}
+		// ② managed-by 라벨 보유, owner-ref 유실 → re-adopt(ref 복구 + password 재생성으로 위조 무효화).
+		if err := controllerutil.SetControllerReference(search, existing, r.Scheme); err != nil {
+			return "", fmt.Errorf("re-adopt sync secret owner ref: %w", err)
+		}
+		if existing.Data == nil {
+			existing.Data = map[string][]byte{}
+		}
+		existing.Data["username"] = []byte(defaultSyncUser)
+		existing.Data["password"] = []byte(generateSyncPassword())
+		if err := r.Update(ctx, existing); err != nil {
+			return "", fmt.Errorf("re-adopt sync secret update: %w", err)
+		}
+		return secretName, nil
+	case apierrors.IsNotFound(err):
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: search.Namespace,
+				Labels:    map[string]string{labelManagedBy: managedByValue, "mongodb.keiailab.com/search": search.Name},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{"username": []byte(defaultSyncUser), "password": []byte(generateSyncPassword())},
+		}
+		if err := controllerutil.SetControllerReference(search, secret, r.Scheme); err != nil {
+			return "", fmt.Errorf("set owner ref on sync secret: %w", err)
+		}
+		if err := r.Create(ctx, secret); err != nil {
+			if apierrors.IsAlreadyExists(err) {
+				return r.ensureSyncSecret(ctx, search) // race: 막 생성됨 → 재검증(소유 확인)
+			}
+			return "", fmt.Errorf("create sync secret: %w", err)
+		}
+		return secretName, nil
+	default:
+		return "", fmt.Errorf("get sync secret: %w", err)
+	}
+}
+
+// ensureSyncMongoUser — auto-create 경로에서 source mongod 에 searchCoordinator user(dual SCRAM)를
+// 생성·보정한다. SyncUserSecretRef 제공(사용자 관리) 또는 source 미Running 시 no-op. 호출자가
+// best-effort 로 부르며(실패해도 sidecar 진행), EnsureSearchCoordinatorUser 가 usersInfo precheck
+// 로 멱등 — 이미 정상이면 mongod write 없음.
+func (r *MongoDBSearchReconciler) ensureSyncMongoUser(ctx context.Context, search *mongodbv1beta1.MongoDBSearch, source *mongodbv1alpha1.MongoDB, secretName string) error {
+	if search.Spec.SyncUserSecretRef != nil {
+		return nil // 사용자 제공 user — operator 가 mongod user 미관리
+	}
+	if source.Status.Phase != mongodbPhaseRunning {
+		return nil // SCRAM 인증 가능 시점 아님 — 다음 reconcile
+	}
+	s := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: search.Namespace}, s); err != nil {
+		return fmt.Errorf("get sync secret: %w", err)
+	}
+	// 보안: auto-create 경로의 mongod user 이름은 항상 고정 defaultSyncUser 로 강제한다.
+	// secret 의 username 키를 신뢰해 mongod user 를 만들면, 공격자가 <name>-search-sync secret 을
+	// 미리 staging 해 username=admin(등 특권 user) 으로 두면 operator(admin 권한)가 그 user 에
+	// searchCoordinator role + 공격자 password 를 부여 → 계정 탈취/권한 상승(privilege escalation).
+	// operator 가 생성·관리하는 user 의 이름은 operator 가 결정하지 secret 입력에 의존하지 않는다.
+	pw := string(s.Data["password"])
+	adminPw, err := r.sourceAdminPassword(ctx, source)
+	if err != nil {
+		return err
+	}
+	factory := mongodb.NewPodConnectFactory(source.Name+"-headless", 27017, "admin", adminPw, "admin")
+	conn, err := factory(ctx, source.Name+"-0", source.Namespace, false) // direct=false → write 를 primary 로 라우팅
+	if err != nil {
+		return fmt.Errorf("connect source mongod: %w", err)
+	}
+	defer func() { _ = conn.Disconnect(ctx) }()
+	return mongodb.EnsureSearchCoordinatorUser(ctx, conn, defaultSyncUser, pw)
+}
+
+// sourceAdminPassword — source MongoDB 의 admin credential secret 에서 password 를 읽는다
+// (mongodb_controller.go getAdminPassword 패턴). admin username 은 "admin" 고정.
+func (r *MongoDBSearchReconciler) sourceAdminPassword(ctx context.Context, source *mongodbv1alpha1.MongoDB) (string, error) {
+	secretName := source.Spec.Auth.AdminCredentialsSecretRef.Name
+	if secretName == "" {
+		return "", fmt.Errorf("source MongoDB %q 에 admin credentials secret 미설정", source.Name)
+	}
+	s := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: source.Namespace}, s); err != nil {
+		return "", fmt.Errorf("get admin secret %s: %w", secretName, err)
+	}
+	pw := string(s.Data["password"])
+	if pw == "" {
+		return "", fmt.Errorf("admin secret %s 에 password 키 없음", secretName)
+	}
+	return pw, nil
+}
+
+// generateSyncPassword — searchCoordinator user 용 랜덤 password(crypto/rand 32byte → base64url).
+func generateSyncPassword() string {
+	b := make([]byte, 32)
+	_, _ = rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 // annotateSource — source MongoDB 에 sidecar annotation 설정(idempotent — 동일 값이면 skip).
