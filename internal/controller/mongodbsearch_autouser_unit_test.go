@@ -187,10 +187,53 @@ func TestEnsureSyncSecret_RejectsForeignSecret(t *testing.T) {
 
 	_, err := r.ensureSyncSecret(context.Background(), search)
 	if err == nil {
-		t.Fatal("foreign(owner-ref 없는) secret 을 adopt 함 — privilege escalation 미차단")
+		t.Fatal("foreign(owner-ref/managed-by 없는) secret 을 adopt 함 — privilege escalation 미차단")
 	}
-	if !strings.Contains(err.Error(), "소유가 아님") {
+	if !strings.Contains(err.Error(), "operator 소유 아님") {
 		t.Errorf("err=%q — foreign adopt 거부 사유 기대", err)
+	}
+}
+
+// TestEnsureSyncSecret_ReAdoptsManagedByLostOwnerRef — self-heal: operator 가 만들었으나
+// owner-ref 를 잃은(velero restore / --cascade=orphan / kubectl apply) managed-by 라벨 secret 은
+// re-adopt(owner-ref 복구 + password 재생성)한다. password 재생성으로 라벨 위조 공격도 무효화.
+func TestEnsureSyncSecret_ReAdoptsManagedByLostOwnerRef(t *testing.T) {
+	s := newTestScheme(t)
+	// managed-by 라벨 보유, owner-ref 없음, password 공격자 추정값(위조 시나리오 포함).
+	orphan := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "srch-search-sync",
+			Namespace: "default",
+			Labels:    map[string]string{labelManagedBy: managedByValue},
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{"username": []byte(defaultSyncUser), "password": []byte("forged-or-stale")},
+	}
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(orphan).Build()
+	r := &MongoDBSearchReconciler{Client: cl, Scheme: s}
+	search := &mongodbv1beta1.MongoDBSearch{
+		ObjectMeta: metav1.ObjectMeta{Name: "srch", Namespace: "default", UID: "uid-1"},
+		Spec:       mongodbv1beta1.MongoDBSearchSpec{},
+	}
+
+	name, err := r.ensureSyncSecret(context.Background(), search)
+	if err != nil {
+		t.Fatalf("ensureSyncSecret(re-adopt): %v — managed-by secret 은 self-heal 해야", err)
+	}
+	if name != "srch-search-sync" {
+		t.Errorf("name=%q", name)
+	}
+	got := &corev1.Secret{}
+	if err := cl.Get(context.Background(), types.NamespacedName{Name: "srch-search-sync", Namespace: "default"}, got); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	// owner-ref 복구.
+	if !metav1.IsControlledBy(got, search) {
+		t.Error("re-adopt 후 owner-ref 미복구")
+	}
+	// password 재생성(위조/stale 값 무효화 — escalation 차단).
+	if string(got.Data["password"]) == "forged-or-stale" {
+		t.Error("re-adopt 시 password 미재생성 — 위조 password 가 살아남음(escalation 위험)")
 	}
 }
 

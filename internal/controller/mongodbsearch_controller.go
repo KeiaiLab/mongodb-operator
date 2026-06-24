@@ -269,22 +269,40 @@ func (r *MongoDBSearchReconciler) ensureSyncSecret(ctx context.Context, search *
 		return search.Spec.SyncUserSecretRef.Name, nil // 사용자 제공 — operator 미관리
 	}
 	secretName := search.Name + "-search-sync"
-	// 보안(privilege escalation 차단): auto-create secret 은 *operator 소유* 여야만 신뢰한다.
-	// 단순 "없으면 생성"(SecretIfNotExists)은 공격자가 <name>-search-sync 를 미리 staging 해
-	// password 를 심으면 operator(admin 권한)가 그 password 로 searchCoordinator 특권 user 를
-	// 만들어 자격증명을 공격자에게 넘긴다. 따라서: 존재하면 이 MongoDBSearch 가 controller-owner
-	// 인지 검증하고(IsControlledBy), foreign secret 이면 adopt 거부(fail). 없으면 owner-ref +
-	// managed-by 라벨 + operator 생성 random password 로 Create. 이후 reconcile 은 operator 소유
-	// secret 의 password 를 보존(rotate 사고 방지).
+	// 보안(privilege escalation 차단) + self-heal 균형: auto-create secret 은 operator 소유여야
+	// 신뢰한다. 공격자가 <name>-search-sync 를 pre-staging 해 password 를 심으면 operator(admin
+	// 권한)가 그 password 로 searchCoordinator 특권 user 를 만들어 자격증명을 넘기게 되므로, 신뢰
+	// 판정은 3-way:
+	//   ① owner-ref(IsControlledBy) 일치 → operator 소유 확정, password 보존(rotate 사고 방지).
+	//   ② owner-ref 없으나 managed-by 라벨 보유 → operator 가 만들었으나 ref 유실(velero restore /
+	//      kubectl apply / --cascade=orphan). re-adopt: owner-ref 복구 + password 재생성(공격자가
+	//      라벨을 위조했더라도 operator 가 password 를 새로 써서 심어둔 값을 무효화 → escalation 불가).
+	//   ③ owner-ref 도 managed-by 도 없음 → 진짜 foreign/pre-staged. adopt 거부(fail).
+	// 없으면 owner-ref + managed-by 라벨 + operator 생성 random password 로 Create.
 	existing := &corev1.Secret{}
 	err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: search.Namespace}, existing)
 	switch {
 	case err == nil:
-		if !metav1.IsControlledBy(existing, search) {
-			return "", fmt.Errorf("sync secret %q 가 이미 존재하나 이 MongoDBSearch 소유가 아님 — "+
+		if metav1.IsControlledBy(existing, search) {
+			return secretName, nil // ① operator 소유 — password 보존
+		}
+		if existing.Labels[labelManagedBy] != managedByValue {
+			return "", fmt.Errorf("sync secret %q 가 이미 존재하나 operator 소유 아님(owner-ref/managed-by 부재) — "+
 				"foreign/pre-staged secret adopt 거부(privilege escalation 방지). 삭제하거나 spec.syncUserSecretRef 로 명시 지정", secretName)
 		}
-		return secretName, nil // operator 소유 — password 보존
+		// ② managed-by 라벨 보유, owner-ref 유실 → re-adopt(ref 복구 + password 재생성으로 위조 무효화).
+		if err := controllerutil.SetControllerReference(search, existing, r.Scheme); err != nil {
+			return "", fmt.Errorf("re-adopt sync secret owner ref: %w", err)
+		}
+		if existing.Data == nil {
+			existing.Data = map[string][]byte{}
+		}
+		existing.Data["username"] = []byte(defaultSyncUser)
+		existing.Data["password"] = []byte(generateSyncPassword())
+		if err := r.Update(ctx, existing); err != nil {
+			return "", fmt.Errorf("re-adopt sync secret update: %w", err)
+		}
+		return secretName, nil
 	case apierrors.IsNotFound(err):
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
