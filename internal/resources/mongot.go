@@ -33,6 +33,10 @@ import (
 const (
 	// mongotGRPCPort — mongod ↔ mongot 검색 쿼리 + 인덱스 관리(gRPC, localhost intra-pod).
 	mongotGRPCPort = 27028
+	// MongodReplicaSetPort — RS mongod listen 포트(mongot syncSource). controller 가 ConfigMap 빌드에 사용.
+	MongodReplicaSetPort = 27017
+	// MongodShardPort — Sharded shard mongod listen 포트(27018 — RS 와 다름, mongot syncSource).
+	MongodShardPort = 27018
 	// mongotHealthPort — mongot healthCheck(config.default.yml 기본 8080).
 	mongotHealthPort = 8080
 	// mongotBasePath — mongot data dir(serverId.txt + 인덱스 스토어). mongod data PVC 의
@@ -84,7 +88,11 @@ func MongotImage(v mongodbv1beta1.MongotVersion) string {
 	return defaultMongotImage
 }
 
-// mongotResources — v1beta1.ResourcesSpec → corev1.
+// mongotResources — v1beta1.ResourcesSpec → corev1. 현재 MongotSidecar 미연결(PR3 도입 후 미사용):
+// spec.resources 를 mongot 컨테이너에 적용하려면 search controller→source annotation 전달 메커니즘이
+// 필요(sidecar 는 source annotation 기반 빌드). GA flip(PR6) 전 처리 대상 — 발견사항.
+//
+//nolint:unused // spec.resources mongot 적용은 annotation 전달 메커니즘 후속(GA flip 전 처리).
 func mongotResources(spec mongodbv1beta1.ResourcesSpec) corev1.ResourceRequirements {
 	return corev1.ResourceRequirements{Requests: spec.Requests, Limits: spec.Limits}
 }
@@ -97,10 +105,12 @@ func mongotLabels(searchName string) map[string]string {
 // MongotConfigMapName — mongot config ConfigMap 이름(mdb 기준 — sidecar 가 마운트).
 func MongotConfigMapName(mdbName string) string { return mdbName + "-mongot-config" }
 
-// BuildMongotConfigMap — mongot config.yml(sidecar). syncSource=localhost:27017(로컬 mongod).
+// BuildMongotConfigMap — mongot config.yml(sidecar). syncSource=localhost:<mongodPort>(로컬 mongod).
+// mongodPort 는 topology 별로 다르다: ReplicaSet=27017, Sharded shard=27018(shard mongod 가 27018
+// listen — 27017 하드코딩 시 shard mongot sync 연결 실패). config server 는 mongot 미배포(메타데이터만).
 // schema SSOT = mongot config.default.yml(kind e2e 실측): hostAndPort 단수 / dataPath=base /
 // server.grpc.tls / healthCheck.address / password owner-only.
-func BuildMongotConfigMap(mdbName, namespace, searchName, syncUser string, tlsEnabled bool) *corev1.ConfigMap {
+func BuildMongotConfigMap(mdbName, namespace, searchName, syncUser string, tlsEnabled bool, mongodPort int) *corev1.ConfigMap {
 	tlsMode := "disabled"
 	if tlsEnabled {
 		tlsMode = "requireTLS"
@@ -108,7 +118,7 @@ func BuildMongotConfigMap(mdbName, namespace, searchName, syncUser string, tlsEn
 	cfg := fmt.Sprintf(`# operator-generated mongot sidecar config — %s/%s (preview)
 syncSource:
   replicaSet:
-    hostAndPort: "localhost:27017"
+    hostAndPort: "localhost:%d"
     username: %q
     passwordFile: %s/passwordFile
     tls: %t
@@ -126,7 +136,7 @@ healthCheck:
   address: "0.0.0.0:%d"
 logging:
   verbosity: INFO
-`, namespace, searchName, syncUser, mongotSecretsPath, tlsEnabled, mongotBasePath,
+`, namespace, searchName, mongodPort, syncUser, mongotSecretsPath, tlsEnabled, mongotBasePath,
 		mongotGRPCPort, tlsMode, mongotHealthPort)
 
 	return &corev1.ConfigMap{
