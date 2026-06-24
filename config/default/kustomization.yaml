@@ -8,5 +8,10 @@ resources:
   - ../rbac
   - ../manager
 
-patches:
-  - path: manager_auth_proxy_patch.yaml
+# NOTE: manager_auth_proxy_patch.yaml(strategic-merge) 를 제거했다. 해당 패치는
+# args 리스트를 4개(--leader-elect/--health-probe/--metrics-*)로 *교체* 했는데,
+# strategic-merge 는 merge-key 없는 primitive 리스트를 통째로 덮어쓰므로
+# config/manager/manager.yaml 의 feature gate args(--enable-search-controller 등 7개)가
+# 전부 유실됐다 → `make deploy` 가 모든 컨트롤러를 비활성으로 배포하는 버그.
+# 패치 args 는 manager.yaml args 의 부분집합이라 제거해도 손실 0. manager.yaml 이 단일 SSOT.
+# (config/manifests OLM bundle 경로는 ../manager 를 직접 참조해 이미 정상이었음.) 발견: PR5 e2e.
