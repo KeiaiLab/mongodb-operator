@@ -37,6 +37,8 @@ const (
 	MongodReplicaSetPort = 27017
 	// MongodShardPort — Sharded shard mongod listen 포트(27018 — RS 와 다름, mongot syncSource).
 	MongodShardPort = 27018
+	// MongosPort — Sharded mongos(router) listen 포트(27017). mongot syncSource.router(Sharded 전용).
+	MongosPort = 27017
 	// mongotHealthPort — mongot healthCheck(config.default.yml 기본 8080).
 	mongotHealthPort = 8080
 	// mongotBasePath — mongot data dir(serverId.txt + 인덱스 스토어). mongod data PVC 의
@@ -110,7 +112,12 @@ func MongotConfigMapName(mdbName string) string { return mdbName + "-mongot-conf
 // listen — 27017 하드코딩 시 shard mongot sync 연결 실패). config server 는 mongot 미배포(메타데이터만).
 // schema SSOT = mongot config.default.yml(kind e2e 실측): hostAndPort 단수 / dataPath=base /
 // server.grpc.tls / healthCheck.address / password owner-only.
-func BuildMongotConfigMap(mdbName, namespace, searchName, syncUser string, tlsEnabled bool, mongodPort int) *corev1.ConfigMap {
+//
+// routerHostPort: Sharded 일 때만 비어있지 않다(mongos host:port). 비어있으면 ReplicaSet 토폴로지로
+// router 블록 생략. Sharded 에서 router 부재 시 mongot 은 "cluster is sharded but syncSource.router
+// is not configured" 로 CommunityConfigUpdater 정지(검색 silent 미동작) — mongot 0.69.1 실측. router
+// 인증 user = mongos 경유 생성된 search-sync(ensureSyncMongoUserSharded), replicaSet 와 동일 syncUser.
+func BuildMongotConfigMap(mdbName, namespace, searchName, syncUser string, tlsEnabled bool, mongodPort int, routerHostPort string) *corev1.ConfigMap {
 	// mongot↔mongod 양방향 연결은 in-pod localhost(같은 pod) → 평문이다(tlsEnabled 무관):
 	// ① mongod→mongot gRPC: server.grpc.tls.mode="DISABLED" (enum DISABLED|TLS|MTLS, config 에
 	//    gRPC cert 필드 없어 TLS 불가; mongod searchTLSMode enum disabled|requireTLS 와 다름).
@@ -120,6 +127,19 @@ func BuildMongotConfigMap(mdbName, namespace, searchName, syncUser string, tlsEn
 	// (구버전: tlsEnabled 시 grpc="requireTLS"[무효 enum] + syncSource tls=true[CA 부재] →
 	//  mongot config-parse crash + sync 실패. 발견: prod sharded(preferTLS) search 활성화 2026-06-24.)
 	grpcTLSMode := "DISABLED"
+	// Sharded: replicaSet(로컬 shard mongod) 뒤에 router(mongos) 블록을 삽입한다. mongot 은 router
+	// 로 cluster topology/메타데이터를, replicaSet 으로 데이터 sync 를 한다(양쪽 모두 필요 — 실측).
+	// mongos preferTLS 가 평문을 수락 → tls:false(replicaSet localhost 채널과 동일 평문 정책; cluster
+	// TLS 검증용 CAFile 부재 회피). routerHostPort 빈 문자열(ReplicaSet)이면 블록 생략.
+	routerBlock := ""
+	if routerHostPort != "" {
+		routerBlock = fmt.Sprintf(`  router:
+    hostAndPort: %q
+    username: %q
+    passwordFile: %s/passwordFile
+    tls: false
+`, routerHostPort, syncUser, mongotSecretsPath)
+	}
 	cfg := fmt.Sprintf(`# operator-generated mongot sidecar config — %s/%s (preview)
 syncSource:
   replicaSet:
@@ -127,7 +147,7 @@ syncSource:
     username: %q
     passwordFile: %s/passwordFile
     tls: false
-storage:
+%sstorage:
   dataPath: %q
 server:
   grpc:
@@ -141,7 +161,7 @@ healthCheck:
   address: "0.0.0.0:%d"
 logging:
   verbosity: INFO
-`, namespace, searchName, mongodPort, syncUser, mongotSecretsPath, mongotBasePath,
+`, namespace, searchName, mongodPort, syncUser, mongotSecretsPath, routerBlock, mongotBasePath,
 		mongotGRPCPort, grpcTLSMode, mongotHealthPort)
 
 	return &corev1.ConfigMap{
