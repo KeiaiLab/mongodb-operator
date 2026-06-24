@@ -111,12 +111,14 @@ func MongotConfigMapName(mdbName string) string { return mdbName + "-mongot-conf
 // schema SSOT = mongot config.default.yml(kind e2e 실측): hostAndPort 단수 / dataPath=base /
 // server.grpc.tls / healthCheck.address / password owner-only.
 func BuildMongotConfigMap(mdbName, namespace, searchName, syncUser string, tlsEnabled bool, mongodPort int) *corev1.ConfigMap {
-	// mongod↔mongot gRPC 는 in-pod localhost(같은 pod) → 평문(DISABLED). cluster TLS 는
-	// mongot→mongod syncSource(아래 `tls: %t` = tlsEnabled)에만 적용된다. mongot
-	// `server.grpc.tls.mode` enum = DISABLED|TLS|MTLS 이고 mongod searchTLSMode enum
-	// (disabled|requireTLS)과 다르며, 본 config 에 gRPC cert 필드가 없어 TLS/MTLS 불가.
-	// (구버전: tlsEnabled 시 "requireTLS" 주입 → mongot "must be one of [DISABLED, MTLS, TLS]"
-	//  config-parse crash. 발견: prod sharded(TLS) search 활성화 2026-06-24.)
+	// mongot↔mongod 양방향 연결은 in-pod localhost(같은 pod) → 평문이다(tlsEnabled 무관):
+	// ① mongod→mongot gRPC: server.grpc.tls.mode="DISABLED" (enum DISABLED|TLS|MTLS, config 에
+	//    gRPC cert 필드 없어 TLS 불가; mongod searchTLSMode enum disabled|requireTLS 와 다름).
+	// ② mongot→mongod syncSource: tls:false (mongod preferTLS 가 localhost 평문 수락; TLS 시
+	//    cert-manager 내부 CA 검증에 CAFile 필요한데 config 에 부재). cluster TLS 는 client/
+	//    replication 경로에만 — localhost sidecar 채널과 무관.
+	// (구버전: tlsEnabled 시 grpc="requireTLS"[무효 enum] + syncSource tls=true[CA 부재] →
+	//  mongot config-parse crash + sync 실패. 발견: prod sharded(preferTLS) search 활성화 2026-06-24.)
 	grpcTLSMode := "DISABLED"
 	cfg := fmt.Sprintf(`# operator-generated mongot sidecar config — %s/%s (preview)
 syncSource:
@@ -124,7 +126,7 @@ syncSource:
     hostAndPort: "localhost:%d"
     username: %q
     passwordFile: %s/passwordFile
-    tls: %t
+    tls: false
 storage:
   dataPath: %q
 server:
@@ -139,7 +141,7 @@ healthCheck:
   address: "0.0.0.0:%d"
 logging:
   verbosity: INFO
-`, namespace, searchName, mongodPort, syncUser, mongotSecretsPath, tlsEnabled, mongotBasePath,
+`, namespace, searchName, mongodPort, syncUser, mongotSecretsPath, mongotBasePath,
 		mongotGRPCPort, grpcTLSMode, mongotHealthPort)
 
 	return &corev1.ConfigMap{
