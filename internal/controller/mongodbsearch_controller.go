@@ -127,10 +127,11 @@ func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	tlsEnabled := source.Spec.TLS != nil && source.Spec.TLS.Enabled
+	// searchTLSMode(mongod→mongot gRPC 채널)는 localhost(in-pod) 평문 → 항상 disabled.
+	// cluster TLS 는 mongot syncSource(BuildMongotConfigMap 의 tlsEnabled)에만 적용한다.
+	// (구버전 requireTLS 는 mongot server.grpc.tls.mode enum[DISABLED|TLS|MTLS]과 충돌해
+	//  config-parse crash — internal/resources/mongot.go BuildMongotConfigMap 참조.)
 	tlsMode := "disabled"
-	if tlsEnabled {
-		tlsMode = "requireTLS"
-	}
 	image := resources.MongotImage(search.Spec.Version)
 
 	// mongot config ConfigMap(sidecar, localhost syncSource). owner=search → CR 삭제 시 GC.
@@ -435,10 +436,11 @@ func (r *MongoDBSearchReconciler) reconcileSharded(ctx context.Context, search *
 	}
 
 	tlsEnabled := mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled
+	// searchTLSMode(mongod→mongot gRPC 채널)는 localhost(in-pod) 평문 → 항상 disabled.
+	// cluster TLS 는 mongot syncSource(BuildMongotConfigMap 의 tlsEnabled)에만 적용한다.
+	// (구버전 requireTLS 는 mongot server.grpc.tls.mode enum[DISABLED|TLS|MTLS]과 충돌해
+	//  config-parse crash — internal/resources/mongot.go BuildMongotConfigMap 참조.)
 	tlsMode := "disabled"
-	if tlsEnabled {
-		tlsMode = "requireTLS"
-	}
 	image := resources.MongotImage(search.Spec.Version)
 
 	// shard 별 mongot ConfigMap(port 27018 — shard mongod listen). owner=search → GC.
