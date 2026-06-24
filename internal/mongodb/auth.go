@@ -139,12 +139,13 @@ func EnsureSearchCoordinatorUser(ctx context.Context, c *mongo.Client, username,
 	if password == "" {
 		return fmt.Errorf("searchCoordinator user %q: 빈 password — passwordless user 생성 거부", username)
 	}
-	// precheck: 이미 dual SCRAM + searchCoordinator role 보유 시 skip — 매 reconcile 마다
-	// updateUser(credential 재계산 write + oplog)를 무조건 재실행하던 낭비 제거. precheck 실패
-	// (조회 에러)는 무시하고 create/update 경로로 진행(보수적 self-heal).
-	if ok, _ := userHasDualSCRAMAndRole(ctx, c, username); ok {
-		return nil
-	}
+	// 비번 동기화 보장: usersInfo(mechanisms+role)만 검사하던 precheck 를 제거했다 — 그 precheck 는
+	// *비번 drift 를 감지 못해* config server 의 search-sync 비번이 secret 과 어긋나도(이미 dual SCRAM +
+	// role 보유 시) skip → mongot 의 router(config server) 인증 실패로 index catalog 조회 불가
+	// (prod sharded search 2026-06-24 RCA — shard-local 비번은 맞아 replicaSet sync 는 정상이나
+	// config server 비번만 drift). 매 reconcile createUser→(존재 시)updateUser 로 pwd+mechanisms+roles
+	// 를 secret 기준 보정한다(멱등 — 동일 pwd 면 mongot 재인증 무영향, updateUser oplog write 는
+	// search reconcile 30s 빈도상 미미).
 	mechanisms := bson.A{scramSHA1, scramSHA256}
 	roles := bson.A{bson.M{"role": "searchCoordinator", "db": adminUserDB}}
 	var res bson.M
@@ -172,41 +173,6 @@ func EnsureSearchCoordinatorUser(ctx context.Context, c *mongo.Client, username,
 		return fmt.Errorf("updateUser %q (searchCoordinator 보정): %w", username, err)
 	}
 	return nil
-}
-
-// userHasDualSCRAMAndRole — usersInfo 로 user 가 SCRAM-SHA-1 + SCRAM-SHA-256 + searchCoordinator
-// role 을 모두 보유하는지 확인한다(EnsureSearchCoordinatorUser 의 매-reconcile write 방지 precheck).
-func userHasDualSCRAMAndRole(ctx context.Context, c *mongo.Client, username string) (bool, error) {
-	var res struct {
-		Users []struct {
-			Mechanisms []string `bson:"mechanisms"`
-			Roles      []struct {
-				Role string `bson:"role"`
-			} `bson:"roles"`
-		} `bson:"users"`
-	}
-	if err := c.Database(adminUserDB).RunCommand(ctx, bson.D{{Key: "usersInfo", Value: username}}).Decode(&res); err != nil {
-		return false, err
-	}
-	if len(res.Users) == 0 {
-		return false, nil
-	}
-	u := res.Users[0]
-	var sha1, sha256, hasRole bool
-	for _, m := range u.Mechanisms {
-		switch m {
-		case scramSHA1:
-			sha1 = true
-		case scramSHA256:
-			sha256 = true
-		}
-	}
-	for _, role := range u.Roles {
-		if role.Role == "searchCoordinator" {
-			hasRole = true
-		}
-	}
-	return sha1 && sha256 && hasRole, nil
 }
 
 // UserRole represents a MongoDB role assignment
