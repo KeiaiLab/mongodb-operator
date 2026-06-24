@@ -1523,6 +1523,21 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 		},
 	}
 
+	// mongot(MongoDB Search) sidecar — shard 별 주입(annotation 시). 각 shard replicaSet 의 mongot 은
+	// 자기 shard 데이터만 인덱싱하며 localhost mongod(27018) 로 topology 연결(별도 STS 비호환). mongos 가
+	// $search 를 shard 별 mongot 으로 fan-out(mongos setParameter 불요). config server 는 mongot 미배포
+	// (메타데이터만). annotation 부재 시 무변경 = 무롤링(mongot_test no-roll 가드). RS 와 동일하게
+	// data PVC subPath(search-index) 공유 — VCT 불변 보존(신규 VCT 없음).
+	if img := mdbsh.Annotations[MongotSidecarImageAnnotation]; img != "" {
+		mc, ic, mvols := MongotSidecar(name, img, mdbsh.Annotations[MongotSyncSecretAnnotation])
+		// mongod(Containers[0]) args 에 setParameter(mongotHost=localhost:27028) 추가.
+		sts.Spec.Template.Spec.Containers[0].Args = append(sts.Spec.Template.Spec.Containers[0].Args,
+			MongotSetParameterArgs(fmt.Sprintf("localhost:%d", mongotGRPCPort), mdbsh.Annotations[MongotTLSModeAnnotation])...)
+		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, ic)
+		sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers, mc)
+		sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, mvols...)
+	}
+
 	// cycle 16: sharded Shard 에도 oplog tailer / audit forwarder sidecar.
 	if IsOplogTailerEnabled(mdbsh.Spec.Backup) {
 		hasAdmin := mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name != ""

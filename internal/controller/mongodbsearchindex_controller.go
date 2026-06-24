@@ -75,6 +75,7 @@ type MongoDBSearchIndexReconciler struct {
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbsearchindices/finalizers,verbs=update
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbsearches,verbs=get;list;watch
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs,verbs=get;list;watch
+// +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbshardeds,verbs=get;list;watch
 
 func (r *MongoDBSearchIndexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx).WithValues("mongodbsearchindex", req.NamespacedName)
@@ -95,35 +96,26 @@ func (r *MongoDBSearchIndexReconciler) Reconcile(ctx context.Context, req ctrl.R
 		}
 		return ctrl.Result{}, err
 	}
-	if search.Spec.Source.Kind == kindMongoDBSharded {
-		return r.fail(ctx, idx, "Sharded source not yet supported (MVP: MongoDB ReplicaSet)")
-	}
-	source := &mongodbv1alpha1.MongoDB{}
 	if search.Spec.Source.MongoDBResourceRef == nil {
 		return r.fail(ctx, idx, "MongoDBSearch.spec.source.mongodbResourceRef required")
 	}
-	if err := r.Get(ctx, types.NamespacedName{Name: search.Spec.Source.MongoDBResourceRef.Name, Namespace: idx.Namespace}, source); err != nil {
-		if apierrors.IsNotFound(err) {
-			if !idx.DeletionTimestamp.IsZero() {
-				return r.handleDeletion(ctx, idx, nil, "")
-			}
-			return r.pending(ctx, idx, "source MongoDB not found yet")
-		}
+
+	// source 연결 해소(RS=pod-0 직결 / Sharded=mongos service). connectPod 는 connect factory 의 podName
+	// (Sharded 는 service connect 라 무시). pendingReason!="" = source/자격증명 미가용(연결 불가).
+	mgr, connectPod, sourceRunning, pendingReason, err := r.resolveSourceManager(ctx, idx, search)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
-
-	mgr, err := r.managerForSource(ctx, source)
-	if err != nil {
-		// 자격증명 조회 실패 등 — 삭제 중이면 best-effort 해제, 아니면 pending(transient).
+	if pendingReason != "" {
 		if !idx.DeletionTimestamp.IsZero() {
-			return r.handleDeletion(ctx, idx, nil, "")
+			return r.handleDeletion(ctx, idx, nil, "") // 연결 불가 → best-effort finalizer 해제(wedge 방지)
 		}
-		return r.pending(ctx, idx, fmt.Sprintf("source connection unavailable: %v", err))
+		return r.pending(ctx, idx, pendingReason)
 	}
 
 	// 삭제 처리(finalizer): dropSearchIndex.
 	if !idx.DeletionTimestamp.IsZero() {
-		return r.handleDeletion(ctx, idx, mgr, source.Name+"-0")
+		return r.handleDeletion(ctx, idx, mgr, connectPod)
 	}
 
 	// finalizer 부착(삭제 시 drop 보장).
@@ -136,7 +128,7 @@ func (r *MongoDBSearchIndexReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	// readiness gate: source Running + search Ready 아니면 mongot 미서빙 → 대기.
-	if source.Status.Phase != mongodbPhaseRunning || search.Status.Phase != searchPhaseReady {
+	if !sourceRunning || search.Status.Phase != searchPhaseReady {
 		return r.building(ctx, idx, "source mongod / mongot sidecar not ready yet")
 	}
 
@@ -146,21 +138,21 @@ func (r *MongoDBSearchIndexReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return r.fail(ctx, idx, fmt.Sprintf("invalid definitionJSON: %v", err))
 	}
 
-	return r.ensureIndex(ctx, idx, source, mgr, def, logger)
+	return r.ensureIndex(ctx, idx, connectPod, mgr, def, logger)
 }
 
-// ensureIndex — source mongod 의 search index 를 desired 로 reconcile + status polling.
+// ensureIndex — source 의 search index 를 desired 로 reconcile + status polling. connectPod 는 connect
+// factory 의 podName 인자(RS=<name>-0 직결 / Sharded=""=mongos service connect 가 라우팅).
 func (r *MongoDBSearchIndexReconciler) ensureIndex(ctx context.Context, idx *mongodbv1beta1.MongoDBSearchIndex,
-	source *mongodbv1alpha1.MongoDB, mgr searchIndexOps, def bson.M, logger logr.Logger) (ctrl.Result, error) {
-	pod := source.Name + "-0"
-	existing, err := mgr.List(ctx, pod, idx.Namespace, idx.Spec.Database, idx.Spec.Collection, idx.Spec.IndexName)
+	connectPod string, mgr searchIndexOps, def bson.M, logger logr.Logger) (ctrl.Result, error) {
+	existing, err := mgr.List(ctx, connectPod, idx.Namespace, idx.Spec.Database, idx.Spec.Collection, idx.Spec.IndexName)
 	if err != nil {
 		return r.pending(ctx, idx, fmt.Sprintf("list search index: %v", err))
 	}
 
 	if len(existing) == 0 {
 		// 생성.
-		if _, err := mgr.Create(ctx, pod, idx.Namespace, idx.Spec.Database, idx.Spec.Collection, idx.Spec.IndexName, indexType(idx), def); err != nil {
+		if _, err := mgr.Create(ctx, connectPod, idx.Namespace, idx.Spec.Database, idx.Spec.Collection, idx.Spec.IndexName, indexType(idx), def); err != nil {
 			return r.fail(ctx, idx, fmt.Sprintf("create search index: %v", err))
 		}
 		logger.Info("search index 생성", "name", idx.Spec.IndexName, "type", indexType(idx))
@@ -197,6 +189,40 @@ func (r *MongoDBSearchIndexReconciler) handleDeletion(ctx context.Context, idx *
 	return commonsreconcile.HandleFinalizerCleanup(ctx, r.Client, idx, searchIndexFinalizer, cleanup)
 }
 
+// resolveSourceManager — search.source.Kind(MongoDB|MongoDBSharded)별로 searchIndexOps + connectPod +
+// running 을 해소한다. RS=pod-0 직결(NewPodConnectFactory), Sharded=mongos service(NewServiceConnectFactory
+// — mongos 가 per-shard mongot 으로 전파). pendingReason!="" = source 부재/자격증명 미가용(호출자가
+// deletion 이면 best-effort finalizer 해제, 아니면 pending). err!=nil = API 조회 실패(재큐).
+func (r *MongoDBSearchIndexReconciler) resolveSourceManager(ctx context.Context, idx *mongodbv1beta1.MongoDBSearchIndex, search *mongodbv1beta1.MongoDBSearch) (mgr searchIndexOps, connectPod string, running bool, pendingReason string, err error) {
+	if search.Spec.Source.Kind == kindMongoDBSharded {
+		mdbsh := &mongodbv1alpha1.MongoDBSharded{}
+		if e := r.Get(ctx, types.NamespacedName{Name: search.Spec.Source.MongoDBResourceRef.Name, Namespace: idx.Namespace}, mdbsh); e != nil {
+			if apierrors.IsNotFound(e) {
+				return nil, "", false, "source MongoDBSharded not found yet", nil
+			}
+			return nil, "", false, "", e
+		}
+		m, e := r.managerForShardedSource(ctx, mdbsh)
+		if e != nil {
+			return nil, "", false, fmt.Sprintf("source connection unavailable: %v", e), nil
+		}
+		// Sharded 인덱스 명령은 mongos 경유(connectPod 무시 — service connect 가 라우팅).
+		return m, "", mdbsh.Status.Phase == mongodbv1alpha1.ShardedPhaseRunning, "", nil
+	}
+	source := &mongodbv1alpha1.MongoDB{}
+	if e := r.Get(ctx, types.NamespacedName{Name: search.Spec.Source.MongoDBResourceRef.Name, Namespace: idx.Namespace}, source); e != nil {
+		if apierrors.IsNotFound(e) {
+			return nil, "", false, "source MongoDB not found yet", nil
+		}
+		return nil, "", false, "", e
+	}
+	m, e := r.managerForSource(ctx, source)
+	if e != nil {
+		return nil, "", false, fmt.Sprintf("source connection unavailable: %v", e), nil
+	}
+	return m, source.Name + "-0", source.Status.Phase == mongodbPhaseRunning, "", nil
+}
+
 // managerForSource — source MongoDB 의 admin 자격으로 SearchIndexManager 생성.
 func (r *MongoDBSearchIndexReconciler) managerForSource(ctx context.Context, source *mongodbv1alpha1.MongoDB) (searchIndexOps, error) {
 	adminPw, err := r.sourceAdminPasswordForIndex(ctx, source)
@@ -210,19 +236,38 @@ func (r *MongoDBSearchIndexReconciler) managerForSource(ctx context.Context, sou
 	return mongodb.NewSearchIndexManagerWithFactory(factory), nil
 }
 
-// sourceAdminPasswordForIndex — source admin secret password 읽기(getAdminPassword 패턴).
+// managerForShardedSource — sharded source 의 admin 자격으로 SearchIndexManager 생성. 인덱스 명령은
+// mongos(<name>-mongos:27017) 경유(mongos 가 config+shard 로 전파 — 개별 shard 직접 아님). NewManager
+// 주입 시 테스트 fake.
+func (r *MongoDBSearchIndexReconciler) managerForShardedSource(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) (searchIndexOps, error) {
+	adminPw, err := r.adminPasswordFor(ctx, mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name, mdbsh.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	if r.NewManager != nil {
+		return r.NewManager("", mdbsh.Name+"-mongos", mdbsh.Namespace, "admin", adminPw), nil
+	}
+	factory := mongodb.NewServiceConnectFactory(mdbsh.Name+"-mongos", mdbsh.Namespace, 27017, "admin", adminPw, "admin")
+	return mongodb.NewSearchIndexManagerWithFactory(factory), nil
+}
+
+// sourceAdminPasswordForIndex — source MongoDB admin secret password 읽기(getAdminPassword 패턴).
 func (r *MongoDBSearchIndexReconciler) sourceAdminPasswordForIndex(ctx context.Context, source *mongodbv1alpha1.MongoDB) (string, error) {
-	name := source.Spec.Auth.AdminCredentialsSecretRef.Name
-	if name == "" {
-		return "", fmt.Errorf("source MongoDB %q 에 admin credentials secret 미설정", source.Name)
+	return r.adminPasswordFor(ctx, source.Spec.Auth.AdminCredentialsSecretRef.Name, source.Namespace)
+}
+
+// adminPasswordFor — admin credential secret 에서 password 읽기(RS/Sharded 공용, getAdminPassword 패턴).
+func (r *MongoDBSearchIndexReconciler) adminPasswordFor(ctx context.Context, secretName, namespace string) (string, error) {
+	if secretName == "" {
+		return "", fmt.Errorf("admin credentials secret 미설정")
 	}
 	s := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: source.Namespace}, s); err != nil {
-		return "", fmt.Errorf("get admin secret %s: %w", name, err)
+	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: namespace}, s); err != nil {
+		return "", fmt.Errorf("get admin secret %s: %w", secretName, err)
 	}
 	pw := string(s.Data["password"])
 	if pw == "" {
-		return "", fmt.Errorf("admin secret %s 에 password 키 없음", name)
+		return "", fmt.Errorf("admin secret %s 에 password 키 없음", secretName)
 	}
 	return pw, nil
 }

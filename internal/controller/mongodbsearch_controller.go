@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -74,6 +75,7 @@ type MongoDBSearchReconciler struct {
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbsearches,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbsearches/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbshardeds,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
@@ -87,9 +89,12 @@ func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// MVP: source = MongoDB(ReplicaSet). Sharded 는 후속(shard 별 sidecar).
-	if search.Spec.Source.MongoDBResourceRef == nil || search.Spec.Source.Kind == kindMongoDBSharded {
-		return r.fail(ctx, search, "source.mongodbResourceRef(Kind=MongoDB) required (Sharded not yet supported)")
+	if search.Spec.Source.MongoDBResourceRef == nil {
+		return r.fail(ctx, search, "source.mongodbResourceRef required")
+	}
+	// Sharded source — shard 별 mongot sidecar(별도 경로). RS 는 이하 진행.
+	if search.Spec.Source.Kind == kindMongoDBSharded {
+		return r.reconcileSharded(ctx, search, logger)
 	}
 	source := &mongodbv1alpha1.MongoDB{}
 	if err := r.Get(ctx, types.NamespacedName{Name: search.Spec.Source.MongoDBResourceRef.Name, Namespace: search.Namespace}, source); err != nil {
@@ -129,7 +134,8 @@ func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	image := resources.MongotImage(search.Spec.Version)
 
 	// mongot config ConfigMap(sidecar, localhost syncSource). owner=search → CR 삭제 시 GC.
-	cm := resources.BuildMongotConfigMap(source.Name, search.Namespace, search.Name, syncUser, tlsEnabled)
+	// RS source → mongod 27017.
+	cm := resources.BuildMongotConfigMap(source.Name, search.Namespace, search.Name, syncUser, tlsEnabled, resources.MongodReplicaSetPort)
 	if err := commonsapply.ConfigMap(ctx, r.Client, r.Scheme, search, cm); err != nil {
 		return ctrl.Result{}, fmt.Errorf("apply mongot configmap: %w", err)
 	}
@@ -402,6 +408,171 @@ func (r *MongoDBSearchReconciler) annotateSource(ctx context.Context, source *mo
 	patched.Annotations[resources.MongotSyncSecretAnnotation] = syncSecret
 	patched.Annotations[resources.MongotTLSModeAnnotation] = tlsMode
 	return r.Patch(ctx, patched, client.MergeFrom(source))
+}
+
+// reconcileSharded — MongoDBSharded source 의 search 활성화. shard replicaSet 마다 mongot sidecar 를
+// 주입한다(각 shard 가 자기 데이터만 인덱싱, mongos 가 $search fan-out). shard 별 mongot ConfigMap
+// (port 27018)을 생성하고 MongoDBSharded CR 에 annotation → shard STS builder 가 sidecar 주입.
+// config server 는 mongot 미배포(메타데이터만). 무롤링: annotation 부재 시 shard STS 무변경.
+func (r *MongoDBSearchReconciler) reconcileSharded(ctx context.Context, search *mongodbv1beta1.MongoDBSearch, logger logr.Logger) (ctrl.Result, error) {
+	mdbsh := &mongodbv1alpha1.MongoDBSharded{}
+	if err := r.Get(ctx, types.NamespacedName{Name: search.Spec.Source.MongoDBResourceRef.Name, Namespace: search.Namespace}, mdbsh); err != nil {
+		if apierrors.IsNotFound(err) {
+			return r.pending(ctx, search, "source MongoDBSharded not found yet")
+		}
+		return ctrl.Result{}, err
+	}
+
+	syncSecret, err := r.ensureSyncSecret(ctx, search) // RS 와 공통(secret 이름 = search 기준)
+	if err != nil {
+		return r.fail(ctx, search, fmt.Sprintf("ensure sync secret: %v", err))
+	}
+	syncUser := defaultSyncUser
+	if search.Spec.SyncUserSecretRef != nil {
+		if syncUser, err = r.resolveSyncUser(ctx, syncSecret, search.Namespace); err != nil {
+			return r.fail(ctx, search, fmt.Sprintf("sync secret invalid: %v", err))
+		}
+	}
+
+	tlsEnabled := mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled
+	tlsMode := "disabled"
+	if tlsEnabled {
+		tlsMode = "requireTLS"
+	}
+	image := resources.MongotImage(search.Spec.Version)
+
+	// shard 별 mongot ConfigMap(port 27018 — shard mongod listen). owner=search → GC.
+	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
+		shardName := fmt.Sprintf("%s-shard-%d", mdbsh.Name, i)
+		cm := resources.BuildMongotConfigMap(shardName, search.Namespace, search.Name, syncUser, tlsEnabled, resources.MongodShardPort)
+		if err := commonsapply.ConfigMap(ctx, r.Client, r.Scheme, search, cm); err != nil {
+			return ctrl.Result{}, fmt.Errorf("apply shard mongot configmap %s: %w", shardName, err)
+		}
+	}
+
+	// MongoDBSharded CR annotate → shard STS builder 가 mongot sidecar 주입(모든 shard).
+	if err := r.annotateShardedSource(ctx, mdbsh, image, syncSecret, tlsMode); err != nil {
+		return ctrl.Result{}, fmt.Errorf("annotate source mongodbsharded: %w", err)
+	}
+
+	// searchCoordinator user 보장(auto-create 경로, mongos 경유 best-effort).
+	if err := r.ensureSyncMongoUserSharded(ctx, search, mdbsh, syncSecret); err != nil {
+		logger.Error(err, "searchCoordinator user(sharded) ensure 실패 — sidecar 진행, 다음 reconcile 재시도")
+	}
+
+	// status: mongot 은 shard mongod pod 의 sidecar 컨테이너 — RS 와 동일하게 *실제 sidecar readiness*
+	// 를 집계해 phase 결정(cluster Running 만으로 조기 Ready 승격 금지 — sidecar 롤링 전 SearchIndex 가
+	// mongot 미서빙 상태에서 인덱스를 조기 시도하는 것 방지). cluster not Running → Provisioning,
+	// shard sidecar 일부 ready → Syncing, 전부 ready → Ready, sidecar 있으나 0 ready → Degraded.
+	var readyReplicas, totalSidecars int32
+	phase := searchPhaseProvisioning
+	if mdbsh.Status.Phase == mongodbv1alpha1.ShardedPhaseRunning {
+		readyReplicas, totalSidecars, err = r.countReadyMongotSidecarsSharded(ctx, mdbsh)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("count sharded mongot sidecars: %w", err)
+		}
+		phase = searchPhaseFromReadiness(readyReplicas, totalSidecars)
+	}
+	apply := func() {
+		search.Status.Phase = phase
+		search.Status.MongotEndpoint = mongotSidecarEndpoint
+		search.Status.ReadyReplicas = readyReplicas
+		search.Status.ObservedGeneration = search.Generation
+		search.Status.Error = ""
+		setSearchConditions(&search.Status.Conditions, search.Generation, phase)
+	}
+	apply()
+	if err := commonsstatus.UpdateWithRetry(ctx, r.Client, search, apply); err != nil {
+		return ctrl.Result{}, err
+	}
+	logger.Info("reconciled sharded (per-shard sidecar)", "phase", phase, "shards", mdbsh.Spec.Shards.Count, "readyMongot", readyReplicas, "totalMongot", totalSidecars, "image", image)
+	if phase != searchPhaseReady {
+		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
+	}
+	return ctrl.Result{RequeueAfter: 2 * time.Minute}, nil
+}
+
+// countReadyMongotSidecarsSharded — 모든 shard STS 의 mongot sidecar ready 집계(countReadyMongotSidecars
+// 의 sharded 판 — shard 0..Count-1 순회). shard STS 미생성(롤링 전)은 skip(graceful). config server/
+// mongos 는 mongot 미배포라 집계 대상 아님.
+func (r *MongoDBSearchReconciler) countReadyMongotSidecarsSharded(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) (ready, total int32, err error) {
+	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
+		shardName := fmt.Sprintf("%s-shard-%d", mdbsh.Name, i)
+		sts := &appsv1.StatefulSet{}
+		if err := r.Get(ctx, types.NamespacedName{Name: shardName, Namespace: mdbsh.Namespace}, sts); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue // shard STS 아직 미생성(롤링 전)
+			}
+			return 0, 0, err
+		}
+		pods := &corev1.PodList{}
+		if err := r.List(ctx, pods, client.InNamespace(mdbsh.Namespace), client.MatchingLabels(sts.Spec.Selector.MatchLabels)); err != nil {
+			return 0, 0, err
+		}
+		for j := range pods.Items {
+			for _, cs := range pods.Items[j].Status.ContainerStatuses {
+				if cs.Name == mongotContainerName {
+					total++
+					if cs.Ready {
+						ready++
+					}
+				}
+			}
+		}
+	}
+	return ready, total, nil
+}
+
+// annotateShardedSource — MongoDBSharded 에 sidecar annotation(idempotent). annotateSource 의 sharded 판.
+func (r *MongoDBSearchReconciler) annotateShardedSource(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, image, syncSecret, tlsMode string) error {
+	if mdbsh.Annotations[resources.MongotSidecarImageAnnotation] == image &&
+		mdbsh.Annotations[resources.MongotSyncSecretAnnotation] == syncSecret &&
+		mdbsh.Annotations[resources.MongotTLSModeAnnotation] == tlsMode {
+		return nil
+	}
+	patched := mdbsh.DeepCopy()
+	if patched.Annotations == nil {
+		patched.Annotations = map[string]string{}
+	}
+	patched.Annotations[resources.MongotSidecarImageAnnotation] = image
+	patched.Annotations[resources.MongotSyncSecretAnnotation] = syncSecret
+	patched.Annotations[resources.MongotTLSModeAnnotation] = tlsMode
+	return r.Patch(ctx, patched, client.MergeFrom(mdbsh))
+}
+
+// ensureSyncMongoUserSharded — sharded source 의 searchCoordinator user 를 mongos 경유로 생성·보정한다
+// (mongos 가 config+shards 로 전파). SyncUserSecretRef 제공 또는 cluster 미Running 시 no-op. best-effort.
+func (r *MongoDBSearchReconciler) ensureSyncMongoUserSharded(ctx context.Context, search *mongodbv1beta1.MongoDBSearch, mdbsh *mongodbv1alpha1.MongoDBSharded, secretName string) error {
+	if search.Spec.SyncUserSecretRef != nil {
+		return nil
+	}
+	if mdbsh.Status.Phase != mongodbv1alpha1.ShardedPhaseRunning {
+		return nil
+	}
+	s := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: search.Namespace}, s); err != nil {
+		return fmt.Errorf("get sync secret: %w", err)
+	}
+	pw := string(s.Data["password"]) // 보안: username 은 항상 defaultSyncUser 고정(RS 와 동일).
+	adminSecretName := mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name
+	if adminSecretName == "" {
+		return fmt.Errorf("source MongoDBSharded %q 에 admin credentials secret 미설정", mdbsh.Name)
+	}
+	adminS := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: adminSecretName, Namespace: mdbsh.Namespace}, adminS); err != nil {
+		return fmt.Errorf("get admin secret %s: %w", adminSecretName, err)
+	}
+	adminPw := string(adminS.Data["password"])
+	if adminPw == "" {
+		return fmt.Errorf("admin secret %s 에 password 키 없음", adminSecretName)
+	}
+	factory := mongodb.NewServiceConnectFactory(mdbsh.Name+"-mongos", mdbsh.Namespace, 27017, "admin", adminPw, "admin")
+	conn, err := factory(ctx, "", mdbsh.Namespace, false) // service connect — podName 무시, mongos 가 라우팅
+	if err != nil {
+		return fmt.Errorf("connect mongos: %w", err)
+	}
+	defer func() { _ = conn.Disconnect(ctx) }()
+	return mongodb.EnsureSearchCoordinatorUser(ctx, conn, defaultSyncUser, pw)
 }
 
 func (r *MongoDBSearchReconciler) pending(ctx context.Context, search *mongodbv1beta1.MongoDBSearch, msg string) (ctrl.Result, error) {

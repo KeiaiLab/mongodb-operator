@@ -30,15 +30,23 @@ func TestMongotImage_Default(t *testing.T) {
 }
 
 func TestBuildMongotConfigMap(t *testing.T) {
-	cm := BuildMongotConfigMap("ks", "data", "ks-search", "search-sync", true)
+	cm := BuildMongotConfigMap("ks", "data", "ks-search", "search-sync", true, MongodReplicaSetPort)
 	assert.Equal(t, "ks-mongot-config", cm.Name)
 	cfg := cm.Data["config.yml"]
 	require.NotEmpty(t, cfg)
-	assert.Contains(t, cfg, `hostAndPort: "localhost:27017"`, "sidecar — localhost mongod (단수 hostAndPort)")
+	assert.Contains(t, cfg, `hostAndPort: "localhost:27017"`, "RS sidecar — localhost mongod 27017 (단수 hostAndPort)")
 	assert.Contains(t, cfg, "search-sync", "searchCoordinator user")
 	assert.Contains(t, cfg, "requireTLS", "tlsEnabled=true → requireTLS")
 	assert.Contains(t, cfg, `dataPath: "/var/lib/mongot"`, "data dir = base (serverId 영속)")
 	assert.Contains(t, cfg, "/etc/mongot/secrets/passwordFile", "owner-only password 경로")
+}
+
+// TestBuildMongotConfigMap_ShardPort — Sharded shard mongot 은 27018 로 sync(27017 하드코딩 버그 가드).
+func TestBuildMongotConfigMap_ShardPort(t *testing.T) {
+	cm := BuildMongotConfigMap("ks-shard-0", "data", "ks-search", "search-sync", false, MongodShardPort)
+	cfg := cm.Data["config.yml"]
+	assert.Contains(t, cfg, `hostAndPort: "localhost:27018"`, "shard sidecar — localhost mongod 27018(RS 27017 와 다름)")
+	assert.NotContains(t, cfg, `localhost:27017`, "shard config 에 27017 누출 금지")
 }
 
 func TestMongotSidecar(t *testing.T) {
