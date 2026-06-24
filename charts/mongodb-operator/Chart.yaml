@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for MongoDB — ReplicaSets, Sharded Clusters with auto scale-out, S3/PVC Backup, TLS, and LDAP. MIT licensed.
 type: application
-version: 1.15.2
-appVersion: "1.15.2"
+version: 1.16.0
+appVersion: "1.16.0"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -151,17 +151,23 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:v1.15.2
+      image: ghcr.io/keiailab/mongodb-operator:v1.16.0
     - name: mongodb
       image: mongo:8.3.1
     - name: mongodb-exporter
       image: percona/mongodb_exporter:0.51.0
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
+    - kind: added
+      description: "MongoDBSearchIndex controller — declarative $search/$vectorSearch index lifecycle (create/update/delete via mongo-driver SearchIndexView). The CRD was a no-op shell before."
+    - kind: added
+      description: "Sharded cluster search support — per-shard mongot sidecar (port 27018) with $search/$vectorSearch served via mongos fan-out and index commands routed through the mongos endpoint."
+    - kind: added
+      description: "MongoDBSearch status conditions (Available/Progressing/Degraded) and ReadyReplicas populated from actual mongot sidecar container readiness."
+    - kind: added
+      description: "searchCoordinator sync user is auto-created (dual SCRAM-SHA-1/256) with adopt-safe secret handling; manual user provisioning is no longer required."
     - kind: fixed
-      description: "Zero-downtime upgrade now triggers on adopted clusters (Helm→OLM): Status.Version is seeded on reconcile entry so a later spec.Version bump is detected as an upgrade instead of being permanently skipped (sharded clusters had no Status.Version backfill at all)."
-    - kind: fixed
-      description: "Sync UpgradeStrategy.maxRetries into the packaged Helm CRDs — it was added to the OLM bundle/API in 1.15.1 but the chart CRDs were left stale."
+      description: "make deploy no longer strips feature-gate args (--enable-search-controller etc.): the manager_auth_proxy_patch strategic-merge replaced the full args list, so it was removed and config/manager/manager.yaml is now the single source of truth."
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
