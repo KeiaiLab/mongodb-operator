@@ -15661,6 +15661,85 @@ spec:
                 required:
                 - enabled
                 type: object
+              shardedCollections:
+                description: |-
+                  ShardedCollections declares collections to shard declaratively. operator는
+                  각 항목에 대해 EnableSharding(database) 선행 후 shardCollection 을
+                  idempotent 하게 적용한다. 키 불일치(이미 다른 키로 샤딩된 컬렉션)는
+                  흡수하지 않고 Status condition "ShardKeyDrift" 로 노출한다.
+                items:
+                  description: ShardedCollectionSpec declares a single collection
+                    to be sharded.
+                  properties:
+                    collection:
+                      description: Collection is the collection name.
+                      minLength: 1
+                      type: string
+                    database:
+                      description: Database is the database name.
+                      minLength: 1
+                      type: string
+                    shardKey:
+                      description: ShardKey is the ordered shard key. 최소 1개 필드.
+                      items:
+                        description: |-
+                          ShardKeyField defines a single field of a shard key. ordered slice 로 키 순서를
+                          보존한다(map 금지 — bson.D 순서가 샤드 키 의미에 영향).
+                        properties:
+                          field:
+                            description: |-
+                              Field is the document field path used as part of the shard key
+                              (e.g. "userId", "meta.symbol").
+                            minLength: 1
+                            type: string
+                          order:
+                            description: |-
+                              Order is the shard key field ordering. "1"=ascending range, "-1"=descending
+                              range, "hashed"=hashed sharding.
+                            enum:
+                            - 1
+                            - -1
+                            - hashed
+                            type: string
+                        required:
+                        - field
+                        - order
+                        type: object
+                      minItems: 1
+                      type: array
+                    timeseries:
+                      description: |-
+                        Timeseries, 설정 시 timeseries 컬렉션으로 샤딩한다. shard key 는 metaField
+                        /그 하위 또는 timeField 만 허용(MongoDB 8.x 제약, 런타임 검증).
+                      properties:
+                        granularity:
+                          description: Granularity is the timeseries bucket granularity.
+                          enum:
+                          - seconds
+                          - minutes
+                          - hours
+                          type: string
+                        metaField:
+                          description: MetaField is the timeseries metadata field.
+                          type: string
+                        timeField:
+                          description: TimeField is the timeseries time field.
+                          minLength: 1
+                          type: string
+                      required:
+                      - timeField
+                      type: object
+                    unique:
+                      description: |-
+                        Unique enforces a unique constraint on the shard key. timeseries 컬렉션은
+                        unique 불가(런타임 검증).
+                      type: boolean
+                  required:
+                  - collection
+                  - database
+                  - shardKey
+                  type: object
+                type: array
               shards:
                 description: Shards defines shard configuration
                 properties:
@@ -39538,6 +39617,85 @@ spec:
                 required:
                 - enabled
                 type: object
+              shardedCollections:
+                description: |-
+                  ShardedCollections declares collections to shard declaratively. operator는
+                  각 항목에 대해 EnableSharding(database) 선행 후 shardCollection 을
+                  idempotent 하게 적용한다. 키 불일치(이미 다른 키로 샤딩된 컬렉션)는
+                  흡수하지 않고 Status condition "ShardKeyDrift" 로 노출한다.
+                items:
+                  description: ShardedCollectionSpec declares a single collection
+                    to be sharded.
+                  properties:
+                    collection:
+                      description: Collection is the collection name.
+                      minLength: 1
+                      type: string
+                    database:
+                      description: Database is the database name.
+                      minLength: 1
+                      type: string
+                    shardKey:
+                      description: ShardKey is the ordered shard key. 최소 1개 필드.
+                      items:
+                        description: |-
+                          ShardKeyField defines a single field of a shard key. ordered slice 로 키 순서를
+                          보존한다(map 금지 — bson.D 순서가 샤드 키 의미에 영향).
+                        properties:
+                          field:
+                            description: |-
+                              Field is the document field path used as part of the shard key
+                              (e.g. "userId", "meta.symbol").
+                            minLength: 1
+                            type: string
+                          order:
+                            description: |-
+                              Order is the shard key field ordering. "1"=ascending range, "-1"=descending
+                              range, "hashed"=hashed sharding.
+                            enum:
+                            - 1
+                            - -1
+                            - hashed
+                            type: string
+                        required:
+                        - field
+                        - order
+                        type: object
+                      minItems: 1
+                      type: array
+                    timeseries:
+                      description: |-
+                        Timeseries, 설정 시 timeseries 컬렉션으로 샤딩한다. shard key 는 metaField
+                        /그 하위 또는 timeField 만 허용(MongoDB 8.x 제약, 런타임 검증).
+                      properties:
+                        granularity:
+                          description: Granularity is the timeseries bucket granularity.
+                          enum:
+                          - seconds
+                          - minutes
+                          - hours
+                          type: string
+                        metaField:
+                          description: MetaField is the timeseries metadata field.
+                          type: string
+                        timeField:
+                          description: TimeField is the timeseries time field.
+                          minLength: 1
+                          type: string
+                      required:
+                      - timeField
+                      type: object
+                    unique:
+                      description: |-
+                        Unique enforces a unique constraint on the shard key. timeseries 컬렉션은
+                        unique 불가(런타임 검증).
+                      type: boolean
+                  required:
+                  - collection
+                  - database
+                  - shardKey
+                  type: object
+                type: array
               shards:
                 description: Shards defines shard configuration
                 properties:

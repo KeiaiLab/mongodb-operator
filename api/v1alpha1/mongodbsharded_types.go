@@ -81,6 +81,68 @@ type MongoDBShardedSpec struct {
 	// 활성화 시 cfg(27019)/shard(27018)/mongos(27017) 컴포넌트별 deny-by-default.
 	// +optional
 	NetworkPolicy *NetworkPolicySpec `json:"networkPolicy,omitempty"`
+
+	// ShardedCollections declares collections to shard declaratively. operator는
+	// 각 항목에 대해 EnableSharding(database) 선행 후 shardCollection 을
+	// idempotent 하게 적용한다. 키 불일치(이미 다른 키로 샤딩된 컬렉션)는
+	// 흡수하지 않고 Status condition "ShardKeyDrift" 로 노출한다.
+	// +optional
+	ShardedCollections []ShardedCollectionSpec `json:"shardedCollections,omitempty"`
+}
+
+// ShardKeyField defines a single field of a shard key. ordered slice 로 키 순서를
+// 보존한다(map 금지 — bson.D 순서가 샤드 키 의미에 영향).
+type ShardKeyField struct {
+	// Field is the document field path used as part of the shard key
+	// (e.g. "userId", "meta.symbol").
+	// +kubebuilder:validation:MinLength=1
+	Field string `json:"field"`
+
+	// Order is the shard key field ordering. "1"=ascending range, "-1"=descending
+	// range, "hashed"=hashed sharding.
+	// +kubebuilder:validation:Enum=1;-1;hashed
+	Order string `json:"order"`
+}
+
+// ShardedCollectionSpec declares a single collection to be sharded.
+type ShardedCollectionSpec struct {
+	// Database is the database name.
+	// +kubebuilder:validation:MinLength=1
+	Database string `json:"database"`
+
+	// Collection is the collection name.
+	// +kubebuilder:validation:MinLength=1
+	Collection string `json:"collection"`
+
+	// ShardKey is the ordered shard key. 최소 1개 필드.
+	// +kubebuilder:validation:MinItems=1
+	ShardKey []ShardKeyField `json:"shardKey"`
+
+	// Unique enforces a unique constraint on the shard key. timeseries 컬렉션은
+	// unique 불가(런타임 검증).
+	// +optional
+	Unique bool `json:"unique,omitempty"`
+
+	// Timeseries, 설정 시 timeseries 컬렉션으로 샤딩한다. shard key 는 metaField
+	// /그 하위 또는 timeField 만 허용(MongoDB 8.x 제약, 런타임 검증).
+	// +optional
+	Timeseries *TimeseriesSpec `json:"timeseries,omitempty"`
+}
+
+// TimeseriesSpec configures sharding for a timeseries collection.
+type TimeseriesSpec struct {
+	// TimeField is the timeseries time field.
+	// +kubebuilder:validation:MinLength=1
+	TimeField string `json:"timeField"`
+
+	// MetaField is the timeseries metadata field.
+	// +optional
+	MetaField string `json:"metaField,omitempty"`
+
+	// Granularity is the timeseries bucket granularity.
+	// +kubebuilder:validation:Enum=seconds;minutes;hours
+	// +optional
+	Granularity string `json:"granularity,omitempty"`
 }
 
 // ConfigServerSpec defines config server configuration

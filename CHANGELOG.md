@@ -2,6 +2,16 @@
 
 All notable changes to mongodb-operator will be documented in this file.
 
+## [1.16.5] - 2026-06-25
+
+### Features
+
+- **선언적 컬렉션 샤딩 (`spec.shardedCollections`)** — MongoDBSharded CR 에 샤딩할 컬렉션을 선언하면 operator 가 `EnableSharding(database)` 선행 후 `shardCollection` 을 idempotent 하게 적용한다. ordered shard key(`shardKey: [{field, order}]`, order ∈ {1,-1,hashed}), `unique` 제약, timeseries 컬렉션 샤딩(`timeseries: {timeField, metaField, granularity}`) 지원. v1alpha1 + v1beta1 양 API 에 byte-동일 추가(storageversion=v1beta1).
+  - **키 drift 비흡수** — `config.collections` 사전 조회로 현재 shard key 와 desired 를 *순서까지* 비교. 이미 *다른 키*로 샤딩된 컬렉션은 흡수하지 않고 `ShardKeyDrift` status condition 으로 노출한다(silent absorption 차단).
+  - **진입 가드** — mongos `ReadyReplicas>=1` AND 모든 `Status.ShardsAdded[i]==true` 충족 후에만 적용. 컬렉션 미생성(`NamespaceNotFound`)·연결 실패는 비치명 requeue.
+  - **status 실측** — `updateStatus` 가 `config.collections` 를 관측해 `Status.ShardedCollections` 를 채운다(관측 실패 시 기존 값 보존).
+  - **webhook 형식 검증** — db/coll non-empty, order enum, 중복 namespace 금지, timeseries+unique 모순 차단, timeField hashed 금지. timeseries shard key 적합성은 런타임 검증.
+
 ## [1.15.2] - 2026-06-23
 
 ### Fixed

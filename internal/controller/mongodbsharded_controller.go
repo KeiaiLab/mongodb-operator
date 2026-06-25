@@ -11,9 +11,11 @@ import (
 	stderrors "errors"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
+	"go.mongodb.org/mongo-driver/v2/bson"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -234,6 +236,16 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// 11. Add shards to cluster — reconcileAddShards도 errors.Join 누적 패턴.
 	if err := r.reconcileAddShards(ctx, mdbsh); err != nil {
 		return r.updateStatusError(ctx, mdbsh, "AddShards", err)
+	}
+
+	// 11.7. Declarative collection sharding — spec.ShardedCollections 의 각 항목을
+	// config.collections 실측 기반으로 idempotent 하게 적용. 가드(mongos ready +
+	// 모든 shard added)는 reconcileShardedCollections 내부에서 검사하고, namespace
+	// not found / connect 실패는 비치명 requeue 로 흡수한다.
+	if res, err := r.reconcileShardedCollections(ctx, mdbsh); err != nil {
+		return r.updateStatusError(ctx, mdbsh, "ShardedCollections", err)
+	} else if res.RequeueAfter > 0 {
+		return res, nil
 	}
 
 	// 11.5. Mongos HPA (opt-in via Spec.Mongos.AutoScaling.Enabled — ADR-0007).
@@ -667,6 +679,202 @@ func (r *MongoDBShardedReconciler) reconcileAddShards(ctx context.Context, mdbsh
 	return statusErr
 }
 
+// reconcileShardedCollections 는 spec.ShardedCollections 를 선언적으로 적용한다.
+//
+// 가드(B-0 high): mongos ReadyReplicas>=1 AND 모든 Status.ShardsAdded[i]==true.
+// 가드 미통과 시 RequeueAfter 로 다음 reconcile 대기(에러 아님).
+//
+// 각 spec 항목:
+//   - EnsureShardedCollection 이 config.collections 사전 조회 → 미샤딩이면
+//     EnableSharding+ShardCollection, 동일 키면 skip, *다른 키면 에러*.
+//   - 키 불일치(ShardKeyDrift) → Status condition "ShardKeyDrift" 로 노출(흡수 X).
+//   - namespace/collection not found(컬렉션 미생성) → 비치명: log + requeue.
+//   - connect 실패 → 비치명: log + requeue.
+//
+// 모든 항목이 성공/skip 이면 ShardKeyDrift condition 을 정리하고 ctrl.Result{} 반환.
+func (r *MongoDBShardedReconciler) reconcileShardedCollections(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	if len(mdbsh.Spec.ShardedCollections) == 0 {
+		// spec 비어있음 — 잔존 drift condition 정리.
+		meta.RemoveStatusCondition(&mdbsh.Status.Conditions, "ShardKeyDrift")
+		return ctrl.Result{}, nil
+	}
+
+	// 가드: mongos ready.
+	if !r.isMongosReady(ctx, mdbsh) {
+		logger.Info("ShardedCollections: waiting for mongos to be ready")
+		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
+	}
+	// 가드: 모든 shard 가 cluster 에 add 됨.
+	if len(mdbsh.Status.ShardsAdded) < int(mdbsh.Spec.Shards.Count) {
+		logger.Info("ShardedCollections: waiting for all shards to be added")
+		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
+	}
+	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
+		if !mdbsh.Status.ShardsAdded[i] {
+			logger.Info("ShardedCollections: waiting for all shards to be added", "shard", i)
+			return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
+		}
+	}
+
+	adminPassword, err := r.getAdminPassword(ctx, mdbsh)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("get admin password: %w", err)
+	}
+	mongosPod, err := r.getMongosPodName(ctx, mdbsh)
+	if err != nil {
+		// running mongos pod 없음 — 비치명 requeue (가드와 별개로 race 가능).
+		logger.Info("ShardedCollections: no running mongos pod, requeueing", "err", err.Error())
+		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
+	}
+
+	shardManager := mongodb.NewShardManagerWithFactory(
+		mongodb.NewServiceConnectFactory(mdbsh.Name+"-mongos", mdbsh.Namespace, 27017, "admin", adminPassword, "admin"),
+	)
+
+	var driftMsgs []string
+	requeue := false
+	for _, sc := range mdbsh.Spec.ShardedCollections {
+		ns := sc.Database + "." + sc.Collection
+		key := buildShardKey(sc.ShardKey)
+		opts := buildShardCollectionOptions(sc)
+
+		err := shardManager.EnsureShardedCollection(ctx, mongosPod, mdbsh.Namespace,
+			"admin", adminPassword, sc.Database, sc.Collection, key, opts)
+		if err == nil {
+			continue
+		}
+		msg := err.Error()
+		switch {
+		case strings.Contains(msg, "ShardKeyDrift"):
+			// 키 불일치 — 흡수 금지, condition 으로 노출.
+			logger.Info("ShardedCollections: shard key drift detected", "namespace", ns, "err", msg)
+			driftMsgs = append(driftMsgs, fmt.Sprintf("%s: %s", ns, msg))
+		case isNamespaceNotFound(msg) || isConnectError(msg):
+			// 컬렉션 미생성 / 연결 실패 — 비치명 requeue.
+			logger.Info("ShardedCollections: non-fatal, will requeue", "namespace", ns, "err", msg)
+			requeue = true
+		default:
+			// 그 외 server 에러 — 치명. 호출자가 ReconcileError condition 으로 노출.
+			return ctrl.Result{}, fmt.Errorf("ensure sharded collection %s: %w", ns, err)
+		}
+	}
+
+	// drift condition 반영(있으면 set, 없으면 제거).
+	if len(driftMsgs) > 0 {
+		meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+			Type:               "ShardKeyDrift",
+			Status:             metav1.ConditionTrue,
+			Reason:             "ShardKeyMismatch",
+			Message:            strings.Join(driftMsgs, "; "),
+			ObservedGeneration: mdbsh.Generation,
+		})
+	} else {
+		meta.RemoveStatusCondition(&mdbsh.Status.Conditions, "ShardKeyDrift")
+	}
+
+	if requeue {
+		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
+	}
+	return ctrl.Result{}, nil
+}
+
+// observeShardedCollections 는 config.collections 실측으로 샤딩된 사용자
+// namespace 목록(정렬)을 반환한다. 연결/조회 실패 시 nil 반환 → 호출자가 기존
+// Status.ShardedCollections 를 보존(B-3). config.* / admin.* 내부 namespace 는
+// 제외한다.
+func (r *MongoDBShardedReconciler) observeShardedCollections(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) []string {
+	logger := log.FromContext(ctx)
+
+	if !r.isMongosReady(ctx, mdbsh) {
+		return nil
+	}
+	adminPassword, err := r.getAdminPassword(ctx, mdbsh)
+	if err != nil {
+		logger.Info("observeShardedCollections: get admin password failed, preserving status", "err", err.Error())
+		return nil
+	}
+	mongosPod, err := r.getMongosPodName(ctx, mdbsh)
+	if err != nil {
+		logger.Info("observeShardedCollections: no running mongos pod, preserving status", "err", err.Error())
+		return nil
+	}
+	shardManager := mongodb.NewShardManagerWithFactory(
+		mongodb.NewServiceConnectFactory(mdbsh.Name+"-mongos", mdbsh.Namespace, 27017, "admin", adminPassword, "admin"),
+	)
+	infos, err := shardManager.ListShardedNamespaces(ctx, mongosPod, mdbsh.Namespace)
+	if err != nil {
+		logger.Info("observeShardedCollections: list failed, preserving status", "err", err.Error())
+		return nil
+	}
+	// 빈 결과도 유효한 관측(샤딩 컬렉션 0개) — empty non-nil slice 반환.
+	out := make([]string, 0, len(infos))
+	for _, info := range infos {
+		if strings.HasPrefix(info.Namespace, "config.") || strings.HasPrefix(info.Namespace, "admin.") {
+			continue
+		}
+		out = append(out, info.Namespace)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// buildShardKey 는 spec 의 ordered ShardKeyField slice 를 bson.D(순서 보존)로
+// 변환한다. order "1"/"-1" 는 BSON 숫자로, "hashed" 는 문자열로 매핑한다 —
+// MongoDB shardCollection 명령의 key 도큐먼트 컨벤션.
+func buildShardKey(fields []mongodbv1alpha1.ShardKeyField) bson.D {
+	key := make(bson.D, 0, len(fields))
+	for _, f := range fields {
+		var val any
+		switch f.Order {
+		case "hashed":
+			val = "hashed"
+		case "-1":
+			val = int32(-1)
+		default: // "1"
+			val = int32(1)
+		}
+		key = append(key, bson.E{Key: f.Field, Value: val})
+	}
+	return key
+}
+
+// buildShardCollectionOptions 는 spec 의 unique/timeseries 를 mongodb 패키지 옵션
+// 으로 변환한다. timeseries 미설정 + unique=false 면 nil(기존 동작).
+func buildShardCollectionOptions(sc mongodbv1alpha1.ShardedCollectionSpec) *mongodb.ShardCollectionOptions {
+	if !sc.Unique && sc.Timeseries == nil {
+		return nil
+	}
+	opts := &mongodb.ShardCollectionOptions{Unique: sc.Unique}
+	if sc.Timeseries != nil {
+		opts.Timeseries = &mongodb.TimeseriesOptions{
+			TimeField:   sc.Timeseries.TimeField,
+			MetaField:   sc.Timeseries.MetaField,
+			Granularity: sc.Timeseries.Granularity,
+		}
+	}
+	return opts
+}
+
+// isNamespaceNotFound 는 MongoDB 의 "컬렉션/네임스페이스 미존재" 에러를 식별한다.
+// shardCollection 은 대상 컬렉션(또는 db)이 아직 만들어지지 않았을 때 발생 — 앱이
+// 첫 write 를 하기 전 reconcile 이 앞서면 정상적인 일시 상태이므로 비치명 처리.
+func isNamespaceNotFound(msg string) bool {
+	return strings.Contains(msg, "NamespaceNotFound") ||
+		strings.Contains(msg, "ns not found") ||
+		strings.Contains(msg, "does not exist")
+}
+
+// isConnectError 는 driver connect/network 일시 실패를 식별한다(비치명 requeue).
+func isConnectError(msg string) bool {
+	return strings.Contains(msg, "connect for") ||
+		strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "server selection error") ||
+		strings.Contains(msg, "context deadline exceeded") ||
+		strings.Contains(msg, "no reachable servers")
+}
+
 func (r *MongoDBShardedReconciler) getMongosPodName(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) (string, error) {
 	// List mongos pods
 	podList := &corev1.PodList{}
@@ -767,11 +975,21 @@ func (r *MongoDBShardedReconciler) updateStatus(ctx context.Context, mdbsh *mong
 		mdbsh.Status.Phase = mongodbv1alpha1.ShardedPhaseInitializing
 	}
 
+	// 샤딩 컬렉션 실측 — config.collections 에 등록된 사용자 namespace 를 관측해
+	// Status.ShardedCollections([]string)를 채운다. 실패(연결/조회) 시 log + skip
+	// 으로 기존 값 보존(B-3) — status 관측 실패가 reconcile 전체를 막지 않는다.
+	observedShardedCollections := r.observeShardedCollections(ctx, mdbsh)
+
 	// Set connection string
 	// status 계산을 클로저로 묶어 conflict refetch 후에도 재적용한다.
 	applyStatus := func() {
 		mdbsh.Status.ConnectionString = fmt.Sprintf("mongodb://%s-mongos.%s.svc.cluster.local:27017",
 			mdbsh.Name, mdbsh.Namespace)
+
+		// 관측 성공 시에만 갱신(nil = 관측 실패/skip → 기존 보존).
+		if observedShardedCollections != nil {
+			mdbsh.Status.ShardedCollections = observedShardedCollections
+		}
 
 		mdbsh.Status.ObservedGeneration = mdbsh.Generation
 		mdbsh.Status.Conditions = clearReconcileErrorCondition(mdbsh.Status.Conditions, mdbsh.Generation)

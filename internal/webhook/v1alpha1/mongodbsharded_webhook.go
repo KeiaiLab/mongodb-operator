@@ -109,6 +109,74 @@ func validateMongoDBShardedSpec(m *mongodbv1alpha1.MongoDBSharded) field.ErrorLi
 	// Shards.Arbiter 일관성 (ROADMAP 4.2-a).
 	errs = append(errs, validateShardArbiter(p.Child("shards", "arbiter"), m.Spec.Shards.Arbiter, m.Spec.Shards.MembersPerShard)...)
 
+	// ShardedCollections 형식 검증 (Track B). timeseries 적합성은 런타임.
+	errs = append(errs, validateShardedCollections(p.Child("shardedCollections"), m.Spec.ShardedCollections)...)
+
+	return errs
+}
+
+// validateShardedCollections — 선언적 샤딩 컬렉션 형식 검증.
+//
+// CRD marker(MinLength/Enum/MinItems)가 일부 강제하지만, *조합 모순* 은 webhook
+// 에서만 검증 가능:
+//   - db/coll non-empty(MinLength=1 중복이지만 명시 가드).
+//   - shard key 필드 non-empty + order ∈ {1,-1,hashed}(Enum 중복 가드).
+//   - 동일 namespace(db.coll) 중복 선언 금지 — 마지막 선언이 silent 우선되는
+//     혼란 차단.
+//   - timeseries: unique 와 동시 설정 금지(MongoDB 8.x 제약), timeField non-empty.
+//
+// timeseries shard key 적합성(metaField/그 하위 또는 timeField 만 허용)은 컬렉션
+// 생성 옵션을 알아야 하므로 런타임(reconcile)에서 server 가 거부 → ShardKeyDrift
+// 가 아닌 일반 에러로 surface.
+func validateShardedCollections(path *field.Path, scs []mongodbv1alpha1.ShardedCollectionSpec) field.ErrorList {
+	var errs field.ErrorList
+	seen := make(map[string]struct{}, len(scs))
+	for i, sc := range scs {
+		ip := path.Index(i)
+		if sc.Database == "" {
+			errs = append(errs, field.Invalid(ip.Child("database"), sc.Database, "database must not be empty"))
+		}
+		if sc.Collection == "" {
+			errs = append(errs, field.Invalid(ip.Child("collection"), sc.Collection, "collection must not be empty"))
+		}
+		ns := sc.Database + "." + sc.Collection
+		if _, dup := seen[ns]; dup {
+			errs = append(errs, field.Duplicate(ip, ns))
+		}
+		seen[ns] = struct{}{}
+
+		if len(sc.ShardKey) == 0 {
+			errs = append(errs, field.Invalid(ip.Child("shardKey"), sc.ShardKey, "shardKey must have at least 1 field"))
+		}
+		for j, f := range sc.ShardKey {
+			kp := ip.Child("shardKey").Index(j)
+			if f.Field == "" {
+				errs = append(errs, field.Invalid(kp.Child("field"), f.Field, "shard key field must not be empty"))
+			}
+			if f.Order != "1" && f.Order != "-1" && f.Order != "hashed" {
+				errs = append(errs, field.NotSupported(kp.Child("order"), f.Order, []string{"1", "-1", "hashed"}))
+			}
+		}
+
+		if sc.Timeseries != nil {
+			tp := ip.Child("timeseries")
+			if sc.Unique {
+				errs = append(errs, field.Invalid(ip.Child("unique"), sc.Unique,
+					"unique constraint is not supported for timeseries collections (MongoDB 8.x)"))
+			}
+			if sc.Timeseries.TimeField == "" {
+				errs = append(errs, field.Invalid(tp.Child("timeField"), sc.Timeseries.TimeField,
+					"timeField must not be empty for timeseries collections"))
+			}
+			// timeField 를 hashed shard key 로 쓰는 것은 MongoDB 가 금지 — 조기 차단.
+			for j, f := range sc.ShardKey {
+				if f.Field == sc.Timeseries.TimeField && f.Order == "hashed" {
+					errs = append(errs, field.Invalid(ip.Child("shardKey").Index(j).Child("order"), f.Order,
+						"timeField cannot be a hashed shard key for timeseries collections"))
+				}
+			}
+		}
+	}
 	return errs
 }
 
