@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for MongoDB — ReplicaSets, Sharded Clusters with auto scale-out, S3/PVC Backup, TLS, and LDAP. MIT licensed.
 type: application
-version: 1.16.3
-appVersion: "1.16.3"
+version: 1.16.4
+appVersion: "1.16.4"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -148,18 +148,18 @@ annotations:
             endpoint: https://s3.amazonaws.com
             credentialsRef:
               name: s3-credentials
-  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:v1.16.3
+      image: ghcr.io/keiailab/mongodb-operator:v1.16.4
     - name: mongodb
       image: mongo:8.3.1
     - name: mongodb-exporter
       image: percona/mongodb_exporter:0.51.0
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
-    - kind: fixed
-      description: "Sharded MongoDB Search: the config-server search-sync user password is now reconciled on every loop. The previous precheck only verified SCRAM mechanisms and role, so a drifted config-server password was skipped and the mongot router authentication to the index catalog failed (shard-local password matched, so replicaSet data sync still worked). Note: multi-shard $search/$vectorSearch fan-out is a Community mongot 0.69.1 upstream limitation (mongos routes to a single endpoint, not per-shard) — see ADR-0039."
+    - kind: security
+      description: "MongoDBSearch now drops the auto-created searchCoordinator (search-sync) user from the source on CR deletion via a finalizer. Previously the privileged user was never garbage-collected (no finalizer/dropUser), so deleting a MongoDBSearch left an orphaned searchCoordinator account on the source — a privilege-leak (on sharded clusters it lingered on the config server and every shard). The cleanup drops the user on RS (pod-0) and Sharded (mongos + each shard); it is leak-free (only a deleted source is best-effort skipped — a transient-unavailable source retries) and targets only operator-managed users (identified by the managed-by sync secret, not the current spec value)."
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager

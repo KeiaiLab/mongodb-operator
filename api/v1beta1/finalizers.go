@@ -31,4 +31,10 @@ const (
 	// FinalizerMongoDBSearchIndex — MongoDBSearchIndex CR 삭제 시 cleanup.
 	// source mongod 에서 dropSearchIndex 로 mongot 인덱스 제거 의무.
 	FinalizerMongoDBSearchIndex = "mongodbsearchindex.keiailab.com/finalizer"
+
+	// FinalizerMongoDBSearch — MongoDBSearch CR 삭제 시 cleanup.
+	// source mongod(RS pod-0 / Sharded mongos + 각 shard)에서 dropUser 로 auto-create 한
+	// searchCoordinator(search-sync) user 를 제거 의무 — 미제거 시 특권 user 가 source 에
+	// 영구 orphan(privilege-leak). 사용자 제공 user(spec.syncUserSecretRef)는 operator 미관리라 제외.
+	FinalizerMongoDBSearch = "mongodbsearch.keiailab.com/finalizer"
 )
