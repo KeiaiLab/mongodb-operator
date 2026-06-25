@@ -35,6 +35,7 @@ const (
 
 	backupPhaseCompleted = "Completed"
 	backupPhaseFailed    = "Failed"
+	backupPhasePassed    = "Passed"
 	backupPhasePending   = "Pending"
 	backupPhaseRunning   = "Running"
 	backupPhaseRestoring = "Restoring"

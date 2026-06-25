@@ -82,6 +82,7 @@ func ensureShardedUpgradeStartTime(mdbsh *mongodbv1alpha1.MongoDBSharded) {
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cert-manager.io,resources=certificates,verbs=get;list;watch;create;update;patch;delete
 
+//nolint:gocyclo // 12-step reconcile orchestrator — 본질적 복잡도(step 추출 시 가독성 저하, reconcileShardedCollections 분리 완료)
 func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("Reconciling MongoDBSharded", "namespace", req.Namespace, "name", req.Name)
@@ -838,12 +839,13 @@ func (r *MongoDBShardedReconciler) observeShardedCollections(ctx context.Context
 // 변환한다. order "1"/"-1" 는 BSON 숫자로, "hashed" 는 문자열로 매핑한다 —
 // MongoDB shardCollection 명령의 key 도큐먼트 컨벤션.
 func buildShardKey(fields []mongodbv1alpha1.ShardKeyField) bson.D {
+	const orderHashed = "hashed"
 	key := make(bson.D, 0, len(fields))
 	for _, f := range fields {
 		var val any
 		switch f.Order {
-		case "hashed":
-			val = "hashed"
+		case orderHashed:
+			val = orderHashed
 		case "-1":
 			val = int32(-1)
 		default: // "1"
