@@ -7321,6 +7321,57 @@ spec:
                 required:
                 - enabled
                 type: object
+              shardedCollections:
+                items:
+                  properties:
+                    collection:
+                      minLength: 1
+                      type: string
+                    database:
+                      minLength: 1
+                      type: string
+                    shardKey:
+                      items:
+                        properties:
+                          field:
+                            minLength: 1
+                            type: string
+                          order:
+                            enum:
+                            - 1
+                            - -1
+                            - hashed
+                            type: string
+                        required:
+                        - field
+                        - order
+                        type: object
+                      minItems: 1
+                      type: array
+                    timeseries:
+                      properties:
+                        granularity:
+                          enum:
+                          - seconds
+                          - minutes
+                          - hours
+                          type: string
+                        metaField:
+                          type: string
+                        timeField:
+                          minLength: 1
+                          type: string
+                      required:
+                      - timeField
+                      type: object
+                    unique:
+                      type: boolean
+                  required:
+                  - collection
+                  - database
+                  - shardKey
+                  type: object
+                type: array
               shards:
                 properties:
                   arbiter:
@@ -18547,6 +18598,57 @@ spec:
                 required:
                 - enabled
                 type: object
+              shardedCollections:
+                items:
+                  properties:
+                    collection:
+                      minLength: 1
+                      type: string
+                    database:
+                      minLength: 1
+                      type: string
+                    shardKey:
+                      items:
+                        properties:
+                          field:
+                            minLength: 1
+                            type: string
+                          order:
+                            enum:
+                            - 1
+                            - -1
+                            - hashed
+                            type: string
+                        required:
+                        - field
+                        - order
+                        type: object
+                      minItems: 1
+                      type: array
+                    timeseries:
+                      properties:
+                        granularity:
+                          enum:
+                          - seconds
+                          - minutes
+                          - hours
+                          type: string
+                        metaField:
+                          type: string
+                        timeField:
+                          minLength: 1
+                          type: string
+                      required:
+                      - timeField
+                      type: object
+                    unique:
+                      type: boolean
+                  required:
+                  - collection
+                  - database
+                  - shardKey
+                  type: object
+                type: array
               shards:
                 properties:
                   arbiter:
