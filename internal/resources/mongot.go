@@ -95,6 +95,7 @@ func MongotImage(v mongodbv1beta1.MongotVersion) string {
 // 필요(sidecar 는 source annotation 기반 빌드). GA flip(PR6) 전 처리 대상 — 발견사항.
 //
 //nolint:unused // spec.resources mongot 적용은 annotation 전달 메커니즘 후속(GA flip 전 처리).
+//lint:ignore U1000 spec.resources mongot 적용은 annotation 전달 메커니즘 후속(GA flip 전 처리, staticcheck 억제).
 func mongotResources(spec mongodbv1beta1.ResourcesSpec) corev1.ResourceRequirements {
 	return corev1.ResourceRequirements{Requests: spec.Requests, Limits: spec.Limits}
 }
