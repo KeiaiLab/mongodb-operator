@@ -8,9 +8,30 @@ package mongodb
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
+
+// TestIsUserNotFoundErr — dropUser 멱등 판정(UserNotFound=11) 결정론 검증. message fallback 제거로
+// untyped 'not found'(database/host 등)는 false 여야 한다(실제 drop 실패를 멱등 성공으로 오인 → user
+// leak 방지, adversarial review #2). DropSearchCoordinatorUser 의 멱등 경계.
+func TestIsUserNotFoundErr(t *testing.T) {
+	if isUserNotFoundErr(nil) {
+		t.Error("nil → false 기대")
+	}
+	if !isUserNotFoundErr(mongo.CommandError{Code: mongoErrUserNotFound, Message: "User 'search-sync@admin' not found"}) {
+		t.Error("typed code 11(UserNotFound) → true 기대(멱등 drop)")
+	}
+	if isUserNotFoundErr(mongo.CommandError{Code: mongoErrUnauthorized, Message: "unauthorized"}) {
+		t.Error("typed code 13(Unauthorized) → false 기대")
+	}
+	if isUserNotFoundErr(errors.New("database not found")) {
+		t.Error("untyped 'not found' → false 기대(message fallback 제거 — 무관 에러 오인 방지)")
+	}
+}
 
 // TestDefaultAdminUser는 기본 admin user가 root 권한을 가진 admin DB 사용자로
 // 구성되어야 함을 보장한다. 이 사양이 깨지면 클러스터 부트스트랩이 실패한다.

@@ -37,6 +37,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	commonsapply "github.com/keiailab/keiailab-commons/pkg/apply"
+	commonsfinalizer "github.com/keiailab/keiailab-commons/pkg/finalizer"
+	commonsreconcile "github.com/keiailab/keiailab-commons/pkg/reconcile"
 	commonsstatus "github.com/keiailab/keiailab-commons/pkg/status"
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	mongodbv1beta1 "github.com/keiailab/mongodb-operator/api/v1beta1"
@@ -46,6 +48,7 @@ import (
 
 const (
 	defaultSyncUser         = "search-sync"
+	searchFinalizer         = mongodbv1beta1.FinalizerMongoDBSearch
 	kindMongoDBSharded      = "MongoDBSharded"
 	searchPhasePending      = "Pending"
 	searchPhaseProvisioning = "Provisioning"
@@ -74,6 +77,7 @@ type MongoDBSearchReconciler struct {
 
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbsearches,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbsearches/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbsearches/finalizers,verbs=update
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbshardeds,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -89,8 +93,22 @@ func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// 삭제 처리(finalizer): auto-create searchCoordinator user 를 source 에서 dropUser(privilege-leak
+	// 방지). RS/Sharded 분기 + source 부재/연결 불가는 best-effort(finalizer 해제로 CR wedge 방지).
+	if !search.DeletionTimestamp.IsZero() {
+		return r.handleDeletion(ctx, search)
+	}
+
 	if search.Spec.Source.MongoDBResourceRef == nil {
 		return r.fail(ctx, search, "source.mongodbResourceRef required")
+	}
+	// finalizer 부착(auto-create 경로만 — 사용자 제공 user(syncUserSecretRef)는 operator 미관리라 drop 제외).
+	if search.Spec.SyncUserSecretRef == nil && !commonsfinalizer.Has(search, searchFinalizer) {
+		commonsfinalizer.Add(search, searchFinalizer)
+		if err := r.Update(ctx, search); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
 	}
 	// Sharded source — shard 별 mongot sidecar(별도 경로). RS 는 이하 진행.
 	if search.Spec.Source.Kind == kindMongoDBSharded {
@@ -367,6 +385,110 @@ func (r *MongoDBSearchReconciler) ensureSyncMongoUser(ctx context.Context, searc
 	}
 	defer func() { _ = conn.Disconnect(ctx) }()
 	return mongodb.EnsureSearchCoordinatorUser(ctx, conn, defaultSyncUser, pw)
+}
+
+// handleDeletion — finalizer cleanup: operator auto-create searchCoordinator user 를 source 에서
+// dropUser(멱등). drop 대상 판정 = <name>-search-sync managed-by secret(auto-create 흔적) 존재 여부 —
+// spec.SyncUserSecretRef *현재값* 으로 판정하면 nil→set 변경 시 과거 auto-create user 가 drop 누락
+// → leak(review #3). 사용자 제공 user(foreign secret, managed-by 부재)는 제외. drop 함수는 source
+// 소멸만 best-effort nil, transient/연결 불가/drop 실패는 재시도(leak-free, review #1).
+func (r *MongoDBSearchReconciler) handleDeletion(ctx context.Context, search *mongodbv1beta1.MongoDBSearch) (ctrl.Result, error) {
+	cleanup := func(ctx context.Context) error {
+		if search.Spec.Source.MongoDBResourceRef == nil {
+			return nil // source ref 부재 — drop 불가(best-effort)
+		}
+		// operator-managed user 존재 여부 = auto-create 흔적 secret(managed-by 라벨)로 판정.
+		managed := &corev1.Secret{}
+		if err := r.Get(ctx, types.NamespacedName{Name: search.Name + "-search-sync", Namespace: search.Namespace}, managed); err != nil {
+			return client.IgnoreNotFound(err) // 흔적 secret 부재(NotFound)→사용자 제공/미생성, drop 대상 아님; 그 외 API err→재시도
+		}
+		if managed.Labels[labelManagedBy] != managedByValue {
+			return nil // foreign secret — operator 미관리(privilege escalation 방지 정합)
+		}
+		if search.Spec.Source.Kind == kindMongoDBSharded {
+			return r.dropSyncMongoUserSharded(ctx, search)
+		}
+		return r.dropSyncMongoUser(ctx, search)
+	}
+	return commonsreconcile.HandleFinalizerCleanup(ctx, r.Client, search, searchFinalizer, cleanup)
+}
+
+// dropSyncMongoUser — RS source pod-0 에서 searchCoordinator user drop(ensureSyncMongoUser 거울).
+// leak-free 정책(adversarial review #1): source 소멸(Get NotFound)만 best-effort nil(user 도 함께 소멸).
+// transient non-Running(rolling/failover)/연결 불가/drop 실패는 *error 반환* → HandleFinalizerCleanup 가
+// finalizer 유지 + 재시도 → 살아있는 source 의 searchCoordinator 특권 user orphan(privilege-leak) 방지.
+func (r *MongoDBSearchReconciler) dropSyncMongoUser(ctx context.Context, search *mongodbv1beta1.MongoDBSearch) error {
+	source := &mongodbv1alpha1.MongoDB{}
+	if err := r.Get(ctx, types.NamespacedName{Name: search.Spec.Source.MongoDBResourceRef.Name, Namespace: search.Namespace}, source); err != nil {
+		return client.IgnoreNotFound(err) // source 소멸(NotFound)만 best-effort nil; 그 외 API err → 재시도
+	}
+	if source.Status.Phase != mongodbPhaseRunning {
+		return fmt.Errorf("source MongoDB %q not Running(phase=%q) — searchCoordinator drop 재시도 대기", source.Name, source.Status.Phase)
+	}
+	adminPw, err := r.sourceAdminPassword(ctx, source)
+	if err != nil {
+		return fmt.Errorf("source admin password(drop): %w", err)
+	}
+	factory := mongodb.NewPodConnectFactory(source.Name+"-headless", 27017, "admin", adminPw, "admin")
+	conn, err := factory(ctx, source.Name+"-0", source.Namespace, false)
+	if err != nil {
+		return fmt.Errorf("connect source mongod(drop): %w", err)
+	}
+	defer func() { _ = conn.Disconnect(ctx) }()
+	return mongodb.DropSearchCoordinatorUser(ctx, conn, defaultSyncUser)
+}
+
+// dropSyncMongoUserSharded — Sharded source 의 mongos(config server)+각 shard 에서 searchCoordinator
+// user drop(ensureSyncMongoUserSharded ①+② 거울). leak-free 정책(#1): source 소멸(NotFound)만 best-effort,
+// transient non-Running/연결 불가/drop 실패는 첫 error 반환 → finalizer 유지 + 재시도(orphan 제거 보장).
+// drop 은 멱등(UserNotFound→nil)이라 재시도 안전.
+func (r *MongoDBSearchReconciler) dropSyncMongoUserSharded(ctx context.Context, search *mongodbv1beta1.MongoDBSearch) error {
+	mdbsh := &mongodbv1alpha1.MongoDBSharded{}
+	if err := r.Get(ctx, types.NamespacedName{Name: search.Spec.Source.MongoDBResourceRef.Name, Namespace: search.Namespace}, mdbsh); err != nil {
+		return client.IgnoreNotFound(err) // source 소멸(NotFound)만 best-effort nil
+	}
+	if mdbsh.Status.Phase != mongodbv1alpha1.ShardedPhaseRunning {
+		return fmt.Errorf("source MongoDBSharded %q not Running(phase=%q) — drop 재시도 대기", mdbsh.Name, mdbsh.Status.Phase)
+	}
+	adminSecretName := mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name
+	if adminSecretName == "" {
+		return fmt.Errorf("source MongoDBSharded %q admin credentials secret 미설정 — drop 불가", mdbsh.Name)
+	}
+	adminS := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: adminSecretName, Namespace: mdbsh.Namespace}, adminS); err != nil {
+		return fmt.Errorf("get admin secret(drop): %w", err)
+	}
+	adminPw := string(adminS.Data["password"])
+	if adminPw == "" {
+		return fmt.Errorf("admin secret %q password 키 없음(drop)", adminSecretName)
+	}
+	var dropErr error
+	setErr := func(e error) {
+		if e != nil && dropErr == nil {
+			dropErr = e
+		}
+	}
+	// ① mongos(config server) — syncSource.router 인증용 user drop.
+	factory := mongodb.NewServiceConnectFactory(mdbsh.Name+"-mongos", mdbsh.Namespace, resources.MongosPort, "admin", adminPw, "admin")
+	if conn, err := factory(ctx, "", mdbsh.Namespace, false); err != nil {
+		setErr(fmt.Errorf("connect mongos(drop): %w", err))
+	} else {
+		setErr(mongodb.DropSearchCoordinatorUser(ctx, conn, defaultSyncUser))
+		_ = conn.Disconnect(ctx)
+	}
+	// ② 각 shard RS mongod 직접(:27018) — syncSource.replicaSet 인증용 user drop.
+	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
+		shardSvc := fmt.Sprintf("%s-shard-%d-headless", mdbsh.Name, i)
+		shardSeed := fmt.Sprintf("%s-shard-%d-0", mdbsh.Name, i)
+		sf := mongodb.NewPodConnectFactory(shardSvc, resources.MongodShardPort, "admin", adminPw, "admin")
+		if sconn, serr := sf(ctx, shardSeed, mdbsh.Namespace, false); serr != nil {
+			setErr(fmt.Errorf("connect shard %d(drop): %w", i, serr))
+		} else {
+			setErr(mongodb.DropSearchCoordinatorUser(ctx, sconn, defaultSyncUser))
+			_ = sconn.Disconnect(ctx)
+		}
+	}
+	return dropErr // 연결/drop 실패 → 재시도(orphan 제거 보장). source 소멸만 위에서 nil.
 }
 
 // sourceAdminPassword — source MongoDB 의 admin credential secret 에서 password 를 읽는다

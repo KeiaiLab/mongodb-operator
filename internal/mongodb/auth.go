@@ -83,6 +83,7 @@ const (
 const (
 	mongoErrUnauthorized         = 13
 	mongoErrAuthenticationFailed = 18
+	mongoErrUserNotFound         = 11
 	mongoErrDuplicateKey         = 11000
 	mongoErrUserAlreadyExists    = 51003
 )
@@ -173,6 +174,36 @@ func EnsureSearchCoordinatorUser(ctx context.Context, c *mongo.Client, username,
 		return fmt.Errorf("updateUser %q (searchCoordinator 보정): %w", username, err)
 	}
 	return nil
+}
+
+// DropSearchCoordinatorUser — searchCoordinator(search-sync) user 를 admin 인증된 client 로 삭제한다
+// (MongoDBSearch CR 삭제 finalizer cleanup, EnsureSearchCoordinatorUser sister). 멱등: user 부재
+// (UserNotFound)면 성공 처리. source 가 sharded 면 호출자가 mongos(config server)+각 shard 에 대칭
+// 호출(생성 경로 ①+② 거울) — 미삭제 시 searchCoordinator 특권 user 가 source 에 영구 orphan.
+func DropSearchCoordinatorUser(ctx context.Context, c *mongo.Client, username string) error {
+	var res bson.M
+	if err := c.Database(adminUserDB).RunCommand(ctx, bson.D{{Key: "dropUser", Value: username}}).Decode(&res); err != nil {
+		if isUserNotFoundErr(err) {
+			return nil // 멱등 — 이미 없음
+		}
+		return fmt.Errorf("dropUser %q (searchCoordinator): %w", username, err)
+	}
+	return nil
+}
+
+// isUserNotFoundErr는 dropUser 가 미존재 user 로 거부됐는지 검사한다(UserNotFound=11). typed code 만
+// 신뢰한다 — message substring fallback("not found")은 'database not found'/DNS 'host not found' 등
+// dropUser 무관 실패까지 멱등 성공으로 오인해 *실제 drop 실패를 삼키고 finalizer 를 해제 → user leak*
+// 위험이 있어 제거(adversarial review). 현대 MongoDB dropUser 는 미존재 user 에 안정적으로 code 11 반환.
+func isUserNotFoundErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	var srvErr mongo.ServerError
+	if errors.As(err, &srvErr) {
+		return srvErr.HasErrorCode(mongoErrUserNotFound)
+	}
+	return false
 }
 
 // UserRole represents a MongoDB role assignment

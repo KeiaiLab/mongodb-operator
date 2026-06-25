@@ -151,6 +151,7 @@ rules:
   - mongodbbackups/finalizers
   - mongodbfederations/finalizers
   - mongodbs/finalizers
+  - mongodbsearches/finalizers
   - mongodbsearchindices/finalizers
   - mongodbshardeds/finalizers
   verbs:
