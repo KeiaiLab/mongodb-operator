@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -230,6 +231,33 @@ type configCollectionDoc struct {
 	Dropped bool   `bson:"dropped"`
 }
 
+// bucketsNamespace 는 timeseries 컬렉션이 config.collections 에 등록되는 내부
+// buckets namespace 를 만든다 — MongoDB 는 샤딩된 timeseries 를 사용자 ns
+// "<db>.<coll>" 이 아니라 "<db>.system.buckets.<coll>" 로 등록한다(라이브 실측,
+// crypto.system.buckets.binance_spot_usdt_klines_1m). 이미 buckets prefix 가
+// 붙은 ns 는 그대로 둔다(idempotent).
+func bucketsNamespace(database, collection string) string {
+	if strings.HasPrefix(collection, "system.buckets.") {
+		return database + "." + collection
+	}
+	return database + ".system.buckets." + collection
+}
+
+// userNamespaceFromBuckets 는 buckets namespace 를 사용자 ns 로 역변환한다.
+// "<db>.system.buckets.<coll>" → "<db>.<coll>". buckets ns 가 아니면 그대로 반환.
+// Status 정규화(buckets ns 를 사용자 ns 로 기록)에 사용.
+func userNamespaceFromBuckets(namespace string) string {
+	dot := strings.IndexByte(namespace, '.')
+	if dot < 0 {
+		return namespace
+	}
+	db, rest := namespace[:dot], namespace[dot+1:]
+	if !strings.HasPrefix(rest, "system.buckets.") {
+		return namespace
+	}
+	return db + "." + strings.TrimPrefix(rest, "system.buckets.")
+}
+
 // lookupShardedCollection 은 config.collections 에서 namespace 의 현재 shard key
 // 를 조회한다. 미등록(미샤딩)이면 (nil, nil). dropped=true 는 미샤딩으로 취급.
 func (s *ShardManager) lookupShardedCollection(ctx context.Context, c *mongo.Client, namespace string) (*configCollectionDoc, error) {
@@ -246,6 +274,31 @@ func (s *ShardManager) lookupShardedCollection(ctx context.Context, c *mongo.Cli
 		return nil, nil
 	}
 	return &doc, nil
+}
+
+// lookupShardedCollectionAny 는 사용자 ns 와 timeseries buckets ns 를 모두 조회해
+// 둘 중 *하나라도* 등록돼 있으면 그 도큐먼트를 반환한다(B-HIGH timeseries
+// idempotency). MongoDB 는 샤딩된 timeseries 를 buckets ns 로 등록하므로 사용자
+// ns 만 조회하면 매 reconcile 마다 미샤딩으로 오판 → 재샤딩 무한 루프가 발생한다.
+//
+// 반환: (doc, isBuckets, err). doc==nil 이면 둘 다 미등록(미샤딩). isBuckets 는
+// buckets ns 에서 매칭됐는지(timeseries) 여부 — 호출자가 키 비교/Status 정규화
+// 분기에 사용.
+func (s *ShardManager) lookupShardedCollectionAny(ctx context.Context, c *mongo.Client, database, collection string) (*configCollectionDoc, bool, error) {
+	userNS := database + "." + collection
+	if doc, err := s.lookupShardedCollection(ctx, c, userNS); err != nil {
+		return nil, false, err
+	} else if doc != nil {
+		return doc, false, nil
+	}
+
+	bucketsNS := bucketsNamespace(database, collection)
+	if doc, err := s.lookupShardedCollection(ctx, c, bucketsNS); err != nil {
+		return nil, false, err
+	} else if doc != nil {
+		return doc, true, nil
+	}
+	return nil, false, nil
 }
 
 // shardKeyEqual 은 두 shard key(bson.D)가 *순서까지* 동일한지 비교한다.
@@ -271,6 +324,12 @@ func shardKeyEqual(a, b bson.D) bool {
 // 정규 문자열로 변환한다. config.collections 의 key 값은 BSON 숫자(int32/int64/
 // float64)로 디코드되고, spec 에서 빌드한 키는 같은 숫자 타입이지만 driver 디코드
 // 경로가 달라 직접 == 비교가 깨질 수 있어 정규화한다.
+//
+// float64 는 *정수값일 때만* 정수 문자열로 정규화한다(예: 1.0 → "1", int32(1)
+// 과 동등). 비정수 float(예: 2.9)을 int64(t) 로 truncate 하면 2.9 와 2 가 같은
+// "2" 로 정규화돼 false-positive equality → 실제 drift 흡수(B-MEDIUM, 이 PR 이
+// 막으려는 실패 모드). 비정수 float 은 truncate 하지 않고 %v fallback 으로 고유
+// 표현("2.9")을 남겨 정수값과 구분한다.
 func normalizeShardKeyValue(v any) string {
 	switch t := v.(type) {
 	case string:
@@ -282,7 +341,10 @@ func normalizeShardKeyValue(v any) string {
 	case int:
 		return fmt.Sprintf("%d", t)
 	case float64:
-		return fmt.Sprintf("%d", int64(t))
+		if t == math.Trunc(t) && !math.IsInf(t, 0) {
+			return fmt.Sprintf("%d", int64(t))
+		}
+		return fmt.Sprintf("%v", t)
 	default:
 		return fmt.Sprintf("%v", t)
 	}
@@ -291,11 +353,21 @@ func normalizeShardKeyValue(v any) string {
 // EnsureShardedCollection 은 선언적 컬렉션 샤딩을 idempotent 하게 적용한다.
 //
 // 흐름:
-//  1. config.collections 사전 조회로 namespace 의 현재 shard key 확인.
+//  1. config.collections 사전 조회로 namespace 의 현재 shard key 확인 — 사용자
+//     ns "<db>.<coll>" 와 timeseries buckets ns "<db>.system.buckets.<coll>" 를
+//     *모두* 조회한다(B-HIGH). MongoDB 는 샤딩된 timeseries 를 buckets ns 로만
+//     등록하므로 사용자 ns 만 조회하면 매 reconcile 마다 미샤딩 오판 → 재샤딩
+//     무한 루프(라이브 실측: crypto.system.buckets.binance_spot_usdt_klines_1m).
 //  2. 미등록 → EnableSharding(db)[idempotent] 선행 후 ShardCollection 실행.
 //  3. 이미 동일 키로 샤딩됨 → skip(no-op).
 //  4. 이미 *다른 키*로 샤딩됨 → 에러 반환(흡수 금지, B-0 high). 호출자가
 //     ShardKeyDrift condition 으로 노출한다.
+//
+// timeseries 특수성: buckets ns 에 등록된 키는 MongoDB 내부 표현이라(라이브 실측:
+// spec meta.symbol:hashed → buckets 등록 key {meta.symbol:1}) spec 키와 직접
+// 비교하면 영원히 drift 로 오판한다. 따라서 buckets ns 매칭은 *샤딩됨으로 판정해
+// idempotent skip* 하고 키 drift 비교를 적용하지 않는다(재샤딩/재해석 불가능한
+// 내부 키이므로). 사용자 ns 매칭(비-timeseries)만 엄격 키 비교를 유지한다.
 //
 // database/collection 은 호출자가 분리해 전달한다(namespace = db.coll).
 // key 는 순서 보존 bson.D, opts 는 unique/timeseries.
@@ -306,18 +378,18 @@ func (s *ShardManager) EnsureShardedCollection(ctx context.Context, mongosPod, n
 	if err != nil {
 		return fmt.Errorf("connect for EnsureShardedCollection: %w", err)
 	}
-	cur, lookupErr := s.lookupShardedCollection(ctx, c, ns)
+	cur, isBuckets, lookupErr := s.lookupShardedCollectionAny(ctx, c, database, collection)
 	disconnectQuiet(c)
 	if lookupErr != nil {
 		return lookupErr
 	}
 
-	if cur != nil {
-		// 이미 샤딩됨 — 키 비교(흡수 아님).
-		if shardKeyEqual(cur.Key, key) {
-			return nil // 동일 키 — idempotent skip
-		}
-		return fmt.Errorf("collection %s already sharded with different key %v (desired %v) — ShardKeyDrift", ns, cur.Key, key)
+	doShard, err := decideEnsureAction(cur, isBuckets, ns, key)
+	if err != nil {
+		return err
+	}
+	if !doShard {
+		return nil // 이미 샤딩됨(동일 키 또는 timeseries buckets ns) — idempotent skip
 	}
 
 	// 미샤딩 — EnableSharding(idempotent) 선행 후 ShardCollection.
@@ -328,6 +400,30 @@ func (s *ShardManager) EnsureShardedCollection(ctx context.Context, mongosPod, n
 		return err
 	}
 	return nil
+}
+
+// decideEnsureAction 은 config.collections 조회 결과로부터 샤딩 액션을 결정하는
+// pure 함수다(side effect 0 — 단위 테스트 가능, B-HIGH idempotency 의 핵심 결정
+// 로직). 반환: (doShard, err).
+//
+//   - cur==nil(미등록) → (true, nil): ShardCollection 수행.
+//   - cur!=nil & isBuckets(timeseries buckets ns 등록) → (false, nil): idempotent
+//     skip. buckets ns 의 등록 키는 MongoDB 내부 표현이라 spec 키와 직접 비교하면
+//     영원히 drift 로 오판하므로 키 비교 없이 샤딩됨으로 판정한다. 이것이 매
+//     reconcile 재샤딩 → fatal 무한 루프(B-HIGH) 차단 핵심.
+//   - cur!=nil & !isBuckets(사용자 ns 등록, 비-timeseries) → 엄격 키 비교:
+//     동일 키면 (false,nil) skip, 다른 키면 (false, ShardKeyDrift err).
+func decideEnsureAction(cur *configCollectionDoc, isBuckets bool, ns string, key bson.D) (bool, error) {
+	if cur == nil {
+		return true, nil
+	}
+	if isBuckets {
+		return false, nil
+	}
+	if shardKeyEqual(cur.Key, key) {
+		return false, nil
+	}
+	return false, fmt.Errorf("collection %s already sharded with different key %v (desired %v) — ShardKeyDrift", ns, cur.Key, key)
 }
 
 // ListShardedNamespaces 는 config.collections 에 등록된(미-dropped) 샤딩 컬렉션의
@@ -356,7 +452,12 @@ func (s *ShardManager) ListShardedNamespaces(ctx context.Context, mongosPod, nam
 		// config DB 내부 컬렉션(config.system.sessions 등)은 namespace prefix
 		// "config." 로 시작 — 사용자 컬렉션만 노출하지 않고 그대로 반환하되,
 		// 호출자가 필요 시 필터. 여기서는 등록된 모든 샤딩 ns 를 보고한다.
-		infos = append(infos, ShardedCollectionInfo{Namespace: doc.ID, Key: doc.Key})
+		//
+		// timeseries 정규화(B-HIGH): MongoDB 는 샤딩된 timeseries 를 buckets ns
+		// "<db>.system.buckets.<coll>" 로 등록한다 — Status.ShardedCollections 가
+		// spec ns 와 영원히 불일치하지 않도록 사용자 ns "<db>.<coll>" 로 역변환해
+		// 보고한다.
+		infos = append(infos, ShardedCollectionInfo{Namespace: userNamespaceFromBuckets(doc.ID), Key: doc.Key})
 	}
 	if err := cursor.Err(); err != nil {
 		return nil, fmt.Errorf("iterate config.collections: %w", err)

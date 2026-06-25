@@ -761,20 +761,34 @@ func (r *MongoDBShardedReconciler) reconcileShardedCollections(ctx context.Conte
 		}
 	}
 
-	// drift condition 반영(있으면 set, 없으면 제거).
-	if len(driftMsgs) > 0 {
-		meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
-			Type:               "ShardKeyDrift",
-			Status:             metav1.ConditionTrue,
-			Reason:             "ShardKeyMismatch",
-			Message:            strings.Join(driftMsgs, "; "),
-			ObservedGeneration: mdbsh.Generation,
-		})
-	} else {
-		meta.RemoveStatusCondition(&mdbsh.Status.Conditions, "ShardKeyDrift")
+	// drift condition 반영(있으면 set, 없으면 제거)을 클로저로 묶는다 — requeue
+	// 경로에서 직접 status persist 시 conflict refetch 후 재적용 가능해야 한다.
+	applyDrift := func() {
+		if len(driftMsgs) > 0 {
+			meta.SetStatusCondition(&mdbsh.Status.Conditions, metav1.Condition{
+				Type:               "ShardKeyDrift",
+				Status:             metav1.ConditionTrue,
+				Reason:             "ShardKeyMismatch",
+				Message:            strings.Join(driftMsgs, "; "),
+				ObservedGeneration: mdbsh.Generation,
+			})
+		} else {
+			meta.RemoveStatusCondition(&mdbsh.Status.Conditions, "ShardKeyDrift")
+		}
 	}
+	applyDrift()
 
 	if requeue {
+		// B-MEDIUM: requeue 경로에서는 caller(Reconcile)가 updateStatus 를 호출하지
+		// 않고 res,nil 로 조기 반환한다 — drift condition 이 in-memory 에만 남아
+		// API server 에 안 써져 가시성이 비결정적으로 지연된다. drift 가 있으면
+		// 여기서 직접 status 를 persist 한 후 requeue 한다(다른 item 의 비치명
+		// 실패와 무관하게 drift 를 즉시 노출).
+		if len(driftMsgs) > 0 {
+			if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyDrift); err != nil {
+				return ctrl.Result{}, fmt.Errorf("persist ShardKeyDrift condition before requeue: %w", err)
+			}
+		}
 		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
 	}
 	return ctrl.Result{}, nil
