@@ -103,12 +103,14 @@ func (r *MongoDBSearchReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return r.fail(ctx, search, "source.mongodbResourceRef required")
 	}
 	// finalizer 부착(auto-create 경로만 — 사용자 제공 user(syncUserSecretRef)는 operator 미관리라 drop 제외).
+	// Requeue 없이 이어서 reconcile — finalizer Update 가 search 객체(resourceVersion)를 갱신하고 이후
+	// status 는 UpdateWithRetry 가 최신 fetch 로 충돌 처리하므로, 첫 reconcile 에서 본 로직(secret/user/
+	// sidecar)까지 한 번에 진행한다(early Requeue 는 첫 reconcile 결과를 기대하는 기존 동작/테스트와 충돌).
 	if search.Spec.SyncUserSecretRef == nil && !commonsfinalizer.Has(search, searchFinalizer) {
 		commonsfinalizer.Add(search, searchFinalizer)
 		if err := r.Update(ctx, search); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{Requeue: true}, nil
 	}
 	// Sharded source — shard 별 mongot sidecar(별도 경로). RS 는 이하 진행.
 	if search.Spec.Source.Kind == kindMongoDBSharded {
