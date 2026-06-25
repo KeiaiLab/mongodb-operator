@@ -87,6 +87,40 @@ spec:
           - name: readWrite
             db: myapp
 
+  # Declarative collection sharding (선언적 컬렉션 샤딩)
+  # operator 가 EnableSharding(database) 선행 후 shardCollection 을 idempotent 하게 적용한다.
+  # 진입 가드: 모든 shard 추가 완료 + mongos Ready 후에만 적용. 이미 *다른 키*로 샤딩된
+  # 컬렉션은 흡수하지 않고 ShardKeyDrift status condition 으로 노출한다.
+  shardedCollections:
+    # 일반 범위 샤딩
+    - database: myapp
+      collection: orders
+      shardKey:
+        - field: userId
+          order: hashed
+
+    # compound 범위 키 (order 순서가 의미를 가짐 — drift 비교 시 순서까지 검증)
+    - database: myapp
+      collection: events
+      shardKey:
+        - field: tenantId
+          order: "1"
+        - field: createdAt
+          order: "1"
+
+    # timeseries 컬렉션 샤딩 (MongoDB 8.x)
+    # shard key 는 metaField/그 하위 또는 timeField 만 허용. timeField hashed·unique 불가.
+    # 예: crypto.binance 시계열 — meta.symbol 로 hashed 분산
+    - database: crypto
+      collection: binance
+      shardKey:
+        - field: meta.symbol
+          order: hashed
+      timeseries:
+        timeField: openTime
+        metaField: meta
+        granularity: seconds
+
 ---
 # Admin credentials Secret
 # Create this secret before deploying the MongoDBSharded resource
