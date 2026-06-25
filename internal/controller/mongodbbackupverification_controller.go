@@ -237,7 +237,7 @@ func (r *MongoDBBackupVerificationReconciler) Reconcile(ctx context.Context, req
 		v.Status.QueryResults = append(v.Status.QueryResults, results...)
 
 		if allPassed {
-			v.Status.Phase = "Passed"
+			v.Status.Phase = backupPhasePassed
 		} else {
 			v.Status.Phase = backupPhaseFailed
 		}
