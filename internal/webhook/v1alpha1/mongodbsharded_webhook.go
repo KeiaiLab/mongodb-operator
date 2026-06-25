@@ -128,6 +128,9 @@ func validateMongoDBShardedSpec(m *mongodbv1alpha1.MongoDBSharded) field.ErrorLi
 // timeseries shard key 적합성(metaField/그 하위 또는 timeField 만 허용)은 컬렉션
 // 생성 옵션을 알아야 하므로 런타임(reconcile)에서 server 가 거부 → ShardKeyDrift
 // 가 아닌 일반 에러로 surface.
+// orderHashed 는 shard key field 의 hashed sharding order 값(MongoDB 표현).
+const orderHashed = "hashed"
+
 func validateShardedCollections(path *field.Path, scs []mongodbv1alpha1.ShardedCollectionSpec) field.ErrorList {
 	var errs field.ErrorList
 	seen := make(map[string]struct{}, len(scs))
@@ -153,8 +156,8 @@ func validateShardedCollections(path *field.Path, scs []mongodbv1alpha1.ShardedC
 			if f.Field == "" {
 				errs = append(errs, field.Invalid(kp.Child("field"), f.Field, "shard key field must not be empty"))
 			}
-			if f.Order != "1" && f.Order != "-1" && f.Order != "hashed" {
-				errs = append(errs, field.NotSupported(kp.Child("order"), f.Order, []string{"1", "-1", "hashed"}))
+			if f.Order != "1" && f.Order != "-1" && f.Order != orderHashed {
+				errs = append(errs, field.NotSupported(kp.Child("order"), f.Order, []string{"1", "-1", orderHashed}))
 			}
 		}
 
@@ -170,7 +173,7 @@ func validateShardedCollections(path *field.Path, scs []mongodbv1alpha1.ShardedC
 			}
 			// timeField 를 hashed shard key 로 쓰는 것은 MongoDB 가 금지 — 조기 차단.
 			for j, f := range sc.ShardKey {
-				if f.Field == sc.Timeseries.TimeField && f.Order == "hashed" {
+				if f.Field == sc.Timeseries.TimeField && f.Order == orderHashed {
 					errs = append(errs, field.Invalid(ip.Child("shardKey").Index(j).Child("order"), f.Order,
 						"timeField cannot be a hashed shard key for timeseries collections"))
 				}
