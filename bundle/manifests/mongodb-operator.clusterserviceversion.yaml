@@ -404,8 +404,8 @@ metadata:
       ]
     capabilities: Seamless Upgrades
     categories: Database, Storage
-    containerImage: ghcr.io/keiailab/mongodb-operator:v1.16.4
-    createdAt: "2026-06-25T04:03:57Z"
+    containerImage: ghcr.io/keiailab/mongodb-operator:v1.16.5
+    createdAt: "2026-06-25T11:25:20Z"
     description: |
       Kubernetes operator for MongoDB — manages MongoDB (ReplicaSet) and
       MongoDBSharded (config server + shards + mongos) CRDs with K8s Lease
@@ -416,7 +416,7 @@ metadata:
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/keiailab/mongodb-operator
     support: https://github.com/keiailab/mongodb-operator/issues
-  name: mongodb-operator.v1.16.4
+  name: mongodb-operator.v1.16.5
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -784,7 +784,7 @@ spec:
                 - --enable-clustergroup-controller=true
                 - --enable-autoscaling=true
                 - --enable-search-controller=true
-                image: ghcr.io/keiailab/mongodb-operator:v1.16.4
+                image: ghcr.io/keiailab/mongodb-operator:v1.16.5
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -894,4 +894,4 @@ spec:
     name: Keiailab
     url: https://github.com/keiailab
   replaces: mongodb-operator.v1.9.0
-  version: 1.16.4
+  version: 1.16.5
