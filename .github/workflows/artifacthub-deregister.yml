@@ -1,0 +1,39 @@
+name: Artifact Hub deregister (one-shot)
+
+# 일회성 유지보수: 중앙 catalog(keiailab) 통합 후 잔존한 per-chart OCI repository 를
+# ArtifactHub 에서 제거한다. RFC: charts 중앙 catalog 가 OCI 를 payload 로만 쓰고
+# ArtifactHub 노출은 classic 'keiailab' 하나로 통합하는 설계 정합.
+on:
+  workflow_dispatch:
+    inputs:
+      repository_name:
+        description: "삭제할 ArtifactHub repository name (org=keiailab)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  deregister:
+    runs-on: ubuntu-latest
+    steps:
+      - name: DELETE ArtifactHub repository
+        env:
+          AH_API_KEY_ID: ${{ secrets.AH_API_KEY_ID }}
+          AH_API_KEY_SECRET: ${{ secrets.AH_API_KEY_SECRET }}
+          REPO_NAME: ${{ github.event.inputs.repository_name }}
+        run: |
+          set -euo pipefail
+          if [ -z "${AH_API_KEY_ID:-}" ] || [ -z "${AH_API_KEY_SECRET:-}" ]; then
+            echo "::error::AH_API_KEY_ID/SECRET 누락"; exit 1
+          fi
+          code=$(curl -sS -o /tmp/resp.txt -w '%{http_code}' \
+            -X DELETE "https://artifacthub.io/api/v1/repositories/org/keiailab/${REPO_NAME}" \
+            -H "X-API-KEY-ID: ${AH_API_KEY_ID}" \
+            -H "X-API-KEY-SECRET: ${AH_API_KEY_SECRET}")
+          echo "HTTP ${code}"; cat /tmp/resp.txt 2>/dev/null || true; echo
+          case "${code}" in
+            200|204) echo "deleted ${REPO_NAME}";;
+            404) echo "already absent ${REPO_NAME}";;
+            *) echo "::error::unexpected HTTP ${code}"; exit 1;;
+          esac
