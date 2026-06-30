@@ -29,7 +29,9 @@ import (
 	commonsnp "github.com/keiailab/keiailab-commons/pkg/networkpolicy"
 	commonspdb "github.com/keiailab/keiailab-commons/pkg/pdb"
 	"github.com/keiailab/keiailab-commons/pkg/probes"
+	commonsservice "github.com/keiailab/keiailab-commons/pkg/service"
 	commonstopology "github.com/keiailab/keiailab-commons/pkg/topology"
+	commonsvolume "github.com/keiailab/keiailab-commons/pkg/volume"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	"github.com/keiailab/mongodb-operator/internal/assets"
@@ -212,24 +214,15 @@ func tlsArgs(tls *mongodbv1alpha1.TLSSpec) []string {
 // Phase 3a 는 volume mount 만 추가 — mongod args 의 --tlsCertificateKeyFile 통합은
 // Phase 3b 에서 init container PEM merge (cat tls.crt tls.key > server.pem) 후.
 func buildTLSServerVolume(secretName string) corev1.Volume {
-	return corev1.Volume{
-		Name: "tls-server",
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{
-				SecretName:  secretName,
-				DefaultMode: ptr.To[int32](0o400),
-			},
-		},
-	}
+	// 0o400/readonly cert 불변식은 keiailab-commons/pkg/volume.TLSSecretMount 에 위임.
+	vol, _ := commonsvolume.TLSSecretMount("tls-server", secretName, MongoTLSMountPath)
+	return vol
 }
 
 // buildTLSServerMount 는 tls-server Volume 의 mountPath 를 반환한다.
 func buildTLSServerMount() corev1.VolumeMount {
-	return corev1.VolumeMount{
-		Name:      "tls-server",
-		MountPath: MongoTLSMountPath,
-		ReadOnly:  true,
-	}
+	_, mount := commonsvolume.TLSSecretMount("tls-server", "", MongoTLSMountPath)
+	return mount
 }
 
 // buildLabels — keiailab-commons/pkg/labels 위임 (iteration 27).
@@ -530,42 +523,35 @@ func BuildShardScriptsConfigMap(mdbsh *mongodbv1alpha1.MongoDBSharded, shardInde
 	}
 }
 
-// BuildHeadlessService creates a headless service for StatefulSet
+// BuildHeadlessService creates a headless service for StatefulSet.
+// 조립은 keiailab-commons/pkg/service.Build 에 위임 (Headless → ClusterIP None +
+// PublishNotReadyAddresses). 포트/라벨은 mongo 도메인 잔류.
 func BuildHeadlessService(mdb *mongodbv1alpha1.MongoDB) *corev1.Service {
-	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      mdb.Name + "-headless",
-			Namespace: mdb.Namespace,
-			Labels:    buildLabels(mdb.Name, "headless"),
+	return commonsservice.Build(commonsservice.Params{
+		Name:      mdb.Name + "-headless",
+		Namespace: mdb.Namespace,
+		Labels:    buildLabels(mdb.Name, "headless"),
+		Selector:  buildLabels(mdb.Name, "replicaset"),
+		Ports: []corev1.ServicePort{
+			{Name: "mongodb", Port: mongoDBPort, TargetPort: intstr.FromInt(mongoDBPort)},
 		},
-		Spec: corev1.ServiceSpec{
-			ClusterIP: "None",
-			Selector:  buildLabels(mdb.Name, "replicaset"),
-			Ports: []corev1.ServicePort{
-				{Name: "mongodb", Port: mongoDBPort, TargetPort: intstr.FromInt(mongoDBPort)},
-			},
-			PublishNotReadyAddresses: true,
-		},
-	}
+		Headless: true,
+	})
 }
 
-// BuildClientService creates a client service for MongoDB access
+// BuildClientService creates a client service for MongoDB access.
 func BuildClientService(mdb *mongodbv1alpha1.MongoDB) *corev1.Service {
-	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      mdb.Name,
-			Namespace: mdb.Namespace,
-			Labels:    buildLabels(mdb.Name, "client"),
+	return commonsservice.Build(commonsservice.Params{
+		Name:      mdb.Name,
+		Namespace: mdb.Namespace,
+		Labels:    buildLabels(mdb.Name, "client"),
+		Selector:  buildLabels(mdb.Name, "replicaset"),
+		Type:      corev1.ServiceTypeClusterIP,
+		Ports: []corev1.ServicePort{
+			{Name: "mongodb", Port: mongoDBPort, TargetPort: intstr.FromInt(mongoDBPort)},
+			{Name: "metrics", Port: metricsPort, TargetPort: intstr.FromInt(metricsPort)},
 		},
-		Spec: corev1.ServiceSpec{
-			Type:     corev1.ServiceTypeClusterIP,
-			Selector: buildLabels(mdb.Name, "replicaset"),
-			Ports: []corev1.ServicePort{
-				{Name: "mongodb", Port: mongoDBPort, TargetPort: intstr.FromInt(mongoDBPort)},
-				{Name: "metrics", Port: metricsPort, TargetPort: intstr.FromInt(metricsPort)},
-			},
-		},
-	}
+	})
 }
 
 // BuildReplicaSetStatefulSet creates a StatefulSet for MongoDB ReplicaSet.
