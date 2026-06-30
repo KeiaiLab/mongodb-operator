@@ -2,9 +2,8 @@ package controller
 
 import (
 	"context"
-	"crypto/sha256"
-	"fmt"
 
+	commonssecrethash "github.com/keiailab/keiailab-commons/pkg/secrethash"
 	commonsstatus "github.com/keiailab/keiailab-commons/pkg/status"
 
 	corev1 "k8s.io/api/core/v1"
@@ -62,12 +61,12 @@ func (r *MongoDBReconciler) reconcilePasswordRotation(ctx context.Context, mdb *
 }
 
 func hashSecretData(secret *corev1.Secret) string {
-	h := sha256.New()
-	for k, v := range secret.Data {
-		h.Write([]byte(k))
-		h.Write(v)
-	}
-	return fmt.Sprintf("%x", h.Sum(nil))[:16]
+	// 결정적 정렬-누적은 keiailab-commons/pkg/secrethash.Hash 에 위임 — 기존
+	// `for k, v := range secret.Data` map 순회의 *비결정성 버그*(동일 Secret 이
+	// reconcile 마다 다른 해시 → 불필요한 rotation 신호) 를 구조적 교정. 16자
+	// truncation 은 annotation 형식 보존을 위해 유지 (determinism 만 교정 →
+	// adopt 시 1회 해시 변화 후 안정).
+	return commonssecrethash.Hash(secret.Data)[:16]
 }
 
 func getAnnotation(mdb *mongodbv1alpha1.MongoDB, key string) string {
