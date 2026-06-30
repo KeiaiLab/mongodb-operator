@@ -29,7 +29,7 @@ func BuildBackupJob(backup *mongodbv1alpha1.MongoDBBackup, authSecretName string
 
 	var envVars []corev1.EnvVar
 	envVars = append(envVars, corev1.EnvVar{
-		Name: "MONGODB_URI",
+		Name: envMongoDBURI,
 		ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{
@@ -215,7 +215,7 @@ func BuildRestoreJob(backup *mongodbv1alpha1.MongoDBBackup, authSecretName strin
 	ttl := int32(86400)
 
 	envVars := []corev1.EnvVar{
-		{Name: "MONGODB_URI", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: authSecretName}, Key: "connectionString"}}},
+		{Name: envMongoDBURI, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: authSecretName}, Key: "connectionString"}}},
 		{Name: "SOURCE_BACKUP", Value: backup.Spec.Restore.SourceBackupName},
 	}
 	if backup.Spec.Restore.PointInTime != nil {

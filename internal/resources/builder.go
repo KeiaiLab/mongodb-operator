@@ -51,6 +51,10 @@ const (
 	scriptReadiness = "readiness-probe.sh"
 	scriptBootstrap = "bootstrap-admin.sh"
 	scriptStepDown  = "prestop-stepdown.sh"
+
+	// envMongoDBURI — backup/restore Job 의 MongoDB 연결 URI env 이름 (RS/sharded
+	// StatefulSet + backup/restore Job 공용 — goconst SSOT).
+	envMongoDBURI = "MONGODB_URI"
 )
 
 // Helper functions
@@ -727,7 +731,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			},
 			Env: []corev1.EnvVar{
 				{
-					Name: "MONGODB_URI",
+					Name: envMongoDBURI,
 					ValueFrom: &corev1.EnvVarSource{
 						SecretKeyRef: &corev1.SecretKeySelector{
 							LocalObjectReference: corev1.LocalObjectReference{
@@ -1810,7 +1814,7 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 			Args: []string{"--collect-all", "--compatible-mode"},
 			Env: []corev1.EnvVar{
 				{
-					Name: "MONGODB_URI",
+					Name: envMongoDBURI,
 					ValueFrom: &corev1.EnvVarSource{
 						SecretKeyRef: &corev1.SecretKeySelector{
 							LocalObjectReference: corev1.LocalObjectReference{
