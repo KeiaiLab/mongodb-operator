@@ -24,8 +24,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
+	commonshpa "github.com/keiailab/keiailab-commons/pkg/hpa"
 	commonslabels "github.com/keiailab/keiailab-commons/pkg/labels"
 	commonsnp "github.com/keiailab/keiailab-commons/pkg/networkpolicy"
+	commonspdb "github.com/keiailab/keiailab-commons/pkg/pdb"
 	"github.com/keiailab/keiailab-commons/pkg/probes"
 	commonstopology "github.com/keiailab/keiailab-commons/pkg/topology"
 
@@ -2282,32 +2284,19 @@ func BuildMongoDBPDB(mdb *mongodbv1alpha1.MongoDB) *policyv1.PodDisruptionBudget
 	if pdbSpec == nil || !pdbSpec.Enabled {
 		return nil
 	}
-	pdb := &policyv1.PodDisruptionBudget{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      mdb.Name + "-pdb",
-			Namespace: mdb.Namespace,
-			Labels:    buildLabels(mdb.Name, "replicaset"),
-		},
-		Spec: policyv1.PodDisruptionBudgetSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: buildLabels(mdb.Name, "replicaset"),
-			},
-		},
-	}
-	switch {
-	case pdbSpec.MinAvailable != nil:
-		pdb.Spec.MinAvailable = pdbSpec.MinAvailable
-	case pdbSpec.MaxUnavailable != nil:
-		pdb.Spec.MaxUnavailable = pdbSpec.MaxUnavailable
-	default:
-		minAvail := mdb.Spec.Members - 1
-		if minAvail < 0 {
-			minAvail = 0
-		}
-		v := intstr.FromInt(int(minAvail))
-		pdb.Spec.MinAvailable = &v
-	}
-	return pdb
+	labels := buildLabels(mdb.Name, "replicaset")
+	// 빌드 골격은 keiailab-commons/pkg/pdb.Build 에 위임 (DefaultFloor=0 = mongo).
+	// mongo 는 MinAvailable-우선 = commons 기본과 동일 → 거동 보존.
+	return commonspdb.Build(commonspdb.Params{
+		Name:           mdb.Name + "-pdb",
+		Namespace:      mdb.Namespace,
+		Labels:         labels,
+		Selector:       labels,
+		Replicas:       mdb.Spec.Members,
+		DefaultFloor:   0,
+		MinAvailable:   pdbSpec.MinAvailable,
+		MaxUnavailable: pdbSpec.MaxUnavailable,
+	})
 }
 
 // BuildMongoDBNetworkPolicy는 MongoDB ReplicaSet pods에 대한 deny-by-default
@@ -2359,23 +2348,16 @@ func convertAdditionalPeers(in []mongodbv1alpha1.NetworkPolicyPeer) []commonsnp.
 // pdbBaseSpec은 PodDisruptionBudgetSpec를 받아 기본 minAvailable=replicas-1을
 // 적용한 K8s PDB spec을 만든다(MinAvailable/MaxUnavailable 미지정 시).
 func pdbBaseSpec(spec *mongodbv1alpha1.PodDisruptionBudgetSpec, replicas int32, selector map[string]string) policyv1.PodDisruptionBudgetSpec {
-	out := policyv1.PodDisruptionBudgetSpec{
-		Selector: &metav1.LabelSelector{MatchLabels: selector},
-	}
-	switch {
-	case spec.MinAvailable != nil:
-		out.MinAvailable = spec.MinAvailable
-	case spec.MaxUnavailable != nil:
-		out.MaxUnavailable = spec.MaxUnavailable
-	default:
-		minAvail := replicas - 1
-		if minAvail < 0 {
-			minAvail = 0
-		}
-		v := intstr.FromInt(int(minAvail))
-		out.MinAvailable = &v
-	}
-	return out
+	// 빌드 골격(min/max 우선순위 + default-floor)은 keiailab-commons/pkg/pdb.Build
+	// 에 위임 (DefaultFloor=0 = mongo). BuildShardedPDBs 가 ObjectMeta 를 별도
+	// 설정하므로 여기서는 Spec 만 반환한다.
+	return commonspdb.Build(commonspdb.Params{
+		Selector:       selector,
+		Replicas:       replicas,
+		DefaultFloor:   0,
+		MinAvailable:   spec.MinAvailable,
+		MaxUnavailable: spec.MaxUnavailable,
+	}).Spec
 }
 
 // BuildShardedPDBs는 sharded cluster의 cfg/shards/mongos 각 컴포넌트에 대한
@@ -2526,27 +2508,20 @@ func BuildConfigServerHPA(mdbsh *mongodbv1alpha1.MongoDBSharded) *autoscalingv2.
 func buildHPAForTarget(name, namespace string, labels map[string]string, kind, refName string,
 	as *mongodbv1alpha1.AutoScalingSpec,
 ) *autoscalingv2.HorizontalPodAutoscaler {
-	min := as.MinReplicas
-	if min < 1 {
-		min = 1
-	}
-	return &autoscalingv2.HorizontalPodAutoscaler{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels:    labels,
-		},
-		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
-			ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
-				APIVersion: "apps/v1",
-				Kind:       kind,
-				Name:       refName,
-			},
-			MinReplicas: &min,
-			MaxReplicas: as.MaxReplicas,
-			Metrics:     buildHPAMetrics(as.Metrics),
-		},
-	}
+	// 빌드 골격(ScaleTargetRef apps/v1 + MinReplicas clamp)은
+	// keiailab-commons/pkg/hpa.Build 에 위임 (MinFloor=1 = mongo). metric 조립은
+	// buildHPAMetrics(cpu/memory/custom) 도메인 잔류.
+	return commonshpa.Build(commonshpa.Params{
+		Name:        name,
+		Namespace:   namespace,
+		Labels:      labels,
+		TargetKind:  kind,
+		TargetName:  refName,
+		MinReplicas: as.MinReplicas,
+		MaxReplicas: as.MaxReplicas,
+		MinFloor:    1,
+		Metrics:     buildHPAMetrics(as.Metrics),
+	})
 }
 
 // IsRSHPAActive는 RS HPA가 reconcile에서 활성 상태인지 검사한다(이중 가드).
@@ -2590,44 +2565,16 @@ func IsShardScaleDeliberate(mdbsh *mongodbv1alpha1.MongoDBSharded) bool {
 func buildHPAMetrics(metrics []mongodbv1alpha1.AutoScalingMetric) []autoscalingv2.MetricSpec {
 	if len(metrics) == 0 {
 		// 아무 metric도 없으면 cpu 80% 기본값 — upstream chart 등 표준 기본.
-		v := int32(80)
-		return []autoscalingv2.MetricSpec{{
-			Type: autoscalingv2.ResourceMetricSourceType,
-			Resource: &autoscalingv2.ResourceMetricSource{
-				Name: corev1.ResourceCPU,
-				Target: autoscalingv2.MetricTarget{
-					Type:               autoscalingv2.UtilizationMetricType,
-					AverageUtilization: &v,
-				},
-			},
-		}}
+		return []autoscalingv2.MetricSpec{commonshpa.CPUUtilization(80)}
 	}
 	out := make([]autoscalingv2.MetricSpec, 0, len(metrics))
 	for _, m := range metrics {
 		target := m.Target
 		switch m.Type {
 		case "cpu":
-			out = append(out, autoscalingv2.MetricSpec{
-				Type: autoscalingv2.ResourceMetricSourceType,
-				Resource: &autoscalingv2.ResourceMetricSource{
-					Name: corev1.ResourceCPU,
-					Target: autoscalingv2.MetricTarget{
-						Type:               autoscalingv2.UtilizationMetricType,
-						AverageUtilization: &target,
-					},
-				},
-			})
+			out = append(out, commonshpa.CPUUtilization(target))
 		case "memory":
-			out = append(out, autoscalingv2.MetricSpec{
-				Type: autoscalingv2.ResourceMetricSourceType,
-				Resource: &autoscalingv2.ResourceMetricSource{
-					Name: corev1.ResourceMemory,
-					Target: autoscalingv2.MetricTarget{
-						Type:               autoscalingv2.UtilizationMetricType,
-						AverageUtilization: &target,
-					},
-				},
-			})
+			out = append(out, commonshpa.MemoryUtilization(target))
 		case "custom":
 			if m.CustomMetric == nil || m.CustomMetric.Name == "" {
 				continue
