@@ -43,9 +43,11 @@ import (
 )
 
 const (
-	mongoDBPort  = 27017
-	metricsPort  = 9216
-	defaultImage = "mongo:8.3.1"
+	mongoDBPort = 27017
+	metricsPort = 9216
+	// metricsPortName — Service/Container 의 metrics 포트 이름 (goconst SSOT).
+	metricsPortName = "metrics"
+	defaultImage    = "mongo:8.3.1"
 	// exporterImage — chart values / examples (0.51.0) 와 코드 const (0.40) 의
 	// 3-way drift 를 최신 쪽 0.51.0 단일 진실원으로 통일 (kubebuilder default 동기).
 	exporterImage = "percona/mongodb_exporter:0.51.0"
@@ -162,35 +164,6 @@ func buildTLSPEMMount() corev1.VolumeMount {
 // fail → sharding pool init 실패 → 27017 미 listen → kubelet liveness kill cascade.
 // cluster-internal CA chain + preferTLS 환경에서 hostname 검증은 의미 적음 (CA 로 ID
 // 검증 충분), short/long hostname mix 흡수 의무.
-//
-//lint:ignore U1000 StatefulSet PVC template 통합 예정 helper 보존
-func buildDataVolumeClaimTemplate(storage mongodbv1alpha1.StorageSpec) corev1.PersistentVolumeClaim {
-	accessModes := storage.AccessModes
-	if len(accessModes) == 0 {
-		accessModes = []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
-	}
-	storageClassName := ptr.To(storage.StorageClassName)
-	if storage.StorageClassName == "" {
-		storageClassName = nil
-	}
-	pvc := corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{Name: "data"},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes:      accessModes,
-			StorageClassName: storageClassName,
-			Resources: corev1.VolumeResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: storage.Size,
-				},
-			},
-		},
-	}
-	if storage.Selector != nil {
-		pvc.Spec.Selector = storage.Selector
-	}
-	return pvc
-}
-
 func tlsArgs(tls *mongodbv1alpha1.TLSSpec) []string {
 	mode := "preferTLS"
 	if tls != nil && tls.Mode != "" {
@@ -550,7 +523,7 @@ func BuildClientService(mdb *mongodbv1alpha1.MongoDB) *corev1.Service {
 		Type:      corev1.ServiceTypeClusterIP,
 		Ports: []corev1.ServicePort{
 			{Name: "mongodb", Port: mongoDBPort, TargetPort: intstr.FromInt(mongoDBPort)},
-			{Name: "metrics", Port: metricsPort, TargetPort: intstr.FromInt(metricsPort)},
+			{Name: metricsPortName, Port: metricsPort, TargetPort: intstr.FromInt(metricsPort)},
 		},
 	})
 }
@@ -754,7 +727,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			Name:  "exporter",
 			Image: exporterImg,
 			Ports: []corev1.ContainerPort{
-				{Name: "metrics", ContainerPort: metricsPort, Protocol: corev1.ProtocolTCP},
+				{Name: metricsPortName, ContainerPort: metricsPort, Protocol: corev1.ProtocolTCP},
 			},
 			Args: []string{
 				"--collect-all",
@@ -1638,7 +1611,7 @@ func BuildMongosService(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.Service {
 			Selector: labels,
 			Ports: []corev1.ServicePort{
 				{Name: "mongodb", Port: mongoDBPort, TargetPort: intstr.FromInt(mongoDBPort)},
-				{Name: "metrics", Port: metricsPort, TargetPort: intstr.FromInt(metricsPort)},
+				{Name: metricsPortName, Port: metricsPort, TargetPort: intstr.FromInt(metricsPort)},
 			},
 		},
 	}
@@ -1840,7 +1813,7 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 			Name:  "exporter",
 			Image: exporterImage,
 			Ports: []corev1.ContainerPort{
-				{Name: "metrics", ContainerPort: metricsPort},
+				{Name: metricsPortName, ContainerPort: metricsPort},
 			},
 			Args: []string{"--collect-all", "--compatible-mode"},
 			Env: []corev1.EnvVar{
