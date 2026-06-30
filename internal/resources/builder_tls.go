@@ -14,6 +14,12 @@ import (
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
+// TLS 볼륨 이름 (goconst SSOT — PEM merge init container / server cert mount 공용).
+const (
+	tlsServerVolume    = "tls-server"
+	tlsServerPEMVolume = "tls-server-pem"
+)
+
 // BuildPEMMergeInitContainer 는 cert-manager Secret 의 tls.crt + tls.key 를
 // 단일 PEM file 로 합치는 init container 를 반환한다 (mongod 의 --tlsCertificateKeyFile
 // 호환). PSA restricted 정합 (busybox + RunAsUser 999 + drop ALL + seccomp RuntimeDefault).
@@ -48,8 +54,8 @@ func BuildPEMMergeInitContainer() corev1.Container {
 		},
 		SecurityContext: buildKeyfileInitContainerSecurityContext(),
 		VolumeMounts: []corev1.VolumeMount{
-			{Name: "tls-server", MountPath: "/tls-input", ReadOnly: true},
-			{Name: "tls-server-pem", MountPath: "/tls-pem"},
+			{Name: tlsServerVolume, MountPath: "/tls-input", ReadOnly: true},
+			{Name: tlsServerPEMVolume, MountPath: "/tls-pem"},
 		},
 	}
 }
@@ -57,7 +63,7 @@ func BuildPEMMergeInitContainer() corev1.Container {
 // buildTLSPEMVolume 는 init container 와 mongod 가 공유하는 emptyDir.
 func buildTLSPEMVolume() corev1.Volume {
 	return corev1.Volume{
-		Name:         "tls-server-pem",
+		Name:         tlsServerPEMVolume,
 		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
 	}
 }
@@ -65,7 +71,7 @@ func buildTLSPEMVolume() corev1.Volume {
 // buildTLSPEMMount 는 mongod container 의 mount.
 func buildTLSPEMMount() corev1.VolumeMount {
 	return corev1.VolumeMount{
-		Name:      "tls-server-pem",
+		Name:      tlsServerPEMVolume,
 		MountPath: MongoTLSPEMPath,
 		ReadOnly:  true,
 	}
@@ -110,12 +116,12 @@ func tlsArgs(tls *mongodbv1alpha1.TLSSpec) []string {
 // Phase 3b 에서 init container PEM merge (cat tls.crt tls.key > server.pem) 후.
 func buildTLSServerVolume(secretName string) corev1.Volume {
 	// 0o400/readonly cert 불변식은 keiailab-commons/pkg/volume.TLSSecretMount 에 위임.
-	vol, _ := commonsvolume.TLSSecretMount("tls-server", secretName, MongoTLSMountPath)
+	vol, _ := commonsvolume.TLSSecretMount(tlsServerVolume, secretName, MongoTLSMountPath)
 	return vol
 }
 
 // buildTLSServerMount 는 tls-server Volume 의 mountPath 를 반환한다.
 func buildTLSServerMount() corev1.VolumeMount {
-	_, mount := commonsvolume.TLSSecretMount("tls-server", "", MongoTLSMountPath)
+	_, mount := commonsvolume.TLSSecretMount(tlsServerVolume, "", MongoTLSMountPath)
 	return mount
 }
