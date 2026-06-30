@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
+	commonsbatchjob "github.com/keiailab/keiailab-commons/pkg/batchjob"
 	commonshpa "github.com/keiailab/keiailab-commons/pkg/hpa"
 	commonslabels "github.com/keiailab/keiailab-commons/pkg/labels"
 	commonsnp "github.com/keiailab/keiailab-commons/pkg/networkpolicy"
@@ -2042,44 +2043,34 @@ func BuildBackupJob(backup *mongodbv1alpha1.MongoDBBackup, authSecretName string
 	// Build backup script
 	script := buildBackupScript(backup)
 
-	return &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      backup.Name,
-			Namespace: backup.Namespace,
-			Labels:    labels,
-		},
-		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoff,
-			TTLSecondsAfterFinished: &ttl,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyOnFailure,
-					Containers: []corev1.Container{
-						{
-							Name:    "backup",
-							Image:   defaultImage,
-							Command: []string{"/bin/bash", "-c"},
-							Args:    []string{script},
-							Env:     envVars,
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("100m"),
-									corev1.ResourceMemory: resource.MustParse("256Mi"),
-								},
-								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("500m"),
-									corev1.ResourceMemory: resource.MustParse("1Gi"),
-								},
-							},
-						},
+	// Job 엔벨로프는 keiailab-commons/pkg/batchjob.Build 에 위임. 컨테이너(mongodump
+	// 스크립트) 조립은 mongo 도메인 잔류.
+	return commonsbatchjob.Build(commonsbatchjob.Params{
+		Name:                    backup.Name,
+		Namespace:               backup.Namespace,
+		Labels:                  labels,
+		BackoffLimit:            &backoff,
+		TTLSecondsAfterFinished: &ttl,
+		Containers: []corev1.Container{
+			{
+				Name:    "backup",
+				Image:   defaultImage,
+				Command: []string{"/bin/bash", "-c"},
+				Args:    []string{script},
+				Env:     envVars,
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("100m"),
+						corev1.ResourceMemory: resource.MustParse("256Mi"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceMemory: resource.MustParse("1Gi"),
 					},
 				},
 			},
 		},
-	}
+	})
 }
 
 // BuildBackupCronJob creates a CronJob that periodically creates MongoDBBackup CRs.
@@ -2216,47 +2207,38 @@ fi
 mongorestore --uri "${MONGODB_URI}" ${RESTORE_FLAGS}
 echo "[restore] completed"
 `
-	return &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      backup.Name + "-restore",
-			Namespace: backup.Namespace,
-			Labels:    labels,
+	// Job 엔벨로프는 keiailab-commons/pkg/batchjob.Build 에 위임. 컨테이너(mongorestore)/볼륨 잔류.
+	return commonsbatchjob.Build(commonsbatchjob.Params{
+		Name:                    backup.Name + "-restore",
+		Namespace:               backup.Namespace,
+		Labels:                  labels,
+		BackoffLimit:            &backoff,
+		TTLSecondsAfterFinished: &ttl,
+		Containers: []corev1.Container{
+			{
+				Name:    "mongorestore",
+				Image:   getMongoDBImage(mongodbv1alpha1.MongoDBVersion{Version: "8.2"}),
+				Command: []string{"sh", "-c", script},
+				Env:     envVars,
+				VolumeMounts: []corev1.VolumeMount{
+					{Name: "source", MountPath: "/data/source", ReadOnly: true},
+				},
+				SecurityContext: buildDefaultContainerSecurityContext(),
+			},
 		},
-		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoff,
-			TTLSecondsAfterFinished: &ttl,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyOnFailure,
-					Containers: []corev1.Container{
-						{
-							Name:    "mongorestore",
-							Image:   getMongoDBImage(mongodbv1alpha1.MongoDBVersion{Version: "8.2"}),
-							Command: []string{"sh", "-c", script},
-							Env:     envVars,
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "source", MountPath: "/data/source", ReadOnly: true},
-							},
-							SecurityContext: buildDefaultContainerSecurityContext(),
-						},
+		Volumes: []corev1.Volume{
+			{
+				Name: "source",
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: backup.Spec.Restore.SourceBackupName,
+						ReadOnly:  true,
 					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "source",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: backup.Spec.Restore.SourceBackupName,
-									ReadOnly:  true,
-								},
-							},
-						},
-					},
-					SecurityContext: buildDefaultSecurityContext(),
 				},
 			},
 		},
-	}, nil
+		PodSecurityContext: buildDefaultSecurityContext(),
+	}), nil
 }
 
 // BuildMongoDBPDB는 MongoDB ReplicaSet workload를 위한 PodDisruptionBudget을 생성한다.
