@@ -1524,10 +1524,12 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 	}
 
 	// mongot(MongoDB Search) sidecar — shard 별 주입(annotation 시). 각 shard replicaSet 의 mongot 은
-	// 자기 shard 데이터만 인덱싱하며 localhost mongod(27018) 로 topology 연결(별도 STS 비호환). mongos 가
-	// $search 를 shard 별 mongot 으로 fan-out(mongos setParameter 불요). config server 는 mongot 미배포
-	// (메타데이터만). annotation 부재 시 무변경 = 무롤링(mongot_test no-roll 가드). RS 와 동일하게
-	// data PVC subPath(search-index) 공유 — VCT 불변 보존(신규 VCT 없음).
+	// 자기 shard 데이터만 인덱싱하며 localhost mongod(27018) 로 topology 연결(별도 STS 비호환).
+	// ⚠ 구 주석의 "mongos setParameter 불요" 는 오류였다(ADR-0039 #5 / 라이브 실측 2026-07-14 —
+	// mongos 에 mongot 엔드포인트가 없으면 $search·인덱스 관리 명령이 SearchNotEnabled 로 거부).
+	// mongos 배선은 BuildMongosDeployment + BuildMongotService(ADR-0040) 참조. config server 는
+	// mongot 미배포(메타데이터만). annotation 부재 시 무변경 = 무롤링(mongot_test no-roll 가드).
+	// RS 와 동일하게 data PVC subPath(search-index) 공유 — VCT 불변 보존(신규 VCT 없음).
 	if img := mdbsh.Annotations[MongotSidecarImageAnnotation]; img != "" {
 		mc, ic, mvols := MongotSidecar(name, img, mdbsh.Annotations[MongotSyncSecretAnnotation])
 		// mongod(Containers[0]) args 에 setParameter(mongotHost=localhost:27028) 추가.
@@ -1536,6 +1538,15 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, ic)
 		sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers, mc)
 		sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, mvols...)
+		// mongot Service(BuildMongotService) selector 표식 — pod template 에만 부착한다.
+		// Selector.MatchLabels 와 Template.Labels 가 같은 map 인스턴스라 in-place 수정 시 STS
+		// Selector(immutable)까지 오염 → apply 실패. 반드시 복사본에 추가한다.
+		tmplLabels := make(map[string]string, len(sts.Spec.Template.Labels)+1)
+		for k, v := range sts.Spec.Template.Labels {
+			tmplLabels[k] = v
+		}
+		tmplLabels[MongotPodLabel] = MongotPodLabelValue
+		sts.Spec.Template.Labels = tmplLabels
 	}
 
 	// cycle 16: sharded Shard 에도 oplog tailer / audit forwarder sidecar.
@@ -1764,6 +1775,19 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 	}
 	if mdbsh.Spec.AuditLog != nil {
 		args = append(args, auditpkg.MongodArgs(mdbsh.Spec.AuditLog)...)
+	}
+
+	// mongot(MongoDB Search) 컨트롤면 배선 — mongos 는 mongot 사이드카가 *없다*. 그러나
+	// MongoDBSearchIndex 컨트롤러는 인덱스 관리 명령($listSearchIndexes / createSearchIndex)을 mongos
+	// 경유로 보내므로, mongos 에 mongot 엔드포인트가 비어 있으면 SearchNotEnabled 로 거부되어 인덱스
+	// CR 이 Pending 고착한다(라이브 실측 2026-07-14 — 구 주석의 "mongos setParameter 불요" 가정 오류).
+	// 따라서 pod 밖 mongot Service(BuildMongotService)를 가리킨다. 데이터면($search fan-out)은 여전히
+	// shard mongod → 자기 localhost mongot 경로로 동작한다.
+	// annotation 부재(= search 비활성) 시 args 무변경 = mongos 무롤링(mongot_sharded_test no-roll 가드).
+	if mdbsh.Annotations[MongotSidecarImageAnnotation] != "" {
+		args = append(args, MongotSetParameterArgs(
+			MongotServiceEndpoint(mdbsh.Name, mdbsh.Namespace),
+			mdbsh.Annotations[MongotTLSModeAnnotation])...)
 	}
 
 	// mongos container의 volume mounts. admin-credentials와 scripts는

@@ -81,6 +81,7 @@ type MongoDBSearchReconciler struct {
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbshardeds,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch
@@ -579,9 +580,24 @@ func (r *MongoDBSearchReconciler) reconcileSharded(ctx context.Context, search *
 		}
 	}
 
-	// MongoDBSharded CR annotate → shard STS builder 가 mongot sidecar 주입(모든 shard).
+	// MongoDBSharded CR annotate → shard STS builder 가 mongot sidecar 주입(모든 shard) + mongos
+	// builder 가 mongot Service 를 가리키는 setParameter 주입.
 	if err := r.annotateShardedSource(ctx, mdbsh, image, syncSecret, tlsMode); err != nil {
 		return ctrl.Result{}, fmt.Errorf("annotate source mongodbsharded: %w", err)
+	}
+
+	// mongot ClusterIP Service — mongos 의 인덱스 관리 명령 진입점(mongos 는 mongot 사이드카 미보유).
+	// annotate 이후에 빌드해야 annotation 가드가 통과한다(위 Patch 는 메모리 객체 mdbsh 를 갱신하지
+	// 않으므로 로컬에도 반영). owner=search → search CR 삭제 시 GC(mongot ConfigMap 과 동일 수명).
+	if mdbsh.Annotations == nil {
+		mdbsh.Annotations = map[string]string{}
+	}
+	mdbsh.Annotations[resources.MongotSidecarImageAnnotation] = image
+	mdbsh.Annotations[resources.MongotTLSModeAnnotation] = tlsMode
+	if svc := resources.BuildMongotService(mdbsh); svc != nil {
+		if err := commonsapply.Service(ctx, r.Client, r.Scheme, search, svc); err != nil {
+			return ctrl.Result{}, fmt.Errorf("apply mongot service: %w", err)
+		}
 	}
 
 	// searchCoordinator user 보장(auto-create 경로, mongos 경유 best-effort).

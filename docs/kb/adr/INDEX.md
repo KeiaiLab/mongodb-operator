@@ -37,6 +37,7 @@
 | [ADR-0037](0037-gitops-artifacthub-standardization.md) | GitOps overlay + ArtifactHub 검증 파이프라인 표준화 (operator 4종 2-layer 표준, examples/gitops → deploy/overlays/prod 이전, signingKey, GH Actions OSS 정당화) | Accepted | 2026-06-02 |
 | [ADR-0038](0038-olm-v1-path1-realignment-and-parity-guard.md) | OLM v1 (Path 1) 재정렬 + 7-CRD parity + drift 가드 (bundle/catalog/ClusterExtension → appVersion 1.13.1 정렬, sync-crds wildcard, verify-bundle-parity CI/pre-push 게이트, ClusterExtension 컷오버 보류) | Accepted | 2026-06-22 |
 | [ADR-0039](0039-sharded-search-mongot-fanout-limit.md) | sharded MongoDB Search multi-shard 검색 = Community mongot 0.69.1 upstream 한계 (mongos 단일 endpoint 직접 라우팅=broadcast 아님, mongot localhost 하드코딩=StatefulSet 불가) + config server search-sync 비번 drift fix (precheck 비번 미검증 → 제거, v1.16.3) | Accepted | 2026-06-24 |
+| [ADR-0040](0040-mongos-mongot-service-wiring.md) | sharded search 컨트롤면 배선 — mongot ClusterIP Service(`<cluster>-mongot:27028`) 신설 + mongos 4 setParameter 주입 (ADR-0039 #5 코드 해소, MongoDBSearchIndex Pending 고착 근본 원인). shard pod template 표식 라벨로 전 shard mongot 묶음, annotation 부재 시 mongos 무롤링 | Accepted | 2026-07-14 |
 
 ## 작성 가이드
 
