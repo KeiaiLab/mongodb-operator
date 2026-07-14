@@ -17,6 +17,9 @@ name: stable
 entries:
   - name: mongodb-operator.v1.16.5
     skipRange: '>=0.3.0 <1.16.5'
+  - name: mongodb-operator.v1.16.6
+    replaces: mongodb-operator.v1.16.5
+    skipRange: '>=0.3.0 <1.16.6'
 ---
 schema: olm.channel
 package: mongodb-operator
@@ -24,11 +27,21 @@ name: alpha
 entries:
   - name: mongodb-operator.v1.16.5
     skipRange: '>=0.3.0 <1.16.5'
+  - name: mongodb-operator.v1.16.6
+    replaces: mongodb-operator.v1.16.5
+    skipRange: '>=0.3.0 <1.16.6'
 ---
 schema: olm.bundle
 name: mongodb-operator.v1.16.5
 package: mongodb-operator
 image: harbor.keiailab.dev/keiailab/platform/mongodb-operator-bundle@sha256:c757b9cd717269bc38f4b0c42f26805df48948a31cbb0a11200c0d5d91033ed7
+---
+# v1.16.6 — image digest 는 CI `catalog:image` 잡이 push 된 bundle 의 실 digest 로 sed 치환
+# (mutable tag 참조 금지 — operator-controller 는 tag+digest 동시참조 거부). placeholder 태그.
+schema: olm.bundle
+name: mongodb-operator.v1.16.6
+package: mongodb-operator
+image: harbor.keiailab.dev/keiailab/platform/mongodb-operator-bundle:v1.16.6
 properties:
   - type: olm.package
     value:

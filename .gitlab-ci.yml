@@ -103,9 +103,12 @@ build:image:
   extends: .harbor_build
   needs: []
   script:
-    - echo "build $REGISTRY/$IMAGE_PATH -> :$CI_COMMIT_SHA :$APP_VERSION :latest (push=$PUSH_IMAGE)"
+    - echo "build $REGISTRY/$IMAGE_PATH -> :$CI_COMMIT_SHA :$APP_VERSION :v$APP_VERSION :latest (push=$PUSH_IMAGE)"
     - |
-      NAMES="$REGISTRY/$IMAGE_PATH:$CI_COMMIT_SHA,$REGISTRY/$IMAGE_PATH:$APP_VERSION,$REGISTRY/$IMAGE_PATH:latest"
+      # :$APP_VERSION(v 없음) + :v$APP_VERSION 둘 다 태깅한다 — CI 는 v 없는 태그를,
+      # bundle/CSV·Makefile IMAGE_BASE 는 :v 접두 태그를 참조하는 이력 불일치를 양쪽 태깅으로
+      # 흡수(OLM 이 없는 태그를 pull 하는 회귀 차단). digest 는 동일 이미지라 저장 중복 0.
+      NAMES="$REGISTRY/$IMAGE_PATH:$CI_COMMIT_SHA,$REGISTRY/$IMAGE_PATH:$APP_VERSION,$REGISTRY/$IMAGE_PATH:v$APP_VERSION,$REGISTRY/$IMAGE_PATH:latest"
       buildctl \
         --addr "$BUILDKIT_HOST" \
         --tlscacert /buildkit-certs/ca.crt \
@@ -183,8 +186,15 @@ catalog:image:
     - BUNDLE_BASE="$REGISTRY/$IMAGE_PATH-bundle"
     - |
       if [ -n "$BUNDLE_DIGEST" ]; then
-        sed -i "s|^image: ${BUNDLE_BASE}.*|image: ${BUNDLE_BASE}@${BUNDLE_DIGEST}|" "$CATALOG_YAML"
-        echo "catalog.yaml bundle pin -> ${BUNDLE_BASE}@${BUNDLE_DIGEST}"
+        # **이번 APP_VERSION bundle 엔트리 한 줄만** 치환한다 — 과거 버전 엔트리의 고정 digest 를
+        # 덮지 않도록 placeholder 태그(:v$APP_VERSION)를 앵커로 targeting. base 접두 전체(`.*`)로
+        # 치환하면 FBC 의 다른 버전 bundle digest 까지 오염돼 upgrade graph 가 깨진다.
+        sed -i "s|^image: ${BUNDLE_BASE}:v${APP_VERSION}$|image: ${BUNDLE_BASE}@${BUNDLE_DIGEST}|" "$CATALOG_YAML"
+        echo "catalog.yaml v${APP_VERSION} bundle pin -> ${BUNDLE_BASE}@${BUNDLE_DIGEST}"
+        # placeholder 태그가 여전히 남아있으면(=치환 실패) 발행 경로에서 즉사(mutable tag 참조 방지).
+        if [ "$PUSH" = "true" ] && grep -q "^image: ${BUNDLE_BASE}:v${APP_VERSION}$" "$CATALOG_YAML"; then
+          echo "FATAL: catalog.yaml v${APP_VERSION} placeholder 태그 치환 실패 — digest pin 안 됨" >&2; exit 1
+        fi
       else
         echo "WARN: BUNDLE_DIGEST 비어있음 — 커밋된 catalog.yaml digest 유지 (MR build-only 검증)"
       fi
