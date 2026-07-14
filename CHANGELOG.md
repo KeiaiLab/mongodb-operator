@@ -2,6 +2,35 @@
 
 All notable changes to mongodb-operator will be documented in this file.
 
+## [1.16.6] - 2026-07-14
+
+### Fixed
+
+- **mongos → mongot 배선 (SearchIndex Pending 고착 근본 해소)** — operator 가 shard mongod 에만 mongot
+  파라미터(`mongotHost` / `searchIndexManagementHostAndPort`)를 주입하고 **mongos 에는 주입하지 않아**,
+  `MongoDBSearchIndex` 컨트롤러가 mongos 경유로 보내는 인덱스 명령이 `SearchNotEnabled` 로 거부되어
+  CR 이 Pending 에서 고착했다(라이브 19일). `builder.go` 의 *"mongos setParameter 불요"* 가정은
+  ADR-0039 #5 가 이미 실측으로 반증한 것이었다.
+
+### Added
+
+- `MongoDBSearch.spec.router.mongotShard` (optional, default `shard-0`) — mongot Service 를
+  **단일 shard 의 mongot pod 로 pin**. ClusterIP 로드밸런싱은 채택하지 않았다: ADR-0039 #7 실측상
+  mongos 는 단일 mongot endpoint 에 **직접 연결**(fan-out 아님)하므로, LB 는 연결마다 임의 shard 로
+  라우팅되어 **데이터가 없는 shard 를 만나면 조용히 빈 결과**를 낸다.
+- `BuildMongotService()` — mongot(27028) 결정적 엔드포인트.
+
+### 범위 (정직 표기)
+
+- ✅ SearchIndex Pending 고착 해소 (인덱스 관리 경로)
+- ✅ **unsharded(단일 shard 상주) 컬렉션**에 한한 `$search` / `$vectorSearch`
+- ⛔ **multi-shard 분산 컬렉션 검색은 여전히 미해결** — Community mongot 0.69.1 upstream 한계
+  (ADR-0039 Decision #2 불변). 본 릴리스는 이를 해결하지 않는다.
+
+**배포 주의**: `spec.router.mongotShard` 는 **검색 대상 DB 의 primary shard 와 일치**해야 질의가 결과를
+낸다(`config.databases` 확인). 불일치 시 인덱스는 Ready 여도 질의는 빈 결과.
+search 활성 클러스터는 shard pod template 라벨 추가로 **shard STS 1회 롤링**(RS 순차 = 무중단).
+
 ## [1.16.5] - 2026-06-25
 
 ### Features

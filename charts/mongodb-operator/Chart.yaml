@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for MongoDB — ReplicaSets, Sharded Clusters with auto scale-out, S3/PVC Backup, TLS, and LDAP. MIT licensed.
 type: application
-version: 1.16.5
-appVersion: "1.16.5"
+version: 1.16.6
+appVersion: "1.16.6"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
