@@ -144,6 +144,8 @@ bundle:image:
   script:
     - BUNDLE_IMG="$REGISTRY/$IMAGE_PATH-bundle:v$APP_VERSION"
     - echo "build bundle $BUNDLE_IMG (push=$PUSH_IMAGE)"
+    # buildctl 출력(stderr 의 'pushing manifest ...@sha256:...')을 로그로 남기면서 파일로도 캡처 —
+    # metadata-file 키가 buildkit 버전마다 다를 수 있어 2-경로(파일 + 로그 파싱)로 digest 취득.
     - |
       buildctl \
         --addr "$BUILDKIT_HOST" \
@@ -156,12 +158,17 @@ bundle:image:
         --opt filename=bundle.Dockerfile \
         --opt platform=linux/amd64 \
         --output "type=image,\"name=$BUNDLE_IMG\",push=$PUSH" \
-        --metadata-file /tmp/bundle-meta.json
-    # 로컬 docker 없이 digest 취득 — buildctl 이 빌드/push 시 기록한 정규 이미지 digest.
-    # ⚠ push=false(MR-event)면 buildkit 이 containerimage.digest 를 metadata 에 안 넣을 수 있다
-    #   → grep 매치 0. set -e 하에서 grep exit 1 이 잡을 죽이므로 || true 로 흡수(비발행 검증엔
-    #   digest 불요, 발행 경로 필수성은 아래 164행 가드가 강제). 파일 부재도 동일 방어.
+        --metadata-file /tmp/bundle-meta.json 2>&1 | tee /tmp/bundle-build.log
+    # digest 취득 2-경로 (로컬 docker 없이):
+    #   1) metadata-file 의 containerimage.digest (정석)
+    #   2) 실패 시 buildctl 로그의 'pushing manifest <ref>@sha256:...' 파싱 (버전 견고성)
+    - echo "=== metadata-file 내용:"; cat /tmp/bundle-meta.json 2>/dev/null || echo "(파일 없음)"
     - BUNDLE_DIGEST=$(grep -o '"containerimage.digest":"sha256:[a-f0-9]*"' /tmp/bundle-meta.json 2>/dev/null | cut -d'"' -f4 || true)
+    - |
+      if [ -z "$BUNDLE_DIGEST" ]; then
+        BUNDLE_DIGEST=$(grep -o 'sha256:[a-f0-9]\{64\}' /tmp/bundle-build.log 2>/dev/null | tail -1 || true)
+        [ -n "$BUNDLE_DIGEST" ] && echo "digest = 로그 파싱 fallback 사용"
+      fi
     - echo "bundle digest = ${BUNDLE_DIGEST:-<none>}"
     # 발행 경로(push=true)인데 digest 취득 실패 = catalog digest 체인 불가 → 즉사.
     - '[ "$PUSH" != "true" ] || [ -n "$BUNDLE_DIGEST" ] || { echo "FATAL: bundle push 됐으나 digest 취득 실패 — catalog 체인 불가" >&2; exit 1; }'
