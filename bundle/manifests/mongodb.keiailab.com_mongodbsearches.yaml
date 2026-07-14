@@ -3291,6 +3291,13 @@ spec:
                       x-kubernetes-int-or-string: true
                     type: object
                 type: object
+              router:
+                properties:
+                  mongotShard:
+                    default: shard-0
+                    pattern: ^shard-[0-9]+$
+                    type: string
+                type: object
               source:
                 properties:
                   kind:

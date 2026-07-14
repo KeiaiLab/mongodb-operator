@@ -78,6 +78,12 @@ const (
 	MongotSyncSecretAnnotation = "search.mongodb.keiailab.com/sync-secret"
 	// MongotTLSModeAnnotation — mongod searchTLSMode + mongot config tls(disabled|requireTLS).
 	MongotTLSModeAnnotation = "search.mongodb.keiailab.com/tls-mode"
+	// MongotRouterShardAnnotation — mongos 가 연결할 mongot 의 shard pin(예 "shard-0").
+	// search controller 가 MongoDBSearch.spec.router.mongotShard 를 그대로 전달한다.
+	// mongot Service 의 selector(= 단일 shard) 를 결정한다 — 부재 시 DefaultMongotRouterShard.
+	MongotRouterShardAnnotation = "search.mongodb.keiailab.com/router-shard"
+	// DefaultMongotRouterShard — router shard 미지정 시 기본 pin.
+	DefaultMongotRouterShard = "shard-0"
 
 	// MongotPodLabel — mongot sidecar 를 *실제로 보유한* pod 표식(값 "true"). Sharded 의 shard pod
 	// 는 component 라벨이 shard-N 으로 shard 마다 달라 공통 selector 가 불가능하다(Service selector 는
@@ -247,7 +253,15 @@ func MongotServiceEndpoint(clusterName, namespace string) string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local:%d", MongotServiceName(clusterName), namespace, mongotGRPCPort)
 }
 
-// BuildMongotService — Sharded 전용 mongot ClusterIP Service(gRPC 27028).
+// MongotRouterShard — mongos 가 연결할 mongot 의 shard(annotation, 미지정 시 shard-0).
+func MongotRouterShard(mdbsh *mongodbv1alpha1.MongoDBSharded) string {
+	if s := mdbsh.Annotations[MongotRouterShardAnnotation]; s != "" {
+		return s
+	}
+	return DefaultMongotRouterShard
+}
+
+// BuildMongotService — Sharded 전용 mongot ClusterIP Service(gRPC 27028), **단일 shard pin**.
 //
 // 왜 필요한가: mongos 는 mongot 사이드카를 갖지 않는데, MongoDBSearchIndex 컨트롤러는 인덱스 관리
 // 명령($listSearchIndexes / createSearchIndex)을 *mongos 경유*로 보낸다. mongos 에 mongot 엔드포인트
@@ -255,18 +269,21 @@ func MongotServiceEndpoint(clusterName, namespace string) string {
 // Pending 고착한다(라이브 실측 2026-07-14). 따라서 mongos 가 도달 가능한 *pod 밖* mongot 진입점이
 // 필요하다 — mongot 컨테이너가 27028(mongot-grpc)을 containerPort 로 선언하므로 Service 로 노출 가능.
 //
-// selector: shard pod 는 component 라벨이 shard-N 으로 갈리므로(equality-only selector 로 전 shard 를
-// 못 묶음) annotation 활성 시 shard pod template 에 붙는 공통 표식(MongotPodLabel)으로 묶는다. 결과적
-// 으로 전 shard 의 mongot 이 엔드포인트가 되고 ClusterIP 가 그중 하나로 로드밸런싱한다.
+// 왜 *단일 shard* 인가: mongos 는 mongotHost 로 준 엔드포인트에 **직접 연결**하며 broadcast/fan-out
+// 하지 않는다(ADR-0039 #7 — dummy endpoint 실측 errCode:125 / 데이터가 다른 shard 면 빈 결과 VS:[]).
+// 따라서 전 shard mongot 을 묶은 로드밸런싱 ClusterIP 를 주면 연결마다 임의 shard 의 mongot 으로
+// 라우팅되어 **비결정적 빈 결과(조용한 오답)** 가 나온다 — 최악의 실패 모드. selector 를 pin 대상
+// shard(MongotRouterShardAnnotation, 기본 shard-0) 의 pod 로 좁혀 결정적 엔드포인트를 만든다.
+// ⛔ 이 배선은 검색 대상 컬렉션이 그 shard 에 상주할 때만(=unsharded 컬렉션의 primary shard) 올바른
+// 결과를 준다. multi-shard 분산 컬렉션 검색은 ADR-0039 대로 upstream 한계로 **여전히 미해결**.
 //
 // annotation(MongotSidecarImageAnnotation) 부재 = search 비활성 → nil(생성 안 함, 기존 opt-in 규율).
 func BuildMongotService(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.Service {
 	if mdbsh.Annotations[MongotSidecarImageAnnotation] == "" {
 		return nil
 	}
-	// component 를 비우면 buildLabels 가 component 키를 omit → shard/mongos 공통 3 라벨만 남는다.
-	// 여기에 MongotPodLabel 을 더해 "mongot 사이드카 보유 pod" 만 정확히 선택한다.
-	selector := buildLabels(mdbsh.Name, "")
+	// pin 대상 shard 의 pod 라벨(component=shard-N) + mongot 표식(사이드카 실보유 pod 만).
+	selector := buildLabels(mdbsh.Name, MongotRouterShard(mdbsh))
 	selector[MongotPodLabel] = MongotPodLabelValue
 
 	return &corev1.Service{

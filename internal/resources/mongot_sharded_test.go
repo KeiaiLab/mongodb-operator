@@ -132,12 +132,22 @@ func TestShardedMongot_ShardInjectionUnchanged(t *testing.T) {
 	}
 }
 
-// TestShardedMongot_Service — mongot Service 가 전 shard 의 mongot pod 를 selector 로 묶고 27028(gRPC,
-// named targetPort)을 노출하는지. selector 는 shard STS pod template 라벨과 실제로 매치해야 한다
-// (component=shard-N 은 shard 마다 달라 공통 표식 라벨 MongotPodLabel 로 묶는다).
+// selectorMatches — Service selector 가 주어진 pod 라벨 집합을 선택하는지(부분집합 판정).
+func selectorMatches(selector, podLabels map[string]string) bool {
+	for k, v := range selector {
+		if podLabels[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
+// TestShardedMongot_Service — mongot Service 가 **pin 된 단일 shard** 의 mongot pod 만 selector 로 잡고
+// 27028(gRPC, named targetPort)을 노출하는지. mongos 는 mongotHost 엔드포인트에 직접 연결(broadcast
+// 아님 — ADR-0039 #7)하므로 로드밸런싱 엔드포인트는 비결정적 빈 결과를 낳는다 → 단일 shard pin 고정.
 func TestShardedMongot_Service(t *testing.T) {
 	sh := newTestSharded()
-	sh.Annotations = mongotAnnotations()
+	sh.Annotations = mongotAnnotations() // router-shard 미지정 → 기본 shard-0
 
 	svc := BuildMongotService(sh)
 	require.NotNil(t, svc, "annotation 존재 시 mongot Service 생성돼야")
@@ -146,25 +156,43 @@ func TestShardedMongot_Service(t *testing.T) {
 	require.Len(t, svc.Spec.Ports, 1)
 	assert.Equal(t, int32(27028), svc.Spec.Ports[0].Port)
 	assert.Equal(t, "mongot-grpc", svc.Spec.Ports[0].TargetPort.StrVal)
+	assert.Equal(t, DefaultMongotRouterShard, svc.Spec.Selector["app.kubernetes.io/component"],
+		"router-shard 미지정 시 기본 pin = shard-0")
 
-	// selector 가 *모든* shard pod template 라벨의 부분집합인지(= 전 shard mongot 을 엔드포인트로 묶음).
-	for i := int32(0); i < sh.Spec.Shards.Count; i++ {
-		podLabels := BuildShardStatefulSet(sh, i).Spec.Template.Labels
-		for k, v := range svc.Spec.Selector {
-			assert.Equal(t, v, podLabels[k], "shard-%d pod 가 mongot Service selector[%s] 를 만족해야", i, k)
-		}
-	}
+	// pin 된 shard-0 pod 는 선택되고, 다른 shard(shard-1) pod 는 선택되지 않아야(결정적 단일 엔드포인트).
+	assert.True(t, selectorMatches(svc.Spec.Selector, BuildShardStatefulSet(sh, 0).Spec.Template.Labels),
+		"pin 된 shard-0 mongot pod 는 mongot Service 엔드포인트여야")
+	assert.False(t, selectorMatches(svc.Spec.Selector, BuildShardStatefulSet(sh, 1).Spec.Template.Labels),
+		"pin 되지 않은 shard-1 pod 는 엔드포인트가 되면 안 됨(LB → 비결정적 빈 결과 방지)")
 
-	// mongos / config server pod 는 selector 에 걸리지 않아야(mongot 미보유 — 엔드포인트 오염 금지).
-	mongosLabels := BuildMongosDeployment(sh).Spec.Template.Labels
-	assert.NotEqual(t, "true", mongosLabels[MongotPodLabel], "mongos pod 는 mongot 표식 라벨 없어야")
-	cfgLabels := BuildConfigServerStatefulSet(sh).Spec.Template.Labels
-	assert.NotEqual(t, "true", cfgLabels[MongotPodLabel], "config server pod 는 mongot 표식 라벨 없어야")
+	// mongos / config server pod 도 selector 에 걸리지 않아야(mongot 미보유 — 엔드포인트 오염 금지).
+	assert.False(t, selectorMatches(svc.Spec.Selector, BuildMongosDeployment(sh).Spec.Template.Labels),
+		"mongos pod 는 mongot Service 엔드포인트가 되면 안 됨")
+	assert.False(t, selectorMatches(svc.Spec.Selector, BuildConfigServerStatefulSet(sh).Spec.Template.Labels),
+		"config server pod 는 mongot Service 엔드포인트가 되면 안 됨")
 
 	// STS Selector(immutable)는 오염되지 않아야 — 표식 라벨은 pod template 에만.
 	shard := BuildShardStatefulSet(sh, 0)
 	assert.NotContains(t, shard.Spec.Selector.MatchLabels, MongotPodLabel,
 		"STS Selector 는 immutable — mongot 표식 라벨이 들어가면 기존 STS apply 실패")
+}
+
+// TestShardedMongot_ServiceRouterShardPin — spec.router.mongotShard(→ annotation) 로 pin 대상 shard 를
+// 바꾸면 selector 가 그 shard 만 잡는지. 검색 대상 컬렉션이 상주하는 shard(primary shard)로 지정해야
+// $search/$vectorSearch 가 올바른 결과를 준다.
+func TestShardedMongot_ServiceRouterShardPin(t *testing.T) {
+	sh := newTestSharded()
+	sh.Annotations = mongotAnnotations()
+	sh.Annotations[MongotRouterShardAnnotation] = "shard-1"
+
+	svc := BuildMongotService(sh)
+	require.NotNil(t, svc)
+	assert.Equal(t, "shard-1", svc.Spec.Selector["app.kubernetes.io/component"])
+	assert.True(t, selectorMatches(svc.Spec.Selector, BuildShardStatefulSet(sh, 1).Spec.Template.Labels),
+		"pin 된 shard-1 pod 가 엔드포인트여야")
+	assert.False(t, selectorMatches(svc.Spec.Selector, BuildShardStatefulSet(sh, 0).Spec.Template.Labels),
+		"pin 되지 않은 shard-0 pod 는 엔드포인트가 되면 안 됨")
+	assert.Equal(t, "shard-1", MongotRouterShard(sh))
 }
 
 // TestShardedMongot_SidecarHasInitAndVolume — 주입된 sidecar 가 init(password 0400) + data PVC subPath

@@ -1781,8 +1781,10 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 	// MongoDBSearchIndex 컨트롤러는 인덱스 관리 명령($listSearchIndexes / createSearchIndex)을 mongos
 	// 경유로 보내므로, mongos 에 mongot 엔드포인트가 비어 있으면 SearchNotEnabled 로 거부되어 인덱스
 	// CR 이 Pending 고착한다(라이브 실측 2026-07-14 — 구 주석의 "mongos setParameter 불요" 가정 오류).
-	// 따라서 pod 밖 mongot Service(BuildMongotService)를 가리킨다. 데이터면($search fan-out)은 여전히
-	// shard mongod → 자기 localhost mongot 경로로 동작한다.
+	// 따라서 pod 밖 mongot Service(BuildMongotService)를 가리킨다. 그 Service 는 **단일 shard pin**
+	// (spec.router.mongotShard, 기본 shard-0) — mongos 는 이 엔드포인트에 *직접 연결*하며 broadcast
+	// 하지 않으므로(ADR-0039 #7) LB 엔드포인트를 주면 비결정적 빈 결과가 난다. multi-shard 분산
+	// 컬렉션 검색은 upstream 한계로 여전히 미해결(ADR-0039 Decision #2) — 본 배선의 범위 밖.
 	// annotation 부재(= search 비활성) 시 args 무변경 = mongos 무롤링(mongot_sharded_test no-roll 가드).
 	if mdbsh.Annotations[MongotSidecarImageAnnotation] != "" {
 		args = append(args, MongotSetParameterArgs(
