@@ -1,6 +1,21 @@
-# Image URL to use all building/pushing image targets
-# GHCR(GitHub Container Registry)을 단일 진실 소스로 사용. Docker Hub는 더 이상 사용하지 않음.
-IMG ?= ghcr.io/keiailab/mongodb-operator:latest
+# ──────────────────────────────────────────────────────────────────────────
+# 이미지 레지스트리 — Harbor (RFC-0125 registry 이관). 구 GHCR 는 폐기.
+#
+# 왜: GHCR push 자격이 로컬 docker 키체인에 묶여 있어 CI/자동화가 불가능했다
+# (릴리스가 사람의 키체인 승인 프롬프트에 종속 = SPOF). 이미지 빌드/발행은
+# GitLab CI(.gitlab-ci.yml `build:image`)가 클러스터 remote buildkitd(RFC-0127)와
+# Harbor robot 자격(RFC-0125)으로 수행한다 → 로컬 docker/ghcr 자격 불요.
+#
+# REGISTRY_PATH 는 GitLab 프로젝트 경로($CI_PROJECT_PATH) 와 동일 (케플 규약:
+# harbor.keiailab.dev/$CI_PROJECT_PATH).
+# ──────────────────────────────────────────────────────────────────────────
+REGISTRY      ?= harbor.keiailab.dev
+REGISTRY_PATH ?= keiailab/platform/mongodb-operator
+IMAGE_BASE    ?= $(REGISTRY)/$(REGISTRY_PATH)
+BUNDLE_IMAGE_BASE  ?= $(IMAGE_BASE)-bundle
+CATALOG_IMAGE_BASE ?= $(IMAGE_BASE)-catalog
+
+IMG ?= $(IMAGE_BASE):latest
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -73,7 +88,7 @@ test-mongo: ## Run real-mongo integration tests (insights round-trip). 실 mongo
 # 사용법:
 #   make release VERSION=v1.3.2-beta.6
 #
-# 순서: gate → image build/push → git tag → tag push → GH release → helm-publish
+# 순서: gate → image 확인(빌드는 GitLab CI) → git tag → tag push → GH release → helm-publish
 # 모든 단계가 PASS여야 진행. 1단계라도 실패 시 즉시 중단.
 # ──────────────────────────────────────────────────────────────────────────
 .PHONY: release
@@ -92,11 +107,18 @@ release: ## Full release pipeline. VERSION=v1.x.y 필수 (e.g., make release VER
 	fi
 	@echo "✓ Chart.yaml version=$$(echo $(VERSION) | sed 's/^v//')"
 	@echo ""
-	@echo "=== Step 3/6- Docker image build + push (linux/amd64, default builder) ==="
-	docker --context=default buildx build --platform $(PLATFORMS) \
-		-t ghcr.io/keiailab/mongodb-operator:$(VERSION) \
-		-t ghcr.io/keiailab/mongodb-operator:$$(echo $(VERSION) | sed 's/^v//') \
-		--push .
+	@echo "=== Step 3/6- 컨테이너 이미지 (GitLab CI 담당 — 로컬 push 안 함) ==="
+	# RFC-0125/RFC-0127: 이미지 빌드/push 는 GitLab CI `build:image` 잡이 클러스터
+	# remote buildkitd + Harbor robot 자격으로 수행한다. 로컬 릴리스는 docker 자격을
+	# 요구하지 않는다 (구 `docker buildx build --push ghcr.io/...` 제거 — 키체인 SPOF).
+	# 여기서는 대상 태그가 Harbor 에 실재하는지 *확인만* 한다 (미도달 시 warn — NetBird 밖).
+	@IMAGE_REF="$(IMAGE_BASE):$(VERSION)"; \
+	if docker buildx imagetools inspect "$$IMAGE_REF" >/dev/null 2>&1; then \
+		echo "✓ image 존재- $$IMAGE_REF"; \
+	else \
+		echo "WARN- $$IMAGE_REF 확인 불가 (Harbor 미도달 또는 CI 빌드 미완료)"; \
+		echo "  → GitLab stable push 파이프라인의 build:image 잡 완료 후 재시도"; \
+	fi
 	@echo ""
 	@echo "=== Step 4/6- Git tag + push ==="
 	@if git tag -l $(VERSION) | grep -q .; then \
@@ -120,7 +142,7 @@ release: ## Full release pipeline. VERSION=v1.x.y 필수 (e.g., make release VER
 	SBOM_ASSET=""; \
 	if command -v syft >/dev/null 2>&1; then \
 		echo "=== syft SBOM 생성 (T0-2 자동화) ==="; \
-		syft scan ghcr.io/keiailab/mongodb-operator:$(VERSION) -o spdx-json -q > "/tmp/mongodb-operator-$(VERSION).spdx.json" 2>/dev/null && \
+		syft scan $(IMAGE_BASE):$(VERSION) -o spdx-json -q > "/tmp/mongodb-operator-$(VERSION).spdx.json" 2>/dev/null && \
 			SBOM_ASSET="/tmp/mongodb-operator-$(VERSION).spdx.json"; \
 	fi; \
 	if gh release view $(VERSION) -R keiailab/mongodb-operator >/dev/null 2>&1; then \
@@ -137,7 +159,7 @@ release: ## Full release pipeline. VERSION=v1.x.y 필수 (e.g., make release VER
 	@$(MAKE) helm-publish
 	@echo ""
 	@echo "✓ Release $(VERSION) 완료"
-	@echo "  - Image- ghcr.io/keiailab/mongodb-operator:$(VERSION)"
+	@echo "  - Image- $(IMAGE_BASE):$(VERSION)"
 	@echo "  - GH Release- https://github.com/keiailab/mongodb-operator/releases/tag/$(VERSION)"
 	@echo "  - Helm OCI- oci://ghcr.io/keiailab/charts/mongodb-operator"
 	@echo "  - ArtifactHub은 ~30분 내 인덱스 자동 갱신"
@@ -148,6 +170,8 @@ HELM_GPG_FINGERPRINT ?= F1A6893583E632A757FF6767F3CC8C6AEC9CEB08
 HELM_GPG_KEY         ?= $(HELM_GPG_FINGERPRINT)
 HELM_KEYRING         ?= $(HOME)/.gnupg/secring.gpg
 HELM_PUBLISH_TARGET  ?= oci
+# helm *chart* 배포처는 GHCR OCI 유지 (RFC-0070 — GitHub canonical + ArtifactHub 발행 SSOT).
+# 본 cycle 의 Harbor 이관 범위는 *컨테이너 이미지 빌드/발행* 경로 한정 (ADR-0041).
 HELM_OCI_REPO        ?= oci://ghcr.io/keiailab/charts
 
 # Build platforms — AGENTS.md §2 + RFC-0002 §2: amd64-only 강제 (multi-arch 금지).
@@ -170,14 +194,14 @@ bundle: ## OperatorHub.io bundle 생성 — operator-sdk + kustomize. VERSION �
 	@command -v operator-sdk >/dev/null 2>&1 || { echo "[error] operator-sdk not installed: brew install operator-sdk"; exit 1; }
 	@command -v kustomize >/dev/null 2>&1 || { echo "[error] kustomize not installed"; exit 1; }
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수 (e.g. make bundle VERSION=1.5.0)"; exit 1; fi
-	@echo "=== set image ghcr.io/keiailab/mongodb-operator=ghcr.io/keiailab/mongodb-operator:v$(VERSION) ==="
-	# 실 manager.yaml 의 image 명 (ghcr.io/keiailab/mongodb-operator) 를 정확히 타겟해야 newTag 가 적용됨.
+	@echo "=== set image $(IMAGE_BASE)=$(IMAGE_BASE):v$(VERSION) ==="
+	# 실 manager.yaml 의 image 명 ($(IMAGE_BASE)) 를 정확히 타겟해야 newTag 가 적용됨.
 	# 'controller' placeholder 는 manager.yaml 에 없으므로 매칭 실패 → 이전 cycle 의 version drift 원인 (CSV containerImage 가 stale tag 유지).
-	cd config/manager && kustomize edit set image ghcr.io/keiailab/mongodb-operator=ghcr.io/keiailab/mongodb-operator:v$(VERSION)
+	cd config/manager && kustomize edit set image $(IMAGE_BASE)=$(IMAGE_BASE):v$(VERSION)
 	@echo "=== bump base CSV containerImage annotation to v$(VERSION) ==="
 	# ADR-0028: operator-sdk 는 input CSV 의 containerImage annotation 이 이미 있으면 deployment spec 의 image 로 덮어쓰지 않는다.
 	# 이 sed 단계가 없으면 base CSV 의 stale tag 가 그대로 bundle 로 흘러간다 (결격 1 RCA).
-	sed -i.bak -E 's|(containerImage: ghcr.io/keiailab/mongodb-operator:)v[0-9]+\.[0-9]+\.[0-9]+.*|\1v$(VERSION)|' config/manifests/bases/mongodb-operator.clusterserviceversion.yaml
+	sed -i.bak -E 's|(containerImage: $(IMAGE_BASE):)v[0-9]+\.[0-9]+\.[0-9]+.*|\1v$(VERSION)|' config/manifests/bases/mongodb-operator.clusterserviceversion.yaml
 	rm -f config/manifests/bases/mongodb-operator.clusterserviceversion.yaml.bak
 	@echo "=== kustomize build config/manifests | operator-sdk generate bundle ==="
 	# ADR-0028: stable + alpha 양 channel 동시 push, default = stable (외부 사용자 운영 수준).
@@ -204,15 +228,15 @@ bundle: ## OperatorHub.io bundle 생성 — operator-sdk + kustomize. VERSION �
 bundle-build: bundle ## bundle image 빌드 — registry push 는 community-operators PR 시점에 별.
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
 	# ADR-0028: GOVERNANCE.md §2 — 멀티아키 빌드 금지. PLATFORMS=linux/amd64 강제.
-	docker buildx build --platform linux/amd64 -f bundle.Dockerfile -t ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) --load .
-	@echo "✓ bundle image: ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) (local docker daemon)"
+	docker buildx build --platform linux/amd64 -f bundle.Dockerfile -t $(BUNDLE_IMAGE_BASE):v$(VERSION) --load .
+	@echo "✓ bundle image: $(BUNDLE_IMAGE_BASE):v$(VERSION) (local docker daemon)"
 
 .PHONY: bundle-push
-bundle-push: ## bundle image push to ghcr.io. ADR-0028 외부 사용자 운영 수준 + community-operators PR 입력.
+bundle-push: ## bundle image push to Harbor (RFC-0125). ADR-0028 외부 사용자 운영 수준 + community-operators PR 입력.
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
-	docker push ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION)
-	@DIGEST=$$(docker buildx imagetools inspect ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) --format '{{.Manifest.Digest}}'); \
-	echo "✓ bundle pushed: ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION)@$$DIGEST"
+	docker push $(BUNDLE_IMAGE_BASE):v$(VERSION)
+	@DIGEST=$$(docker buildx imagetools inspect $(BUNDLE_IMAGE_BASE):v$(VERSION) --format '{{.Manifest.Digest}}'); \
+	echo "✓ bundle pushed: $(BUNDLE_IMAGE_BASE):v$(VERSION)@$$DIGEST"
 
 .PHONY: catalog-build
 catalog-build: ## FBC catalog image 빌드. deploy/catalog/ 의 plain YAML 을 opm serve image 로 wrap. ADR-0028 Phase D.
@@ -224,19 +248,19 @@ catalog-build: ## FBC catalog image 빌드. deploy/catalog/ 의 plain YAML 을 o
 	# imagetools '{{.Manifest.Digest}}' 는 단일 manifest·manifest-list 모두 *정규 이미지 ref digest* 반환.
 	# (구 `docker manifest inspect | config.digest` 는 단일 manifest 에서 config blob digest 를 잘못
 	#  반환 — default 빌더 --provenance=false 단일 manifest 빌드 시 OLM 이 못 pull. 발견: v1.16.0 릴리스.)
-	@BUNDLE_DIGEST=$$(docker buildx imagetools inspect ghcr.io/keiailab/mongodb-operator-bundle:v$(VERSION) --format '{{.Manifest.Digest}}' 2>/dev/null); \
+	@BUNDLE_DIGEST=$$(docker buildx imagetools inspect $(BUNDLE_IMAGE_BASE):v$(VERSION) --format '{{.Manifest.Digest}}' 2>/dev/null); \
 	if [ -z "$$BUNDLE_DIGEST" ]; then echo "ERROR: bundle image v$(VERSION) 의 GHCR 의 digest 가져오지 못함 — bundle-push 먼저 실행"; exit 1; fi; \
 	echo "=== bundle digest: $$BUNDLE_DIGEST"; \
-	sed -i.bak -E "s|image: ghcr.io/keiailab/mongodb-operator-bundle(:v[0-9.]+)?(@sha256:[a-f0-9]+)?|image: ghcr.io/keiailab/mongodb-operator-bundle@$$BUNDLE_DIGEST|g" deploy/catalog/catalog/mongodb-operator/catalog.yaml; \
+	sed -i.bak -E "s|image: $(BUNDLE_IMAGE_BASE)(:v[0-9.]+)?(@sha256:[a-f0-9]+)?|image: $(BUNDLE_IMAGE_BASE)@$$BUNDLE_DIGEST|g" deploy/catalog/catalog/mongodb-operator/catalog.yaml; \
 	rm -f deploy/catalog/catalog/mongodb-operator/catalog.yaml.bak
-	cd deploy/catalog && docker buildx build --platform linux/amd64 -t ghcr.io/keiailab/mongodb-operator-catalog:v$(VERSION) --load .
-	@echo "✓ catalog image: ghcr.io/keiailab/mongodb-operator-catalog:v$(VERSION)"
+	cd deploy/catalog && docker buildx build --platform linux/amd64 -t $(CATALOG_IMAGE_BASE):v$(VERSION) --load .
+	@echo "✓ catalog image: $(CATALOG_IMAGE_BASE):v$(VERSION)"
 
 .PHONY: catalog-push
-catalog-push: ## catalog image push to ghcr.io. OLM v1 ClusterCatalog 의 image: 가 본 image pull.
+catalog-push: ## catalog image push to Harbor (RFC-0125). OLM v1 ClusterCatalog 의 image: 가 본 image pull.
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
-	docker push ghcr.io/keiailab/mongodb-operator-catalog:v$(VERSION)
-	@echo "✓ catalog pushed: ghcr.io/keiailab/mongodb-operator-catalog:v$(VERSION)"
+	docker push $(CATALOG_IMAGE_BASE):v$(VERSION)
+	@echo "✓ catalog pushed: $(CATALOG_IMAGE_BASE):v$(VERSION)"
 
 .PHONY: verify-bundle-parity
 verify-bundle-parity: ## OLM bundle ↔ chart 정합 가드 (ADR-0038). bundle CSV version == Chart.yaml appVersion + CRD 개수 일치. release CI / pre-push 게이트.
@@ -264,8 +288,8 @@ verify-bundle-parity: ## OLM bundle ↔ chart 정합 가드 (ADR-0038). bundle C
 sbom: ## syft 로 SBOM (SPDX-2.3) 생성 — image 의 binary + Go modules. SLSA / EU CRA 표준.
 	@command -v syft >/dev/null 2>&1 || { echo "[error] syft not installed: brew install syft"; exit 1; }
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수"; exit 1; fi
-	@echo "=== syft scan ghcr.io/keiailab/mongodb-operator:$(VERSION) ==="
-	syft scan ghcr.io/keiailab/mongodb-operator:$(VERSION) -o spdx-json -q > "/tmp/mongodb-operator-$(VERSION).spdx.json"
+	@echo "=== syft scan $(IMAGE_BASE):$(VERSION) ==="
+	syft scan $(IMAGE_BASE):$(VERSION) -o spdx-json -q > "/tmp/mongodb-operator-$(VERSION).spdx.json"
 	@SIZE=$$(wc -c < "/tmp/mongodb-operator-$(VERSION).spdx.json" | tr -d ' '); \
 	echo "✓ SBOM: /tmp/mongodb-operator-$(VERSION).spdx.json ($$SIZE bytes)"
 
@@ -346,11 +370,16 @@ md-link-check: ## 마크다운 문서 깨진 링크 검사 (구 GHA markdown-lin
 
 .PHONY: validate
 validate: manifests generate ## Validate K8s manifests + helm chart + CRD (RFC 0002 L3 validate 게이트).
-	helm lint charts/mongodb-operator
-	helm template gate charts/mongodb-operator >/dev/null && echo "helm template OK"
-	helm lint charts/mongodb-cluster
-	helm template gate-cluster charts/mongodb-cluster >/dev/null && echo "mongodb-cluster template OK"
-	helm template gate-cluster charts/mongodb-cluster --set architecture=sharded >/dev/null && echo "mongodb-cluster sharded template OK"
+	# charts/ 에 실재하는 차트만 lint/template. 구 하드코딩은 존재하지 않는 charts/mongodb-cluster
+	# 를 lint 하다 "no such file or directory" 로 항상 FAIL 했다 (v1.16.6 릴리스 blocker RCA).
+	# wildcard 순회라 향후 차트 추가/삭제에도 자동 정합 (sync-crds 와 동일 패턴).
+	@for chart in charts/*/; do \
+		[ -f "$$chart/Chart.yaml" ] || continue; \
+		name=$$(basename "$$chart"); \
+		echo "=== helm lint $$name ==="; \
+		helm lint "$$chart"; \
+		helm template gate "$$chart" >/dev/null && echo "✓ helm template $$name OK"; \
+	done
 
 .PHONY: gate
 gate: lint test-unit audit validate ## RFC 0002 로컬 4계층 게이트 — pre-push 동등.
@@ -427,7 +456,7 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image ghcr.io/keiailab/mongodb-operator=${IMG}
+	cd config/manager && $(KUSTOMIZE) edit set image $(IMAGE_BASE)=${IMG}
 	$(KUSTOMIZE) build config/default | kubectl apply --server-side --force-conflicts -f -
 
 .PHONY: undeploy

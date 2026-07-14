@@ -404,7 +404,7 @@ metadata:
       ]
     capabilities: Seamless Upgrades
     categories: Database, Storage
-    containerImage: ghcr.io/keiailab/mongodb-operator:v1.16.5
+    containerImage: harbor.keiailab.dev/keiailab/platform/mongodb-operator:v1.16.5
     createdAt: "2026-07-14T11:55:11Z"
     description: |
       Kubernetes operator for MongoDB — manages MongoDB (ReplicaSet) and
@@ -784,7 +784,7 @@ spec:
                 - --enable-clustergroup-controller=true
                 - --enable-autoscaling=true
                 - --enable-search-controller=true
-                image: ghcr.io/keiailab/mongodb-operator:v1.16.5
+                image: harbor.keiailab.dev/keiailab/platform/mongodb-operator:v1.16.5
                 livenessProbe:
                   httpGet:
                     path: /healthz

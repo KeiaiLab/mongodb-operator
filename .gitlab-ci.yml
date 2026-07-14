@@ -1,6 +1,10 @@
 # keiailab OSS · GitLab CI (self-contained, RFC-0043 spirit / shadow phase)
-# Mirror of the local quality gates: vet -> test -> build.
-# allow_failure keeps this non-blocking until a runner + green baseline exist.
+# Mirror of the local quality gates: vet -> test -> build (+ image).
+# allow_failure keeps the Go gates non-blocking until a green baseline exists.
+#
+# 이미지 빌드 = RFC-0127 remote buildkitd (클러스터 상주 데몬, mTLS) + RFC-0125 Harbor.
+# 구 GHCR push (로컬 docker 키체인 자격 의존) 는 폐기 — 자격이 클러스터에 있으므로
+# 사람 개입 없이 자동 발행된다 (ADR-0041).
 stages: [lint, test, build]
 
 default:
@@ -26,3 +30,81 @@ go-build:
   script:
     - go build ./...
   allow_failure: true
+
+# =============================================================================
+# build:image — operator manager 이미지 (linux/amd64 단일, 멀티아키 금지 GOVERNANCE §2.3)
+#
+#   - tags: [k8s]         클러스터 K8s runner (run_untagged=false → tag 필수)
+#   - buildctl 클라이언트  → BUILDKIT_HOST(클러스터 상주 buildkitd Deployment, mTLS)
+#                          빌드 자원은 데몬이 소유 → job pod 는 경량 무권한 클라이언트
+#   - Harbor robot 자격    /harbor-auth/config.json (runner volumes.secret harbor-push,
+#                          OpenBao apps/harbor → ESO). CI_JOB_TOKEN 은 Harbor 미인증.
+#   - PUSH_IMAGE           MR-event = "false" (미머지 코드 태그 차단, build-only 검증)
+#                          stable push = "true"
+#   - 태그                 :$CI_COMMIT_SHA · :$APP_VERSION(Chart.yaml appVersion) · :latest
+#
+# Refs: RFC-0127(remote buildkitd) / RFC-0125(Harbor 이관) / ADR-0041(본 repo 전환 결정)
+# =============================================================================
+build:image:
+  stage: build
+  needs: []
+  tags: [k8s]
+  image:
+    name: harbor.keiailab.dev/dockerhub-proxy/moby/buildkit:v0.31.1
+    entrypoint: [""]
+  variables:
+    # 클라이언트 경량 — 실 빌드 자원은 buildkitd Deployment limit 이 소유 (RFC-0127)
+    KUBERNETES_MEMORY_REQUEST: "256Mi"
+    KUBERNETES_MEMORY_LIMIT: "1Gi"
+    KUBERNETES_CPU_REQUEST: "250m"
+    KUBERNETES_CPU_LIMIT: "1"
+    BUILDKIT_HOST: "tcp://buildkitd.gitlab-runner.svc.cluster.local:1234"
+    REGISTRY: "harbor.keiailab.dev"
+    IMAGE_PATH: $CI_PROJECT_PATH
+    # 기본 false — 신규 rule 이 PUSH_IMAGE 설정을 누락해도 조용한 push 회귀가 없도록
+    # (fail-closed. push 는 아래 stable rule 이 명시적으로 켠다).
+    PUSH_IMAGE: "false"
+  rules:
+    # MR-event: build-only 검증 (push 안 함)
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      variables:
+        PUSH_IMAGE: "false"
+    # stable(= default branch) push: 발행
+    - if: '($CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH == "stable") && $CI_PIPELINE_SOURCE != "merge_request_event"'
+      variables:
+        PUSH_IMAGE: "true"
+  before_script:
+    # Harbor robot config.json — 부재 시 즉사 (익명 push 침묵 실패 차단, RFC-0125)
+    - |
+      if [ -f /harbor-auth/config.json ]; then
+        mkdir -p ~/.docker && cp /harbor-auth/config.json ~/.docker/config.json
+      else
+        echo "FATAL: /harbor-auth/config.json 부재 — gitlab-runner values [[runners.kubernetes.volumes.secret]] harbor-push mount 확인 (RFC-0125)" >&2
+        exit 1
+      fi
+    # mTLS client cert — 부재 시 즉사 (silent 무TLS 회귀 차단, RFC-0127)
+    - |
+      if [ ! -f /buildkit-certs/ca.crt ]; then
+        echo "FATAL: /buildkit-certs 부재 — gitlab-runner values buildkit-client-certs mount + buildkitd 배포(platform/system chart) 확인 (RFC-0127)" >&2
+        exit 1
+      fi
+    # 앵커 = charts/mongodb-operator/Chart.yaml appVersion (Go repo 라 pyproject 없음).
+    # chart appVersion == operator 이미지 태그 (RFC-0026 정합, verify-bundle-parity 가 강제).
+    - export APP_VERSION=$(grep -m1 '^appVersion:' charts/mongodb-operator/Chart.yaml | awk '{print $2}' | tr -d '"')
+    - '[ -n "$APP_VERSION" ] || { echo "FATAL: Chart.yaml appVersion 추출 실패" >&2; exit 1; }'
+    - echo "build $REGISTRY/$IMAGE_PATH -> :$CI_COMMIT_SHA :$APP_VERSION :latest (push=$PUSH_IMAGE)"
+  script:
+    - |
+      PUSH=true; [ "$PUSH_IMAGE" = "false" ] && PUSH=false
+      NAMES="$REGISTRY/$IMAGE_PATH:$CI_COMMIT_SHA,$REGISTRY/$IMAGE_PATH:$APP_VERSION,$REGISTRY/$IMAGE_PATH:latest"
+      buildctl \
+        --addr "$BUILDKIT_HOST" \
+        --tlscacert /buildkit-certs/ca.crt \
+        --tlscert /buildkit-certs/tls.crt \
+        --tlskey /buildkit-certs/tls.key \
+        build --frontend dockerfile.v0 \
+        --local context="$CI_PROJECT_DIR" \
+        --local dockerfile="$CI_PROJECT_DIR" \
+        --opt filename=Dockerfile \
+        --opt platform=linux/amd64 \
+        --output "type=image,\"name=$NAMES\",push=$PUSH"

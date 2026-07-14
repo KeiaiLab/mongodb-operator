@@ -2,6 +2,35 @@
 
 All notable changes to mongodb-operator will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **컨테이너 이미지 빌드·발행 경로 이관 — GHCR 로컬 push → GitLab CI + Harbor** (ADR-0041).
+  구 `make release` 는 `docker buildx build --push ghcr.io/...` 로 이미지를 냈는데, GHCR 자격이
+  로컬 macOS 키체인에 묶여 **push 마다 GUI 승인 프롬프트**가 떴다 — 릴리스가 *사람이 앉아 있는
+  특정 머신*에 종속된 SPOF 이자, 어떤 CI 경로로도 이미지를 낼 수 없는 구조였다. 이제
+  `.gitlab-ci.yml` 의 `build:image` 잡이 클러스터 remote buildkitd(RFC-0127, mTLS) + Harbor robot
+  자격(RFC-0125)으로 빌드·push 한다 (`stable` push = 발행 / MR = build-only 검증).
+  이미지 경로: `harbor.keiailab.dev/keiailab/platform/mongodb-operator{,-bundle,-catalog}`.
+  **범위 = 이미지 한정** — 코드 canonical 은 GitHub, helm chart 발행도 GHCR OCI + ArtifactHub
+  유지 (RFC-0070 불변).
+
+### Fixed
+
+- **`make validate` 선재 결함 (v1.16.6 릴리스 blocker)** — `validate` 가 존재하지 않는
+  `charts/mongodb-cluster` 를 lint 해 `no such file or directory` 로 **항상 FAIL** 했다.
+  `validate` ⊂ `gate` ⊂ `release` Step 1 이라 릴리스 파이프라인 전체가 이 한 줄에 막혀 있었다.
+  실재하는 `charts/*/Chart.yaml` 만 wildcard 순회하도록 수정 (차트 추가/삭제에 자동 정합).
+
+### Known gaps (정직 표기)
+
+- `harbor.keiailab.dev` 는 NetBird 내부망 전용(RFC-0082) → **외부 사용자는 Harbor 에서 pull 불가**.
+  단 `.github/workflows/release.yml` 이 `v*` 태그에서 `GITHUB_TOKEN` 으로 GHCR 에 이미 push 하므로
+  (로컬 자격 불요) 공개 발행 자체는 살아 있다 — 공개 배포를 유지하려면 차트 `image.repository` 를
+  GHCR 로 되돌려 **GHCR=공개 / Harbor=내부 2-plane** 으로 두면 된다 (ADR-0041 Consequences, 열린 결정).
+- GitLab 미러 프로젝트(`keiailab/platform/mongodb-operator`) 미생성 — 생성 전까지 `build:image` 미가동.
+
 ## [1.16.6] - 2026-07-14
 
 ### Fixed

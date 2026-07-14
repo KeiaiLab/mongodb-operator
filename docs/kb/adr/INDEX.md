@@ -38,6 +38,7 @@
 | [ADR-0038](0038-olm-v1-path1-realignment-and-parity-guard.md) | OLM v1 (Path 1) 재정렬 + 7-CRD parity + drift 가드 (bundle/catalog/ClusterExtension → appVersion 1.13.1 정렬, sync-crds wildcard, verify-bundle-parity CI/pre-push 게이트, ClusterExtension 컷오버 보류) | Accepted | 2026-06-22 |
 | [ADR-0039](0039-sharded-search-mongot-fanout-limit.md) | sharded MongoDB Search multi-shard 검색 = Community mongot 0.69.1 upstream 한계 (mongos 단일 endpoint 직접 라우팅=broadcast 아님, mongot localhost 하드코딩=StatefulSet 불가) + config server search-sync 비번 drift fix (precheck 비번 미검증 → 제거, v1.16.3) | Accepted | 2026-06-24 |
 | [ADR-0040](0040-mongos-mongot-service-wiring.md) | sharded search 컨트롤면 배선 — mongot Service(`<cluster>-mongot:27028`, **단일 shard pin** `spec.router.mongotShard`) + mongos 4 setParameter 주입 (ADR-0039 #5 코드 해소 → SearchIndex Pending 고착 해소 + unsharded 컬렉션 검색 동작). **multi-shard 분산 컬렉션 검색은 upstream 한계로 여전히 미해결**(ADR-0039 #7·Decision #2 유지) | Accepted | 2026-07-14 |
+| [ADR-0041](0041-harbor-registry-gitlab-ci-image-build.md) | 컨테이너 이미지 빌드·발행 이관 — GHCR 로컬 push(키체인 SPOF) → **GitLab CI `build:image`(remote buildkitd, RFC-0127) + Harbor**(`harbor.keiailab.dev/keiailab/platform/mongodb-operator`, RFC-0125). `make validate` 의 유령 차트(`charts/mongodb-cluster`) lint 선재 결함 동시 수정 — 릴리스 blocker. 범위 = *이미지 한정* (코드 canonical = GitHub, chart 발행 = GHCR OCI/ArtifactHub 유지 — RFC-0070 불변). residual: harbor 는 NetBird 내부 전용 → 공개 pull 미러 후속 필요 | Accepted | 2026-07-15 |
 
 ## 작성 가이드
 

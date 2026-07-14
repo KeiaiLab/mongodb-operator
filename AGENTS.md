@@ -77,7 +77,11 @@ make test                      # go test ./internal/... + envtest
 ### 배포 — 3 deployment models (ADR-0028~0030)
 
 **operator container image** (모든 model 공통):
-- `make docker-push IMG=ghcr.io/keiailab/mongodb-operator:X.Y.Z` (linux/amd64 단일, 글로벌 §2)
+- **GitLab CI 가 빌드·발행한다** — `stable` push 시 `.gitlab-ci.yml` `build:image` 잡이 클러스터
+  remote buildkitd(RFC-0127) + Harbor robot 자격(RFC-0125)으로
+  `harbor.keiailab.dev/keiailab/platform/mongodb-operator:{sha,appVersion,latest}` push.
+  로컬 docker/registry 자격 불요 (ADR-0041 — 구 GHCR 로컬 push 는 키체인 SPOF 라 폐기).
+- 로컬 개발용 빌드만: `make docker-build` (linux/amd64 단일, 글로벌 §2)
 
 **Path 1 — OLM v1 (recommended, current modern standard)**:
 - `make bundle VERSION=X.Y.Z && make bundle-build VERSION=X.Y.Z && make bundle-push VERSION=X.Y.Z`
