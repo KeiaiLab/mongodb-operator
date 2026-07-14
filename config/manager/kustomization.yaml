@@ -9,4 +9,4 @@ resources:
 images:
 - name: harbor.keiailab.dev/keiailab/platform/mongodb-operator
   newName: harbor.keiailab.dev/keiailab/platform/mongodb-operator
-  newTag: v1.16.5
+  newTag: v1.16.6

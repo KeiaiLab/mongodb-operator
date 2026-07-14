@@ -32,7 +32,11 @@ go-build:
   allow_failure: true
 
 # =============================================================================
-# build:image — operator manager 이미지 (linux/amd64 단일, 멀티아키 금지 GOVERNANCE §2.3)
+# Harbor + remote buildkitd 이미지 빌드 (linux/amd64 단일, 멀티아키 금지 GOVERNANCE §2.3)
+#
+#   build:image(manager) → bundle:image(OLM bundle) → catalog:image(FBC) 3 잡이
+#   아래 .harbor_build 골격을 공유한다 (extends). 각 잡은 자신의 buildctl 호출만
+#   script 로 정의.
 #
 #   - tags: [k8s]         클러스터 K8s runner (run_untagged=false → tag 필수)
 #   - buildctl 클라이언트  → BUILDKIT_HOST(클러스터 상주 buildkitd Deployment, mTLS)
@@ -41,13 +45,13 @@ go-build:
 #                          OpenBao apps/harbor → ESO). CI_JOB_TOKEN 은 Harbor 미인증.
 #   - PUSH_IMAGE           MR-event = "false" (미머지 코드 태그 차단, build-only 검증)
 #                          stable push = "true"
-#   - 태그                 :$CI_COMMIT_SHA · :$APP_VERSION(Chart.yaml appVersion) · :latest
+#   - APP_VERSION          charts/mongodb-operator/Chart.yaml appVersion (Go repo 라
+#                          pyproject 없음). chart appVersion == 이미지 태그 (RFC-0026).
 #
 # Refs: RFC-0127(remote buildkitd) / RFC-0125(Harbor 이관) / ADR-0041(본 repo 전환 결정)
 # =============================================================================
-build:image:
+.harbor_build:
   stage: build
-  needs: []
   tags: [k8s]
   image:
     name: harbor.keiailab.dev/dockerhub-proxy/moby/buildkit:v0.31.1
@@ -88,15 +92,23 @@ build:image:
         echo "FATAL: /buildkit-certs 부재 — gitlab-runner values buildkit-client-certs mount + buildkitd 배포(platform/system chart) 확인 (RFC-0127)" >&2
         exit 1
       fi
-    # 앵커 = charts/mongodb-operator/Chart.yaml appVersion (Go repo 라 pyproject 없음).
-    # chart appVersion == operator 이미지 태그 (RFC-0026 정합, verify-bundle-parity 가 강제).
     - export APP_VERSION=$(grep -m1 '^appVersion:' charts/mongodb-operator/Chart.yaml | awk '{print $2}' | tr -d '"')
     - '[ -n "$APP_VERSION" ] || { echo "FATAL: Chart.yaml appVersion 추출 실패" >&2; exit 1; }'
-    - echo "build $REGISTRY/$IMAGE_PATH -> :$CI_COMMIT_SHA :$APP_VERSION :latest (push=$PUSH_IMAGE)"
+    # PUSH_IMAGE(문자열) → PUSH(buildctl push= 인자) 정규화. 기본 fail-closed(false).
+    - PUSH=true; [ "$PUSH_IMAGE" = "false" ] && PUSH=false
+    - export PUSH
+
+# build:image — operator manager 이미지. 태그 :$CI_COMMIT_SHA · :$APP_VERSION · :latest
+build:image:
+  extends: .harbor_build
+  needs: []
   script:
+    - echo "build $REGISTRY/$IMAGE_PATH -> :$CI_COMMIT_SHA :$APP_VERSION :v$APP_VERSION :latest (push=$PUSH_IMAGE)"
     - |
-      PUSH=true; [ "$PUSH_IMAGE" = "false" ] && PUSH=false
-      NAMES="$REGISTRY/$IMAGE_PATH:$CI_COMMIT_SHA,$REGISTRY/$IMAGE_PATH:$APP_VERSION,$REGISTRY/$IMAGE_PATH:latest"
+      # :$APP_VERSION(v 없음) + :v$APP_VERSION 둘 다 태깅한다 — CI 는 v 없는 태그를,
+      # bundle/CSV·Makefile IMAGE_BASE 는 :v 접두 태그를 참조하는 이력 불일치를 양쪽 태깅으로
+      # 흡수(OLM 이 없는 태그를 pull 하는 회귀 차단). digest 는 동일 이미지라 저장 중복 0.
+      NAMES="$REGISTRY/$IMAGE_PATH:$CI_COMMIT_SHA,$REGISTRY/$IMAGE_PATH:$APP_VERSION,$REGISTRY/$IMAGE_PATH:v$APP_VERSION,$REGISTRY/$IMAGE_PATH:latest"
       buildctl \
         --addr "$BUILDKIT_HOST" \
         --tlscacert /buildkit-certs/ca.crt \
@@ -108,3 +120,95 @@ build:image:
         --opt filename=Dockerfile \
         --opt platform=linux/amd64 \
         --output "type=image,\"name=$NAMES\",push=$PUSH"
+
+# =============================================================================
+# bundle:image — OLM operator bundle 이미지 (registry+v1, ADR-0028)
+#
+#   bundle.Dockerfile(FROM scratch + COPY bundle/{manifests,metadata,tests}) 을
+#   buildkitd 로 빌드 → mongodb-operator-bundle:v<APP_VERSION> push.
+#   catalog:image 가 소비하도록 push 된 bundle 의 digest 를 dotenv(BUNDLE_DIGEST)
+#   로 내보낸다 — 로컬 docker 없이 digest 취득 = buildctl --metadata-file 의
+#   containerimage.digest (정규 이미지 ref digest, OLM 이 그대로 pull).
+#
+#   범위: bundle 매니페스트(bundle/manifests) *재생성*(operator-sdk)은 로컬
+#   `make bundle VERSION=<v>` 담당. 본 잡은 커밋된 bundle 을 *빌드/발행만* 한다
+#   (Makefile bundle-build + bundle-push 등가). manager 이미지 참조·CSV version 은
+#   커밋된 매니페스트를 그대로 따른다 (drift 는 verify-bundle-parity 가 검출).
+# =============================================================================
+bundle:image:
+  extends: .harbor_build
+  needs: ["build:image"]
+  artifacts:
+    reports:
+      dotenv: bundle.env
+  script:
+    - BUNDLE_IMG="$REGISTRY/$IMAGE_PATH-bundle:v$APP_VERSION"
+    - echo "build bundle $BUNDLE_IMG (push=$PUSH_IMAGE)"
+    - |
+      buildctl \
+        --addr "$BUILDKIT_HOST" \
+        --tlscacert /buildkit-certs/ca.crt \
+        --tlscert /buildkit-certs/tls.crt \
+        --tlskey /buildkit-certs/tls.key \
+        build --frontend dockerfile.v0 \
+        --local context="$CI_PROJECT_DIR" \
+        --local dockerfile="$CI_PROJECT_DIR" \
+        --opt filename=bundle.Dockerfile \
+        --opt platform=linux/amd64 \
+        --output "type=image,\"name=$BUNDLE_IMG\",push=$PUSH" \
+        --metadata-file /tmp/bundle-meta.json
+    # 로컬 docker 없이 digest 취득 — buildctl 이 빌드/push 시 기록한 정규 이미지 digest.
+    - BUNDLE_DIGEST=$(grep -o '"containerimage.digest":"sha256:[a-f0-9]*"' /tmp/bundle-meta.json | cut -d'"' -f4)
+    - echo "bundle digest = ${BUNDLE_DIGEST:-<none>}"
+    # 발행 경로(push=true)인데 digest 취득 실패 = catalog digest 체인 불가 → 즉사.
+    - '[ "$PUSH" != "true" ] || [ -n "$BUNDLE_DIGEST" ] || { echo "FATAL: bundle push 됐으나 digest 취득 실패 — catalog 체인 불가" >&2; exit 1; }'
+    - echo "BUNDLE_DIGEST=$BUNDLE_DIGEST" > bundle.env
+
+# =============================================================================
+# catalog:image — File-Based Catalog(FBC) 이미지 (opm serve, ADR-0028/ADR-0038)
+#
+#   digest 체인: bundle:image 가 dotenv 로 넘긴 BUNDLE_DIGEST 를 catalog.yaml 의
+#   olm.bundle image: 에 digest-only 로 sed 주입(operator-controller 는 tag+digest
+#   동시 참조 거부) 후 catalog 이미지를 빌드 → mongodb-operator-catalog:v<APP_VERSION>
+#   push. 라이브 ClusterCatalog 의 image: 가 본 이미지를 pull.
+#
+#   MR-event(build-only, BUNDLE_DIGEST 부재) 시 커밋된 catalog.yaml digest 를 유지하고
+#   Dockerfile 빌드만 검증한다.
+# =============================================================================
+catalog:image:
+  extends: .harbor_build
+  needs:
+    - job: "bundle:image"
+      artifacts: true
+  script:
+    - CATALOG_IMG="$REGISTRY/$IMAGE_PATH-catalog:v$APP_VERSION"
+    - CATALOG_YAML="deploy/catalog/catalog/mongodb-operator/catalog.yaml"
+    - BUNDLE_BASE="$REGISTRY/$IMAGE_PATH-bundle"
+    - |
+      if [ -n "$BUNDLE_DIGEST" ]; then
+        # **이번 APP_VERSION bundle 엔트리 한 줄만** 치환한다 — 과거 버전 엔트리의 고정 digest 를
+        # 덮지 않도록 placeholder 태그(:v$APP_VERSION)를 앵커로 targeting. base 접두 전체(`.*`)로
+        # 치환하면 FBC 의 다른 버전 bundle digest 까지 오염돼 upgrade graph 가 깨진다.
+        sed -i "s|^image: ${BUNDLE_BASE}:v${APP_VERSION}$|image: ${BUNDLE_BASE}@${BUNDLE_DIGEST}|" "$CATALOG_YAML"
+        echo "catalog.yaml v${APP_VERSION} bundle pin -> ${BUNDLE_BASE}@${BUNDLE_DIGEST}"
+        # placeholder 태그가 여전히 남아있으면(=치환 실패) 발행 경로에서 즉사(mutable tag 참조 방지).
+        if [ "$PUSH" = "true" ] && grep -q "^image: ${BUNDLE_BASE}:v${APP_VERSION}$" "$CATALOG_YAML"; then
+          echo "FATAL: catalog.yaml v${APP_VERSION} placeholder 태그 치환 실패 — digest pin 안 됨" >&2; exit 1
+        fi
+      else
+        echo "WARN: BUNDLE_DIGEST 비어있음 — 커밋된 catalog.yaml digest 유지 (MR build-only 검증)"
+      fi
+    - grep '^image:' "$CATALOG_YAML"
+    - echo "build catalog $CATALOG_IMG (push=$PUSH_IMAGE)"
+    - |
+      buildctl \
+        --addr "$BUILDKIT_HOST" \
+        --tlscacert /buildkit-certs/ca.crt \
+        --tlscert /buildkit-certs/tls.crt \
+        --tlskey /buildkit-certs/tls.key \
+        build --frontend dockerfile.v0 \
+        --local context="$CI_PROJECT_DIR/deploy/catalog" \
+        --local dockerfile="$CI_PROJECT_DIR/deploy/catalog" \
+        --opt filename=Dockerfile \
+        --opt platform=linux/amd64 \
+        --output "type=image,\"name=$CATALOG_IMG\",push=$PUSH"
