@@ -81,6 +81,7 @@ type MongoDBSearchReconciler struct {
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbshardeds,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch
@@ -579,9 +580,29 @@ func (r *MongoDBSearchReconciler) reconcileSharded(ctx context.Context, search *
 		}
 	}
 
-	// MongoDBSharded CR annotate → shard STS builder 가 mongot sidecar 주입(모든 shard).
-	if err := r.annotateShardedSource(ctx, mdbsh, image, syncSecret, tlsMode); err != nil {
+	// router shard pin — mongos 는 mongot 엔드포인트에 *직접* 연결(broadcast 아님, ADR-0039 #7)이라
+	// 단일 shard 로 결정적으로 pin 해야 한다. spec.router.mongotShard 미지정 시 shard-0.
+	routerShard := routerShardOf(search)
+
+	// MongoDBSharded CR annotate → shard STS builder 가 mongot sidecar 주입(모든 shard) + mongos
+	// builder 가 mongot Service 를 가리키는 setParameter 주입 + mongot Service 가 pin shard 선택.
+	if err := r.annotateShardedSource(ctx, mdbsh, image, syncSecret, tlsMode, routerShard); err != nil {
 		return ctrl.Result{}, fmt.Errorf("annotate source mongodbsharded: %w", err)
+	}
+
+	// mongot ClusterIP Service — mongos 의 인덱스 관리 명령 진입점(mongos 는 mongot 사이드카 미보유).
+	// annotate 이후에 빌드해야 annotation 가드가 통과한다(위 Patch 는 메모리 객체 mdbsh 를 갱신하지
+	// 않으므로 로컬에도 반영). owner=search → search CR 삭제 시 GC(mongot ConfigMap 과 동일 수명).
+	if mdbsh.Annotations == nil {
+		mdbsh.Annotations = map[string]string{}
+	}
+	mdbsh.Annotations[resources.MongotSidecarImageAnnotation] = image
+	mdbsh.Annotations[resources.MongotTLSModeAnnotation] = tlsMode
+	mdbsh.Annotations[resources.MongotRouterShardAnnotation] = routerShard
+	if svc := resources.BuildMongotService(mdbsh); svc != nil {
+		if err := commonsapply.Service(ctx, r.Client, r.Scheme, search, svc); err != nil {
+			return ctrl.Result{}, fmt.Errorf("apply mongot service: %w", err)
+		}
 	}
 
 	// searchCoordinator user 보장(auto-create 경로, mongos 경유 best-effort).
@@ -652,11 +673,21 @@ func (r *MongoDBSearchReconciler) countReadyMongotSidecarsSharded(ctx context.Co
 	return ready, total, nil
 }
 
+// routerShardOf — mongos 가 연결할 mongot 의 shard pin(spec.router.mongotShard, 미지정 시 shard-0).
+// mongos 는 단일 엔드포인트 직결이라(ADR-0039 #7) 반드시 결정적 단일 shard 여야 한다.
+func routerShardOf(search *mongodbv1beta1.MongoDBSearch) string {
+	if search.Spec.Router != nil && search.Spec.Router.MongotShard != "" {
+		return search.Spec.Router.MongotShard
+	}
+	return resources.DefaultMongotRouterShard
+}
+
 // annotateShardedSource — MongoDBSharded 에 sidecar annotation(idempotent). annotateSource 의 sharded 판.
-func (r *MongoDBSearchReconciler) annotateShardedSource(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, image, syncSecret, tlsMode string) error {
+func (r *MongoDBSearchReconciler) annotateShardedSource(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, image, syncSecret, tlsMode, routerShard string) error {
 	if mdbsh.Annotations[resources.MongotSidecarImageAnnotation] == image &&
 		mdbsh.Annotations[resources.MongotSyncSecretAnnotation] == syncSecret &&
-		mdbsh.Annotations[resources.MongotTLSModeAnnotation] == tlsMode {
+		mdbsh.Annotations[resources.MongotTLSModeAnnotation] == tlsMode &&
+		mdbsh.Annotations[resources.MongotRouterShardAnnotation] == routerShard {
 		return nil
 	}
 	patched := mdbsh.DeepCopy()
@@ -666,6 +697,7 @@ func (r *MongoDBSearchReconciler) annotateShardedSource(ctx context.Context, mdb
 	patched.Annotations[resources.MongotSidecarImageAnnotation] = image
 	patched.Annotations[resources.MongotSyncSecretAnnotation] = syncSecret
 	patched.Annotations[resources.MongotTLSModeAnnotation] = tlsMode
+	patched.Annotations[resources.MongotRouterShardAnnotation] = routerShard
 	return r.Patch(ctx, patched, client.MergeFrom(mdbsh))
 }
 

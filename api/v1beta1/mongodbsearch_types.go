@@ -58,6 +58,26 @@ type MongoDBSearchSpec struct {
 	// Pod — 스케줄링/보안 컨텍스트 등 pod-level 제어(기존 PodSpec 패턴 재사용).
 	// +optional
 	Pod *PodSpec `json:"pod,omitempty"`
+
+	// Router — Sharded source 전용. mongos 가 연결할 mongot 을 *단일 shard 로 pin* 한다.
+	// mongos 는 mongotHost 로 준 엔드포인트에 *직접* 연결하며 broadcast/fan-out 하지 않는다
+	// (ADR-0039 #7 라이브 실측) → 로드밸런싱 엔드포인트를 주면 질의가 비결정적으로 임의 shard
+	// mongot 에 도달해 빈 결과(조용한 오답)를 낼 수 있다. 따라서 결정적 단일 shard pin 이 필수.
+	// 미지정 시 shard-0. ReplicaSet source 에서는 무시(사이드카 localhost 직결).
+	// +optional
+	Router *SearchRouterSpec `json:"router,omitempty"`
+}
+
+// SearchRouterSpec — Sharded 전용 mongos → mongot 라우팅 pin.
+type SearchRouterSpec struct {
+	// MongotShard — mongos 가 연결할 mongot 이 상주하는 shard(예 "shard-0").
+	// **검색 대상 컬렉션이 상주하는 shard(=그 database 의 primary shard)로 지정해야 한다.**
+	// 다른 shard 를 지정하면 인덱스 관리는 되더라도 $search/$vectorSearch 가 빈 결과를 낸다.
+	// multi-shard 분산 컬렉션 검색은 Community mongot upstream 한계로 여전히 미해결(ADR-0039).
+	// +kubebuilder:validation:Pattern=`^shard-[0-9]+$`
+	// +kubebuilder:default="shard-0"
+	// +optional
+	MongotShard string `json:"mongotShard,omitempty"`
 }
 
 // SearchSource — mongot 색인 대상.

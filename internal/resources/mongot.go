@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
+	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	mongodbv1beta1 "github.com/keiailab/mongodb-operator/api/v1beta1"
 )
 
@@ -77,6 +78,23 @@ const (
 	MongotSyncSecretAnnotation = "search.mongodb.keiailab.com/sync-secret"
 	// MongotTLSModeAnnotation — mongod searchTLSMode + mongot config tls(disabled|requireTLS).
 	MongotTLSModeAnnotation = "search.mongodb.keiailab.com/tls-mode"
+	// MongotRouterShardAnnotation — mongos 가 연결할 mongot 의 shard pin(예 "shard-0").
+	// search controller 가 MongoDBSearch.spec.router.mongotShard 를 그대로 전달한다.
+	// mongot Service 의 selector(= 단일 shard) 를 결정한다 — 부재 시 DefaultMongotRouterShard.
+	MongotRouterShardAnnotation = "search.mongodb.keiailab.com/router-shard"
+	// DefaultMongotRouterShard — router shard 미지정 시 기본 pin.
+	DefaultMongotRouterShard = "shard-0"
+
+	// MongotPodLabel — mongot sidecar 를 *실제로 보유한* pod 표식(값 "true"). Sharded 의 shard pod
+	// 는 component 라벨이 shard-N 으로 shard 마다 달라 공통 selector 가 불가능하다(Service selector 는
+	// equality-only). 전 shard 의 mongot 을 하나의 Service 엔드포인트로 묶기 위해 shard pod template
+	// 에만(= annotation 활성 시에만) 부착하는 공통 표식. mongos/config server pod 는 부착 대상 아님.
+	// STS Selector(immutable)에는 넣지 않는다 — template label 만 추가(기존 STS in-place 갱신 가능).
+	MongotPodLabel = "search.mongodb.keiailab.com/mongot"
+	// MongotPodLabelValue — MongotPodLabel 의 유일 값(Service selector ↔ pod template 동일 상수 사용).
+	MongotPodLabelValue = "true"
+	// mongotServiceSuffix — mongot ClusterIP Service 이름 suffix(<cluster>-mongot).
+	mongotServiceSuffix = "-mongot"
 )
 
 // MongotImage — spec.version 에서 mongot 이미지 결정(controller 가 annotation 설정에 사용).
@@ -225,8 +243,70 @@ func MongotSidecar(mdbName, image, syncSecretName string) (corev1.Container, cor
 	return mongotC, initC, volumes
 }
 
-// MongotSetParameterArgs — source mongod 에 주입할 mongot 연동 setParameter.
-// endpoint 비어있으면 nil → mongod template 무변경(무롤링). sidecar 는 endpoint=localhost:27028.
+// MongotServiceName — Sharded mongot ClusterIP Service 이름(mongos → mongot 진입점).
+func MongotServiceName(clusterName string) string { return clusterName + mongotServiceSuffix }
+
+// MongotServiceEndpoint — mongos setParameter(mongotHost / searchIndexManagementHostAndPort)에 넣을
+// mongot Service FQDN:port. shard mongod 는 localhost:27028(자기 사이드카)이지만, mongos 는 mongot
+// 사이드카가 없으므로 pod 밖 Service 를 경유해야 한다.
+func MongotServiceEndpoint(clusterName, namespace string) string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local:%d", MongotServiceName(clusterName), namespace, mongotGRPCPort)
+}
+
+// MongotRouterShard — mongos 가 연결할 mongot 의 shard(annotation, 미지정 시 shard-0).
+func MongotRouterShard(mdbsh *mongodbv1alpha1.MongoDBSharded) string {
+	if s := mdbsh.Annotations[MongotRouterShardAnnotation]; s != "" {
+		return s
+	}
+	return DefaultMongotRouterShard
+}
+
+// BuildMongotService — Sharded 전용 mongot ClusterIP Service(gRPC 27028), **단일 shard pin**.
+//
+// 왜 필요한가: mongos 는 mongot 사이드카를 갖지 않는데, MongoDBSearchIndex 컨트롤러는 인덱스 관리
+// 명령($listSearchIndexes / createSearchIndex)을 *mongos 경유*로 보낸다. mongos 에 mongot 엔드포인트
+// (mongotHost / searchIndexManagementHostAndPort)가 비어 있으면 SearchNotEnabled 로 거부되어 CR 이
+// Pending 고착한다(라이브 실측 2026-07-14). 따라서 mongos 가 도달 가능한 *pod 밖* mongot 진입점이
+// 필요하다 — mongot 컨테이너가 27028(mongot-grpc)을 containerPort 로 선언하므로 Service 로 노출 가능.
+//
+// 왜 *단일 shard* 인가: mongos 는 mongotHost 로 준 엔드포인트에 **직접 연결**하며 broadcast/fan-out
+// 하지 않는다(ADR-0039 #7 — dummy endpoint 실측 errCode:125 / 데이터가 다른 shard 면 빈 결과 VS:[]).
+// 따라서 전 shard mongot 을 묶은 로드밸런싱 ClusterIP 를 주면 연결마다 임의 shard 의 mongot 으로
+// 라우팅되어 **비결정적 빈 결과(조용한 오답)** 가 나온다 — 최악의 실패 모드. selector 를 pin 대상
+// shard(MongotRouterShardAnnotation, 기본 shard-0) 의 pod 로 좁혀 결정적 엔드포인트를 만든다.
+// ⛔ 이 배선은 검색 대상 컬렉션이 그 shard 에 상주할 때만(=unsharded 컬렉션의 primary shard) 올바른
+// 결과를 준다. multi-shard 분산 컬렉션 검색은 ADR-0039 대로 upstream 한계로 **여전히 미해결**.
+//
+// annotation(MongotSidecarImageAnnotation) 부재 = search 비활성 → nil(생성 안 함, 기존 opt-in 규율).
+func BuildMongotService(mdbsh *mongodbv1alpha1.MongoDBSharded) *corev1.Service {
+	if mdbsh.Annotations[MongotSidecarImageAnnotation] == "" {
+		return nil
+	}
+	// pin 대상 shard 의 pod 라벨(component=shard-N) + mongot 표식(사이드카 실보유 pod 만).
+	selector := buildLabels(mdbsh.Name, MongotRouterShard(mdbsh))
+	selector[MongotPodLabel] = MongotPodLabelValue
+
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      MongotServiceName(mdbsh.Name),
+			Namespace: mdbsh.Namespace,
+			Labels:    buildLabels(mdbsh.Name, "mongot"),
+		},
+		Spec: corev1.ServiceSpec{
+			Type:     corev1.ServiceTypeClusterIP,
+			Selector: selector,
+			Ports: []corev1.ServicePort{
+				{Name: "mongot-grpc", Port: mongotGRPCPort, TargetPort: intstr.FromString("mongot-grpc")},
+			},
+		},
+	}
+}
+
+// MongotSetParameterArgs — source mongod/mongos 에 주입할 mongot 연동 setParameter.
+// endpoint 비어있으면 nil → template 무변경(무롤링). sidecar 보유 mongod 는 endpoint=localhost:27028,
+// sidecar 없는 mongos 는 endpoint=<cluster>-mongot.<ns>.svc.cluster.local:27028(MongotServiceEndpoint).
+// 4 파라미터 모두 mongos 바이너리에 정식 등록돼 있다(mongo 8.3 라이브 getParameter ok=1 — mongotHost /
+// searchIndexManagementHostAndPort / searchTLSMode / useGrpcForSearch).
 func MongotSetParameterArgs(endpoint, tlsMode string) []string {
 	if endpoint == "" {
 		return nil
