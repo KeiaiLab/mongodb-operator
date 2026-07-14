@@ -158,7 +158,10 @@ bundle:image:
         --output "type=image,\"name=$BUNDLE_IMG\",push=$PUSH" \
         --metadata-file /tmp/bundle-meta.json
     # 로컬 docker 없이 digest 취득 — buildctl 이 빌드/push 시 기록한 정규 이미지 digest.
-    - BUNDLE_DIGEST=$(grep -o '"containerimage.digest":"sha256:[a-f0-9]*"' /tmp/bundle-meta.json | cut -d'"' -f4)
+    # ⚠ push=false(MR-event)면 buildkit 이 containerimage.digest 를 metadata 에 안 넣을 수 있다
+    #   → grep 매치 0. set -e 하에서 grep exit 1 이 잡을 죽이므로 || true 로 흡수(비발행 검증엔
+    #   digest 불요, 발행 경로 필수성은 아래 164행 가드가 강제). 파일 부재도 동일 방어.
+    - BUNDLE_DIGEST=$(grep -o '"containerimage.digest":"sha256:[a-f0-9]*"' /tmp/bundle-meta.json 2>/dev/null | cut -d'"' -f4 || true)
     - echo "bundle digest = ${BUNDLE_DIGEST:-<none>}"
     # 발행 경로(push=true)인데 digest 취득 실패 = catalog digest 체인 불가 → 즉사.
     - '[ "$PUSH" != "true" ] || [ -n "$BUNDLE_DIGEST" ] || { echo "FATAL: bundle push 됐으나 digest 취득 실패 — catalog 체인 불가" >&2; exit 1; }'
@@ -198,7 +201,7 @@ catalog:image:
       else
         echo "WARN: BUNDLE_DIGEST 비어있음 — 커밋된 catalog.yaml digest 유지 (MR build-only 검증)"
       fi
-    - grep '^image:' "$CATALOG_YAML"
+    - grep '^image:' "$CATALOG_YAML" || true  # 관측용 — 매치 0 시 set -e 즉사 방지
     - echo "build catalog $CATALOG_IMG (push=$PUSH_IMAGE)"
     - |
       buildctl \
