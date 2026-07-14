@@ -1,5 +1,5 @@
 # File-Based Catalog image for mongodb-operator (ADR-0028).
-# OLM CatalogSource (image: ghcr.io/keiailab/mongodb-operator-catalog:v1.13.1) 가 본 image 를 pull.
+# OLM CatalogSource (image: harbor.keiailab.dev/keiailab/platform/mongodb-operator-catalog:v1.13.1) 가 본 image 를 pull.
 #
 # base: quay.io/operator-framework/opm — gRPC catalog server `opm serve /configs` 가 OLM 의
 # resolver 에 stream. file-based catalog 는 plain YAML, opm 도구 없이 git 에서 직접 검토 가능.

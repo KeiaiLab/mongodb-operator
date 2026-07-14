@@ -35,14 +35,14 @@ var (
 		if v := os.Getenv("IMG"); v != "" {
 			return v
 		}
-		return "ghcr.io/keiailab/mongodb-operator:e2e-dev"
+		return "harbor.keiailab.dev/keiailab/platform/mongodb-operator:e2e-dev"
 	}()
 	shouldCleanupCertManager = false
 )
 
 // TestE2E — Ginkgo 진입점.
 // 환경변수:
-//   - IMG: 빌드/로드할 manager image (default ghcr.io/keiailab/mongodb-operator:e2e-dev)
+//   - IMG: 빌드/로드할 manager image (default harbor.keiailab.dev/keiailab/platform/mongodb-operator:e2e-dev)
 //   - KIND_CLUSTER: kind cluster 이름 (default kind, valkey 호환 차용 — 단,
 //     본 e2e 는 utils.LoadImageToKindClusterWithName 가 hardcoded "kind" 사용)
 //   - CERT_MANAGER_INSTALL_SKIP=true: cert-manager install skip (이미 설치된 경우)
