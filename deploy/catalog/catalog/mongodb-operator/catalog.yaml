@@ -35,9 +35,94 @@ schema: olm.bundle
 name: mongodb-operator.v1.16.5
 package: mongodb-operator
 image: harbor.keiailab.dev/keiailab/platform/mongodb-operator-bundle@sha256:c757b9cd717269bc38f4b0c42f26805df48948a31cbb0a11200c0d5d91033ed7
+properties:
+  - type: olm.package
+    value:
+      packageName: mongodb-operator
+      version: 1.16.5
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDB
+      version: v1alpha1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDB
+      version: v1beta1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBSharded
+      version: v1alpha1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBSharded
+      version: v1beta1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBBackup
+      version: v1alpha1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBBackup
+      version: v1beta1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBBackupVerification
+      version: v1alpha1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBBackupVerification
+      version: v1beta1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBClusterGroup
+      version: v1alpha1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBClusterGroup
+      version: v1beta1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBFederation
+      version: v1alpha1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBFederation
+      version: v1beta1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBInsights
+      version: v1alpha1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBInsights
+      version: v1beta1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBSearch
+      version: v1beta1
+  - type: olm.gvk
+    value:
+      group: mongodb.keiailab.com
+      kind: MongoDBSearchIndex
+      version: v1beta1
 ---
-# v1.16.6 — image digest 는 CI `catalog:image` 잡이 push 된 bundle 의 실 digest 로 sed 치환
-# (mutable tag 참조 금지 — operator-controller 는 tag+digest 동시참조 거부). placeholder 태그.
+# v1.16.6 — image digest 는 CI catalog:image 잡이 push 된 bundle 실 digest 로 sed 치환
+# (placeholder 태그 :v1.16.6 앵커 — mutable tag 참조 금지).
 schema: olm.bundle
 name: mongodb-operator.v1.16.6
 package: mongodb-operator
@@ -46,7 +131,7 @@ properties:
   - type: olm.package
     value:
       packageName: mongodb-operator
-      version: 1.16.5
+      version: 1.16.6
   - type: olm.gvk
     value:
       group: mongodb.keiailab.com
