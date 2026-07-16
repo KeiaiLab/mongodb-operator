@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.6] — 2026-07-14
+
+### Fixed
+
+- **mongos → mongot 배선 누락으로 인한 SearchIndex Pending 고착 해소** — operator가 shard mongod에만 mongot 파라미터를 주입하고 mongos에는 누락시켜 검색 인덱스 명령이 `SearchNotEnabled`로 거부되며 CR이 최대 19일간 Pending에 머물렀다. `spec.router.mongotShard`(신규, 기본 `shard-0`)로 mongot Service를 단일 shard pod에 고정하는 방식으로 해소.
+
+### Known limitations
+
+- 본 릴리스는 unsharded(단일 shard 상주) 컬렉션의 `$search`/`$vectorSearch`만 해결한다 — multi-shard 분산 컬렉션 검색은 Community mongot 0.69.1 upstream 한계로 여전히 미해결.
+
+## [1.16.5] — 2026-06-25
+
+### Added
+
+- **선언적 컬렉션 샤딩** (`spec.shardedCollections`) — MongoDBSharded CR에 샤딩 대상 컬렉션을 선언하면 operator가 `EnableSharding` 후 `shardCollection`을 idempotent하게 적용한다. ordered shard key·unique 제약·timeseries 샤딩을 지원하며(v1alpha1+v1beta1 양쪽), 이미 다른 키로 샤딩된 컬렉션은 흡수하지 않고 `ShardKeyDrift` status condition으로 노출한다.
+
+## [1.15.2] — 2026-06-23
+
+### Fixed
+
+- **[CRITICAL] adopt된 클러스터의 무중단 업그레이드 영구 skip** — Helm→OLM 등으로 operator가 인수(adopt)한 기존 클러스터는 `Status.Version`이 비어 있어 업그레이드 감지가 영구히 skip됐다(Sharded 컨트롤러는 백필 경로 자체가 없었음). reconcile 진입 시 `Status.Version`을 `EffectiveVersion`으로 seed해 이후 spec 변경이 정상 감지되도록 수정.
+- packaged Helm CRD에서 누락됐던 `UpgradeStrategy.maxRetries` 필드를 `make manifests`의 `sync-crds`로 동기화.
+
+## [1.13.1] — 2026-06-16
+
+### Added
+
+- **sharded topology v2 순수 결정 함수** (`internal/topology`) — zone-aware placement·pre-flight 안전검증·balancer advisory·chunk migration throttle을 순수 함수 + advisory(DryRun 기본)로 구현. 실 mongos 명령은 controller opt-in 시에만 실행된다.
+
+### Changed
+
+- 브랜치 모델을 `main` 단일에서 `stable`(production) + `dev`(integration) 2-브랜치로 전환, CI 트리거 재배선. Dependabot 비활성화.
+
+## [1.13.0] — 2026-06-11
+
+### Changed
+
+- keiailab-commons v0.11.0 채택 — 자체 구현하던 7개 표면을 공통 라이브러리로 위임하며 -1,025 LOC.
+
+## [1.12.5] — 2026-06-11
+
+### Fixed
+
+- ArtifactHub 배포 파이프라인 안정화 — repository tracking nudge, workflow ref 기반 dispatch, stale metadata retry, Helm chart 서명(signing) 적용 후 signed chart 게시.
+
 ## [1.12.4] — 2026-06-10
 
 ### Added

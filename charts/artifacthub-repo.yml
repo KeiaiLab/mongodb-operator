@@ -4,7 +4,7 @@
 repositoryID: 9fc95fb5-cf66-4d5d-8446-b41db7041767
 
 # 2026-06-10: refresh OCI repository metadata after publishing signed chart
-# version 1.12.3 so Artifact Hub tracks the updated tag list and provenance.
+# version 1.16.6 so Artifact Hub tracks the updated tag list and provenance.
 
 signingKey:
   fingerprint: "F1A6893583E632A757FF6767F3CC8C6AEC9CEB08"

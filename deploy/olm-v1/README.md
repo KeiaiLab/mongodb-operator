@@ -17,8 +17,8 @@
 
 ### 현재 (2026-06-22, ADR-0038 Path 1 재정렬)
 
-- 활성 operator 경로 = **Helm** (`data` ns, `ghcr.io/keiailab/mongodb-operator:v1.13.1`).
-- OLM v1 `keiailab-operators` ClusterCatalog = **v1.13.1 로 정렬** (catalog/bundle 정합 복구). SERVING.
+- 활성 operator 경로 = **Helm** (`data` ns, `ghcr.io/keiailab/mongodb-operator:v1.16.6`).
+- OLM v1 `keiailab-operators` ClusterCatalog = **v1.16.6 로 정렬** (catalog/bundle 정합 복구). SERVING.
 - mongodb-operator **ClusterExtension 은 미설치** — Helm 과 동시 운영 시 cluster-scoped CRD 이중 reconcile 충돌이 나므로, §4 Helm→OLM *컷오버* 시점에 설치한다.
 
 ### PoC 검증 (2026-05-15, v1.5.0) — OLM v1 메커니즘 라이브 확인 (historical)
@@ -33,7 +33,7 @@ NAME               INSTALLED BUNDLE          VERSION   INSTALLED   PROGRESSING
 mongodb-operator   mongodb-operator.v1.5.0   1.5.0     True        True
 ```
 
-`<!-- live-verified: 2026-05-15 (PoC, v1.5.0); catalog realigned: 2026-06-22 (v1.13.1, ADR-0038) -->`
+`<!-- live-verified: 2026-05-15 (PoC, v1.5.0); catalog realigned: 2026-06-22 (v1.16.6, ADR-0038) -->`
 
 ## §3 적용 절차
 
@@ -91,7 +91,7 @@ kubectl apply -k deploy/olm-v1/
 ### 3.4 CRD adopt (기존 helm CRD takeover, 일회성)
 
 ```fish
-# 본 cluster 에 기존 helm chart mongodb-operator v1.13.1 의 CRD 가 라이브 → OLM v1 가 takeover.
+# 본 cluster 에 기존 helm chart mongodb-operator v1.16.6 의 CRD 가 라이브 → OLM v1 가 takeover.
 # helm v3 의 adopt mechanism (meta.helm.sh annotation + managed-by=Helm label) 으로 ownership transfer.
 # OLM v1 의 ClusterExtension `mongodb-operator` 의 internal helm release name 정합.
 for crd in mongodbs.mongodb.keiailab.com mongodbshardeds.mongodb.keiailab.com mongodbbackups.mongodb.keiailab.com mongodbbackupverifications.mongodb.keiailab.com mongodbclustergroups.mongodb.keiailab.com mongodbfederations.mongodb.keiailab.com mongodbinsights.mongodb.keiailab.com; do
@@ -120,7 +120,7 @@ kubectl get pod -n mongodb-system -l app.kubernetes.io/name=mongodb-operator
 
 ## §4 helm chart 영구 cutover (사용자 git PR)
 
-본 cluster 의 활성 경로는 helm chart mongodb-operator v1.13.1 (data ns). OLM v1 catalog 는 v1.13.1 로 정렬되어 *cutover 준비 완료* 이나 ClusterExtension 은 미설치 (Helm 과 동시 운영 시 이중 reconcile 충돌 회피). *영구 cutover* 는 git PR 으로만 — Helm 제거와 OLM ClusterExtension 설치를 *원자적으로*:
+본 cluster 의 활성 경로는 helm chart mongodb-operator v1.16.6 (data ns). OLM v1 catalog 는 v1.16.6 로 정렬되어 *cutover 준비 완료* 이나 ClusterExtension 은 미설치 (Helm 과 동시 운영 시 이중 reconcile 충돌 회피). *영구 cutover* 는 git PR 으로만 — Helm 제거와 OLM ClusterExtension 설치를 *원자적으로*:
 
 ### PR 1: `keiailab/platform/data` (helm chart 제거)
 

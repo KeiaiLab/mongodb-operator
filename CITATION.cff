@@ -20,5 +20,5 @@ keywords:
   - replicaset
   - sharded
 license: MIT
-version: v1.11.0
-date-released: "2026-06-03"
+version: v1.16.6
+date-released: "2026-07-16"

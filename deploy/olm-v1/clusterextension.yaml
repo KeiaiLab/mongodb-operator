@@ -1,7 +1,7 @@
-# OLM v1 ClusterExtension — mongodb-operator install (v1.13.1 stable)
+# OLM v1 ClusterExtension — mongodb-operator install (v1.16.6 stable)
 # 참조: https://github.com/operator-framework/operator-controller/blob/main/config/samples/olm_v1_clusterextension.yaml
 #
-# Path 1 재정렬 (ADR-0038, 2026-06): version pin = 1.13.1 (catalog FBC 와 정합).
+# Path 1 재정렬 (ADR-0038, 2026-06): version pin = 1.16.6 (catalog FBC 와 정합).
 # 라이브 클러스터의 활성 경로는 Helm (data ns) — OLM v1 ClusterExtension 설치는 Helm→OLM 컷오버 시점에 수행.
 #
 # 본 manifest 의 cluster-admin binding 은 *Phase B 단순화 path*. 후속 phase 의 narrow RBAC
@@ -16,7 +16,7 @@ metadata:
     app.kubernetes.io/managed-by: argocd
 ---
 # Phase B 단순화 (후속 narrow RBAC 별 ADR):
-#   현재: cluster-admin binding (helm chart v1.13.1 도 cluster-admin scope 으로 deploy 되어 있어 *동등 권한*)
+#   현재: cluster-admin binding (helm chart v1.16.6 도 cluster-admin scope 으로 deploy 되어 있어 *동등 권한*)
 #   후속: bundle-derived narrow ClusterRole (CRDs + ClusterRoles + Webhook + Deployment + Service 등 명시)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -47,6 +47,6 @@ spec:
     sourceType: Catalog
     catalog:
       packageName: mongodb-operator
-      version: 1.13.1
+      version: 1.16.6
       channels:
         - stable
