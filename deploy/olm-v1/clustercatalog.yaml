@@ -17,5 +17,5 @@ spec:
   source:
     type: Image
     image:
-      ref: harbor.keiailab.dev/keiailab/platform/mongodb-operator-catalog:v1.13.1
+      ref: harbor.keiailab.dev/keiailab/platform/mongodb-operator-catalog:v1.16.6
       pollIntervalMinutes: 10

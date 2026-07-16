@@ -2,7 +2,7 @@
 # (clusterextension.yaml 의 cluster-admin alternative; ADR-0030).
 #
 # 표준 출처: https://operator-framework.github.io/operator-controller/howto/derive-service-account/
-# 본 manifest 의 RBAC 는 bundle CSV (v1.13.1) 의 spec.install.spec.{clusterPermissions, permissions}
+# 본 manifest 의 RBAC 는 bundle CSV (v1.16.6) 의 spec.install.spec.{clusterPermissions, permissions}
 # 를 derive — operator 가 자체 declare 한 *최소 필요* 권한만 installer 에 부여.
 #
 # vs clusterextension.yaml (cluster-admin):
@@ -17,7 +17,7 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: argocd
 ---
-# Installer ClusterRole — *bundle-derived*, mongodb-operator v1.13.1 의 CSV 기반.
+# Installer ClusterRole — *bundle-derived*, mongodb-operator v1.16.6 의 CSV 기반.
 # resourceNames 의 generated name 은 *first install 후* 라이브 grep 으로 정정 가능 (ADR-0030 §Future).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -36,7 +36,7 @@ rules:
     # First install 후 라이브 검증으로 정확한 generated name pinning:
     # kubectl get clusterrole,clusterrolebinding | grep mongodb-operator
     resourceNames:
-      - mongodb-operator.v1.13.1  # placeholder, post-install pinning 권장
+      - mongodb-operator.v1.16.6  # placeholder, post-install pinning 권장
   # ─── §2B. CustomResourceDefinition ────────────────────────────────
   - apiGroups: [apiextensions.k8s.io]
     resources: [customresourcedefinitions]
@@ -57,7 +57,7 @@ rules:
     resources: [clusterextensions/finalizers]
     verbs: [update]
     resourceNames: [mongodb-operator]
-  # ─── §2D. Operator's CSV clusterPermissions (13 rules from bundle v1.13.1) ──────
+  # ─── §2D. Operator's CSV clusterPermissions (13 rules from bundle v1.16.6) ──────
   - apiGroups: [""]
     resources: [configmaps, secrets, services]
     verbs: [create, delete, get, list, patch, update, watch]
@@ -193,7 +193,7 @@ rules:
   - apiGroups: [""]
     resources: [configmaps]
     verbs: [get, list, watch, update, patch, delete]
-  # ─── §3E. Operator's CSV permissions (3 rules from bundle v1.13.1) ───────
+  # ─── §3E. Operator's CSV permissions (3 rules from bundle v1.16.6) ───────
   - apiGroups: [""]
     resources: [configmaps]
     verbs: [get, list, watch, create, update, patch, delete]
@@ -234,6 +234,6 @@ spec:
     sourceType: Catalog
     catalog:
       packageName: mongodb-operator
-      version: 1.13.1
+      version: 1.16.6
       channels:
         - stable
