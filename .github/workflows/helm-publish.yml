@@ -5,22 +5,22 @@ name: Helm chart publish
 #   2. ghcr.io OCI → oci://ghcr.io/keiailab/charts/mongodb-operator  ← ArtifactHub 추적 소스
 #
 # 트리거 4종 — 어느 릴리스 방식이든 작동:
-#   - push:    stable      → Chart.yaml version SSOT 기준 자동 publish
+#   - push:    main        → Chart.yaml version SSOT 기준 자동 publish
 #   - release: published   → `gh release create vX.Y.Z` (GitHub UI/API/CLI)
 #   - push:    tags ['v*'] → `git push origin vX.Y.Z`
 #   - workflow_dispatch    → 수동 재실행 / 백필
+#
+# paths 필터를 두지 않는다: GitHub Actions는 branches+tags를 한 push 트리거에
+# 같이 쓰면 paths가 태그 push에도 그대로 적용된다 — charts/** 를 안 건드린 태그
+# (예: CI-only 커밋)가 조용히 스킵되어 gh-pages/ghcr가 뒤처지는 사고가 있었다
+# (v1.16.6 미발행). 각 publish 단계 자체가 이미 멱등(CR_SKIP_EXISTING / OCI
+# "already exists" early-exit)이라 paths 필터 없이도 불필요한 재publish는 없다.
 on:
   release:
     types: [published]
   push:
     branches: [main]
     tags: ['v*']
-    paths:
-      - 'charts/**'
-      - 'docs/branding/**'
-      - 'docs/BRANDING.md'
-      - 'README.md'
-      - '.github/workflows/helm-publish.yml'
   workflow_dispatch:
     inputs:
       tag:
