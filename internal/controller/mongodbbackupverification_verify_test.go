@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"testing"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -89,6 +90,59 @@ func reconcileOnce(t *testing.T, r *MongoDBBackupVerificationReconciler, v *mong
 		t.Fatalf("Get after reconcile: %v", err)
 	}
 	return got
+}
+
+// Pending drill 이 *일반 백업* (Spec.Restore=nil) CR 에 대해서도 restore Job 을
+// 만들어야 한다. 회귀 가드: BuildRestoreJob 에 원본 CR 을 그대로 넘기던 시절엔
+// "Spec.Restore is nil" error 로 drill 이 상시 실패했고, verification 은
+// Restoring 에 갇힌 채 Job 이 영영 생기지 않았다.
+func TestPendingDrill_NilRestoreBackup_CreatesRestoreJob(t *testing.T) {
+	t.Parallel()
+	s := newTestScheme(t)
+
+	backup := &mongodbv1alpha1.MongoDBBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "backup-1", Namespace: "default"},
+		Spec: mongodbv1alpha1.MongoDBBackupSpec{
+			ClusterRef: mongodbv1alpha1.ClusterReference{Kind: "MongoDB", Name: "target-cluster"},
+			Storage:    mongodbv1alpha1.BackupStorageSpec{Type: "pvc"},
+			// Spec.Restore 는 의도적으로 nil — 일반 백업 CR 이 drill 대상이다.
+		},
+		Status: mongodbv1alpha1.MongoDBBackupStatus{Phase: backupPhaseCompleted},
+	}
+	verify := &mongodbv1alpha1.MongoDBBackupVerification{
+		ObjectMeta: metav1.ObjectMeta{Name: "verify-1", Namespace: "default"},
+		Spec: mongodbv1alpha1.MongoDBBackupVerificationSpec{
+			BackupRef: corev1.LocalObjectReference{Name: "backup-1"},
+		},
+	}
+	cl := fake.NewClientBuilder().WithScheme(s).
+		WithObjects(verify, backup).
+		WithStatusSubresource(verify, backup).
+		Build()
+	r := &MongoDBBackupVerificationReconciler{Client: cl, Scheme: s}
+	ctx := context.Background()
+
+	if _, err := r.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: "verify-1", Namespace: "default"},
+	}); err != nil {
+		t.Fatalf("drill reconcile 이 실패하면 안 됨: %v", err)
+	}
+
+	// restore Job 이 실제로 생성돼야 Restoring 이 진행 가능한 상태다.
+	job := &batchv1.Job{}
+	if err := cl.Get(ctx, types.NamespacedName{Name: "verify-1-verify-restore", Namespace: "default"}, job); err != nil {
+		t.Fatalf("verify restore job 이 생성돼야 함: %v", err)
+	}
+
+	// 원본 백업 CR 은 변형되지 않아야 한다 — Spec.Restore 가 API 서버에 새어나가면
+	// backup controller 가 이 CR 을 restore 작업으로 재해석한다.
+	gotBackup := &mongodbv1alpha1.MongoDBBackup{}
+	if err := cl.Get(ctx, types.NamespacedName{Name: "backup-1", Namespace: "default"}, gotBackup); err != nil {
+		t.Fatalf("get backup: %v", err)
+	}
+	if gotBackup.Spec.Restore != nil {
+		t.Errorf("원본 백업 CR 의 Spec.Restore 는 nil 이어야 함(합성 spec 누출): %+v", gotBackup.Spec.Restore)
+	}
 }
 
 // 모든 쿼리가 MinExpectedDocs 이상 → Passed.

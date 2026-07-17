@@ -49,6 +49,7 @@ import (
 const (
 	defaultSyncUser         = "search-sync"
 	searchFinalizer         = mongodbv1beta1.FinalizerMongoDBSearch
+	kindMongoDB             = "MongoDB"
 	kindMongoDBSharded      = "MongoDBSharded"
 	searchPhasePending      = "Pending"
 	searchPhaseProvisioning = "Provisioning"

@@ -37,6 +37,15 @@ var (
 		}
 		return "harbor.keiailab.dev/keiailab/platform/mongodb-operator:e2e-dev"
 	}()
+	// tailerImage — PITR oplog tailer 사이드카(mongodump+aws) 이미지.
+	// PITR round-trip e2e 는 operator Deployment 에 OPLOG_TAILER_IMAGE 로 이걸
+	// 주입해야 tailer 가 주입된다(미주입 시 fail-open = oplog 스트리밍 없음).
+	tailerImage = func() string {
+		if v := os.Getenv("OPLOG_TAILER_IMG"); v != "" {
+			return v
+		}
+		return "harbor.keiailab.dev/keiailab/platform/mongodb-operator-oplog-tailer:e2e-dev"
+	}()
 	shouldCleanupCertManager = false
 )
 
@@ -62,6 +71,15 @@ var _ = BeforeSuite(func() {
 	By("loading the manager image on Kind")
 	err = utils.LoadImageToKindClusterWithName(managerImage)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager image into Kind")
+
+	By("building the PITR oplog tailer image (mongodump+aws)")
+	cmd = exec.Command("make", "oplog-tailer-image-build", fmt.Sprintf("OPLOG_TAILER_IMG=%s", tailerImage))
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the oplog tailer image")
+
+	By("loading the PITR oplog tailer image on Kind")
+	err = utils.LoadImageToKindClusterWithName(tailerImage)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the oplog tailer image into Kind")
 
 	configureKubectlKubeRC()
 	setupCertManager()

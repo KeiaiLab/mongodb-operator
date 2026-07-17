@@ -50,7 +50,7 @@
 | 저장 데이터 암호화 | ❌ | ✅ | 🔴 높음 |
 | 감사 로깅 | ❌ | ✅ | 🟡 중간 |
 | **백업/복원** | | | |
-| Point-in-Time Recovery | ⚠️ 필드만 | ✅ | 🔴 높음 |
+| Point-in-Time Recovery | ⚠️ RS + S3 한정 | ✅ | 🔴 높음 |
 | 쿼리 가능한 백업 | ❌ | ✅ | 🟡 중간 |
 | 지속적 백업 | ❌ | ✅ | 🟡 중간 |
 | **모니터링** | | | |
@@ -72,12 +72,27 @@
 **목표**: 프로덕션 환경의 안정성·운영성 개선.
 
 ### 1.1 Point-in-Time Recovery (PITR) 완전 구현
+
+**아키텍처 = 사이드카 직접 스트리밍 (PBM 방식)**: tailer 사이드카가 staging volume
+을 경유하지 않고 증분 tail → S3 직접 업로드 (capture+upload 원자화). resume token
+= S3 최신 segment 키의 endTs 에서 유도 (별도 상태 저장소 0). 세그먼트 키
+`<prefix><cluster>/oplog/<startTs>_<endTs>.bson.gz` 가 시간 범위를 담아 S3 list
+하나로 resume token + 복원 가능 window 를 모두 유도.
+
 - [x] CRD 필드 정의 (`PITREnabled`, `OplogRetentionHours`) — `api/v1alpha1/common_types.go` — cycle 1 F01 API stable
-- [x] Oplog tailing 사이드카 컨테이너 — `internal/resources/oplog_tailer.go` (`BuildOplogTailerSidecar` + EmptyDir staging volume) — cycle 1 F02
-- [x] S3 oplog 지속 업로드 controller — `internal/controller/oplog_uploader.go` (skeleton + IsApplicable + MongoDB/MongoDBSharded watch) — cycle 1 F03 — Note: 실제 S3 multipart upload + ETag verify 는 cycle 6 KMS 통합 시점 강화
-- [x] 타임스탬프 기반 복원 (`Spec.Restore.PointInTime`) — `mongodbbackup_types.go` Restore field + Status.Phase=Restoring branch — cycle 1 F04
-- [x] 복원 검증 자동화 e2e — `test/e2e/pitr_test.go` API path + Restoring phase 검증 (실제 mongorestore round-trip 은 cycle 6 강화) — cycle 1 F05
-- Verify: `test/e2e/pitr_test.go` PASS + restore 후 `db.collection.find({_ts: <T>})` 동등성 — cycle 6 후속
+- [x] Oplog tailing 사이드카 (증분 tail → S3 직접 스트리밍) — `internal/resources/oplog_tailer.go` — 구 EmptyDir staging + 전량 재덤프는 폐기 (재시작 유실창 + gap 제거)
+- [x] base 스냅샷 oplog 앵커 — `mongodump --oplog` + `Status.OplogStart` 기록 (없으면 replay 하한 불명 → PITR 기점 불가)
+- [x] 복원 가능 window status — `Status.EarliestRestore` / `LatestRestore` / `RestorableWindow` (gap-free segment chain 계산) + `kubectl get mdbbackup -o wide` WINDOW 열
+- [x] oplog retention prune — `internal/controller/oplog_uploader.go` (`OplogRetentionHours` 만료 segment 삭제 + window 재계산). 구 skeleton (Job 0개 생성, log만) 대체
+- [x] 타임스탬프 기반 복원 — `Spec.Restore.PointInTime` (RFC3339 초) + `PointInTimeTimestamp` (`<sec>:<ordinal>` BSON 원형, 우선) → S3 base fetch + oplog replay
+- [x] restore 완료 감지 — `Phase=Restoring` → `Completed`/`Failed` 전이 (구: Restoring 에서 정지)
+- [x] validating webhook — 목표 ts 가 window 밖이면 reject (window 미기록 시 **fail-open** = 권고 게이트, 진본은 restore Job)
+- Verify: `test/e2e/pitr_test.go` — base 백업 → doc-A insert(t1) → doc-B insert(t2) → PIT=t1+1s 복원 → **doc-A 존재 ∧ doc-B 부재** (실 round-trip). CI 미실행 (kind 필요 — 로컬 `make test-e2e`).
+
+**제약 (미구현 — 백로그)**:
+- **RS 전용**. sharded 는 shard 별 oplog ts 독립 → 단일 PIT 로 cluster-wide 일관 시점 정의 불가. 거부 아닌 per-shard best-effort + webhook Warning. cluster-wide sharded PITR = **P2**.
+- **S3 전용**. PVC 스토리지는 PITR 미지원.
+- base 백업 retention (`RetentionSpec.Days`/`Count`) 은 여전히 **선언만** — 읽는 코드 0, S3 lifecycle policy 로 대체 (별도 트랙). `OplogRetentionHours` 는 본 cycle 에서 enforce.
 
 ### 1.2 Grafana 대시보드 템플릿
 - [x] 클러스터 개요 대시보드 (연결/작업/상태) — `dashboards/cluster-overview.json` + `charts/mongodb-operator/dashboards/cluster-overview.json` — cycle 2 F06
@@ -250,7 +265,7 @@
 - ✅ 4.4 PVC retention (필드 존재, 매핑만)
 
 ### 높은 가치, 높은 난이도 (전략적 투자)
-- 🎯 PITR 완전 구현
+- 🎯 PITR — RS + S3 구현 완료 (§1.1). 잔여 = cluster-wide sharded PITR (P2)
 - 🎯 LDAP/OIDC 인증
 - 🎯 다중 리전 (`MongoDBFederation`)
 - 🎯 성능 분석 (`MongoDBInsights`)

@@ -37,6 +37,17 @@ type stepDownData struct{ Port int }
 type backupData struct {
 	ClusterName     string
 	CompressionFlag string
+	// WithOplog는 mongodump에 --oplog를 붙일지 여부. dump 중 들어온 write까지
+	// 캡처해 *시점 일관* 스냅샷을 만든다(PITR의 기점). ReplicaSet 멤버 접속에서만
+	// 유효 — mongos(sharded)에 붙이면 mongodump가 거부하므로 호출자가 판정한다.
+	WithOplog bool
+}
+
+// restoreData는 restore-{fetch,replay}.sh.tpl 렌더 컨텍스트.
+type restoreData struct {
+	// SourceDir는 base 아카이브/덤프 + oplog.bson이 놓이는 경로. init container와
+	// main 컨테이너가 같은 경로로 마운트한다.
+	SourceDir string
 }
 
 // RenderReadiness는 mongod 헬스체크 스크립트를 반환.
@@ -60,12 +71,34 @@ func RenderStepDown(port int) (string, error) {
 
 // RenderBackup는 mongodump → S3 또는 PVC 분기로 백업 스크립트를 반환.
 // storageType은 "s3" 또는 "pvc". compressionFlag는 "--gzip" / "--archive" 등.
-func RenderBackup(storageType, clusterName, compressionFlag string) (string, error) {
+// withOplog는 --oplog(시점 일관 스냅샷 = PITR 기점) 부착 여부 — ReplicaSet 전용.
+//
+// 두 변형 모두 백업 이름을 BACKUP_NAME env로 받는다(operator가 MongoDBBackup CR
+// 이름을 주입). 구 구현은 컨테이너 안에서 $(date)로 지어 operator도 restore도
+// 실제 키를 알 수 없었다.
+func RenderBackup(storageType, clusterName, compressionFlag string, withOplog bool) (string, error) {
 	tpl := "scripts/backup-pvc.sh.tpl"
 	if storageType == "s3" {
 		tpl = "scripts/backup-s3.sh.tpl"
 	}
-	return render(tpl, backupData{ClusterName: clusterName, CompressionFlag: compressionFlag})
+	return render(tpl, backupData{
+		ClusterName:     clusterName,
+		CompressionFlag: compressionFlag,
+		WithOplog:       withOplog,
+	})
+}
+
+// RenderRestoreFetch는 restore Job의 init container 스크립트를 반환(S3 전용).
+// base 아카이브 + base.meta.json + PITR oplog 세그먼트를 sourceDir에 펼친다.
+// 세그먼트 선택/gap 판정 계약은 템플릿 헤더 주석 참조.
+func RenderRestoreFetch(sourceDir string) (string, error) {
+	return render("scripts/restore-fetch.sh.tpl", restoreData{SourceDir: sourceDir})
+}
+
+// RenderRestoreReplay는 restore Job의 main 컨테이너 스크립트를 반환.
+// base(임베드 oplog 포함) 복원 후 oplog.bson이 있으면 --oplogLimit까지 replay.
+func RenderRestoreReplay(sourceDir string) (string, error) {
+	return render("scripts/restore-replay.sh.tpl", restoreData{SourceDir: sourceDir})
 }
 
 // render는 embed.FS 안의 template 파일을 data로 실행해 결과 string 반환.

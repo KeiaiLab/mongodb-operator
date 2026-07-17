@@ -27,6 +27,7 @@ import (
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 	mongodbv1beta1 "github.com/keiailab/mongodb-operator/api/v1beta1"
+	"github.com/keiailab/mongodb-operator/internal/backup"
 	"github.com/keiailab/mongodb-operator/internal/controller"
 	webhookv1alpha1 "github.com/keiailab/mongodb-operator/internal/webhook/v1alpha1"
 	webhookv1beta1 "github.com/keiailab/mongodb-operator/internal/webhook/v1beta1"
@@ -186,6 +187,9 @@ func main() {
 		if err = (&controller.MongoDBBackupReconciler{
 			Client: mgr.GetClient(),
 			Scheme: mgr.GetScheme(),
+			// Store 주입 = base.meta.json 을 읽어 status.OplogStart(window/restore
+			// 앵커)를 채운다. uploader 와 동일 구현체 — nil 이면 OplogStart 미기록.
+			Store: backup.NewS3SegmentStore(mgr.GetClient()),
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "MongoDBBackup")
 			os.Exit(1)
@@ -196,6 +200,11 @@ func main() {
 		// 변화에 reaction.
 		if err = (&controller.OplogUploaderReconciler{
 			Client: mgr.GetClient(),
+			// Store 주입 = minio-go 백엔드. nil 로 두면 window 계산·GC·메트릭이
+			// 영구 비활성(spec-only)이라 여기서 실 S3 접근면을 배선한다. 생성은
+			// 실패하지 않고(S3 접속은 reconcile 시점 lazy), 자격/엔드포인트 오류는
+			// reconcile 에러로 표면화돼 requeue = operator 기동 무영향.
+			Store: backup.NewS3SegmentStore(mgr.GetClient()),
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "OplogUploader")
 			os.Exit(1)
@@ -296,7 +305,13 @@ func main() {
 			setupLog.Error(err, "unable to create webhook", "webhook", "MongoDBSearchIndex")
 			os.Exit(1)
 		}
-		setupLog.Info("admission webhooks enabled (MongoDB / MongoDBSharded / MongoDBSearchIndex)")
+		// MongoDBBackup(v1beta1) validating webhook — restore(PITR) 요청만 검증.
+		// 백업 capture CR 은 무검증 통과.
+		if err = webhookv1beta1.SetupMongoDBBackupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "MongoDBBackup")
+			os.Exit(1)
+		}
+		setupLog.Info("admission webhooks enabled (MongoDB / MongoDBSharded / MongoDBSearchIndex / MongoDBBackup)")
 	} else {
 		setupLog.Info("admission webhooks disabled by feature gate (--enable-webhooks=false)")
 	}
