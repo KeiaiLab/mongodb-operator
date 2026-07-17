@@ -413,10 +413,22 @@ func BuildRestoreJob(backup *mongodbv1alpha1.MongoDBBackup, authSecretName strin
 		}
 		fetchEnv = append(fetchEnv, buildS3EnvVars(backup.Spec.Storage.S3)...)
 
+		// fetch 이미지 선택: oplog 세그먼트(.bson.gz) 를 풀려면 aws + gzip 이
+		// 둘 다 필요하다. amazon/aws-cli(Amazon Linux 2023)엔 gzip 이 없고
+		// 런타임 dnf 설치는 클러스터 egress 정책에 막혀 취약(라이브 실측). PITR
+		// tailer 이미지(mongo 베이스 = gzip 내장 + aws v2)가 둘 다 갖췄으므로,
+		// OPLOG_TAILER_IMAGE 가 설정돼 있으면 그걸 쓴다. 미설정이면 base-only
+		// 복원(oplog 세그먼트 없음 = gzip 불요)만 안전한 amazon/aws-cli 로 폴백
+		// 하고, PITR 복원이면 restore-fetch.sh.tpl 가 gzip 부재로 fail-closed.
+		fetchImage := awsCLIImage
+		if img, _ := resolveOplogTailerImage(); img != "" {
+			fetchImage = img
+		}
+
 		job.Spec.Template.Spec.InitContainers = []corev1.Container{
 			{
 				Name:    "fetch",
-				Image:   awsCLIImage,
+				Image:   fetchImage,
 				Command: []string{binBash, "-c", fetchScript},
 				Env:     fetchEnv,
 				VolumeMounts: []corev1.VolumeMount{

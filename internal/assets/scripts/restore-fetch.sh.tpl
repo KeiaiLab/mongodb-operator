@@ -140,6 +140,17 @@ SEGS=$(aws_s3 ls "s3://${S3_BUCKET}/${OPLOG_PREFIX}/" 2>/dev/null \
 [ -n "${SEGS}" ] || die "oplog 세그먼트가 하나도 없다 (s3://${S3_BUCKET}/${OPLOG_PREFIX}/).
   이 클러스터에 PITR tailer 사이드카가 돌지 않았다 (BackupSpec.PITREnabled)."
 
+# gzip 확보 — 세그먼트(.bson.gz)를 풀어 oplog.bson 으로 연접하는 데 필요하다.
+# 여기 도달 = oplog 세그먼트가 있는 PITR 복원. fetch 컨테이너는 이 경우
+# OPLOG_TAILER_IMAGE(mongo 베이스 = gzip 내장 + aws)로 뜨므로(builder_backup.go
+# BuildRestoreJob) gzip 이 있어야 정상이다. 런타임 설치는 안 한다 — 클러스터
+# egress 정책에 막혀 취약하기 때문(라이브 실측). 없으면 이미지 배선 오류이니
+# 명확히 fail-closed 한다.
+command -v gzip >/dev/null 2>&1 || die "gzip 부재 — PITR 복원의 fetch 컨테이너는
+  aws + gzip 을 모두 갖춘 이미지여야 한다. operator Deployment 에
+  OPLOG_TAILER_IMAGE(mongodump/mongosh/aws 통합 이미지)를 설정하라 —
+  amazon/aws-cli 폴백엔 gzip 이 없어 oplog 세그먼트를 풀 수 없다."
+
 mkdir -p "${SRC}/oplog"
 : > "${SRC}/oplog/oplog.bson"
 
