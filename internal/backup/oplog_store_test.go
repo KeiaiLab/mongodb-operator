@@ -35,6 +35,9 @@ type fakeBackend struct {
 	listErr   error
 	removed   []string
 	removeErr error
+	// objects[key] = 내용. getObject 검증용. 키 부재는 errObjectNotFound.
+	objects map[string][]byte
+	getErr  error
 }
 
 func (f *fakeBackend) listKeys(_ context.Context, _, _ string) ([]string, error) {
@@ -47,6 +50,17 @@ func (f *fakeBackend) listKeys(_ context.Context, _, _ string) ([]string, error)
 func (f *fakeBackend) removeKeys(_ context.Context, _ string, keys []string) error {
 	f.removed = append(f.removed, keys...)
 	return f.removeErr
+}
+
+func (f *fakeBackend) getObject(_ context.Context, _, key string) ([]byte, error) {
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	data, ok := f.objects[key]
+	if !ok {
+		return nil, errObjectNotFound
+	}
+	return data, nil
 }
 
 func testScheme(t *testing.T) *runtime.Scheme {
@@ -91,6 +105,54 @@ func newStore(t *testing.T, backend objectBackend, objs ...client.Object) *S3Seg
 
 func ts(sec, ord uint32) controller.BSONTimestamp {
 	return controller.BSONTimestamp{Sec: sec, Ordinal: ord}
+}
+
+func TestReadBaseOplogEnd(t *testing.T) {
+	t.Parallel()
+	spec := s3Spec() // Prefix "pitr/"
+	metaKey := controller.BaseMetaKey(spec.Prefix, "mb1")
+
+	t.Run("파싱: oplogEnd 초를 metav1.Time 으로", func(t *testing.T) {
+		t.Parallel()
+		be := &fakeBackend{objects: map[string][]byte{
+			metaKey: []byte(`{"backup":"mb1","cluster":"rs0","oplogAnchor":"1700000000:1","oplogEnd":"1700000123:5","createdAt":"2026-07-18T00:00:00Z"}`),
+		}}
+		s := newStore(t, be, credsSecret("default", "s3-creds"))
+		got, err := s.ReadBaseOplogEnd(context.Background(), spec, "default", "mb1")
+		if err != nil {
+			t.Fatalf("err= %v", err)
+		}
+		if got == nil {
+			t.Fatal("nil — oplogEnd 를 못 읽음")
+		}
+		// Ordinal 은 소실, 초만 → 1700000123.
+		if got.Unix() != 1700000123 {
+			t.Errorf("Unix= %d, want 1700000123", got.Unix())
+		}
+	})
+
+	t.Run("base.meta.json 부재 = nil (--oplog 없이 뜬 base, 에러 아님)", func(t *testing.T) {
+		t.Parallel()
+		s := newStore(t, &fakeBackend{objects: map[string][]byte{}}, credsSecret("default", "s3-creds"))
+		got, err := s.ReadBaseOplogEnd(context.Background(), spec, "default", "mb1")
+		if err != nil {
+			t.Fatalf("부재는 에러 아님이어야: %v", err)
+		}
+		if got != nil {
+			t.Errorf("got= %v, want nil", got)
+		}
+	})
+
+	t.Run("malformed oplogEnd = 에러", func(t *testing.T) {
+		t.Parallel()
+		be := &fakeBackend{objects: map[string][]byte{
+			metaKey: []byte(`{"oplogEnd":"garbage"}`),
+		}}
+		s := newStore(t, be, credsSecret("default", "s3-creds"))
+		if _, err := s.ReadBaseOplogEnd(context.Background(), spec, "default", "mb1"); err == nil {
+			t.Error("malformed oplogEnd 는 에러여야")
+		}
+	})
 }
 
 func TestListSegments_ParsesValidAndSkipsViolations(t *testing.T) {

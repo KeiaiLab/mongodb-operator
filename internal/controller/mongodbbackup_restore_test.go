@@ -26,6 +26,104 @@ import (
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
 )
 
+// fakeOplogStore 는 OplogSegmentStore 의 테스트 대역 (network 0).
+type fakeOplogStore struct {
+	oplogEnd    *metav1.Time
+	oplogEndErr error
+}
+
+func (f *fakeOplogStore) ListSegments(_ context.Context, _ *mongodbv1alpha1.S3StorageSpec, _, _ string) ([]OplogSegment, error) {
+	return nil, nil
+}
+func (f *fakeOplogStore) DeleteSegments(_ context.Context, _ *mongodbv1alpha1.S3StorageSpec, _ string, _ []string) error {
+	return nil
+}
+func (f *fakeOplogStore) ReadBaseOplogEnd(_ context.Context, _ *mongodbv1alpha1.S3StorageSpec, _, _ string) (*metav1.Time, error) {
+	return f.oplogEnd, f.oplogEndErr
+}
+
+// TestBackupPath_JobComplete_PopulatesOplogStart — S3 백업 Job 이 완료되면
+// updateBackupStatus 가 base.meta.json 의 oplogEnd 를 status.OplogStart 로
+// 끌어와야 한다. 회귀 가드: 배선 전에는 OplogStart 가 영구 nil 이라 PITR
+// window 가 비어 restore 가 base 시점만 허용됐다.
+func TestBackupPath_JobComplete_PopulatesOplogStart(t *testing.T) {
+	s := newTestScheme(t)
+	backup := &mongodbv1alpha1.MongoDBBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "b1", Namespace: "ns"},
+		Spec: mongodbv1alpha1.MongoDBBackupSpec{
+			ClusterRef: mongodbv1alpha1.ClusterReference{Kind: "MongoDB", Name: "c1"},
+			Storage: mongodbv1alpha1.BackupStorageSpec{
+				Type: "s3",
+				S3:   &mongodbv1alpha1.S3StorageSpec{Bucket: "bk", Prefix: "pitr/", CredentialsRef: corev1.LocalObjectReference{Name: "cred"}},
+			},
+		},
+	}
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: "b1", Namespace: "ns"},
+		Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{
+			Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now(),
+		}}},
+	}
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(backup, job).
+		WithStatusSubresource(&mongodbv1alpha1.MongoDBBackup{}).Build()
+	want := metav1.NewTime(metav1.Unix(1700000123, 0).Time)
+	r := &MongoDBBackupReconciler{Client: cl, Scheme: s, Store: &fakeOplogStore{oplogEnd: &want}}
+
+	if err := r.updateBackupStatus(context.Background(), backup, "b1"); err != nil {
+		t.Fatalf("updateBackupStatus: %v", err)
+	}
+	got := &mongodbv1alpha1.MongoDBBackup{}
+	if err := cl.Get(context.Background(), types.NamespacedName{Name: "b1", Namespace: "ns"}, got); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.Status.Phase != backupPhaseCompleted {
+		t.Fatalf("Phase 기대 Completed, got %q", got.Status.Phase)
+	}
+	if got.Status.OplogStart == nil {
+		t.Fatal("OplogStart 미기록 — base.meta.json 배선 회귀")
+	}
+	if got.Status.OplogStart.Unix() != 1700000123 {
+		t.Errorf("OplogStart Unix= %d, want 1700000123", got.Status.OplogStart.Unix())
+	}
+}
+
+// TestBackupPath_NoStore_SkipsOplogStart — Store 미주입이면 OplogStart 를
+// 못 채우지만 백업 완료 전이 자체는 정상이어야 한다 (nil 안전 degrade).
+func TestBackupPath_NoStore_SkipsOplogStart(t *testing.T) {
+	s := newTestScheme(t)
+	backup := &mongodbv1alpha1.MongoDBBackup{
+		ObjectMeta: metav1.ObjectMeta{Name: "b2", Namespace: "ns"},
+		Spec: mongodbv1alpha1.MongoDBBackupSpec{
+			ClusterRef: mongodbv1alpha1.ClusterReference{Kind: "MongoDB", Name: "c1"},
+			Storage: mongodbv1alpha1.BackupStorageSpec{
+				Type: "s3",
+				S3:   &mongodbv1alpha1.S3StorageSpec{Bucket: "bk", Prefix: "pitr/", CredentialsRef: corev1.LocalObjectReference{Name: "cred"}},
+			},
+		},
+	}
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: "b2", Namespace: "ns"},
+		Status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{
+			Type: batchv1.JobComplete, Status: corev1.ConditionTrue, LastTransitionTime: metav1.Now(),
+		}}},
+	}
+	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(backup, job).
+		WithStatusSubresource(&mongodbv1alpha1.MongoDBBackup{}).Build()
+	r := &MongoDBBackupReconciler{Client: cl, Scheme: s} // Store nil
+
+	if err := r.updateBackupStatus(context.Background(), backup, "b2"); err != nil {
+		t.Fatalf("updateBackupStatus: %v", err)
+	}
+	got := &mongodbv1alpha1.MongoDBBackup{}
+	_ = cl.Get(context.Background(), types.NamespacedName{Name: "b2", Namespace: "ns"}, got)
+	if got.Status.Phase != backupPhaseCompleted {
+		t.Fatalf("Store nil 이어도 Completed 전이는 돼야: got %q", got.Status.Phase)
+	}
+	if got.Status.OplogStart != nil {
+		t.Errorf("Store nil 이면 OplogStart 는 nil 이어야: %v", got.Status.OplogStart)
+	}
+}
+
 func newRestoreBackup(name, ns, source string) *mongodbv1alpha1.MongoDBBackup {
 	return &mongodbv1alpha1.MongoDBBackup{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, UID: types.UID(name + "-uid")},

@@ -79,6 +79,11 @@ type OplogSegmentStore interface {
 	// 호출자가 plan 을 구성하므로 (PlanOplogPrune godoc), 구현체는 원자성이
 	// 아니라 *에러 보고* 만 책임진다.
 	DeleteSegments(ctx context.Context, s3 *mongodbv1alpha1.S3StorageSpec, namespace string, keys []string) error
+	// ReadBaseOplogEnd 는 base.meta.json 의 oplogEnd(base 스냅샷 일관 시점 =
+	// replay 하한)를 초 정밀 metav1.Time 으로 반환한다. base.meta.json 이 없으면
+	// (= --oplog 없이 뜬 백업) (nil, nil). MongoDBBackup 컨트롤러가 백업 완료
+	// 시 status.OplogStart 를 채우는 데 쓴다 (window/restore 앵커의 진본).
+	ReadBaseOplogEnd(ctx context.Context, s3 *mongodbv1alpha1.S3StorageSpec, namespace, backupName string) (*metav1.Time, error)
 }
 
 // OplogUploaderReconciler 는 PITR 활성 클러스터의 oplog 아카이브 수명주기를

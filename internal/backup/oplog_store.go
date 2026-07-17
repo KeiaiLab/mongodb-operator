@@ -27,13 +27,19 @@ package backup
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -67,7 +73,15 @@ type objectBackend interface {
 	listKeys(ctx context.Context, bucket, prefix string) ([]string, error)
 	// removeKeys 는 주어진 키들을 삭제하고, 실패한 키를 묶어 에러로 보고한다.
 	removeKeys(ctx context.Context, bucket string, keys []string) error
+	// getObject 는 단일 키의 내용을 통째로 읽는다. 키가 없으면 errObjectNotFound
+	// 를 반환한다 (호출자가 "없음" 을 정상 흐름으로 구분할 수 있게). base.meta.json
+	// 같은 작은 메타 객체 전용 — 대용량 스트리밍 용도가 아니다.
+	getObject(ctx context.Context, bucket, key string) ([]byte, error)
 }
+
+// errObjectNotFound 는 getObject 대상 키가 존재하지 않을 때의 sentinel.
+// (base.meta.json 부재 = --oplog 없이 뜬 백업 = 정상 흐름이라 에러 아님.)
+var errObjectNotFound = errors.New("object not found")
 
 // S3SegmentStore 는 controller.OplogSegmentStore 의 minio-go 구현이다.
 // 자격 Secret 은 CredentialsRef 가 가리키는 namespace 안에서 k8s client 로 읽고,
@@ -129,6 +143,52 @@ func (s *S3SegmentStore) DeleteSegments(ctx context.Context, s3 *mongodbv1alpha1
 		return fmt.Errorf("remove oplog segments: %w", err)
 	}
 	return nil
+}
+
+// ReadBaseOplogEnd 는 base.meta.json 의 oplogEnd 를 읽어 base 스냅샷의 oplog
+// 일관 시점(= replay 하한 / 유효 PIT 하한)을 초 정밀도 metav1.Time 으로 반환한다.
+// base.meta.json 이 없으면 (= --oplog 없이 뜬 백업) (nil, nil) — 이는 정상이며
+// 그 백업은 PITR 기점이 될 수 없을 뿐이다.
+func (s *S3SegmentStore) ReadBaseOplogEnd(ctx context.Context, s3 *mongodbv1alpha1.S3StorageSpec, namespace, backupName string) (*metav1.Time, error) {
+	backend, err := s.backendFor(ctx, s3, namespace)
+	if err != nil {
+		return nil, err
+	}
+	key := controller.BaseMetaKey(s3.Prefix, backupName)
+	data, err := backend.getObject(ctx, s3.Bucket, key)
+	if err != nil {
+		if errors.Is(err, errObjectNotFound) {
+			return nil, nil // --oplog 없이 뜬 base — PITR 기점 아님
+		}
+		return nil, fmt.Errorf("read base meta %q: %w", key, err)
+	}
+	var meta struct {
+		OplogEnd string `json:"oplogEnd"`
+	}
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("parse base meta %q: %w", key, err)
+	}
+	sec, ok := parseOplogEndSeconds(meta.OplogEnd)
+	if !ok {
+		return nil, fmt.Errorf("base meta %q has malformed oplogEnd %q", key, meta.OplogEnd)
+	}
+	t := metav1.NewTime(time.Unix(sec, 0).UTC())
+	return &t, nil
+}
+
+// parseOplogEndSeconds 는 base.meta.json 의 oplogEnd("<sec>:<inc>") 에서 초를
+// 뽑는다. status.OplogStart 는 초 정밀도(metav1.Time)라 Ordinal 은 버린다 —
+// replay 경계는 restore init container 가 아카이브 안 oplog 로 재계산한다.
+func parseOplogEndSeconds(tok string) (int64, bool) {
+	sep := strings.IndexByte(tok, ':')
+	if sep <= 0 {
+		return 0, false
+	}
+	v, err := strconv.ParseInt(tok[:sep], 10, 64)
+	if err != nil || v < 0 {
+		return 0, false
+	}
+	return v, true
 }
 
 // backendFor 는 자격을 해석하고 objectBackend 를 만든다 (테스트 seam 경유).
@@ -275,4 +335,23 @@ func (b *minioBackend) removeKeys(ctx context.Context, bucket string, keys []str
 		return err
 	}
 	return nil
+}
+
+// getObject 는 단일 키를 통째로 읽는다. 키 부재는 errObjectNotFound 로 정규화한다
+// (minio 는 NoSuchKey 를 GetObject 가 아니라 첫 Read 시점에 낸다).
+func (b *minioBackend) getObject(ctx context.Context, bucket, key string) ([]byte, error) {
+	obj, err := b.mc.GetObject(ctx, bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = obj.Close() }()
+	data, err := io.ReadAll(obj)
+	if err != nil {
+		var resp minio.ErrorResponse
+		if errors.As(err, &resp) && resp.Code == "NoSuchKey" {
+			return nil, errObjectNotFound
+		}
+		return nil, err
+	}
+	return data, nil
 }

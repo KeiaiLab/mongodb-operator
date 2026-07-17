@@ -45,6 +45,12 @@ const (
 type MongoDBBackupReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+
+	// Store 는 base.meta.json 을 읽어 status.OplogStart(window/restore 앵커)를
+	// 채우기 위한 S3 접근 seam. nil 이면 OplogStart 를 못 채운다 (PITR window 가
+	// 비어 restore 가 base 시점만 허용) — OplogUploaderReconciler 와 동일 구현체를
+	// cmd/main.go 에서 주입한다. nil 안전(기능 degrade 지 crash 아님).
+	Store OplogSegmentStore
 }
 
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbbackups,verbs=get;list;watch;create;update;patch;delete
@@ -289,10 +295,42 @@ func (r *MongoDBBackupReconciler) createOrUpdateSecret(ctx context.Context, secr
 	return r.Update(ctx, existing)
 }
 
+// jobHasCondition 은 Job 이 주어진 condition type 을 True 로 갖는지 검사한다.
+func jobHasCondition(job *batchv1.Job, condType batchv1.JobConditionType) bool {
+	for _, c := range job.Status.Conditions {
+		if c.Type == condType && c.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *MongoDBBackupReconciler) updateBackupStatus(ctx context.Context, backup *mongodbv1alpha1.MongoDBBackup, jobName string) error {
 	job := &batchv1.Job{}
 	if err := r.Get(ctx, types.NamespacedName{Name: jobName, Namespace: backup.Namespace}, job); err != nil {
 		return err
+	}
+
+	jobComplete := jobHasCondition(job, batchv1.JobComplete)
+
+	// status.OplogStart 채우기 — base.meta.json{oplogEnd} 가 base 스냅샷의 oplog
+	// 일관 시점(window/restore replay 하한)의 진본이다. 백업 script 가 S3 에 쓰지만
+	// 그 값을 CR status 로 끌어오는 건 여기 컨트롤러 몫이다 (안 하면 uploader 의
+	// window 계산이 앵커 없이 비어 PITR restore 가 base 시점만 허용). Job 완료 +
+	// S3 + PITR 활성 + 아직 미기록일 때 *1회* 읽는다 (retry 클로저 밖 — 네트워크
+	// 호출 중복 방지). best-effort: 읽기 실패해도 백업 완료 자체는 유효하므로
+	// 로그만 남기고 진행한다 (다음 reconcile 이 재시도 — 단 Completed guard 에
+	// 막히므로 실질 1회, OplogStart 는 nil 로 남아 window 만 degrade).
+	var resolvedOplogStart *metav1.Time
+	if jobComplete && backup.Status.OplogStart == nil && r.Store != nil &&
+		backup.Spec.Storage.Type == "s3" && backup.Spec.Storage.S3 != nil {
+		oplogStart, err := r.Store.ReadBaseOplogEnd(ctx, backup.Spec.Storage.S3, backup.Namespace, backup.Name)
+		if err != nil {
+			log.FromContext(ctx).Error(err, "base.meta.json 읽기 실패 — status.OplogStart 미기록(PITR window degrade)",
+				"backup", backup.Name)
+		} else {
+			resolvedOplogStart = oplogStart // nil 이면 --oplog 없이 뜬 base
+		}
 	}
 
 	// 직전 status mutation 들을 클로저로 묶어 conflict 재시도 시에도 동일 적용 보장.
@@ -316,6 +354,11 @@ func (r *MongoDBBackupReconciler) updateBackupStatus(ctx context.Context, backup
 		// If job is running
 		if job.Status.Active > 0 {
 			backup.Status.Phase = "Running"
+		}
+
+		// base 스냅샷의 oplog 일관 시점 (한 번 해석했으면 매 retry 동일 적용).
+		if resolvedOplogStart != nil {
+			backup.Status.OplogStart = resolvedOplogStart.DeepCopy()
 		}
 
 		// Set location based on storage type

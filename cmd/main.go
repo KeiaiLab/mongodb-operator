@@ -187,6 +187,9 @@ func main() {
 		if err = (&controller.MongoDBBackupReconciler{
 			Client: mgr.GetClient(),
 			Scheme: mgr.GetScheme(),
+			// Store 주입 = base.meta.json 을 읽어 status.OplogStart(window/restore
+			// 앵커)를 채운다. uploader 와 동일 구현체 — nil 이면 OplogStart 미기록.
+			Store: backup.NewS3SegmentStore(mgr.GetClient()),
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "MongoDBBackup")
 			os.Exit(1)

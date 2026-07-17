@@ -157,6 +157,18 @@ func OplogSegmentPrefix(s3Prefix, clusterName string) string {
 	return pfx + clusterName + "/" + oplogKeyInfix
 }
 
+// BaseMetaKey 는 base.meta.json 의 전체 S3 키를 만든다. backup-s3.sh.tpl 의
+// BASE_PREFIX(= "${S3_PREFIX%/}/${BACKUP_NAME}") 계약과 반드시 일치해야 한다.
+// oplog segment(clusterName 기준)와 달리 base 는 *backup 이름* 아래 둔다 —
+// restore 는 SourceBackupName 만 알고 소스 클러스터 이름은 모르기 때문이다.
+func BaseMetaKey(s3Prefix, backupName string) string {
+	pfx := strings.TrimSuffix(s3Prefix, "/")
+	if pfx != "" {
+		pfx += "/"
+	}
+	return pfx + backupName + "/base.meta.json"
+}
+
 // FormatOplogSegmentKey 는 [start, end] 를 담는 segment 의 전체 S3 키를 만든다.
 // tailer 의 shell printf 와 동일한 결과여야 한다 (본 파일 상단 ts 토큰 계약).
 func FormatOplogSegmentKey(s3Prefix, clusterName string, start, end BSONTimestamp) string {
