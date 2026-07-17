@@ -53,8 +53,20 @@ CLUSTER="{{.ClusterName}}"
 
 # aws CLI 확보 — 공식 mongo 이미지에 없다. 본 Job 은 root 라 설치 가능하다
 # (같은 pod 의 non-root 사이드카 / restore init 는 불가 → 그쪽은 다른 경로).
+# NOTE: `apt-get install awscli` 는 Ubuntu Noble(mongo:8.x 베이스)에서 실패한다 —
+# awscli(v1) 패키지가 저장소에서 제거됐다("has no installation candidate"). 공식
+# aws CLI v2 zip 으로 설치한다(arch-aware, oplog-tailer.Dockerfile 과 동일 방식).
 if ! command -v aws >/dev/null 2>&1; then
-  apt-get update && apt-get install -y awscli
+  case "$(uname -m)" in
+    x86_64) _awsarch=x86_64 ;;
+    aarch64|arm64) _awsarch=aarch64 ;;
+    *) echo "unsupported arch $(uname -m) for aws CLI install" >&2; exit 1 ;;
+  esac
+  apt-get update && apt-get install -y --no-install-recommends curl unzip ca-certificates
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${_awsarch}.zip" -o /tmp/awscliv2.zip
+  unzip -q /tmp/awscliv2.zip -d /tmp
+  /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli
+  rm -rf /tmp/awscliv2.zip /tmp/aws
 fi
 
 # aws CLI 는 S3_REGION 을 읽지 않는다 (AWS_DEFAULT_REGION 을 읽는다).

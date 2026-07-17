@@ -354,6 +354,31 @@ spec:
 		)
 
 		BeforeAll(func() {
+			By("deploying operator with OPLOG_TAILER_IMAGE (PITR 는 tailer 사이드카 필수)")
+			// PITR round-trip 은 focus 실행 시 search_test 의 make deploy 가 안 돌 수
+			// 있으므로 여기서 자족적으로 배포한다(idempotent kubectl apply). 그리고
+			// OPLOG_TAILER_IMAGE 를 주입해야 oplog tailer 가 실제로 주입된다 —
+			// 미주입 시 resolveOplogTailerImage 가 fail-open(사이드카 skip)이라
+			// oplog 가 S3 로 안 나가 round-trip 이 성립하지 않는다.
+			_, err := utils.Run(exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", managerImage)))
+			Expect(err).NotTo(HaveOccurred(), "make deploy")
+			_, err = utils.Run(exec.Command("kubectl", "set", "env",
+				"deployment/mongodb-operator-controller-manager", "-n", "mongodb-operator-system",
+				fmt.Sprintf("OPLOG_TAILER_IMAGE=%s", tailerImage)))
+			Expect(err).NotTo(HaveOccurred(), "set OPLOG_TAILER_IMAGE")
+			// rollout restart 강제 — BeforeSuite 가 새로 빌드/로드한 이미지를
+			// 같은 태그(e2e-dev)로 밀어넣으므로, make deploy/set env 가 spec 을
+			// 안 바꾸면 operator pod 가 재시작하지 않아 *이전 실행의 stale 이미지*
+			// 를 계속 쓴다(embedded 스크립트 변경이 반영 안 됨). restart 로 갓
+			// 로드한 이미지를 확실히 집게 한다.
+			_, err = utils.Run(exec.Command("kubectl", "rollout", "restart",
+				"deployment/mongodb-operator-controller-manager", "-n", "mongodb-operator-system"))
+			Expect(err).NotTo(HaveOccurred(), "operator rollout restart")
+			_, err = utils.Run(exec.Command("kubectl", "rollout", "status",
+				"deployment/mongodb-operator-controller-manager", "-n", "mongodb-operator-system",
+				"--timeout=180s"))
+			Expect(err).NotTo(HaveOccurred(), "operator rollout")
+
 			By("creating PITR round-trip namespace + admin secret")
 			_, _ = utils.Run(exec.Command("kubectl", "create", "ns", pitrRTNamespace))
 			ensureAdminSecret(pitrRTNamespace)

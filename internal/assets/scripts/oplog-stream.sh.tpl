@@ -69,8 +69,21 @@ log() { echo "[oplog-tailer] $*"; }
 ensure_aws() {
   if command -v aws >/dev/null 2>&1; then return 0; fi
   if [ "$(id -u)" = "0" ]; then
-    log "aws CLI 부재 — apt-get 설치 (backup-s3.sh.tpl 와 동일 경로)"
-    apt-get update && apt-get install -y awscli
+    # apt-get install awscli 는 Ubuntu Noble 에서 실패(패키지 제거됨) →
+    # aws CLI v2 zip (backup-s3.sh.tpl 와 동일 경로). 단 tailer 는 보통
+    # 비-root 사이드카라 이 경로는 거의 안 타고, OPLOG_TAILER_IMAGE(mongodump+
+    # aws 내장)를 쓰는 게 정상 경로다.
+    log "aws CLI 부재 — aws v2 zip 설치 (root fallback)"
+    case "$(uname -m)" in
+      x86_64) _awsarch=x86_64 ;;
+      aarch64|arm64) _awsarch=aarch64 ;;
+      *) log "FATAL: unsupported arch $(uname -m)"; exit 1 ;;
+    esac
+    apt-get update && apt-get install -y --no-install-recommends curl unzip ca-certificates
+    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${_awsarch}.zip" -o /tmp/awscliv2.zip
+    unzip -q /tmp/awscliv2.zip -d /tmp
+    /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli
+    rm -rf /tmp/awscliv2.zip /tmp/aws
     return 0
   fi
   log "FATAL: aws CLI 부재 + non-root(uid=$(id -u)) → 런타임 설치 불가"

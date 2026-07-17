@@ -4,14 +4,24 @@
 # 초과한다 → CRD 설치(서버사이드 apply)가 "etcdserver: request is too large" 로 실패.
 # etcd 한계를 8MB 로 상향한다(make deploy/install 의 server-side apply 와 병행). 발견: PR5 e2e.
 # 근본적으로는 mongodbshardeds CRD schema 축소가 필요(별도 backlog).
+#
+# k8s 1.31+ (kubeadm v1beta4) 부터 extraArgs 는 map 이 아니라 {name,value} 리스트다.
+# 구 map 형태(max-request-bytes: "...")는 v1beta4 로 파싱될 때 무시/오류라 etcd 에
+# 실제로 인자가 안 붙는다 → CRD apply 재실패. 리스트 형태 + 명시 apiVersion 으로 고정.
+# (라이브 검증: kind v0.32 / k8s 1.36 에서 etcd 에 --max-request-bytes 실제 부착 확인.)
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
     kubeadmConfigPatches:
       - |
+        apiVersion: kubeadm.k8s.io/v1beta4
         kind: ClusterConfiguration
         etcd:
           local:
             extraArgs:
-              max-request-bytes: "8388608"
+              - name: max-request-bytes
+                value: "8388608"
+              # max-request-bytes 상향 시 backend quota 도 함께 올린다(기본 2GB).
+              - name: quota-backend-bytes
+                value: "8589934592"

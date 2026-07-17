@@ -55,6 +55,10 @@ spec:
             # MongoDBSearch (mongot) — sidecar+PVC fix 검증 완료(kind e2e). mongot 엔진은
             # MongoDB upstream public preview. MongoDBSearch CR opt-in(CR 없으면 mongod 무영향).
             - --enable-search-controller=true
+            # MongoDBBackup + PITR oplog uploader — 같은 gate. backup/restore CR opt-in
+            # (CR 없으면 무영향). 이 gate 없이는 backup CR 이 reconcile 되지 않아 Phase 가
+            # 비어있고 PITR oplog uploader(window/GC)도 미가동한다(kind e2e 로 실증).
+            - --enable-backup-controller=true
           ports:
             - name: https
               containerPort: 8443

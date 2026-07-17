@@ -91,7 +91,9 @@ func TestRenderBackup_S3Variant(t *testing.T) {
 		// 백업 이름은 이제 env — 컨테이너 안에서 $(date)로 짓지 않는다.
 		// 그래야 operator/restore가 S3 키를 결정론적으로 계산할 수 있다.
 		`: "${BACKUP_NAME:?`,
-		`apt-get install -y awscli`,
+		// aws CLI v2 zip 설치 — Ubuntu Noble 에서 apt awscli(v1) 는 제거돼
+		// "no installation candidate" 로 실패하므로 공식 zip 을 쓴다.
+		`awscli-exe-linux-${_awsarch}.zip`,
 		`mongodump --uri="${MONGODB_URI}" --gzip --oplog --archive`,
 		// 키 계약: <prefix>/<backup>/base.archive.gz + base.meta.json
 		`base.archive.gz`,
