@@ -50,6 +50,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /validate-mongodb-keiailab-com-v1beta1-mongodbbackup
+  failurePolicy: Fail
+  name: vmongodbbackup-v1beta1.kb.io
+  rules:
+  - apiGroups:
+    - mongodb.keiailab.com
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - mongodbbackups
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /validate-mongodb-keiailab-com-v1beta1-mongodbsearchindex
   failurePolicy: Fail
   name: vmongodbsearchindex-v1beta1.kb.io

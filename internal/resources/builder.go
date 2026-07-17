@@ -576,15 +576,21 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 	}
 
 	// cycle 15: PITR oplog tailer sidecar inject (when backup.pitrEnabled=true).
+	//
+	// 아키텍처 A(S3 직접 스트리밍) 이후 staging volume 은 tailer 전용 scratch
+	// (aws CLI 의 쓰기 가능 HOME) 이므로 mongod 컨테이너에는 마운트하지 않는다 —
+	// 구 구현이 EmptyDir 에 쌓던 oplog batch 파일 자체가 더 이상 없다.
 	if IsOplogTailerEnabled(mdb.Spec.Backup) {
 		hasAdmin := mdb.Spec.Auth.AdminCredentialsSecretRef.Name != ""
-		containers = append(containers, BuildOplogTailerSidecar(mdb.Spec.Version, mongoDBPort, hasAdmin))
-		volumes = append(volumes, BuildOplogStagingVolume())
-		// Also mount staging on mongod for restore drill.
-		containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
-			Name:      oplogStagingVolume,
-			MountPath: oplogStagingMount,
-		})
+		if image, reason := resolveOplogTailerImage(); reason == "" {
+			containers = append(containers, BuildOplogTailerSidecar(
+				image, mongoDBPort, hasAdmin, mdb.Name, mdb.Spec.Backup))
+			volumes = append(volumes, BuildOplogStagingVolume())
+		} else {
+			// fail-open: OPLOG_TAILER_IMAGE 미설정 시 사이드카를 주입하지 않아
+			// mongod pod readiness 를 지키고, reason 은 컨트롤러가 status 로 표면화.
+			_ = reason
+		}
 	}
 
 	// cycle 15: Audit forwarder fluent-bit sidecar (when CentralForwarder set).
@@ -1045,17 +1051,15 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 		},
 	}
 
-	// cycle 16: sharded ConfigServer 에도 oplog tailer / audit forwarder sidecar.
-	if IsOplogTailerEnabled(mdbsh.Spec.Backup) {
-		hasAdmin := mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name != ""
-		sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers,
-			BuildOplogTailerSidecar(mdbsh.Spec.Version, 27019, hasAdmin))
-		sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, BuildOplogStagingVolume())
-		sts.Spec.Template.Spec.Containers[0].VolumeMounts = append(
-			sts.Spec.Template.Spec.Containers[0].VolumeMounts,
-			corev1.VolumeMount{Name: oplogStagingVolume, MountPath: oplogStagingMount},
-		)
-	}
+	// cycle 16: sharded ConfigServer 의 audit forwarder sidecar.
+	//
+	// PITR oplog tailer 는 sharded 에 주입하지 않는다 (RS-only 우선 지원).
+	// S3 키 스킴이 `<cluster>/oplog/<startTs>_<endTs>` 라 shard 차원이 없어,
+	// config-server 와 각 shard 의 tailer 가 *동일 prefix* 를 공유하게 된다 —
+	// 서로 독립적인 oplog 타임라인의 세그먼트가 한 체인에 뒤섞여 restore 가
+	// 잘못된 데이터를 replay 한다 (best-effort 가 아니라 손상).
+	// sharded PITR 은 shard 별 독립 체인 + 단일 PIT 정합 설계가 선행되어야 한다.
+	// MongoDBBackup webhook 이 sharded 대상 복원에 Warning 을 발행한다.
 	if mdbsh.Spec.AuditLog != nil && mdbsh.Spec.AuditLog.Enabled && mdbsh.Spec.AuditLog.CentralForwarder != nil {
 		sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers,
 			buildAuditForwarderSidecar(mdbsh.Spec.AuditLog.CentralForwarder))
@@ -1327,17 +1331,10 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 		sts.Spec.Template.Labels = tmplLabels
 	}
 
-	// cycle 16: sharded Shard 에도 oplog tailer / audit forwarder sidecar.
-	if IsOplogTailerEnabled(mdbsh.Spec.Backup) {
-		hasAdmin := mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name != ""
-		sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers,
-			BuildOplogTailerSidecar(mdbsh.Spec.Version, 27018, hasAdmin))
-		sts.Spec.Template.Spec.Volumes = append(sts.Spec.Template.Spec.Volumes, BuildOplogStagingVolume())
-		sts.Spec.Template.Spec.Containers[0].VolumeMounts = append(
-			sts.Spec.Template.Spec.Containers[0].VolumeMounts,
-			corev1.VolumeMount{Name: oplogStagingVolume, MountPath: oplogStagingMount},
-		)
-	}
+	// cycle 16: sharded Shard 의 audit forwarder sidecar.
+	//
+	// PITR oplog tailer 미주입 — 사유는 BuildConfigServerStatefulSet 의 동일
+	// 위치 주석 참조 (S3 키에 shard 차원 부재 → 체인 혼입 = 손상, RS-only).
 	if mdbsh.Spec.AuditLog != nil && mdbsh.Spec.AuditLog.Enabled && mdbsh.Spec.AuditLog.CentralForwarder != nil {
 		sts.Spec.Template.Spec.Containers = append(sts.Spec.Template.Spec.Containers,
 			buildAuditForwarderSidecar(mdbsh.Spec.AuditLog.CentralForwarder))

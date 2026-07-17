@@ -95,4 +95,27 @@ webhooks:
         operations: [CREATE, UPDATE]
         resources: [mongodbshardeds]
     sideEffects: None
+  {{- /*
+  MongoDBBackup — restore(PITR) 요청만 검증하고 백업 capture CR 은 통과시킨다.
+  v1beta1(storage version)만 등록: matchPolicy 기본값 Equivalent 가 v1alpha1
+  요청도 변환해 이 경로로 보낸다(예약 백업 CronJob 이 v1alpha1 로 apply 한다).
+  failurePolicy=Fail — restore job 이 `mongorestore --drop` 으로 target 을 먼저
+  비우므로, 틀린 PIT 를 무검증 통과시키면 살아 있던 데이터가 지워진 뒤 목표
+  시점에 못 닿는다. 백업 CR 은 놓쳐도 다음 schedule 에 다시 뜨지만(가역),
+  잘못된 복원은 되돌릴 수 없다(비가역) — 의심 시 차단.
+  */}}
+  - admissionReviewVersions: [v1]
+    clientConfig:
+      service:
+        name: {{ $serviceName }}
+        namespace: {{ .Release.Namespace }}
+        path: /validate-mongodb-keiailab-com-v1beta1-mongodbbackup
+    failurePolicy: Fail
+    name: vmongodbbackup-v1beta1.kb.io
+    rules:
+      - apiGroups: [mongodb.keiailab.com]
+        apiVersions: [v1beta1]
+        operations: [CREATE, UPDATE]
+        resources: [mongodbbackups]
+    sideEffects: None
 {{- end }}

@@ -136,7 +136,20 @@ func (r *MongoDBBackupVerificationReconciler) Reconcile(ctx context.Context, req
 			return ctrl.Result{}, err
 		}
 
-		restoreJob, err := resources.BuildRestoreJob(backup, backup.Name+"-backup-uri")
+		// drill 대상은 *일반 백업* CR 이라 Spec.Restore 가 nil 이다. BuildRestoreJob 은
+		// restore 작업 CR 전용(nil 이면 error)이므로, 그대로 넘기면 drill 이 상시
+		// 실패한다 — verification 은 Restoring 에 머문 채 Job 이 영영 생기지 않아
+		// 30s 재큐만 반복(무증상 정지)했다.
+		//
+		// 따라서 "이 백업 자신을 소스로 복원" 이라는 합성 RestoreSpec 을 주입한
+		// **복사본** 으로 Job 을 만든다. DeepCopy 로 원본 CR 은 변형하지 않는다
+		// (Spec.Restore 가 API 서버에 새어나가면 backup controller 가 이 CR 을
+		// restore 작업으로 재해석한다). ClusterRef 등 나머지 spec 은 복사본이 그대로
+		// 승계 — 합성 필드는 SourceBackupName 하나뿐.
+		drill := backup.DeepCopy()
+		drill.Spec.Restore = &mongodbv1alpha1.RestoreSpec{SourceBackupName: backup.Name}
+
+		restoreJob, err := resources.BuildRestoreJob(drill, backup.Name+"-backup-uri")
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("build restore job: %w", err)
 		}

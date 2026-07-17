@@ -87,11 +87,12 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// F-IMP-01 / F04 (cycle 1): Restore path 분기. Spec.Restore 가 nil 이 아니면
-	// 본 CR 은 *백업 capture 가 아닌 restore 작업* 으로 해석한다. 본 cycle 의
-	// acceptance 는 *path 식별 + Phase=Restoring 진입* 까지. 실제 mongorestore
-	// + --oplogReplay 명령 실행은 cycle 6 (KMS encryption + ETag verify) 통합
-	// 시점에서 강화 — 그 사이 phase 는 사용자가 의도적으로 reset 하지 않는 한
-	// Restoring 유지.
+	// 본 CR 은 *백업 capture 가 아닌 restore 작업* 으로 해석한다.
+	//
+	// 생명주기: Pending → Restoring (Job 생성) → Completed | Failed. 백업 path 의
+	// updateBackupStatus 와 동일하게 Job condition 을 관찰해 종단 phase 로 전이한다
+	// (updateRestoreStatus). 종단 도달 후 재진입은 본 함수 상단의
+	// Completed/Failed guard 가 차단 — 멱등.
 	if backup.Spec.Restore != nil {
 		if backup.Status.Phase == "" || backup.Status.Phase == backupPhasePending {
 			applyRestoringStatus := func() {
@@ -123,6 +124,15 @@ func (r *MongoDBBackupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			"job", restoreJob.Name,
 			"sourceBackup", backup.Spec.Restore.SourceBackupName,
 			"pointInTime", backup.Spec.Restore.PointInTime)
+
+		// Job 완료 감지 → 종단 phase 전이. Job 이 아직 진행 중이면 Restoring 유지 + 재큐.
+		if err := r.updateRestoreStatus(ctx, backup, restoreJob.Name); err != nil {
+			return ctrl.Result{}, err
+		}
+		if backup.Status.Phase == backupPhaseCompleted || backup.Status.Phase == backupPhaseFailed {
+			logger.Info("Restore finished", "phase", backup.Status.Phase, "job", restoreJob.Name)
+			return ctrl.Result{}, nil
+		}
 		return ctrl.Result{RequeueAfter: requeueProvisioning}, nil
 	}
 
@@ -314,6 +324,41 @@ func (r *MongoDBBackupReconciler) updateBackupStatus(ctx context.Context, backup
 				backup.Spec.Storage.S3.Bucket,
 				backup.Spec.Storage.S3.Prefix,
 				backup.Name)
+		}
+	}
+	applyJobStatus()
+
+	return commonsstatus.UpdateWithRetry(ctx, r.Client, backup, applyJobStatus)
+}
+
+// updateRestoreStatus — restore Job 의 condition 을 관찰해 CR phase 를 종단
+// (Completed/Failed) 으로 전이한다. updateBackupStatus 의 restore 대응물로,
+// 구조는 동일하되 두 가지가 다르다:
+//   - Job active 중 phase 는 Restoring 유지 (백업의 Running 대응). 별도 마킹
+//     불필요 — 진입 시 이미 Restoring 이다.
+//   - Status.Location 미설정. Location 은 *백업이 쓴 산출물* 의 위치이고 restore
+//     는 그 위치를 읽기만 하므로 restore CR 에 기록하면 오독을 부른다.
+func (r *MongoDBBackupReconciler) updateRestoreStatus(ctx context.Context, backup *mongodbv1alpha1.MongoDBBackup, jobName string) error {
+	job := &batchv1.Job{}
+	if err := r.Get(ctx, types.NamespacedName{Name: jobName, Namespace: backup.Namespace}, job); err != nil {
+		return err
+	}
+
+	// 직전 status mutation 을 클로저로 묶어 conflict 재시도 시에도 동일 적용 보장
+	// (updateBackupStatus 동일 패턴). job 은 위에서 한 번 Get 한 값을 그대로 사용.
+	applyJobStatus := func() {
+		for _, condition := range job.Status.Conditions {
+			if condition.Type == batchv1.JobComplete && condition.Status == corev1.ConditionTrue {
+				backup.Status.Phase = backupPhaseCompleted
+				backup.Status.CompletionTime = condition.LastTransitionTime.DeepCopy()
+				break
+			}
+			if condition.Type == batchv1.JobFailed && condition.Status == corev1.ConditionTrue {
+				backup.Status.Phase = backupPhaseFailed
+				backup.Status.Error = condition.Message
+				backup.Status.CompletionTime = condition.LastTransitionTime.DeepCopy()
+				break
+			}
 		}
 	}
 	applyJobStatus()

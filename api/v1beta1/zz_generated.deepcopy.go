@@ -998,6 +998,18 @@ func (in *MongoDBBackupStatus) DeepCopyInto(out *MongoDBBackupStatus) {
 		in, out := &in.CompletionTime, &out.CompletionTime
 		*out = (*in).DeepCopy()
 	}
+	if in.OplogStart != nil {
+		in, out := &in.OplogStart, &out.OplogStart
+		*out = (*in).DeepCopy()
+	}
+	if in.EarliestRestore != nil {
+		in, out := &in.EarliestRestore, &out.EarliestRestore
+		*out = (*in).DeepCopy()
+	}
+	if in.LatestRestore != nil {
+		in, out := &in.LatestRestore, &out.LatestRestore
+		*out = (*in).DeepCopy()
+	}
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
 		*out = make([]metav1.Condition, len(*in))
@@ -2539,6 +2551,11 @@ func (in *RestoreSpec) DeepCopyInto(out *RestoreSpec) {
 	if in.PointInTime != nil {
 		in, out := &in.PointInTime, &out.PointInTime
 		*out = (*in).DeepCopy()
+	}
+	if in.PointInTimeTimestamp != nil {
+		in, out := &in.PointInTimeTimestamp, &out.PointInTimeTimestamp
+		*out = new(string)
+		**out = **in
 	}
 }
 

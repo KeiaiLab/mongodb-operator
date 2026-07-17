@@ -63,6 +63,22 @@ kubectl get validatingwebhookconfiguration mongodb-operator-validating
 | `spec.configServer.storage.size` | >= 1Gi | cfg replica set floor |
 | `spec.shards.storage.size` | >= 1Gi | shard data floor |
 
+### MongoDBBackup CR (restore / PITR)
+
+`spec.restore` 설정 시에만 적용 — 복구 목표 시점이 source 백업의 복원 가능
+window 밖이면 reject. 상세: [Backup and Restore](backup.md#point-in-time-recovery-pitr).
+
+| Field | Rule | Reason |
+|---|---|---|
+| `spec.restore.pointInTime` / `pointInTimeTimestamp` | source 백업의 `[status.earliestRestore, status.latestRestore]` 안 | 도달 불가 시점 요청을 restore Job 실패 전에 차단 |
+| `spec.restore.sourceBackupName` | 같은 namespace 에 존재 + `Phase=Completed` | 미완료 백업 기점 복원 차단 |
+| `spec.clusterRef.kind=MongoDBSharded` + PITR | **Warning** (reject 아님) | shard 별 oplog ts 독립 — cluster-wide 일관 시점 불가 |
+
+> **본 webhook 은 *권고* 게이트다 (fail-open).** window 가 아직 기록되지 않았
+>거나 source 클러스터를 관측할 수 없으면 *통과*시킨다 — window 는 S3 segment
+> 관측에서 유도한 값이라 진본이 아니기 때문. 진본 판정은 restore Job (도달 불가
+> 시 `Phase=Failed`). admission 통과 = 복원 성공 보장 **아님**.
+
 ## Admission Denial 시 메시지 형식
 
 K8s `apierrors.NewInvalid` 표준 형식 — 사용자 시점:

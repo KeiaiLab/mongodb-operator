@@ -14,8 +14,12 @@ REGISTRY_PATH ?= keiailab/platform/mongodb-operator
 IMAGE_BASE    ?= $(REGISTRY)/$(REGISTRY_PATH)
 BUNDLE_IMAGE_BASE  ?= $(IMAGE_BASE)-bundle
 CATALOG_IMAGE_BASE ?= $(IMAGE_BASE)-catalog
+# PITR oplog tailer 사이드카 이미지 (mongodump+aws 통합 — oplog-tailer.Dockerfile).
+# operator Deployment 의 OPLOG_TAILER_IMAGE env 로 주입 (resolveOplogTailerImage).
+OPLOG_TAILER_IMAGE_BASE ?= $(IMAGE_BASE)-oplog-tailer
 
 IMG ?= $(IMAGE_BASE):latest
+OPLOG_TAILER_IMG ?= $(OPLOG_TAILER_IMAGE_BASE):latest
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -439,6 +443,15 @@ docker-build: ## Build docker image with the manager (host arch via $(LOCAL_PLAT
 .PHONY: docker-push
 docker-push: ## Build and push docker image ($(PLATFORMS), default builder).
 	docker buildx build --platform $(PLATFORMS) --push -t ${IMG} .
+
+.PHONY: oplog-tailer-image-build
+oplog-tailer-image-build: ## Build PITR oplog tailer sidecar image (mongodump+aws) locally ($(LOCAL_PLATFORM), --load).
+	# 글로벌 §2.3: docker buildx 기본 빌더(default)만. 로컬은 host arch, push 대상은 amd64.
+	docker buildx build --platform $(LOCAL_PLATFORM) --load -f oplog-tailer.Dockerfile -t $(OPLOG_TAILER_IMG) .
+
+.PHONY: oplog-tailer-image-push
+oplog-tailer-image-push: ## Build and push PITR oplog tailer sidecar image ($(PLATFORMS)=amd64, default builder).
+	docker buildx build --platform $(PLATFORMS) --push -f oplog-tailer.Dockerfile -t $(OPLOG_TAILER_IMG) .
 
 ##@ Deployment
 
