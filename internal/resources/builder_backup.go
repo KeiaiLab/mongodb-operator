@@ -40,6 +40,10 @@ const (
 	// backupPVCMount 는 PVC 백업이 덤프를 떨어뜨리는 경로 (backup-pvc.sh.tpl 계약).
 	backupPVCMount = "/backup"
 
+	// binBash 는 backup/restore/oplog Job 컨테이너의 shell entrypoint.
+	// 스크립트가 bash 전용 문법(pipefail 등)을 쓰므로 /bin/sh 아님.
+	binBash = "/bin/bash"
+
 	// backupPVCVolume 은 위 volume 이름.
 	backupPVCVolume = "backup"
 
@@ -169,7 +173,7 @@ func BuildBackupJob(backup *mongodbv1alpha1.MongoDBBackup, authSecretName string
 			{
 				Name:         "backup",
 				Image:        defaultImage,
-				Command:      []string{"/bin/bash", "-c"},
+				Command:      []string{binBash, "-c"},
 				Args:         []string{script},
 				Env:          envVars,
 				VolumeMounts: mounts,
@@ -384,7 +388,7 @@ func BuildRestoreJob(backup *mongodbv1alpha1.MongoDBBackup, authSecretName strin
 			{
 				Name:    "mongorestore",
 				Image:   getMongoDBImage(mongodbv1alpha1.MongoDBVersion{Version: "8.2"}),
-				Command: []string{"/bin/bash", "-c", replayScript},
+				Command: []string{binBash, "-c", replayScript},
 				Env:     envVars,
 				VolumeMounts: []corev1.VolumeMount{
 					{Name: restoreSourceVolume, MountPath: restoreSourceMount, ReadOnly: true},
@@ -413,7 +417,7 @@ func BuildRestoreJob(backup *mongodbv1alpha1.MongoDBBackup, authSecretName strin
 			{
 				Name:    "fetch",
 				Image:   awsCLIImage,
-				Command: []string{"/bin/bash", "-c", fetchScript},
+				Command: []string{binBash, "-c", fetchScript},
 				Env:     fetchEnv,
 				VolumeMounts: []corev1.VolumeMount{
 					// init 은 써야 한다 — main 만 ReadOnly.

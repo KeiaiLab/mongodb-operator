@@ -215,7 +215,7 @@ func BuildOplogTailerSidecar(
 	return corev1.Container{
 		Name:    "oplog-tailer",
 		Image:   image,
-		Command: []string{"/bin/bash", "-c", script},
+		Command: []string{binBash, "-c", script},
 		Env:     buildOplogS3EnvVars(spec),
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{

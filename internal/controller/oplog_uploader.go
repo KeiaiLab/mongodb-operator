@@ -217,7 +217,7 @@ func (r *OplogUploaderReconciler) lookupCluster(ctx context.Context, key types.N
 	mdb := &mongodbv1alpha1.MongoDB{}
 	err := r.Get(ctx, key, mdb)
 	if err == nil {
-		return &uploaderTarget{Backup: mdb.Spec.Backup, Kind: "MongoDB", WindowSupported: true}, nil
+		return &uploaderTarget{Backup: mdb.Spec.Backup, Kind: kindMongoDB, WindowSupported: true}, nil
 	}
 	if !apierrors.IsNotFound(err) {
 		return nil, err
@@ -226,7 +226,7 @@ func (r *OplogUploaderReconciler) lookupCluster(ctx context.Context, key types.N
 	mdbsh := &mongodbv1alpha1.MongoDBSharded{}
 	err = r.Get(ctx, key, mdbsh)
 	if err == nil {
-		return &uploaderTarget{Backup: mdbsh.Spec.Backup, Kind: "MongoDBSharded", WindowSupported: false}, nil
+		return &uploaderTarget{Backup: mdbsh.Spec.Backup, Kind: kindMongoDBSharded, WindowSupported: false}, nil
 	}
 	if !apierrors.IsNotFound(err) {
 		return nil, err
