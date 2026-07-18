@@ -381,6 +381,47 @@ spec:
                 required:
                 - adminCredentialsSecretRef
                 type: object
+              autoHealing:
+                description: |-
+                  AutoHealing defines Level-V Auto Pilot 자가복구 정책(opt-in, 기본 비활성).
+                  현재 활성 액션 = 데이터 PVC 자동 확장: mongod dbStats(fsUsedSize/fsTotalSize)로
+                  측정한 데이터 파일시스템 사용률이 PVCExpansionUsagePercent(기본 85%)를 넘으면
+                  PVCExpansionIncrementGi(기본 10Gi)만큼 데이터 볼륨을 온라인 증설한다.
+                  StorageClass.allowVolumeExpansion=true 인 경우에만 동작한다.
+                properties:
+                  enabled:
+                    default: false
+                    description: Enabled toggles all auto-healing actions.
+                    type: boolean
+                  lagThresholdSeconds:
+                    default: 30
+                    description: LagThresholdSeconds — replication lag above this
+                      triggers lagging-member detection.
+                    format: int32
+                    type: integer
+                  podCrashLoopThreshold:
+                    default: 5
+                    description: PodCrashLoopThreshold — CrashLoopBackOff count above
+                      this triggers RemoveMember.
+                    format: int32
+                    type: integer
+                  pvcExpansionIncrementGi:
+                    default: 10
+                    description: PVCExpansionIncrementGi — bytes to add when expanding
+                      (default 10Gi).
+                    format: int32
+                    type: integer
+                  pvcExpansionUsagePercent:
+                    default: 85
+                    description: PVCExpansionUsagePercent — PVC usage above this triggers
+                      expansion (0-100).
+                    format: int32
+                    maximum: 100
+                    minimum: 0
+                    type: integer
+                required:
+                - enabled
+                type: object
               autoScaling:
                 description: |-
                   AutoScaling defines auto-scaling configuration. 멤버 수 자동 조정 — RS

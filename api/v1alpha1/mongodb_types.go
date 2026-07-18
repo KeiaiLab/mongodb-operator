@@ -89,6 +89,14 @@ type MongoDBSpec struct {
 	// +optional
 	AutoScaling *AutoScalingSpec `json:"autoScaling,omitempty"`
 
+	// AutoHealing defines Level-V Auto Pilot 자가복구 정책(opt-in, 기본 비활성).
+	// 현재 활성 액션 = 데이터 PVC 자동 확장: mongod dbStats(fsUsedSize/fsTotalSize)로
+	// 측정한 데이터 파일시스템 사용률이 PVCExpansionUsagePercent(기본 85%)를 넘으면
+	// PVCExpansionIncrementGi(기본 10Gi)만큼 데이터 볼륨을 온라인 증설한다.
+	// StorageClass.allowVolumeExpansion=true 인 경우에만 동작한다.
+	// +optional
+	AutoHealing *AutoHealingSpec `json:"autoHealing,omitempty"`
+
 	// ScalePolicy는 멤버 수 변경 가드. deliberate=true 없이는 spec.Members 변경
 	// 또는 HPA의 scale 결정이 *적용되지 않고* Status.PendingScale에 보류된다.
 	// +optional

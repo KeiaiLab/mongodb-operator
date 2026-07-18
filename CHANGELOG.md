@@ -4,6 +4,20 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **데이터 PVC 자동 확장 (Level-V Auto Pilot, opt-in)** — `MongoDB.spec.autoHealing` 스펙을
+  reconcile loop 에 배선했다. 이제 `spec.autoHealing.enabled=true` 시 operator 가 데이터 볼륨
+  파일시스템 사용률을 관측해 임계(`pvcExpansionUsagePercent`, 기본 85%)를 넘으면
+  `pvcExpansionIncrementGi`(기본 10Gi)만큼 데이터 PVC 를 온라인 증설한다. 사용률 측정은
+  mongod `dbStats` 의 `fsUsedSize`/`fsTotalSize`(데이터 파일시스템 실사용량, MongoDB 4.4+)를
+  쓴다 — 별도 RBAC(`nodes/proxy`)나 pod exec 인프라 없이 기존 mongo 연결만 재사용한다.
+  `StorageClass.allowVolumeExpansion=true` 인 경우에만 동작하며, 이전 확장이 진행 중이면
+  (요청>용량 또는 resize 컨디션) 중복 확장을 건너뛴다(runaway 차단). 실 PVC 크기를 SSOT 로
+  읽어 증분이 단조 증가한다. 기본 비활성(opt-in)이라 미설정 클러스터에는 영향/비용이 없다.
+  기존에 결정 로직(`PlanPVCExpansion`)·유닛 테스트만 있고 reconciler 미배선이던
+  "orphan code" 갭(ADR-0018 패턴)의 PVC 자동 확장 조각을 완성한다.
+
 ### Changed
 
 - **컨테이너 이미지 빌드·발행 경로 이관 — GHCR 로컬 push → GitLab CI + Harbor** (ADR-0041).
