@@ -1,7 +1,7 @@
 <p align="center">
-  <a href="BRANDING.md">English</a> |
-  <a href="BRANDING.ko.md">한국어</a> |
-  <a href="BRANDING.ja.md">日本語</a> |
+  <a href="../../BRANDING.md">English</a> |
+  <a href="../ko/branding.md">한국어</a> |
+  <a href="../ja/branding.md">日本語</a> |
   <b>中文</b>
 </p>
 
@@ -33,7 +33,7 @@
 | Mono mark (计划) | `https://keiailab.com/assets/mark.svg` *(尚未发布)* | Favicon、社交卡片 |
 | Wordmark (计划) | `https://keiailab.com/assets/wordmark.svg` *(尚未发布)* | 页脚、深色背景 |
 
-**Logo placement**: README 顶部居中,宽度 120px。始终链接到 https://github.com/keiailab。
+**Logo placement**: README 顶部居中,宽度 120px。始终链接到 [https://github.com/keiailab](https://github.com/keiailab)。
 
 **Migration note (2026-05-21)**: 在 `keiailab.com/assets/*.svg` 发布之前,family 全部仓库均使用 GitHub avatar (`https://github.com/keiailab.png`) 作为 canonical primary logo。SVG 行为未来迁移预留。
 
@@ -142,6 +142,6 @@ README 中 shield.io badge 的顺序 (左→右):
 
 ## 11. 许可证与归属
 
-- License: [MIT](LICENSE)
+- License: [MIT](../../../LICENSE)
 - Copyright: © 2026 keiailab contributors
-- Third-party attributions: 见 [NOTICE](NOTICE) (如适用)
+- Third-party attributions: 见 `NOTICE` (如适用)

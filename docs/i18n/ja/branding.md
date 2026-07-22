@@ -1,8 +1,8 @@
 <p align="center">
-  <a href="BRANDING.md">English</a> |
-  <a href="BRANDING.ko.md">한국어</a> |
+  <a href="../../BRANDING.md">English</a> |
+  <a href="../ko/branding.md">한국어</a> |
   <b>日本語</b> |
-  <a href="BRANDING.zh.md">中文</a>
+  <a href="../zh/branding.md">中文</a>
 </p>
 
 # ブランディングガイド — `mongodb-operator`
@@ -142,6 +142,6 @@ README の shield.io badge の順序 (左→右):
 
 ## 11. ライセンスおよび表記
 
-- License: [MIT](LICENSE)
+- License: [MIT](../../../LICENSE)
 - Copyright: © 2026 keiailab contributors
-- Third-party attributions: [NOTICE](NOTICE) を参照 (該当する場合)
+- Third-party attributions: `NOTICE` を参照 (該当する場合)

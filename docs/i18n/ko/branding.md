@@ -1,13 +1,13 @@
 <p align="center">
-  <a href="BRANDING.md">English</a> |
+  <a href="../../BRANDING.md">English</a> |
   <b>한국어</b> |
-  <a href="BRANDING.ja.md">日本語</a> |
-  <a href="BRANDING.zh.md">中文</a>
+  <a href="../ja/branding.md">日本語</a> |
+  <a href="../zh/branding.md">中文</a>
 </p>
 
 # Branding Guide — `mongodb-operator` (한국어)
 
-> English: [BRANDING.md](BRANDING.md) — canonical / 정본
+> English: [BRANDING.md](../../BRANDING.md) — canonical / 정본
 
 > keiailab operator 패밀리의 시각 정체성, 보이스, 톤 정의.
 
@@ -144,6 +144,6 @@ README 의 shield.io badge 순서 (좌→우):
 
 ## 11. License & Attribution (라이선스 및 출처 표기)
 
-- License: [MIT](LICENSE)
+- License: [MIT](../../../LICENSE)
 - Copyright: © 2026 keiailab contributors
-- Third-party attributions: [NOTICE](NOTICE) 참조 (해당 시)
+- Third-party attributions: `NOTICE` 참조 (해당 시)
