@@ -20,7 +20,7 @@ automountServiceAccountToken: true
 # Operator image configuration
 image:
   # -- Image repository
-  repository: harbor.keiailab.dev/keiailab/platform/mongodb-operator
+  repository: ghcr.io/keiailab/mongodb-operator
   # -- Image pull policy
   pullPolicy: IfNotPresent
   # -- Overrides the image tag (default: chart appVersion)
