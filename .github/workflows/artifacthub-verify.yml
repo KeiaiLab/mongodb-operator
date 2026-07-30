@@ -41,6 +41,24 @@ jobs:
           ah version
       - name: ah lint
         run: ah lint --kind helm --path charts
+      # artifacthub.io/images 는 정적 텍스트라 릴리스 bump 에서 조용히 뒤처진다 —
+      # 1.16.5~1.16.7 세 릴리스가 내부 전용 harbor.keiailab.dev:v1.16.4 핀을 그대로 실어
+      # ArtifactHub 스캐너가 매 스캔 DNS 실패했다. 외부 스캐너/사용자가 도달 가능한
+      # 공개 레지스트리 + appVersion 정합을 PR 게이트로 강제한다.
+      - name: images annotation ↔ appVersion 정합 (공개 레지스트리 강제)
+        run: |
+          set -euo pipefail
+          CHART=charts/mongodb-operator/Chart.yaml
+          APP_VERSION=$(sed -n 's/^appVersion: "\(.*\)"/\1/p' "$CHART")
+          test -n "$APP_VERSION"
+          grep -q "image: ghcr.io/keiailab/mongodb-operator:v${APP_VERSION}\$" "$CHART" || {
+            echo "::error file=$CHART::artifacthub.io/images 의 operator 이미지가 ghcr.io/keiailab/mongodb-operator:v${APP_VERSION} 와 불일치"
+            exit 1
+          }
+          if grep -rEn '(image|repository): *[^ ]*keiailab\.dev' charts/; then
+            echo "::error::charts/ 에 내부 전용 레지스트리(*.keiailab.dev) 이미지 참조 — 외부에서 pull/스캔 불가"
+            exit 1
+          fi
 
   smoke:
     name: ArtifactHub 인덱싱/서명 smoke
