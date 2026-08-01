@@ -25,6 +25,20 @@ const webhookRejectNS = "mongodb-webhook-reject"
 
 var _ = Describe("Webhook Validators Real Reject (cycle 18)", Ordered, func() {
 	BeforeAll(func() {
+		// 이 Describe 는 *admission webhook* 이 실제로 등록돼 있을 때만 의미가 있다.
+		// e2e 는 `make deploy`(kustomize) 로 배포하는데 그 경로에는 웹훅이 없다:
+		//   - config/default/kustomization.yaml 이 ../webhook 을 포함하지 않고
+		//   - config/manager/manager.yaml 이 --enable-webhooks 를 넘기지 않는다
+		//     (cmd/main.go 기본값 false — cert-manager 의존 때문에 chart 게이트로만 활성).
+		// 실제로 웹훅을 켜는 것은 Helm chart 뿐이다(deployment.yaml --enable-webhooks=true).
+		// 따라서 kustomize 배포 위에서 이 spec 을 돌리면 **영원히 실패**한다 — 검증
+		// 로직(ValidateLDAPSpec/ValidateOIDCSpec)이 정상인데도. 없으면 사유를 밝히고 skip.
+		out, err := utils.Run(exec.Command("kubectl", "get", "validatingwebhookconfiguration",
+			"-o", "jsonpath={.items[*].metadata.name}"))
+		if err != nil || !strings.Contains(out, "mongodb") {
+			Skip("admission webhook 미배포 — `make deploy`(kustomize) 경로는 config/default 에 " +
+				"../webhook 이 없고 --enable-webhooks 도 켜지 않는다. Helm chart 배포에서만 유효한 spec.")
+		}
 		_, _ = utils.Run(exec.Command("kubectl", "create", "namespace", webhookRejectNS))
 		ensureAdminSecret(webhookRejectNS)
 	})
@@ -62,7 +76,10 @@ spec:
 		cmd.Stdin = strings.NewReader(manifest)
 		out, err := utils.Run(cmd)
 		Expect(err).To(HaveOccurred(), "webhook must reject cleartext LDAP bind credentials")
-		Expect(out+err.Error()).To(ContainSubstring("cleartext"), "reject reason should mention cleartext")
+		// ValidateLDAPSpec 의 실제 메시지는 "ldap.tls must be true ... plaintext LDAP
+		// exposes credentials ..." 다 — "cleartext" 라는 단어는 쓰지 않는다.
+		Expect(out+err.Error()).To(ContainSubstring("ldap.tls must be true"),
+			"reject reason should name the tls requirement")
 	})
 
 	// OIDC http issuer reject — operator webhook https-only enforcement.
