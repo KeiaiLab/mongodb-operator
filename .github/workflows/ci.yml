@@ -47,6 +47,10 @@ jobs:
           cache: true
       - name: Run tests
         run: make test
+      - name: Coverage floor (ratchet)
+        env:
+          COVERAGE_FLOOR: "29"
+        run: bash hack/coverage-floor.sh cover.out
       - name: Upload coverage
         if: always()
         uses: codecov/codecov-action@v7
