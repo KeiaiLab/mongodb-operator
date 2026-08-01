@@ -25,11 +25,31 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ### Known gaps (정직 표기)
 
-- `harbor.keiailab.dev` 는 NetBird 내부망 전용(RFC-0082) → **외부 사용자는 Harbor 에서 pull 불가**.
-  단 `.github/workflows/release.yml` 이 `v*` 태그에서 `GITHUB_TOKEN` 으로 GHCR 에 이미 push 하므로
-  (로컬 자격 불요) 공개 발행 자체는 살아 있다 — 공개 배포를 유지하려면 차트 `image.repository` 를
-  GHCR 로 되돌려 **GHCR=공개 / Harbor=내부 2-plane** 으로 두면 된다 (ADR-0041 Consequences, 열린 결정).
 - GitLab 미러 프로젝트(`keiailab/platform/mongodb-operator`) 미생성 — 생성 전까지 `build:image` 미가동.
+
+## [1.16.8] - 2026-07-30
+
+### Fixed
+
+- **ArtifactHub 스캔 에러 — `artifacthub.io/images` 가 내부 전용 레지스트리를 광고** (차트 전용 릴리스,
+  operator 코드 무변경). 1.16.7 이 차트 기본 이미지를 GHCR 로 되돌리면서 이 어노테이션은 함께 고치지
+  않아, `harbor.keiailab.dev/.../mongodb-operator:v1.16.4`(내부망 전용 + stale 태그)가 1.16.5~1.16.7
+  세 릴리스에 그대로 실렸다. ArtifactHub 스캐너는 외부에서 도는지라 호스트를 해석하지 못해
+  **매 스캔이 실패**했다(`no such host` 알림 반복). 실제 배포 기본값은 이미 GHCR 이라 사용자 영향은
+  없었고 *스캔 메타데이터 한정* 결함이었다. `ghcr.io/keiailab/mongodb-operator:v1.16.6`(appVersion 정합)
+  으로 교정.
+- **재발 방지** — `artifacthub-verify` lint 잡에 ① images 어노테이션 ↔ appVersion 정합 ② `charts/`
+  내부 전용 레지스트리(`*.keiailab.dev`) 이미지 참조 금지 게이트 추가. 어노테이션은 정적 텍스트라
+  릴리스 bump 를 따라가지 않고 조용히 썩는다는 것이 이 사고의 뿌리다.
+
+## [1.16.7] - 2026-07-24
+
+### Changed
+
+- **공개 차트 기본 이미지 harbor → GHCR 복귀** — 공개 차트 기본값이 사설 `harbor.keiailab.dev` 를
+  가리키던 결함 수리(`values.yaml` `image.repository` → `ghcr.io/keiailab/mongodb-operator`,
+  v1.16.6 digest 보존 미러 완료). 형제 valkey/postgres/qdrant-operator 동형. 이로써 위 Known gaps 의
+  "GHCR=공개 / Harbor=내부 2-plane" 열린 결정이 **공개=GHCR 로 확정**됐다.
 
 ## [1.16.6] - 2026-07-14
 
