@@ -49,7 +49,7 @@ jobs:
         run: make test
       - name: Coverage floor (ratchet)
         env:
-          COVERAGE_FLOOR: "29"
+          COVERAGE_FLOOR: "30"
         run: bash hack/coverage-floor.sh cover.out
       - name: Upload coverage
         if: always()
