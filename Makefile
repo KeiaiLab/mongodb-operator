@@ -412,9 +412,14 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist.
 			$(KIND) create cluster --name $(KIND_CLUSTER) --config test/e2e/kind-config.yaml ;; \
 	esac
 
+# e2e 스위트 타임아웃. go test 기본값은 10m 인데 이 스위트는 kind 생성 + 이미지 빌드 +
+# cert-manager 설치 + StatefulSet 롤아웃까지 도느라 항상 그 벽에 걸렸다 — 스위트가 작성돼
+# 있으면서도 CI 에 한 번도 붙지 못한 실제 이유다.
+E2E_TIMEOUT ?= 45m
+
 .PHONY: test-e2e
 test-e2e: setup-test-e2e manifests generate fmt vet ## Run e2e tests against the Kind cluster.
-	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v
+	KIND=$(KIND) KIND_CLUSTER=$(KIND_CLUSTER) go test -tags=e2e ./test/e2e/ -v -ginkgo.v -timeout $(E2E_TIMEOUT)
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: cleanup-test-e2e

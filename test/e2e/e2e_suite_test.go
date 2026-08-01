@@ -65,6 +65,19 @@ var _ = BeforeSuite(func() {
 
 	configureKubectlKubeRC()
 	setupCertManager()
+
+	// CRD + operator 설치는 **모든 spec 보다 먼저** 일어나야 한다.
+	// 구 구조는 search_test.go 의 BeforeAll 에서만 `make deploy` 를 했는데,
+	// Ginkgo 는 최상위 컨테이너 순서를 무작위화하므로 그보다 먼저 뽑힌 컨테이너는
+	// CRD 가 없는 클러스터에 CR 을 apply 하다 `no matches for kind "MongoDB"` 로
+	// 죽었다 (첫 CI 실행: 19 Passed / 10 Failed — 전부 이 클래스).
+	By("deploying CRDs + operator (make deploy)")
+	_, err = utils.Run(exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", managerImage)))
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to deploy CRDs + operator")
+
+	By("waiting for controller-manager rollout (best-effort)")
+	_, _ = utils.Run(exec.Command("kubectl", "-n", "mongodb-operator-system", "rollout", "status",
+		"deploy/mongodb-operator-controller-manager", "--timeout=150s"))
 })
 
 var _ = AfterSuite(func() {

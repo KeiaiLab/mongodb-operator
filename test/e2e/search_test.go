@@ -53,12 +53,8 @@ const (
 
 var _ = Describe("MongoDBSearch $vectorSearch Round-Trip (PR5)", Ordered, func() {
 	BeforeAll(func() {
-		By("deploying operator (make deploy — self-contained)")
-		_, err := utils.Run(exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", managerImage)))
-		Expect(err).NotTo(HaveOccurred(), "make deploy")
-		By("waiting for operator controller-manager rollout (best-effort)")
-		_, _ = utils.Run(exec.Command("kubectl", "-n", "mongodb-operator-system", "rollout", "status",
-			"deploy/mongodb-operator-controller-manager", "--timeout=150s"))
+		// operator/CRD 설치는 BeforeSuite 로 이동했다 — 여기서만 하면 Ginkgo 의
+		// 컨테이너 순서 무작위화 때문에 다른 spec 이 CRD 없이 돌 수 있다.
 
 		By("pre-caching mongot image on the kind node (avoid slow Docker Hub pull inside the timed spec)")
 		// mongot 이미지(~1.3GB)를 노드 containerd 에 미리 적재한다. 핀된 :0.69.1(IfNotPresent)가 이
@@ -109,7 +105,7 @@ spec:
 `, searchMongoName, searchNS, searchCRName, searchNS, searchMongoName)
 		cmd := exec.Command("kubectl", "apply", "-f", "-")
 		cmd.Stdin = strings.NewReader(manifest)
-		_, err = utils.Run(cmd)
+		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "MongoDB + MongoDBSearch apply")
 	})
 
