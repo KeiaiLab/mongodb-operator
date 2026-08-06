@@ -59,6 +59,10 @@ type MongoDBReconciler struct {
 	// Recorder는 K8s Events 발행용. SetupWithManager에서 자동 주입.
 	// nil이어도 안전 (eventf 래퍼가 guard) — 단위 테스트에서 미주입 허용.
 	Recorder events.EventRecorder
+	// PVCUsage는 PVC 자동 확장(spec.autoHealing)의 사용률 측정 seam.
+	// nil이면 reconcilePVCAutoExpansion이 dbStatsUsageReader(실 mongod dbStats)로
+	// lazy 기본값을 쓴다. 단위 테스트는 fake를 주입해 배선만 검증한다.
+	PVCUsage pvcUsageReader
 }
 
 // +kubebuilder:rbac:groups=mongodb.keiailab.com,resources=mongodbs,verbs=get;list;watch;create;update;patch;delete
@@ -197,6 +201,12 @@ func (r *MongoDBReconciler) Reconcile(ctx context.Context, req ctrl.Request) (rr
 	// valkey-operator PR #39 + postgres-operator PR #33 cross-operator 패턴.
 	if err := commonspvc.ExpandDataPVCs(ctx, r.Client, mdb.Namespace, []string{mdb.Name}, mdb.Spec.Storage.Size); err != nil {
 		log.FromContext(ctx).Error(err, "PVC resize failed (best-effort)")
+	}
+
+	// 5.2. PVC 자동 확장 (opt-in, spec.autoHealing.enabled) — 데이터 사용률 임계 초과 시
+	// 온라인 증설. best-effort (측정 실패/미배포는 skip, 다음 reconcile 재시도).
+	if err := r.reconcilePVCAutoExpansion(ctx, mdb); err != nil {
+		log.FromContext(ctx).Error(err, "PVC auto-expansion failed (best-effort)")
 	}
 
 	// 5.5. PodDisruptionBudget (opt-in, spec.podDisruptionBudget이 enabled일 때만 생성)

@@ -1785,6 +1785,11 @@ func (in *MongoDBSpec) DeepCopyInto(out *MongoDBSpec) {
 		*out = new(AutoScalingSpec)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.AutoHealing != nil {
+		in, out := &in.AutoHealing, &out.AutoHealing
+		*out = new(AutoHealingSpec)
+		**out = **in
+	}
 	if in.ScalePolicy != nil {
 		in, out := &in.ScalePolicy, &out.ScalePolicy
 		*out = new(ScalePolicy)
