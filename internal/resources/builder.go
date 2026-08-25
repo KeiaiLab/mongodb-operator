@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -54,7 +55,39 @@ const (
 	// envMongoDBURI — backup/restore Job 의 MongoDB 연결 URI env 이름 (RS/sharded
 	// StatefulSet + backup/restore Job 공용 — goconst SSOT).
 	envMongoDBURI = "MONGODB_URI"
+
+	// mongod exec 프로브 시간축 (RS / cfg / shard 3곳 공용 SSOT).
+	//
+	// exec 프로브는 mongosh 를 띄운다 — Node.js 런타임이라 붙기 전에 기동 비용부터 든다
+	// (정상 노드 실측 ~0.6s). 노드의 컨테이너 exec 경로가 잠깐 막히면 이 값이 수 초로 튀는데,
+	// 그때 멈춘 것은 mongod 가 아니라 프로브다. 구 5s 타임아웃은 그 스파이크를 장애로 오독해
+	// 건강한 mongod 를 SIGKILL 했다 — 한 클러스터에서 exec 타임아웃 10,007건, 파드 1본당
+	// 재시작 148회(2026-08-25 실측). 같은 파일의 mongos 는 이미 이 교훈을 반영해 liveness 를
+	// TCP 로 두고 readiness 타임아웃 10s 를 쓴다. mongod 는 hang 판정에 실제 ping 이
+	// 필요하므로 exec 을 유지하되 창을 넓힌다.
+	//
+	//   liveness  30s x 4회 = 120s 계속 못 붙어야 재시작   (구 10s x 6 = 60s)
+	//   readiness 15s x 3회 =  45s 못 붙으면 엔드포인트 제외 (구 10s x 3 = 30s)
+	probeLivenessPeriodSec   = 30
+	probeLivenessTimeoutSec  = 15
+	probeLivenessFailures    = 4
+	probeReadinessPeriodSec  = 15
+	probeReadinessTimeoutSec = 10
 )
+
+// mongoshPing 은 mongod hang 감지용 exec 프로브 명령이다. 플래그가 4곳(RS/cfg/shard/mongos)에
+// 흩어져 있으면 하나만 고치는 표류가 생긴다 — 조립을 여기 한 곳에 둔다.
+//
+//	--norc  rc 파일 로딩 생략 (mongosh 기동 비용 — 프로브는 초당 비용이 곧 오탐 확률이다)
+//	port 0  기본 포트 사용 (ReplicaSet·mongos). shard=27018 / configServer=27019
+func mongoshPing(port int) []string {
+	cmd := []string{"mongosh", "--norc", "--quiet"}
+	if port > 0 {
+		cmd = append(cmd, "--port", strconv.Itoa(port))
+	}
+
+	return append(cmd, "--eval", "db.adminCommand('ping')")
+}
 
 // Helper functions
 func generateRandomKey(length int) string {
@@ -487,17 +520,17 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 			Resources:       buildResourceRequirements(mdb.Spec.Resources),
 			SecurityContext: buildDefaultContainerSecurityContext(),
 			LivenessProbe: probes.New().
-				Exec("mongosh", "--quiet", "--eval", "db.adminCommand('ping')").
+				Exec(mongoshPing(0)...).
 				InitialDelay(30 * time.Second).
-				Period(10 * time.Second).
-				Timeout(5 * time.Second).
-				FailureThreshold(6).
+				Period(probeLivenessPeriodSec * time.Second).
+				Timeout(probeLivenessTimeoutSec * time.Second).
+				FailureThreshold(probeLivenessFailures).
 				Build(),
 			ReadinessProbe: probes.New().
 				Exec("/scripts/readiness-probe.sh").
 				InitialDelay(5 * time.Second).
-				Period(10 * time.Second).
-				Timeout(5 * time.Second).
+				Period(probeReadinessPeriodSec * time.Second).
+				Timeout(probeReadinessTimeoutSec * time.Second).
 				Build(),
 			// pod 자체가 자기 mongod에 localhost 연결로 첫 admin user를 생성한다.
 			// operator는 pods/exec을 호출하지 않는다. 스크립트가 실패해도 mongod
@@ -1004,23 +1037,23 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
-										Command: []string{"mongosh", "--quiet", "--port", "27019", "--eval", "db.adminCommand('ping')"},
+										Command: mongoshPing(27019),
 									},
 								},
 								InitialDelaySeconds: 30,
-								PeriodSeconds:       10,
-								TimeoutSeconds:      5,
-								FailureThreshold:    6,
+								PeriodSeconds:       probeLivenessPeriodSec,
+								TimeoutSeconds:      probeLivenessTimeoutSec,
+								FailureThreshold:    probeLivenessFailures,
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
-										Command: []string{"mongosh", "--quiet", "--port", "27019", "--eval", "db.adminCommand('ping')"},
+										Command: mongoshPing(27019),
 									},
 								},
 								InitialDelaySeconds: 10,
-								PeriodSeconds:       10,
-								TimeoutSeconds:      5,
+								PeriodSeconds:       probeReadinessPeriodSec,
+								TimeoutSeconds:      probeReadinessTimeoutSec,
 							},
 							Env: buildBootstrapEnv(mdbsh.Name+"-cfg", mdbsh.Name+"-cfg-headless", mdbsh.Namespace, mdbsh.Name+"-cfg", mdbsh.Spec.ConfigServer.Members, 27019, true),
 						},
@@ -1260,23 +1293,23 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
-										Command: []string{"mongosh", "--quiet", "--port", "27018", "--eval", "db.adminCommand('ping')"},
+										Command: mongoshPing(27018),
 									},
 								},
 								InitialDelaySeconds: 30,
-								PeriodSeconds:       10,
-								TimeoutSeconds:      5,
-								FailureThreshold:    6,
+								PeriodSeconds:       probeLivenessPeriodSec,
+								TimeoutSeconds:      probeLivenessTimeoutSec,
+								FailureThreshold:    probeLivenessFailures,
 							},
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
-										Command: []string{"mongosh", "--quiet", "--port", "27018", "--eval", "db.adminCommand('ping')"},
+										Command: mongoshPing(27018),
 									},
 								},
 								InitialDelaySeconds: 10,
-								PeriodSeconds:       10,
-								TimeoutSeconds:      5,
+								PeriodSeconds:       probeReadinessPeriodSec,
+								TimeoutSeconds:      probeReadinessTimeoutSec,
 							},
 							Env: buildBootstrapEnv(name, name+"-headless", mdbsh.Namespace, name, mdbsh.Spec.Shards.MembersPerShard, 27018, false),
 						},
@@ -1638,7 +1671,7 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 			ReadinessProbe: &corev1.Probe{
 				ProbeHandler: corev1.ProbeHandler{
 					Exec: &corev1.ExecAction{
-						Command: []string{"mongosh", "--norc", "--quiet", "--eval", "db.adminCommand('ping')"},
+						Command: mongoshPing(0),
 					},
 				},
 				InitialDelaySeconds: 10,
