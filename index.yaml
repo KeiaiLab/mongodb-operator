@@ -5,6 +5,159 @@ entries:
       artifacthub.io/category: database
       artifacthub.io/changes: |
         - kind: fixed
+          description: "mongod exec liveness/readiness probes no longer kill a healthy database. The probe spawns mongosh, a Node.js runtime, so it costs hundreds of milliseconds before it reaches mongod; when a node's container-exec path stalls only the probe slows down, but the 5s timeout read that stall as a dead database. Measured on a live cluster: exit 137 with reason=Error rather than OOMKilled, 148 restarts on a single pod, 99.6% of 10,007 cluster-wide exec timeouts on one node, and 1% CPU throttling on the container. Liveness is now 30s/15s/4 (was 10s/5s/6) and readiness 15s/10s (was 10s/5s), shared by ReplicaSet, config server and shard through one named-constant set. Liveness keeps exec because hang detection needs a real ping - TCP is accepted by a wedged mongod too. See ADR-0042."
+        - kind: fixed
+          description: "The mongot search sidecar had no resource requests or limits at all. mongot is a JVM started without -Xmx, so it reads its heap ceiling from the container cgroup; with no limit it sizes against whole-node RAM. Fifteen sidecars had drifted between 571Mi and 3956Mi with no bound, and the single unbounded container dragged the whole pod down to Burstable QoS, making mongod an eviction candidate alongside it. Defaults are now 50m/512Mi requests and 1/6Gi limits."
+      artifacthub.io/containsSecurityUpdates: "false"
+      artifacthub.io/crds: |
+        - kind: MongoDB
+          version: v1alpha1
+          name: mongodbs.mongodb.keiailab.com
+          displayName: MongoDB ReplicaSet
+          description: Deploys and manages a MongoDB ReplicaSet cluster
+        - kind: MongoDBSharded
+          version: v1alpha1
+          name: mongodbshardeds.mongodb.keiailab.com
+          displayName: MongoDB Sharded Cluster
+          description: Deploys and manages a MongoDB Sharded cluster with config servers, shards, and mongos routers
+        - kind: MongoDBBackup
+          version: v1alpha1
+          name: mongodbbackups.mongodb.keiailab.com
+          displayName: MongoDB Backup
+          description: Creates and manages MongoDB backups to S3 or PVC storage
+      artifacthub.io/crdsExamples: |
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDB
+          metadata:
+            name: my-mongodb
+            namespace: database
+          spec:
+            members: 3
+            version:
+              version: "8.3.1"
+            storage:
+              storageClassName: standard
+              size: 10Gi
+            auth:
+              mechanism: SCRAM-SHA-256
+              adminCredentialsSecretRef:
+                name: mongodb-admin
+            monitoring:
+              enabled: true
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDBSharded
+          metadata:
+            name: my-sharded
+            namespace: database
+          spec:
+            version:
+              version: "8.3.1"
+            configServer:
+              members: 3
+              storage:
+                size: 5Gi
+            shards:
+              count: 2
+              membersPerShard: 3
+              storage:
+                size: 20Gi
+            mongos:
+              replicas: 2
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDBBackup
+          metadata:
+            name: my-backup
+            namespace: database
+          spec:
+            clusterRef:
+              name: my-mongodb
+              kind: MongoDB
+            type: full
+            compression: true
+            storage:
+              type: s3
+              s3:
+                bucket: mongodb-backups
+                endpoint: https://s3.amazonaws.com
+                credentialsRef:
+                  name: s3-credentials
+      artifacthub.io/images: |
+        - name: mongodb-operator
+          image: ghcr.io/keiailab/mongodb-operator:v1.16.9
+        - name: mongodb
+          image: mongo:8.3.1
+        - name: mongodb-exporter
+          image: percona/mongodb_exporter:0.51.0
+      artifacthub.io/license: MIT
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/keiailab/mongodb-operator/blob/main/README.md
+        - name: Source Code
+          url: https://github.com/keiailab/mongodb-operator
+        - name: MongoDB Documentation
+          url: https://www.mongodb.com/docs/
+        - name: Design Assets
+          url: https://github.com/KeiaiLab/mongodb-operator/blob/main/docs/BRANDING.md
+      artifacthub.io/maturity: stable
+      artifacthub.io/operator: "true"
+      artifacthub.io/operatorCapabilities: Auto Pilot
+      artifacthub.io/prerelease: "false"
+      artifacthub.io/recommendations: |
+        - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
+        - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
+      artifacthub.io/screenshots: |
+        - title: Keiailab MongoDB Operator centered service symbol
+          url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/symbol.png
+        - title: Keiailab MongoDB Operator social cover
+          url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/cover.png
+      artifacthub.io/signKey: |
+        fingerprint: F1A6893583E632A757FF6767F3CC8C6AEC9CEB08
+        url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/charts/keiailab-helm-signing-public.asc
+    apiVersion: v2
+    appVersion: 1.16.9
+    created: "2026-08-25T23:39:22.278761353Z"
+    dependencies:
+    - name: keiailab-commons
+      repository: oci://ghcr.io/keiailab/charts
+      version: 0.8.0
+    description: A Kubernetes Operator for MongoDB — ReplicaSets, Sharded Clusters
+      with auto scale-out, S3/PVC Backup, TLS, and LDAP. MIT licensed.
+    digest: b90ad6260eefb7f85ba38b258e31463ff5e9a3a88589f111f2fe07f2bc639eab
+    home: https://github.com/keiailab/mongodb-operator
+    icon: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/symbol.png
+    keywords:
+    - mongodb
+    - database
+    - nosql
+    - operator
+    - replicaset
+    - sharded-cluster
+    - backup
+    - kubernetes
+    - external-secrets
+    - mongodb-operator
+    - kubernetes-operator
+    - mongodb-backup
+    - pitr
+    - ldap
+    - mongos
+    - helm
+    kubeVersion: '>=1.26.0-0'
+    maintainers:
+    - email: support@keiailab.com
+      name: Keiailab
+      url: https://keiailab.com
+    name: mongodb-operator
+    sources:
+    - https://github.com/keiailab/mongodb-operator
+    type: application
+    urls:
+    - https://github.com/KeiaiLab/mongodb-operator/releases/download/mongodb-operator-1.16.9/mongodb-operator-1.16.9.tgz
+    version: 1.16.9
+  - annotations:
+      artifacthub.io/category: database
+      artifacthub.io/changes: |
+        - kind: fixed
           description: "artifacthub.io/images now points the operator image at the public registry (ghcr.io/keiailab/mongodb-operator:v1.16.6). The annotation was left at the internal-only harbor.keiailab.dev registry pinned to a stale v1.16.4 tag, so Artifact Hub's security scanner could not resolve the host and every scan of the package errored out — the chart itself has defaulted to ghcr.io since 1.16.7. Chart-only metadata release, no operator changes."
       artifacthub.io/containsSecurityUpdates: "false"
       artifacthub.io/crds: |
@@ -8873,4 +9026,4 @@ entries:
     urls:
     - https://keiailab.github.io/mongodb-operator/mongodb-operator-0.0.6.tgz
     version: 0.0.6
-generated: "2026-07-30T14:01:42.338981281Z"
+generated: "2026-08-25T23:39:22.278976633Z"
