@@ -4,6 +4,8 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.9] - 2026-08-26
+
 ### Changed
 
 - **컨테이너 이미지 빌드·발행 경로 이관 — GHCR 로컬 push → GitLab CI + Harbor** (ADR-0041).
