@@ -18,6 +18,24 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ### Fixed
 
+- **mongod exec 프로브가 건강한 DB 를 죽였다** (ADR-0042). liveness `mongosh ... ping` 의
+  타임아웃 5s 는 mongosh(Node.js 런타임) 기동 비용을 감당하지 못했다. 노드의 컨테이너 exec
+  경로가 잠깐 막히면 프로브만 느려지는데 kubelet 이 그걸 mongod 장애로 읽고 SIGKILL 했다 —
+  라이브 실측: `exit 137 / reason=Error`(OOMKilled 아님), 파드 1본당 재시작 148회,
+  클러스터 exec 타임아웃 10,007건 중 **99.6%가 단일 노드**, 해당 컨테이너 CPU 스로틀은 1%.
+  시간축을 명명 상수(`probeLiveness*` / `probeReadiness*`) 하나로 모으고 창을 넓혔다:
+  liveness `30s/15s/4회`(구 `10s/5s/6회`), readiness `15s/10s`(구 `10s/5s`).
+  hang 감지가 목적이라 liveness 의 exec 은 **유지**한다(TCP 는 멈춘 mongod 도 accept).
+  mongosh 를 부르는 전 프로브에 `--norc` 추가 — mongos 가 이미 쓰던 규약을 cfg·shard·RS 로 확장.
+  가드 = `internal/resources/builder_probe_timing_test.go`.
+
+- **mongot 사이드카에 자원 지정이 아예 없었다.** mongot 은 JVM 인데 `-Xmx` 를 주지 않으므로
+  힙 상한을 컨테이너 cgroup 에서 읽는다 — limit 이 없으면 **노드 전체 RAM 기준**으로 잡는다.
+  실측: limit 없는 mongot 15본이 571Mi~3956Mi 로 제각각 부풀었고 상한을 아무도 몰랐다.
+  파드 QoS 도 이 컨테이너 하나 때문에 Burstable 로 떨어져 노드 압박 시 mongod 까지 축출
+  후보가 됐다. 기본값 `requests 50m/512Mi`, `limits 1/6Gi` 지정(limit 은 Lucene mmap 페이지
+  캐시가 cgroup 에 함께 계상되므로 mongod 와 같은 눈금으로 여유를 둔다).
+
 - **`make validate` 선재 결함 (v1.16.6 릴리스 blocker)** — `validate` 가 존재하지 않는
   `charts/mongodb-cluster` 를 lint 해 `no such file or directory` 로 **항상 FAIL** 했다.
   `validate` ⊂ `gate` ⊂ `release` Step 1 이라 릴리스 파이프라인 전체가 이 한 줄에 막혀 있었다.

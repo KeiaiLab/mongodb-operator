@@ -23,6 +23,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -193,6 +194,35 @@ logging:
 	}
 }
 
+// mongot 기본 자원. mongot 은 JVM 이고 `-Xmx` 를 주지 않는다 — 힙 상한을 컨테이너
+// cgroup 에서 읽는다(UseContainerSupport). 따라서 **limit 부재 = 힙 상한 부재**이고, JVM 은
+// 노드 전체 RAM 을 기준으로 잡는다. 라이브 실측 2026-08-25: limit 없는 mongot 15본이
+// 571Mi~3956Mi 로 제각각 부풀었고, 상한을 아무도 몰랐다. 파드 QoS 도 이 한 컨테이너 때문에
+// Burstable 로 떨어져 노드 압박 시 mongod 까지 함께 축출 후보가 된다.
+//
+// limit 은 mongod(6Gi)와 같은 눈금으로 둔다 — mongot 은 Lucene mmap 이라 페이지 캐시가
+// cgroup 에 함께 계상되므로, 여유 없는 상한은 인덱스 페이지를 계속 회수시켜 검색을 느리게 한다.
+// request 는 실측 하위값(571Mi) 근처로 낮춰 스케줄러 과예약을 피한다.
+const (
+	mongotCPURequest    = "50m"
+	mongotMemoryRequest = "512Mi"
+	mongotCPULimit      = "1"
+	mongotMemoryLimit   = "6Gi"
+)
+
+func defaultMongotResources() corev1.ResourceRequirements {
+	return corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse(mongotCPURequest),
+			corev1.ResourceMemory: resource.MustParse(mongotMemoryRequest),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse(mongotCPULimit),
+			corev1.ResourceMemory: resource.MustParse(mongotMemoryLimit),
+		},
+	}
+}
+
 // MongotSidecar — mongod pod 에 주입할 mongot sidecar: (mongot 컨테이너, init 컨테이너, volumes).
 // init(999)가 sync secret 의 password 를 emptyDir 로 cp+chmod 0400(mongot owner-only 요구).
 // mongot data(인덱스 스토어) = mongod data PVC 의 subPath(search-index) 공유 — 노드 루트
@@ -229,6 +259,7 @@ func MongotSidecar(mdbName, image, syncSecretName string) (corev1.Container, cor
 			{Name: "mongot-health", ContainerPort: mongotHealthPort},
 		},
 		SecurityContext: buildDefaultContainerSecurityContext(),
+		Resources:       defaultMongotResources(),
 		VolumeMounts: []corev1.VolumeMount{
 			{Name: "mongot-config", MountPath: mongotConfigPath, ReadOnly: true},
 			// mongod data PVC 공유(subPath) — 노드 디스크 독립 + 영속.
