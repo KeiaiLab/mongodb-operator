@@ -6,6 +6,17 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [1.16.9] - 2026-08-26
 
+### Fixed
+
+- **`make bundle` 이 `controller-gen` 부재를 조용히 삼켰다.** 번들 CRD 를 `maxDescLen=0` 으로
+  줄이는 단계가 `$(CONTROLLER_GEN)` 을 부르는데, 바이너리가 없으면 그 레시피 줄의 종료 상태가
+  뒤따르는 `rm -rf` 것이 되어 **실패가 성공으로 보인다**. 결과는 full-description CRD 가 그대로
+  실린 5.1MB 번들이고, 이건 OLM v1 helm-release Secret 1MiB 한도를 넘겨 설치를 깨뜨린다
+  (ADR-0038). 릴리스 preflight 가 잡아주긴 하지만 그때는 이미 태그를 민 뒤다.
+  `bundle` 타깃이 `controller-gen` 을 선행 요구하게 했다. 변수 `$(CONTROLLER_GEN)` 이 아니라
+  **타깃 이름**으로 건다 — 전제조건은 파싱 시점에 전개되는데 그 변수는 한참 아래(480행)에서
+  정의되므로 변수로 걸면 빈 문자열이 되어 아무것도 안 걸린다.
+
 ### Changed
 
 - **컨테이너 이미지 빌드·발행 경로 이관 — GHCR 로컬 push → GitLab CI + Harbor** (ADR-0041).

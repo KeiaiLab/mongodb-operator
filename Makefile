@@ -190,7 +190,7 @@ release-notes: ## git-cliff 로 release notes 자동 생성 — /tmp/release-not
 	@echo "✓ release notes: /tmp/release-notes-$(VERSION).md"
 
 .PHONY: bundle
-bundle: ## OperatorHub.io bundle 생성 — operator-sdk + kustomize. VERSION 필수 (e.g. 1.5.0). PR-B9 / ADR-0023 / ADR-0028.
+bundle: controller-gen ## OperatorHub.io bundle 생성 — operator-sdk + kustomize. VERSION 필수 (e.g. 1.5.0). PR-B9 / ADR-0023 / ADR-0028.
 	@command -v operator-sdk >/dev/null 2>&1 || { echo "[error] operator-sdk not installed: brew install operator-sdk"; exit 1; }
 	@command -v kustomize >/dev/null 2>&1 || { echo "[error] kustomize not installed"; exit 1; }
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: VERSION 필수 (e.g. make bundle VERSION=1.5.0)"; exit 1; fi
