@@ -14,8 +14,7 @@ REPO_URL="https://github.com/keiailab/mongodb-operator"
 
 echo "==> Checking GitHub account flag status ..."
 PROFILE_CODE=$(curl -sS -o /dev/null -w "%{http_code}" https://github.com/eightynine01)
-CORE_LIMIT=$(curl -sS -H "Authorization: Bearer $(gh auth token)" https://api.github.com/rate_limit \
-  | python3 -c "import json,sys; print(json.load(sys.stdin)['resources']['core']['limit'])")
+CORE_LIMIT=$(gh api rate_limit --jq '.resources.core.limit')
 
 echo "    profile (unauthed): HTTP $PROFILE_CODE"
 echo "    core rate limit: $CORE_LIMIT"

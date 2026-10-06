@@ -10,9 +10,7 @@ on:
         required: true
 
 permissions:
-  contents: write       # gh release create
-  packages: write       # ghcr.io push
-  id-token: write       # cosign keyless (future)
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -31,7 +29,7 @@ jobs:
       tag: ${{ steps.derive.outputs.tag }}
       image_release: ${{ steps.derive.outputs.image_release }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
       - id: derive
@@ -87,21 +85,25 @@ jobs:
     needs: preflight
     if: needs.preflight.outputs.image_release == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write       # ghcr.io push
+      id-token: write       # cosign keyless (future)
     outputs:
       digest: ${{ steps.push.outputs.digest }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ env.IMAGE }}
           tags: |
@@ -109,7 +111,7 @@ jobs:
             type=raw,value=${{ needs.preflight.outputs.tag }}
             type=semver,pattern={{major}}.{{minor}}
       - id: push
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: .
           platforms: linux/amd64
@@ -126,13 +128,16 @@ jobs:
     needs: [preflight, image]
     if: needs.preflight.outputs.image_release == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read        # pull image from ghcr.io
     steps:
-      - uses: anchore/sbom-action@v0
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
           image: ${{ env.IMAGE }}:${{ needs.preflight.outputs.version }}
           format: spdx-json
           output-file: mongodb-operator-${{ needs.preflight.outputs.tag }}.spdx.json
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sbom
           path: mongodb-operator-${{ needs.preflight.outputs.tag }}.spdx.json
@@ -143,17 +148,17 @@ jobs:
     if: needs.preflight.outputs.image_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.inputs.tag || github.ref }}
-      - uses: orhun/git-cliff-action@v4
+      - uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4
         with:
           config: cliff.toml
           args: --strip all --tag ${{ needs.preflight.outputs.tag }} --unreleased
         env:
           OUTPUT: CHANGES.md
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-notes
           path: CHANGES.md
@@ -164,15 +169,15 @@ jobs:
     if: needs.preflight.outputs.image_release == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
-      - uses: azure/setup-helm@v5
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
         with: { version: latest }
       - run: |
           mkdir -p out
           helm package charts/mongodb-operator -d out/
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: chart-tgz
           path: out/mongodb-operator-*.tgz
@@ -182,12 +187,14 @@ jobs:
     needs: [preflight, image, sbom, notes, chart-tgz]
     if: needs.preflight.outputs.image_release == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write       # gh release create
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with: { name: sbom,           path: assets }
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with: { name: release-notes,  path: assets }
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with: { name: chart-tgz,      path: assets }
       - name: Determine prerelease flag
         id: pre
@@ -198,7 +205,7 @@ jobs:
             *beta*|*rc*|*alpha*) echo "prerelease=true"  >> "$GITHUB_OUTPUT" ;;
             *)                   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
           esac
-      - uses: softprops/action-gh-release@v3
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           tag_name: ${{ needs.preflight.outputs.tag }}
           name: ${{ needs.preflight.outputs.tag }}
