@@ -117,7 +117,7 @@ metadata:
               "enabled": true
             },
             "version": {
-              "version": "8.3.1"
+              "version": "9.0.2"
             }
           }
         },
@@ -221,7 +221,7 @@ metadata:
               }
             ],
             "version": {
-              "version": "8.3.1"
+              "version": "9.0.2"
             }
           }
         },
@@ -397,15 +397,15 @@ metadata:
               "enabled": true
             },
             "version": {
-              "version": "8.3.1"
+              "version": "9.0.2"
             }
           }
         }
       ]
     capabilities: Seamless Upgrades
     categories: Database, Storage
-    containerImage: harbor.keiailab.dev/keiailab/platform/mongodb-operator:v1.16.9
-    createdAt: "2026-08-25T23:52:16Z"
+    containerImage: harbor.keiailab.dev/keiailab/platform/mongodb-operator:v1.16.10
+    createdAt: "2026-10-06T02:25:45Z"
     description: |
       Kubernetes operator for MongoDB — manages MongoDB (ReplicaSet) and
       MongoDBSharded (config server + shards + mongos) CRDs with K8s Lease
@@ -416,7 +416,7 @@ metadata:
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     repository: https://github.com/keiailab/mongodb-operator
     support: https://github.com/keiailab/mongodb-operator/issues
-  name: mongodb-operator.v1.16.9
+  name: mongodb-operator.v1.16.10
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -784,7 +784,7 @@ spec:
                 - --enable-clustergroup-controller=true
                 - --enable-autoscaling=true
                 - --enable-search-controller=true
-                image: harbor.keiailab.dev/keiailab/platform/mongodb-operator:v1.16.9
+                image: harbor.keiailab.dev/keiailab/platform/mongodb-operator:v1.16.10
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -894,4 +894,4 @@ spec:
     name: Keiailab
     url: https://github.com/keiailab
   replaces: mongodb-operator.v1.9.0
-  version: 1.16.9
+  version: 1.16.10

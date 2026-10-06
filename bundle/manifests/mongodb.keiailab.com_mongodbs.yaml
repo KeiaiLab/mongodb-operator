@@ -419,7 +419,7 @@ spec:
                   exporter:
                     properties:
                       image:
-                        default: percona/mongodb_exporter:0.51.0
+                        default: percona/mongodb_exporter:0.53.0
                         type: string
                       resources:
                         properties:
@@ -4623,7 +4623,7 @@ spec:
                   exporter:
                     properties:
                       image:
-                        default: percona/mongodb_exporter:0.51.0
+                        default: percona/mongodb_exporter:0.53.0
                         type: string
                       resources:
                         properties:
