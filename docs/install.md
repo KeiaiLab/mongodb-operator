@@ -276,7 +276,7 @@ metadata:
 spec:
   members: 3
   version:
-    version: "8.3.1"
+    version: "9.0.2"
   replicaSetName: rs0
   storage:
     storageClassName: ceph-block  # 또는 환경 별

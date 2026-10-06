@@ -117,7 +117,7 @@ metadata:
 spec:
   members: 3
   version:
-    version: "8.3.1"
+    version: "9.0.2"
   storage:
     storageClassName: standard
     size: 10Gi
@@ -145,7 +145,7 @@ metadata:
   namespace: database
 spec:
   version:
-    version: "8.3.1"
+    version: "9.0.2"
   configServer:
     members: 3
     storage:

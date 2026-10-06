@@ -65,7 +65,7 @@ MongoDB Operator has been installed successfully!
    - cert-manager Issuer/Certificate 자동 생성 — caBundle 은 cert-manager 의
      ca-injector annotation 으로 ValidatingWebhookConfiguration 에 자동 주입.
    - 검증 영역:
-     * spec.version.version 화이트리스트 (8.0/8.2/8.3) 위반 거부.
+     * spec.version.version 화이트리스트 (8.0/8.2/8.3/9.0) 위반 거부.
      * spec.members 가 1 또는 odd >= 3 강제 (split-brain 방지).
      * spec.shards.count <= 64 강제 (operational limit).
      * spec.shards.membersPerShard 동일 quorum 강제.

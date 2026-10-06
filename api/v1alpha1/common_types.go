@@ -22,7 +22,7 @@ import (
 
 // MongoDBVersion defines MongoDB version configuration
 type MongoDBVersion struct {
-	// Version is the MongoDB version (e.g., "8.3.1")
+	// Version is the MongoDB version (e.g., "9.0.2")
 	// +kubebuilder:validation:Pattern=`^\d+\.\d+(\.\d+)?$`
 	Version string `json:"version"`
 
@@ -33,12 +33,12 @@ type MongoDBVersion struct {
 
 // supportedMongoDBList — major.minor 화이트리스트. patch 버전은 semver-prefix 매칭.
 // 사용자 요구 (iteration 9, 2026-05-07): 최소 마일스톤 2개 버전 호환 — N + N-1 + N-2.
-// 8.0 = LTS baseline, 8.2 = stable, 8.3 = current. 신규 추가 시 oplog format,
+// 8.0 = LTS baseline, 8.2/8.3 = rapid, 9.0 = current major. 신규 추가 시 oplog format,
 // replica set wire protocol, sharding chunk format 호환성 검증 후 추가.
-var supportedMongoDBList = commonsversion.MustList("8.0", "8.2", "8.3")
+var supportedMongoDBList = commonsversion.MustList("8.0", "8.2", "8.3", "9.0")
 
 // SupportedMongoDBVersions — 외부 노출 슬라이스 (chart values / docs / 기존 호환).
-// major.minor 형식. 사용자가 8.3.1 같이 patch 까지 명시해도 IsSupportedMongoDBVersion
+// major.minor 형식. 사용자가 9.0.2 같이 patch 까지 명시해도 IsSupportedMongoDBVersion
 // 가 prefix 매칭으로 허용.
 var SupportedMongoDBVersions = supportedMongoDBList.Strings()
 
@@ -47,11 +47,11 @@ var SupportedMongoDBVersions = supportedMongoDBList.Strings()
 //
 // 예:
 //
-//	IsSupportedMongoDBVersion("8.3.1") == true   (8.3 매칭)
+//	IsSupportedMongoDBVersion("9.0.2") == true   (9.0 매칭)
 //	IsSupportedMongoDBVersion("8.3")   == true
 //	IsSupportedMongoDBVersion("8.0.0") == true
 //	IsSupportedMongoDBVersion("7.0.5") == false
-//	IsSupportedMongoDBVersion("9.0")   == false
+//	IsSupportedMongoDBVersion("10.0")  == false
 //	IsSupportedMongoDBVersion("8")     == false  (major-only 거부)
 //	IsSupportedMongoDBVersion("")      == false
 func IsSupportedMongoDBVersion(v string) bool {
@@ -510,7 +510,7 @@ type PrometheusRulesSpec struct {
 // ExporterSpec defines MongoDB exporter configuration
 type ExporterSpec struct {
 	// Image is the exporter image
-	// +kubebuilder:default="percona/mongodb_exporter:0.51.0"
+	// +kubebuilder:default="percona/mongodb_exporter:0.53.0"
 	Image string `json:"image,omitempty"`
 
 	// Resources defines exporter resource requirements
@@ -624,7 +624,7 @@ type UpgradeStrategySpec struct {
 //   - patch 변경 (8.0.0 → 8.0.5): 허용
 //   - 단일 minor +1 (8.0 → 8.2): 허용  (홀수 minor 는 dev 라 skip 가능)
 //   - minor skip (8.0 → 8.3): MongoDB 가 단일 step upgrade 요구 → 차단
-//   - major skip (8.x → 9.x): 차단
+//   - major step (8.3 → 9.0): 허용 — checkMajorStep 참조. 그 밖의 major 변경은 차단
 //   - downgrade (8.2 → 8.0): featureCompatibilityVersion 호환 미보장 → 차단
 //   - unknown version (예: 7.0): IsSupportedMongoDBVersion 으로 사전 차단
 //
@@ -647,9 +647,9 @@ func IsValidUpgradePath(from, to string) error {
 		return fmt.Errorf("unable to parse versions: from=%q to=%q", from, to)
 	}
 
-	// Major skip 차단 (8.x → 9.x 또는 그 이상의 jump 도 차단)
+	// Major 변경은 checkMajorStep 의 한 step 만 허용.
 	if toMajor != fromMajor {
-		return fmt.Errorf("major version change %q → %q is not allowed (must upgrade through supported minor path)", from, to)
+		return checkMajorStep(from, to)
 	}
 
 	// Downgrade 차단
@@ -686,6 +686,43 @@ func IsValidUpgradePath(from, to string) error {
 	}
 
 	return nil
+}
+
+// checkMajorStep — major 변경은 직전 major 의 마지막 supported minor → 다음
+// major 의 첫 supported minor 한 step 만 허용한다 (예: 8.3 → 9.0).
+// 9.0 바이너리는 FCV lastContinuous(8.3)·lastLTS(8.0) 로만 기동한다. 오퍼레이터는
+// 업그레이드마다 FCV 를 대상 minor 로 commit 하므로 8.3 에서 출발해야 FCV 가 맞는다.
+// 8.0 → 9.0 은 MongoDB 가 허용하지만 minor 인접 규칙(8.0 → 8.3 차단)과 맞춰 막는다.
+func checkMajorStep(from, to string) error {
+	fromMajor, fromMinor, _ := parseMongoVersion(from)
+	toMajor, toMinor, _ := parseMongoVersion(to)
+	if toMajor != fromMajor+1 {
+		return fmt.Errorf("major version change %q → %q is not allowed (must upgrade through supported minor path)", from, to)
+	}
+
+	last := supportedMinors(fromMajor)
+	first := supportedMinors(toMajor)
+	if len(last) == 0 || len(first) == 0 {
+		return fmt.Errorf("version not in supported minor sequence: from=%q to=%q", from, to)
+	}
+	lastMinor := last[len(last)-1]
+	if fromMinor != lastMinor || toMinor != first[0] {
+		return fmt.Errorf("major version change %q → %q is not allowed (must upgrade %q → %q)",
+			from, to, formatMongoVersion(fromMajor, lastMinor), formatMongoVersion(toMajor, first[0]))
+	}
+	return nil
+}
+
+// supportedMinors — major 에 속한 supported minor 를 오름차순으로.
+func supportedMinors(major int) []int {
+	minors := []int{}
+	for _, v := range SupportedMongoDBVersions {
+		if maj, min, ok := parseMongoVersion(v); ok && maj == major {
+			minors = append(minors, min)
+		}
+	}
+	sort.Ints(minors)
+	return minors
 }
 
 // parseMongoVersion — "8.2" 또는 "8.2.3" → (8, 2, true). 실패 시 false.

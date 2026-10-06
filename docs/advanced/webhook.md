@@ -42,7 +42,7 @@ kubectl get validatingwebhookconfiguration mongodb-operator-validating
 
 | Field | Rule | Reason |
 |---|---|---|
-| `spec.version.version` | 화이트리스트 (8.0/8.2/8.3) | 검증된 major.minor 만 production 권장 |
+| `spec.version.version` | 화이트리스트 (8.0/8.2/8.3/9.0) | 검증된 major.minor 만 production 권장 |
 | `spec.members` | 1 또는 odd >= 3 | even count split-brain risk |
 | `spec.storage.size` | >= 1Gi | data dir + oplog floor |
 | `spec.auth.adminCredentialsSecretRef.name` | non-empty | controller startup 의존 |

@@ -15531,7 +15531,7 @@ spec:
                       sidecar 정적 정의로 cover.
                     properties:
                       image:
-                        default: percona/mongodb_exporter:0.51.0
+                        default: percona/mongodb_exporter:0.53.0
                         description: Image is the exporter image
                         type: string
                       resources:
@@ -23626,7 +23626,7 @@ spec:
                     description: Image is the MongoDB container image
                     type: string
                   version:
-                    description: Version is the MongoDB version (e.g., "8.3.1")
+                    description: Version is the MongoDB version (e.g., "9.0.2")
                     pattern: ^\d+\.\d+(\.\d+)?$
                     type: string
                 required:
@@ -39487,7 +39487,7 @@ spec:
                       sidecar 정적 정의로 cover.
                     properties:
                       image:
-                        default: percona/mongodb_exporter:0.51.0
+                        default: percona/mongodb_exporter:0.53.0
                         description: Image is the exporter image
                         type: string
                       resources:
@@ -47580,7 +47580,7 @@ spec:
                     description: Image is the MongoDB container image
                     type: string
                   version:
-                    description: Version is the MongoDB version (e.g., "8.3.1")
+                    description: Version is the MongoDB version (e.g., "9.0.2")
                     pattern: ^\d+\.\d+(\.\d+)?$
                     type: string
                 required:

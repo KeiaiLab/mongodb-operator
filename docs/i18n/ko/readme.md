@@ -197,7 +197,7 @@ metadata:
 spec:
   members: 3
   version:
-    version: "8.3.1"
+    version: "9.0.2"
   storage:
     storageClassName: standard
     size: 10Gi
@@ -231,7 +231,7 @@ metadata:
   namespace: database
 spec:
   version:
-    version: "8.3.1"
+    version: "9.0.2"
   configServer:
     members: 3
     storage:
@@ -254,7 +254,7 @@ spec:
 | 필드 | 설명 | 기본값 |
 |-------|-------------|---------|
 | `spec.members` | replica set 멤버 수 | `3` |
-| `spec.version.version` | MongoDB 버전 | `8.3.1` |
+| `spec.version.version` | MongoDB 버전 | `9.0.2` |
 | `spec.storage.storageClassName` | 스토리지 클래스 이름 | - |
 | `spec.storage.size` | 멤버당 PVC 크기 | `10Gi` |
 | `spec.auth.mechanism` | 인증 메커니즘 | `SCRAM-SHA-256` |

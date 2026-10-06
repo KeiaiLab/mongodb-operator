@@ -39,10 +39,10 @@ const (
 	metricsPort = 9216
 	// metricsPortName — Service/Container 의 metrics 포트 이름 (goconst SSOT).
 	metricsPortName = "metrics"
-	defaultImage    = "mongo:8.3.1"
-	// exporterImage — chart values / examples (0.51.0) 와 코드 const (0.40) 의
-	// 3-way drift 를 최신 쪽 0.51.0 단일 진실원으로 통일 (kubebuilder default 동기).
-	exporterImage = "percona/mongodb_exporter:0.51.0"
+	defaultImage    = "mongo:9.0.2"
+	// exporterImage — chart values / examples (0.53.0) 와 코드 const (0.40) 의
+	// 3-way drift 를 최신 쪽 0.53.0 단일 진실원으로 통일 (kubebuilder default 동기).
+	exporterImage = "percona/mongodb_exporter:0.53.0"
 	// keyfileInitImage 는 copy-keyfile init container (4곳: replicaset / cfg / shard / mongos)
 	// 의 단일 진실원. busybox 만 사용 (chmod + cp), CVE 패치 시 본 const 만 갱신.
 	keyfileInitImage = "busybox:1.37"

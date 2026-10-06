@@ -419,7 +419,7 @@ func TestGetMongoDBImage(t *testing.T) {
 }
 
 func TestBuildMongoDBShardedVersionMatrix(t *testing.T) {
-	for _, version := range []string{"8.3.1", "8.2", "8.0"} {
+	for _, version := range []string{"9.0.2", "8.3.1", "8.2", "8.0"} {
 		t.Run(version, func(t *testing.T) {
 			sh := shardedWithAuth()
 			sh.Spec.Version.Version = version

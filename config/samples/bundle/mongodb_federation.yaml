@@ -8,7 +8,7 @@ metadata:
 spec:
   # MongoDB 버전
   version:
-    version: "8.3.1"
+    version: "9.0.2"
 
   # 리전 정의 — 각 리전의 kubeconfig Secret 참조
   regions:

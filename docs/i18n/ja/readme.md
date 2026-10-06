@@ -195,7 +195,7 @@ metadata:
 spec:
   members: 3
   version:
-    version: "8.3.1"
+    version: "9.0.2"
   storage:
     storageClassName: standard
     size: 10Gi
@@ -229,7 +229,7 @@ metadata:
   namespace: database
 spec:
   version:
-    version: "8.3.1"
+    version: "9.0.2"
   configServer:
     members: 3
     storage:
@@ -252,7 +252,7 @@ spec:
 | フィールド | 説明 | デフォルト |
 |-------|-------------|---------|
 | `spec.members` | レプリカセットのメンバー数 | `3` |
-| `spec.version.version` | MongoDB バージョン | `8.3.1` |
+| `spec.version.version` | MongoDB バージョン | `9.0.2` |
 | `spec.storage.storageClassName` | StorageClass 名 | - |
 | `spec.storage.size` | メンバーあたりの PVC サイズ | `10Gi` |
 | `spec.auth.mechanism` | 認証メカニズム | `SCRAM-SHA-256` |

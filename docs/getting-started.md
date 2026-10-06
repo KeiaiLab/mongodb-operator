@@ -49,7 +49,7 @@ metadata:
 spec:
   members: 3
   version:
-    version: "8.3.1"
+    version: "9.0.2"
   storage:
     storageClassName: standard
     size: 10Gi
