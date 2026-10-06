@@ -5,7 +5,7 @@ metadata:
   namespace: data
 spec:
   version:
-    version: "8.3.1"
+    version: "9.0.2"
   configServer:
     members: 3
     storage:
@@ -47,4 +47,4 @@ spec:
   monitoring:
     enabled: true
     exporter:
-      image: percona/mongodb_exporter:0.51.0
+      image: percona/mongodb_exporter:0.53.0

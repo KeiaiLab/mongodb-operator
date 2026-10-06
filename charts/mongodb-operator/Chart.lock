@@ -3,4 +3,4 @@ dependencies:
   repository: oci://ghcr.io/keiailab/charts
   version: 0.8.0
 digest: sha256:d7f419fd9f3683fae15a6412faba1251fddeaddaaa1a0c5848ffeda186f643e9
-generated: "2026-06-11T07:07:39.656088+09:00"
+generated: "2026-10-06T10:15:33.922349+09:00"

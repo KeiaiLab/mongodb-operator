@@ -14,7 +14,7 @@ import "testing"
 
 func TestIsSupportedMongoDBVersion_PatchLevelAccepted(t *testing.T) {
 	t.Parallel()
-	cases := []string{"8.0.0", "8.0.5", "8.2.0", "8.2.10", "8.3.0", "8.3.1"}
+	cases := []string{"8.0.0", "8.0.5", "8.2.0", "8.2.10", "8.3.0", "8.3.1", "9.0.0", "9.0.2"}
 	for _, v := range cases {
 		t.Run(v, func(t *testing.T) {
 			t.Parallel()
@@ -27,7 +27,7 @@ func TestIsSupportedMongoDBVersion_PatchLevelAccepted(t *testing.T) {
 
 func TestIsSupportedMongoDBVersion_MajorMinorAccepted(t *testing.T) {
 	t.Parallel()
-	cases := []string{"8.0", "8.2", "8.3"}
+	cases := []string{"8.0", "8.2", "8.3", "9.0"}
 	for _, v := range cases {
 		t.Run(v, func(t *testing.T) {
 			t.Parallel()
@@ -46,8 +46,8 @@ func TestIsSupportedMongoDBVersion_Rejected(t *testing.T) {
 	}{
 		{"7.0.5", "below LTS baseline"},
 		{"7.0", "below LTS baseline"},
-		{"9.0", "future version not yet validated"},
-		{"9.0.0", "future version"},
+		{"9.1", "future rapid release not yet validated"},
+		{"10.0", "future major not yet validated"},
 		{"8.1", "skipped odd-numbered (dev) release"},
 		{"8.4", "future patch line not yet released"},
 		{"8", "major-only, ambiguous"},
@@ -82,7 +82,12 @@ func TestIsValidUpgradePath(t *testing.T) {
 		{"downgrade 8.2 to 8.0 reject", "8.2", "8.0", true},
 		{"downgrade 8.3 to 8.2 reject", "8.3", "8.2", true},
 		{"unsupported from reject", "7.0", "8.0", true},
-		{"unsupported to reject", "8.0", "9.0", true},
+		{"major 8.3 to 9.0", "8.3", "9.0", false},
+		{"major patch-level 8.3.1 to 9.0.2", "8.3.1", "9.0.2", false},
+		{"major from LTS 8.0 to 9.0 reject", "8.0", "9.0", true},
+		{"major from 8.2 to 9.0 reject", "8.2", "9.0", true},
+		{"major downgrade 9.0 to 8.3 reject", "9.0", "8.3", true},
+		{"unsupported to reject", "8.3", "10.0", true},
 		{"unparseable", "abc", "8.0", true},
 	}
 	for _, tc := range cases {
@@ -106,11 +111,14 @@ func TestIsValidUpgradePath_PatchAllowed(t *testing.T) {
 	if err := IsValidUpgradePath("8.2.0", "8.2.10"); err != nil {
 		t.Errorf("patch upgrade must be allowed: %v", err)
 	}
+	if err := IsValidUpgradePath("9.0.0", "9.0.2"); err != nil {
+		t.Errorf("patch upgrade must be allowed: %v", err)
+	}
 }
 
 func TestSupportedMongoDBVersions_Snapshot(t *testing.T) {
 	t.Parallel()
-	want := map[string]bool{"8.0": true, "8.2": true, "8.3": true}
+	want := map[string]bool{"8.0": true, "8.2": true, "8.3": true, "9.0": true}
 	got := SupportedMongoDBVersions
 	if len(got) != len(want) {
 		t.Errorf("SupportedMongoDBVersions length = %d, want %d (snapshot drift?)",

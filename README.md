@@ -153,9 +153,9 @@ More examples — minimal, production, GitOps, monitoring, backups — live in
 
 ## Supported MongoDB versions
 
-MongoDB 8.0, 8.2, and 8.3 (even-numbered stable releases on the 8.x line). The
-admission webhook also enforces single-minor-step upgrades (e.g. 8.0 → 8.2, not
-8.0 → 8.3). Version support is enforced by `IsSupportedMongoDBVersion`; see
+MongoDB 8.0, 8.2, 8.3 and 9.0 (default 9.0.2). The admission webhook also
+enforces single-step upgrades (e.g. 8.0 → 8.2, not 8.0 → 8.3; across the major
+only 8.3 → 9.0). Version support is enforced by `IsSupportedMongoDBVersion`; see
 `api/v1beta1/version_validation_test.go`.
 
 ## Status

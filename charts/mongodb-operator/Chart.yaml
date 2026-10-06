@@ -101,7 +101,7 @@ annotations:
       spec:
         members: 3
         version:
-          version: "8.3.1"
+          version: "9.0.2"
         storage:
           storageClassName: standard
           size: 10Gi
@@ -118,7 +118,7 @@ annotations:
         namespace: database
       spec:
         version:
-          version: "8.3.1"
+          version: "9.0.2"
         configServer:
           members: 3
           storage:
@@ -153,9 +153,11 @@ annotations:
     - name: mongodb-operator
       image: ghcr.io/keiailab/mongodb-operator:v1.16.9
     - name: mongodb
-      image: mongo:8.3.1
+      image: mongo:9.0.2
+      whitelisted: true
     - name: mongodb-exporter
-      image: percona/mongodb_exporter:0.51.0
+      image: percona/mongodb_exporter:0.53.0
+      whitelisted: true
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
     - kind: fixed

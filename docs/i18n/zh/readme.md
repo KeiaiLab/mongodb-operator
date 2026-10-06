@@ -195,7 +195,7 @@ metadata:
 spec:
   members: 3
   version:
-    version: "8.3.1"
+    version: "9.0.2"
   storage:
     storageClassName: standard
     size: 10Gi
@@ -229,7 +229,7 @@ metadata:
   namespace: database
 spec:
   version:
-    version: "8.3.1"
+    version: "9.0.2"
   configServer:
     members: 3
     storage:
@@ -252,7 +252,7 @@ spec:
 | 字段 | 说明 | 默认值 |
 |-------|-------------|---------|
 | `spec.members` | replica set 成员数 | `3` |
-| `spec.version.version` | MongoDB 版本 | `8.3.1` |
+| `spec.version.version` | MongoDB 版本 | `9.0.2` |
 | `spec.storage.storageClassName` | 存储类 (storage class) 名称 | - |
 | `spec.storage.size` | 每个成员的 PVC 大小 | `10Gi` |
 | `spec.auth.mechanism` | 认证机制 | `SCRAM-SHA-256` |
