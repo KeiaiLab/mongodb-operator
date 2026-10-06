@@ -4,6 +4,26 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.10] - 2026-10-06
+
+### Added
+
+- **MongoDB 9.0 지원, 기본값 9.0.2.** 화이트리스트 8.0/8.2/8.3/9.0. 업그레이드 webhook 은
+  major 경계를 한 step 만 연다 — 8.3 → 9.0. 9.0 바이너리는 FCV 8.3(lastContinuous)·8.0(lastLTS)
+  으로만 기동하고, 오퍼레이터는 각 업그레이드 뒤 FCV 를 대상 minor 로 commit 하므로 8.3 에서
+  출발해야 FCV 가 맞는다. 8.0/8.2 → 9.0 은 기존 인접 step 규칙대로 거부.
+- `FuzzIsSupportedMongoDBVersion` — 버전 화이트리스트 native fuzz 테스트.
+
+### Security
+
+- Go toolchain 1.26.8 + 빌더 `golang:1.26.8`(digest 고정). x/crypto 0.57.0 · x/net 0.59.0 ·
+  x/text 0.42.0 · x/mod 0.41.0 · grpc 1.83.2(1.84.0 은 CVE-2026-84445 영향권) · OpenTelemetry
+  1.45.0 · cel-go 0.30.0. govulncheck 호출 취약점 0.
+- 기본 이미지 `mongo:9.0.2`, `percona/mongodb_exporter:0.53.0`. Artifact Hub 에서 두 상류
+  이미지는 `whitelisted`(SECURITY.md "Upstream images").
+- 워크플로 강화: 모든 action SHA 고정, govulncheck v1.8.0·catalog opm digest 고정,
+  release/helm-publish/security-scan 최상위 권한 read-only + job 단위 write, Dependabot 도입.
+
 ## [1.16.9] - 2026-08-26
 
 ### Fixed
