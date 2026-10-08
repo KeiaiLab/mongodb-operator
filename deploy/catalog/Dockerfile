@@ -3,7 +3,7 @@
 #
 # base: quay.io/operator-framework/opm — gRPC catalog server `opm serve /configs` 가 OLM 의
 # resolver 에 stream. file-based catalog 는 plain YAML, opm 도구 없이 git 에서 직접 검토 가능.
-FROM quay.io/operator-framework/opm:v1.42.0@sha256:8872de9b8b7759776cee78d407866cab5db960c2045177ac0bac8dd41b9e7b93
+FROM quay.io/operator-framework/opm:v1.74.0@sha256:b32d3891616662620da08d7f0ec42c2e69fa2de43427dc975d35b12f7a969a0f
 
 # OLM 1.27+ FBC 표준 — /configs 디렉토리 의 YAML/JSON 을 자동 인식.
 LABEL operators.operatorframework.io.index.configs.v1=/configs
