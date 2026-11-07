@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for MongoDB — ReplicaSets, Sharded Clusters with auto scale-out, S3/PVC Backup, TLS, and LDAP. MIT licensed.
 type: application
-version: 1.16.10
-appVersion: "1.16.10"
+version: 1.16.11
+appVersion: "1.16.11"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -151,7 +151,7 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:v1.16.10
+      image: ghcr.io/keiailab/mongodb-operator:v1.16.11
     - name: mongodb
       image: mongo:9.0.2
       whitelisted: true
@@ -161,15 +161,9 @@ annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
     - kind: security
-      description: "Go toolchain 1.26.8 (builder golang:1.26.8) and dependency bumps close the open Trivy/govulncheck findings: stdlib 1.26.5 CVEs, golang.org/x/crypto 0.57.0, x/net 0.59.0, x/text 0.42.0, x/mod 0.41.0, grpc 1.83.2 (CVE-2026-84445/84304/84303; 1.84.0 is still affected), OpenTelemetry 1.45.0 (CVE-2026-81870), cel-go 0.30.0."
+      description: "Go toolchain 1.26.10 (builder golang:1.26.10, digest pinned) closes GO-2026-6809 (crypto/x509 distrust of compromised intermediates) and the stdlib side of GO-2026-6617; golang.org/x/net 0.62.0 closes the HTTP/2 HPACK race (GO-2026-6617); github.com/klauspost/compress 1.20.2 closes the two-block frame panic reachable through mongo-driver (GO-2026-6865). govulncheck reports 0 reachable vulnerabilities."
     - kind: security
-      description: "Default MongoDB image is now mongo:9.0.2."
-    - kind: security
-      description: "Default exporter image is now percona/mongodb_exporter:0.53.0."
-    - kind: security
-      description: "Workflow hardening: every GitHub Action pinned by commit SHA, govulncheck and the catalog opm base image pinned, release/helm-publish/security-scan tokens read-only at the top level with write scopes per job, Dependabot version updates enabled."
-    - kind: added
-      description: "MongoDB 9.0 support. The upgrade webhook admits 8.3 -> 9.0 (9.0 starts with FCV 8.3); FCV 9.0 is committed after the upgrade validates. Other cross-major paths stay rejected."
+      description: "Base images refreshed: gcr.io/distroless/static:nonroot digest bump, catalog opm v1.74.0."
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
