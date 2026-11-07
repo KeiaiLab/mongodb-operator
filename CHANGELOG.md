@@ -4,6 +4,17 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.11] - 2026-11-07
+
+### Security
+
+- Go toolchain 1.26.10 + 빌더 `golang:1.26.10`(digest 고정) — GO-2026-6809(crypto/x509) ·
+  GO-2026-6617(HTTP/2 HPACK, x/net 0.62.0 동반) · GO-2026-6865(klauspost/compress 1.20.2,
+  mongo-driver CountDocuments 경로) 해소. govulncheck 호출 취약점 0. 빌더는 Dependabot 이
+  올린 `golang:1.27.0`(#420) 이 아니라 1.26 라인에 둔다 — 1.27.0 은 두 취약점 영향권
+  (수정판 1.27.2/1.27.3)이고 go.mod toolchain 과 같은 라인을 유지한다.
+- 베이스 `distroless/static:nonroot` digest 갱신(#421), catalog `opm` v1.74.0(#420).
+
 ## [1.16.10] - 2026-10-06
 
 ### Added
