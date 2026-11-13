@@ -259,7 +259,25 @@ type ShardSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	DrainTimeoutSeconds *int32 `json:"drainTimeoutSeconds,omitempty"`
+
+	// SetParameters 는 shard mongod 에 `--setParameter <key>=<value>` 로 넘길
+	// 기동 시 파라미터다(키 정렬 순서). configServer · mongos 에는 싣지 않는다.
+	// 비우거나 생략하면 shard StatefulSet 은 이 필드 도입 전과 같다(롤링 재시작 0).
+	// 값을 바꾸면 shard 가 롤링 재시작한다.
+	// e.g. {"periodicNoopIntervalSecs": "1"} — mongos change stream 지연 단축.
+	// 키는 `^[A-Za-z][A-Za-z0-9_.]*$`, 값은 비지 않고 줄바꿈이 없어야 한다
+	// (CRD CEL + webhook — webhook 이 꺼져 있어도 API 서버가 거절).
+	// +kubebuilder:validation:MaxProperties=64
+	// +kubebuilder:validation:XValidation:rule="self.all(k, k.matches('^[A-Za-z][A-Za-z0-9_.]*$'))",message="setParameters keys must match ^[A-Za-z][A-Za-z0-9_.]*$"
+	// +optional
+	SetParameters map[string]SetParameterValue `json:"setParameters,omitempty"`
 }
+
+// SetParameterValue 는 mongod --setParameter 값 하나다. 비지 않고 줄바꿈이 없다.
+// +kubebuilder:validation:MinLength=1
+// +kubebuilder:validation:MaxLength=4096
+// +kubebuilder:validation:Pattern=`^[^\r\n]+$`
+type SetParameterValue string
 
 // ShardHiddenMembersSpec — F67/F75 (cycle 10).
 type ShardHiddenMembersSpec struct {

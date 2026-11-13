@@ -4,6 +4,18 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **`MongoDBSharded.spec.shards.setParameters`** — shard mongod 기동 파라미터를 키 정렬
+  순서의 `--setParameter <key>=<value>` 로 싣는다. configServer · mongos · `MongoDB` 는
+  대상이 아니다. 용례: `periodicNoopIntervalSecs: "1"` — 한가한 shard 가 기본 10초 noop 를
+  쓸 때까지 mongos change stream 이 사건을 붙잡는 지연(1–18초 실측)을 줄인다(MongoDB
+  Change Streams Production Recommendations). 비우거나 생략하면 shard StatefulSet 은
+  이전 판과 바이트 단위로 같다 — 오퍼레이터 판 올림만으로는 shard 가 롤링 재시작하지
+  않는다(`testdata/shard-statefulset.golden.json`). 키 `^[A-Za-z][A-Za-z0-9_.]*$`(CRD CEL),
+  값 1–4096자 · 줄바꿈 금지(CRD pattern), 64개 이하 — webhook 이 꺼져 있어도 API 서버가
+  거절한다. `spec.additionalConfig` 는 여전히 어떤 코드도 읽지 않는다.
+
 ## [1.16.11] - 2026-11-07
 
 ### Security

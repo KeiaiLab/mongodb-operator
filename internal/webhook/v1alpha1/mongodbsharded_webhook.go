@@ -109,6 +109,9 @@ func validateMongoDBShardedSpec(m *mongodbv1alpha1.MongoDBSharded) field.ErrorLi
 	// Shards.Arbiter 일관성 (ROADMAP 4.2-a).
 	errs = append(errs, validateShardArbiter(p.Child("shards", "arbiter"), m.Spec.Shards.Arbiter, m.Spec.Shards.MembersPerShard)...)
 
+	// Shards.SetParameters 키 · 값 형식 (mongod --setParameter 인자 주입 차단).
+	errs = append(errs, validateShardSetParameters(p.Child("shards", "setParameters"), m.Spec.Shards.SetParameters)...)
+
 	// ShardedCollections 형식 검증 (Track B). timeseries 적합성은 런타임.
 	errs = append(errs, validateShardedCollections(p.Child("shardedCollections"), m.Spec.ShardedCollections)...)
 
