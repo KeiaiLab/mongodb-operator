@@ -50,6 +50,10 @@ const (
 type MongoDBShardedReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// APIReader 는 informer cache 를 거치지 않는 읽기(mgr.GetAPIReader)다. 업그레이드 롤아웃
+	// 게이트가 쓴다 — cache 는 apply 직후 옛 객체를 돌려줘 "이미 다 굴렀다" 로 읽힌다.
+	// nil 이면 Client 로 읽는다(시험 조립용).
+	APIReader client.Reader
 	// EnableAutoscaling 게이트 — false면 reconcileMongosHPA / reconcileConfigServerHPA가
 	// no-op로 종료. cmd/main.go의 --enable-autoscaling flag에서 주입.
 	EnableAutoscaling bool
@@ -145,8 +149,20 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// 2. Config Server
-	if err := r.reconcileConfigServer(ctx, mdbsh); err != nil {
-		return r.updateStatusError(ctx, mdbsh, "ConfigServer", err)
+	// (실패한 업그레이드가 hold 중이면 아직 옛 바이너리인 컴포넌트는 적용하지 않는다 —
+	// 2 · 4 · 6 공통, shardedUpgradeHeld.)
+	if !r.configServerHeld(ctx, mdbsh) {
+		if err := r.reconcileConfigServer(ctx, mdbsh); err != nil {
+			return r.updateStatusError(ctx, mdbsh, "ConfigServer", err)
+		}
+	}
+
+	// 2.5. 업그레이드 중에는 cfg 가 새 revision 으로 다 구른 뒤에만 shard 로 넘어간다.
+	// ReadyReplicas 만 보면 apply 직후(아직 전부 ready)에 통과해 cfg · shard · mongos 가
+	// 한꺼번에 구른다.
+	upgrading := mdbsh.Status.UpgradePhase == UpgradePhaseUpgrading
+	if upgrading && !r.configServerRolledOut(ctx, mdbsh) {
+		return r.awaitShardedRollout(ctx, mdbsh, "config server")
 	}
 
 	// 3. Wait for Config Server to be ready
@@ -157,9 +173,17 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// 4. Shards
 	for i := int32(0); i < mdbsh.Spec.Shards.Count; i++ {
+		if r.shardHeld(ctx, mdbsh, i) {
+			continue
+		}
 		if err := r.reconcileShard(ctx, mdbsh, i); err != nil {
 			return r.updateStatusError(ctx, mdbsh, fmt.Sprintf("Shard-%d", i), err)
 		}
+	}
+
+	// 4.5. 업그레이드 중에는 모든 shard 가 다 구른 뒤에만 mongos 로 넘어간다.
+	if upgrading && !r.shardsRolledOut(ctx, mdbsh) {
+		return r.awaitShardedRollout(ctx, mdbsh, "shards")
 	}
 
 	// 5. Wait for Shards to be ready
@@ -169,12 +193,14 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// 6. Mongos
-	if err := r.reconcileMongos(ctx, mdbsh); err != nil {
-		return r.updateStatusError(ctx, mdbsh, "Mongos", err)
+	if !r.mongosHeld(ctx, mdbsh) {
+		if err := r.reconcileMongos(ctx, mdbsh); err != nil {
+			return r.updateStatusError(ctx, mdbsh, "Mongos", err)
+		}
 	}
 
 	// 6.1. Transition to Validating after all components updated
-	if mdbsh.Status.UpgradePhase == UpgradePhaseUpgrading {
+	if upgrading {
 		setValidating := func() {
 			mdbsh.Status.UpgradePhase = UpgradePhaseValidating
 			// 기존 시작 시각 보존 — 이미 기록돼 있으면 덮어쓰지 않는다(결함 #12).

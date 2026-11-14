@@ -17,6 +17,9 @@ import (
 	"github.com/keiailab/mongodb-operator/internal/mongodb"
 )
 
+// upgradeReasonFCVNotCommitted — 바이너리는 굴렀지만 FCV 는 올리지 않고 업그레이드를 닫았다.
+const upgradeReasonFCVNotCommitted = "FCVNotCommitted"
+
 func (r *MongoDBShardedReconciler) reconcileShardedUpgrade(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) (ctrl.Result, bool, error) {
 	logger := log.FromContext(ctx)
 
@@ -145,8 +148,11 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeBackup(ctx context.Con
 	switch backup.Status.Phase {
 	case "Completed":
 		logger.Info("pre-upgrade backup completed, proceeding to upgrade")
+		// 롤아웃 예산은 Upgrading 시작부터 잰다 — 백업에 쓴 시간을 예산에서 빼지 않는다.
+		upgradingSince := metav1.Now()
 		applyStatus := func() {
 			mdbsh.Status.UpgradePhase = UpgradePhaseUpgrading
+			mdbsh.Status.UpgradeStartTime = &upgradingSince
 		}
 		applyStatus()
 		if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
@@ -174,13 +180,7 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeBackup(ctx context.Con
 func (r *MongoDBShardedReconciler) reconcileShardedUpgradeValidation(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, desiredVersion string) (ctrl.Result, bool, error) {
 	logger := log.FromContext(ctx)
 	interval := parseValidationInterval(mdbsh.Spec.UpgradeStrategy)
-	// validationTimeout = interval + 총멤버×budget(갭3 fix — 정상 rollout이 느려도 오판
-	// rollback 방지). sharded 총멤버 = config + shards×membersPerShard(컴포넌트 다수).
-	totalMembers := mdbsh.Spec.ConfigServer.Members + mdbsh.Spec.Shards.Count*mdbsh.Spec.Shards.MembersPerShard
-	if totalMembers < 1 {
-		totalMembers = 1
-	}
-	validationTimeout := interval + time.Duration(totalMembers)*perMemberRolloutBudget
+	validationTimeout := shardedValidationTimeout(mdbsh)
 
 	if mdbsh.Status.UpgradeStartTime == nil {
 		return ctrl.Result{RequeueAfter: upgradeRequeueInterval}, true, nil
@@ -191,17 +191,17 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeValidation(ctx context
 		return ctrl.Result{RequeueAfter: interval - elapsed}, true, nil
 	}
 
-	allReady := mdbsh.Status.ConfigServer.Ready >= mdbsh.Status.ConfigServer.Total &&
-		mdbsh.Status.Mongos.Ready >= mdbsh.Status.Mongos.Total
-	for _, s := range mdbsh.Status.Shards {
-		if s.Ready < s.Total {
-			allReady = false
-			break
-		}
-	}
+	// 롤아웃 완료를 라이브로 판정한다. Status 의 Ready 수는 Upgrading · Validating 동안
+	// 갱신되지 않아(updateStatus 미도달) 업그레이드 전 값으로 굳어 있다.
+	rolledOut := r.shardedRolloutComplete(ctx, mdbsh)
 
-	if allReady {
+	if rolledOut {
 		logger.Info("sharded upgrade validation passed", "version", desiredVersion)
+		// 바이너리 버전을 알 수 없으면(spec.version.image 가 목표 버전을 선언하지 않음) FCV 를
+		// 올리지 않는다 — version 만 올린 CR 은 template 이 안 바뀌어 옛 바이너리가 그대로다.
+		if !shardedBinaryKnown(mdbsh) {
+			return r.completeShardedUpgradeNoFCV(ctx, mdbsh, desiredVersion)
+		}
 		// FCV 자동 commit(갭5): sharded는 mongos를 통해 setFCV하면 config+shards 전체에
 		// 전파된다. 검증 통과 후이므로 안전(point-of-no-return). mongos 연결로 commit.
 		fcv, err := r.commitShardedFCV(ctx, mdbsh, desiredVersion)
@@ -233,6 +233,39 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgradeValidation(ctx context
 			"elapsed", elapsed.String(), "timeout", validationTimeout.String())
 		return ctrl.Result{RequeueAfter: upgradeRequeueInterval}, true, nil
 	}
+
+	return r.shardedUpgradeTimedOut(ctx, mdbsh, desiredVersion)
+}
+
+// completeShardedUpgradeNoFCV 는 롤아웃은 끝났지만 바이너리 버전을 확인할 수 없는
+// 업그레이드를 FCV 를 건드리지 않고 닫는다. FCV 는 운영자가 바이너리를 확인한 뒤 올린다.
+func (r *MongoDBShardedReconciler) completeShardedUpgradeNoFCV(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, desiredVersion string) (ctrl.Result, bool, error) {
+	log.FromContext(ctx).Info("sharded upgrade closed without FCV commit: spec.version.image does not declare the target version",
+		"version", desiredVersion, "image", mdbsh.Spec.Version.Image)
+
+	applyStatus := func() {
+		mdbsh.Status.Version = desiredVersion
+		mdbsh.Status.EffectiveVersion = desiredVersion
+		mdbsh.Status.RollbackActive = false
+		mdbsh.Status.UpgradePhase = ""
+		mdbsh.Status.UpgradeStartTime = nil
+		mdbsh.Status.UpgradeRetryCount = 0
+		mdbsh.Status.ObservedUpgradeGeneration = mdbsh.Generation
+		setShardedUpgradeCondition(mdbsh, "UpgradeComplete", metav1.ConditionTrue, upgradeReasonFCVNotCommitted,
+			fmt.Sprintf("Rolled out for %s; FCV left at %q: spec.version.image %q does not declare version %s, set featureCompatibilityVersion manually once the binaries are confirmed",
+				desiredVersion, mdbsh.Status.FCVVersion, mdbsh.Spec.Version.Image, desiredVersion))
+	}
+	applyStatus()
+	if err := commonsstatus.UpdateWithRetry(ctx, r.Client, mdbsh, applyStatus); err != nil {
+		return ctrl.Result{}, false, err
+	}
+	return ctrl.Result{}, true, nil
+}
+
+// shardedUpgradeTimedOut 은 롤아웃 예산을 넘긴 업그레이드를 롤백(RollbackOnFailure) 또는
+// terminal 실패로 보낸다. FCV 는 미commit 이라 바이너리 복귀가 안전하다.
+func (r *MongoDBShardedReconciler) shardedUpgradeTimedOut(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, desiredVersion string) (ctrl.Result, bool, error) {
+	logger := log.FromContext(ctx)
 
 	if mdbsh.Spec.UpgradeStrategy != nil && mdbsh.Spec.UpgradeStrategy.RollbackOnFailure {
 		logger.Info("sharded upgrade validation timed out, initiating rollback")
