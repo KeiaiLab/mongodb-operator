@@ -4,6 +4,8 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.13] - 2026-11-14
+
 ### Fixed
 
 - **`MongoDBSharded` 업그레이드가 롤링 도중 FCV 를 올렸다** — 검증이 `status` 의 Ready
