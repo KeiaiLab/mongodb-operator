@@ -15,7 +15,27 @@ All notable changes to mongodb-operator will be documented in this file.
   `observedGeneration` 최신 · `updatedReplicas == readyReplicas == replicas` ·
   `currentRevision == updateRevision`, mongos Deployment 는 `observedGeneration` 최신 ·
   `updatedReplicas == replicas == availableReplicas`(옛 pod 0). 읽기 실패 · 부재 · 빈
-  revision 은 미완료로 본다.
+  revision 은 미완료로 본다. 읽기는 informer cache 가 아니라 API 서버 직접 읽기
+  (`mgr.GetAPIReader`)다 — cache 는 apply 직후 옛 객체를 돌려줘 "이미 다 굴렀다" 로
+  읽힌다. 그리고 pod template 의 mongod · mongos 이미지가 목표 버전의 이미지와 같아야
+  한다(뒤처진 객체는 옛 이미지라 걸린다). 게이트는 `spec.shards.count` 가 아니라 이 CR 의
+  shard StatefulSet 중 존재하는 것 전부를 본다 — 업그레이드 도중 count 를 내려도 옛
+  바이너리 shard 가 남아 있으면 FCV 를 올리지 않는다(예산을 넘기면 롤백 또는
+  `UpgradeFailed`).
+- **`spec.version.image` 를 쓰는 `MongoDBSharded` 는 `version` 만 올려도 FCV 가 올라갔다** —
+  이미지가 `version` 을 따라가지 않아 pod 는 옛 바이너리 그대로인데 업그레이드가 "완료"
+  됐다. 이제 이미지 태그가 목표 버전을 선언할 때(`<repo>:9.0.8`, `<repo>:9.0.8-<접미>`)만
+  FCV 를 commit 한다. 그렇지 않으면(태그 불일치 · digest 고정) 롤아웃 확인 뒤 FCV 를
+  건드리지 않고 업그레이드를 닫고 `UpgradeComplete` condition 에 reason
+  `FCVNotCommitted` 를 남긴다 — FCV 는 바이너리를 확인한 뒤 직접 올린다.
+- **pre-upgrade 백업 시간이 롤아웃 예산을 먹었다** — 예산을 업그레이드 감지 시각부터 재서,
+  백업이 예산보다 길면 첫 Upgrading reconcile 이 곧장 롤백으로 갔다. 예산은 Upgrading 이
+  시작할 때부터 잰다(값 그대로). 시작 시각이 비어 있으면 영구 대기하지 않고 채운다.
+- **롤백 없이 실패한 `MongoDBSharded` 업그레이드가 남은 컴포넌트를 한꺼번에 굴렸다** —
+  `UpgradeFailed`(`rollbackOnFailure` 없음) 뒤에도 목표 버전이 남아 다음 reconcile 이
+  순서 게이트 없이 shard · mongos 를 갱신했다. 이제 실패 상태에서는 아직 옛 바이너리인
+  컴포넌트를 건드리지 않는다(그 컴포넌트의 ConfigMap · Service 포함). `spec` 을 바꾸면
+  업그레이드가 다시 감지돼 cfg → shard → mongos 순서로 재개한다.
 - **`MongoDBSharded` 업그레이드가 cfg · shard · mongos 를 한꺼번에 굴렸다** — 순서 대기가
   `readyReplicas` 만 봐서 apply 직후(아직 전부 ready)에 통과했다. 업그레이드 중에는 cfg 가
   새 revision 으로 다 구른 뒤 shard 를, 모든 shard 가 다 구른 뒤 mongos 를 갱신한다.

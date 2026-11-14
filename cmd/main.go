@@ -171,6 +171,7 @@ func main() {
 	if enableShardedController {
 		if err = (&controller.MongoDBShardedReconciler{
 			Client:            mgr.GetClient(),
+			APIReader:         mgr.GetAPIReader(),
 			Scheme:            mgr.GetScheme(),
 			EnableAutoscaling: enableAutoscaling,
 		}).SetupWithManager(mgr); err != nil {
