@@ -1236,6 +1236,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 	if mdbsh.Spec.AuditLog != nil {
 		args = append(args, auditpkg.MongodArgs(mdbsh.Spec.AuditLog)...)
 	}
+	args = append(args, setParameterArgs(mdbsh.Spec.Shards.SetParameters)...)
 
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{

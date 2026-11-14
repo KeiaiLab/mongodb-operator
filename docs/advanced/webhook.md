@@ -62,6 +62,7 @@ kubectl get validatingwebhookconfiguration mongodb-operator-validating
 | `spec.shards.membersPerShard` | 1 또는 odd >= 3 | per-shard split-brain risk |
 | `spec.configServer.storage.size` | >= 1Gi | cfg replica set floor |
 | `spec.shards.storage.size` | >= 1Gi | shard data floor |
+| `spec.shards.setParameters` | 키 `^[A-Za-z][A-Za-z0-9_.]*$`, 값 non-empty · 줄바꿈 없음 (CRD 도 강제) | mongod 인자 주입 차단 |
 
 ## Admission Denial 시 메시지 형식
 
