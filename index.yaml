@@ -4,6 +4,163 @@ entries:
   - annotations:
       artifacthub.io/category: database
       artifacthub.io/changes: |
+        - kind: added
+          description: "MongoDBSharded spec.shards.setParameters: an optional map passed to every shard mongod as --setParameter key=value (sorted). Lets clusters lower periodicNoopIntervalSecs so change streams through mongos are not held back by idle shards. Absent or empty leaves the shard StatefulSet unchanged."
+        - kind: fixed
+          description: "spec.shards.setParameters was dropped at storage because only the v1alpha1 schema carried it; the v1beta1 storage version now has the same field."
+        - kind: security
+          description: "Go toolchain 1.26.11 (builder golang:1.26.11, digest pinned) closes GO-2026-6859 (net/http)."
+      artifacthub.io/containsSecurityUpdates: "true"
+      artifacthub.io/crds: |
+        - kind: MongoDB
+          version: v1alpha1
+          name: mongodbs.mongodb.keiailab.com
+          displayName: MongoDB ReplicaSet
+          description: Deploys and manages a MongoDB ReplicaSet cluster
+        - kind: MongoDBSharded
+          version: v1alpha1
+          name: mongodbshardeds.mongodb.keiailab.com
+          displayName: MongoDB Sharded Cluster
+          description: Deploys and manages a MongoDB Sharded cluster with config servers, shards, and mongos routers
+        - kind: MongoDBBackup
+          version: v1alpha1
+          name: mongodbbackups.mongodb.keiailab.com
+          displayName: MongoDB Backup
+          description: Creates and manages MongoDB backups to S3 or PVC storage
+      artifacthub.io/crdsExamples: |
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDB
+          metadata:
+            name: my-mongodb
+            namespace: database
+          spec:
+            members: 3
+            version:
+              version: "9.0.2"
+            storage:
+              storageClassName: standard
+              size: 10Gi
+            auth:
+              mechanism: SCRAM-SHA-256
+              adminCredentialsSecretRef:
+                name: mongodb-admin
+            monitoring:
+              enabled: true
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDBSharded
+          metadata:
+            name: my-sharded
+            namespace: database
+          spec:
+            version:
+              version: "9.0.2"
+            configServer:
+              members: 3
+              storage:
+                size: 5Gi
+            shards:
+              count: 2
+              membersPerShard: 3
+              storage:
+                size: 20Gi
+            mongos:
+              replicas: 2
+        - apiVersion: mongodb.keiailab.com/v1alpha1
+          kind: MongoDBBackup
+          metadata:
+            name: my-backup
+            namespace: database
+          spec:
+            clusterRef:
+              name: my-mongodb
+              kind: MongoDB
+            type: full
+            compression: true
+            storage:
+              type: s3
+              s3:
+                bucket: mongodb-backups
+                endpoint: https://s3.amazonaws.com
+                credentialsRef:
+                  name: s3-credentials
+      artifacthub.io/images: |
+        - name: mongodb-operator
+          image: ghcr.io/keiailab/mongodb-operator:v1.16.12
+        - name: mongodb
+          image: mongo:9.0.2
+          whitelisted: true
+        - name: mongodb-exporter
+          image: percona/mongodb_exporter:0.53.0
+          whitelisted: true
+      artifacthub.io/license: MIT
+      artifacthub.io/links: |
+        - name: Documentation
+          url: https://github.com/keiailab/mongodb-operator/blob/main/README.md
+        - name: Source Code
+          url: https://github.com/keiailab/mongodb-operator
+        - name: MongoDB Documentation
+          url: https://www.mongodb.com/docs/
+        - name: Design Assets
+          url: https://github.com/KeiaiLab/mongodb-operator/blob/main/docs/BRANDING.md
+      artifacthub.io/maturity: stable
+      artifacthub.io/operator: "true"
+      artifacthub.io/operatorCapabilities: Auto Pilot
+      artifacthub.io/prerelease: "false"
+      artifacthub.io/recommendations: |
+        - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
+        - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
+      artifacthub.io/screenshots: |
+        - title: Keiailab MongoDB Operator centered service symbol
+          url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/symbol.png
+        - title: Keiailab MongoDB Operator social cover
+          url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/cover.png
+      artifacthub.io/signKey: |
+        fingerprint: F1A6893583E632A757FF6767F3CC8C6AEC9CEB08
+        url: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/charts/keiailab-helm-signing-public.asc
+    apiVersion: v2
+    appVersion: 1.16.12
+    created: "2026-11-14T01:15:30.157873356Z"
+    dependencies:
+    - name: keiailab-commons
+      repository: oci://ghcr.io/keiailab/charts
+      version: 0.8.0
+    description: A Kubernetes Operator for MongoDB — ReplicaSets, Sharded Clusters
+      with auto scale-out, S3/PVC Backup, TLS, and LDAP. MIT licensed.
+    digest: 9f930cafc136aabbbe42704ad62bc27db89f7275b432fa4366e8ec75fa9c68cc
+    home: https://github.com/keiailab/mongodb-operator
+    icon: https://raw.githubusercontent.com/KeiaiLab/mongodb-operator/main/docs/branding/symbol.png
+    keywords:
+    - mongodb
+    - database
+    - nosql
+    - operator
+    - replicaset
+    - sharded-cluster
+    - backup
+    - kubernetes
+    - external-secrets
+    - mongodb-operator
+    - kubernetes-operator
+    - mongodb-backup
+    - pitr
+    - ldap
+    - mongos
+    - helm
+    kubeVersion: '>=1.26.0-0'
+    maintainers:
+    - email: support@keiailab.com
+      name: Keiailab
+      url: https://keiailab.com
+    name: mongodb-operator
+    sources:
+    - https://github.com/keiailab/mongodb-operator
+    type: application
+    urls:
+    - https://github.com/KeiaiLab/mongodb-operator/releases/download/mongodb-operator-1.16.12/mongodb-operator-1.16.12.tgz
+    version: 1.16.12
+  - annotations:
+      artifacthub.io/category: database
+      artifacthub.io/changes: |
         - kind: security
           description: "Go toolchain 1.26.10 (builder golang:1.26.10, digest pinned) closes GO-2026-6809 (crypto/x509 distrust of compromised intermediates) and the stdlib side of GO-2026-6617; golang.org/x/net 0.62.0 closes the HTTP/2 HPACK race (GO-2026-6617); github.com/klauspost/compress 1.20.2 closes the two-block frame panic reachable through mongo-driver (GO-2026-6865). govulncheck reports 0 reachable vulnerabilities."
         - kind: security
@@ -9342,4 +9499,4 @@ entries:
     urls:
     - https://keiailab.github.io/mongodb-operator/mongodb-operator-0.0.6.tgz
     version: 0.0.6
-generated: "2026-11-07T11:38:58.983661091Z"
+generated: "2026-11-14T01:15:30.158125562Z"
