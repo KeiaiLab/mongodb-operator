@@ -47,6 +47,18 @@ func (r *MongoDBShardedReconciler) reconcileShardedUpgrade(ctx context.Context, 
 
 	currentVersion := mdbsh.Status.Version // seed 후 읽음(adopt 클러스터 초기화 반영).
 
+	// 진행 중인 중단(spec 되돌림)은 spec 이 다시 바뀌어도 끝까지 간다.
+	if shardedAbortRolling(mdbsh) {
+		return r.continueShardedAbort(ctx, mdbsh)
+	}
+
+	// spec 이 status.version 으로 돌아왔는데 EffectiveVersion 이 새 버전이면 업그레이드 중단이다.
+	if currentVersion == desiredVersion {
+		if result, handled, err := r.reconcileShardedRevert(ctx, mdbsh); handled || err != nil {
+			return result, handled, err
+		}
+	}
+
 	if currentVersion == "" || currentVersion == desiredVersion {
 		if mdbsh.Status.UpgradePhase != "" {
 			applyStatus := func() {
@@ -379,7 +391,6 @@ func (r *MongoDBShardedReconciler) commitShardedFCV(ctx context.Context, mdbsh *
 	return fcv, nil
 }
 
-//nolint:unparam // status param reserved for future ConditionFalse cases
 func setShardedUpgradeCondition(mdbsh *mongodbv1alpha1.MongoDBSharded, condType string, status metav1.ConditionStatus, reason, message string) {
 	now := metav1.Now()
 	for i, c := range mdbsh.Status.Conditions {
