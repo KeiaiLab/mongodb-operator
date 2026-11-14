@@ -16,6 +16,14 @@ All notable changes to mongodb-operator will be documented in this file.
   값 1–4096자 · 줄바꿈 금지(CRD pattern), 64개 이하 — webhook 이 꺼져 있어도 API 서버가
   거절한다. `spec.additionalConfig` 는 여전히 어떤 코드도 읽지 않는다.
 
+### Fixed
+
+- **`spec.shards.setParameters` 가 저장될 때 사라졌다** — 필드가 `v1alpha1` 스키마에만
+  있었고 저장 버전은 `v1beta1`(변환 None)이라 API 서버가 저장하며 잘라냈다. 컨트롤러가
+  읽은 CR 에 값이 없어 shard 인자에 `--setParameter` 가 실리지 않았다(#431 은 미출시).
+  `v1beta1` 에 같은 필드 · 검증을 싣고, served 버전의 필드가 저장 버전에 모두 있는지
+  `TestStorageVersionKeepsServedFields` 가 본다.
+
 ## [1.16.11] - 2026-11-07
 
 ### Security
