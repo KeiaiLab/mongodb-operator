@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for MongoDB — ReplicaSets, Sharded Clusters with auto scale-out, S3/PVC Backup, TLS, and LDAP. MIT licensed.
 type: application
-version: 1.16.11
-appVersion: "1.16.11"
+version: 1.16.12
+appVersion: "1.16.12"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -151,7 +151,7 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:v1.16.11
+      image: ghcr.io/keiailab/mongodb-operator:v1.16.12
     - name: mongodb
       image: mongo:9.0.2
       whitelisted: true
@@ -160,10 +160,12 @@ annotations:
       whitelisted: true
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
+    - kind: added
+      description: "MongoDBSharded spec.shards.setParameters: an optional map passed to every shard mongod as --setParameter key=value (sorted). Lets clusters lower periodicNoopIntervalSecs so change streams through mongos are not held back by idle shards. Absent or empty leaves the shard StatefulSet unchanged."
+    - kind: fixed
+      description: "spec.shards.setParameters was dropped at storage because only the v1alpha1 schema carried it; the v1beta1 storage version now has the same field."
     - kind: security
-      description: "Go toolchain 1.26.10 (builder golang:1.26.10, digest pinned) closes GO-2026-6809 (crypto/x509 distrust of compromised intermediates) and the stdlib side of GO-2026-6617; golang.org/x/net 0.62.0 closes the HTTP/2 HPACK race (GO-2026-6617); github.com/klauspost/compress 1.20.2 closes the two-block frame panic reachable through mongo-driver (GO-2026-6865). govulncheck reports 0 reachable vulnerabilities."
-    - kind: security
-      description: "Base images refreshed: gcr.io/distroless/static:nonroot digest bump, catalog opm v1.74.0."
+      description: "Go toolchain 1.26.11 (builder golang:1.26.11, digest pinned) closes GO-2026-6859 (net/http)."
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
