@@ -200,6 +200,47 @@ func (r *ReplicaSetManager) GetFCV(ctx context.Context, podName, namespace strin
 	return res.FeatureCompatibilityVersion.Version, nil
 }
 
+// FCVState 는 mongod 한 대가 보고한 featureCompatibilityVersion 문서다. TargetVersion 이
+// 비어 있지 않으면 setFeatureCompatibilityVersion 이 진행 중(또는 중간에 멈춤)이다.
+type FCVState struct {
+	Version       string `bson:"version"`
+	TargetVersion string `bson:"targetVersion"`
+}
+
+// Stable 은 전환 중이 아닌 확정된 FCV 인지 답한다.
+func (s FCVState) Stable() bool {
+	return s.Version != "" && s.TargetVersion == ""
+}
+
+func fcvStateFromReply(reply bson.Raw) (FCVState, error) {
+	var res struct {
+		FeatureCompatibilityVersion FCVState `bson:"featureCompatibilityVersion"`
+	}
+	if err := bson.Unmarshal(reply, &res); err != nil {
+		return FCVState{}, fmt.Errorf("decode featureCompatibilityVersion: %w", err)
+	}
+	return res.FeatureCompatibilityVersion, nil
+}
+
+// GetFCVState 는 podName 의 mongod 가 지금 들고 있는 FCV 문서를 그 pod 에 직접 붙어 읽는다
+// (direct — 다른 멤버로 라우팅되지 않는다). mongos 는 이 파라미터가 없다.
+func (r *ReplicaSetManager) GetFCVState(ctx context.Context, podName, namespace string) (FCVState, error) {
+	c, err := r.connect(ctx, podName, namespace, true)
+	if err != nil {
+		return FCVState{}, fmt.Errorf("connect for GetFCVState: %w", err)
+	}
+	defer disconnectQuiet(c)
+
+	reply, err := c.Database(adminUserDB).RunCommand(ctx, bson.D{
+		{Key: "getParameter", Value: 1},
+		{Key: "featureCompatibilityVersion", Value: 1},
+	}).Raw()
+	if err != nil {
+		return FCVState{}, fmt.Errorf("getParameter featureCompatibilityVersion: %w", err)
+	}
+	return fcvStateFromReply(reply)
+}
+
 // SetFCV는 featureCompatibilityVersion을 version(major.minor, 예 "8.2")으로 상향한다.
 // 무중단 업그레이드 검증 통과 후 자동 commit(point-of-no-return — 이후 바이너리 다운그레이드 불가).
 // MongoDB 7.0+ 는 setFeatureCompatibilityVersion에 confirm:true 가 필수다.

@@ -42,6 +42,28 @@ All notable changes to mongodb-operator will be documented in this file.
   대기가 기존 검증 예산(`validationInterval` + 멤버 × 3분, 시계 · 값 그대로)을 넘기면
   검증 timeout 과 같은 길(롤백 또는 `UpgradeFailed`)로 간다. 업그레이드가 아닌 reconcile 은
   그대로다.
+- **`MongoDBSharded` 업그레이드 도중 `spec.version` 을 되돌리면 전부 새 버전으로 굴렀다** —
+  phase 만 지워지고 `status.effectiveVersion` 은 새 버전으로 남아, 다음 reconcile 이 아직 옛
+  바이너리인 shard · mongos 까지 순서 게이트 없이 한꺼번에 새 버전으로 올렸다
+  (`UpgradeFailed` 로 닫힌 업그레이드를 되돌려도 같았다). 이제 되돌림은 중단이다: 옛
+  바이너리인 컴포넌트는 그대로 두고, 이미 옮겨진 컴포넌트는 mongos → shard → cfg 순서로
+  앞 단계가 옛 이미지로 다 구른 것을 API 에서 확인한 뒤에만 다음 단계를 되돌린다(phase
+  `RollingBack`, condition `UpgradeAborted`: 진행 중 `False/RollingBack`, 끝나면
+  `True/Reverted`). 백업 단계에서 되돌리면 워크로드를 건드리지 않고 닫는다
+  (`True/CancelledBeforeRollout`). FCV 는 건드리지 않는다. 새 버전의 FCV 가 이미 commit 된
+  것으로 기록돼 있으면 바이너리를 내리지 않고 새 버전을 유지한 채 `False/FCVCommitted` 로
+  이유를 남긴다 — `spec.version` 을 새 버전으로 돌려놓으면 이어 간다. 중단은 CR status
+  만으로 재개되고(오퍼레이터 재시작), 도중에 `spec.version` 이 다시 바뀌어도 끝까지 간 뒤
+  새 업그레이드를 감지한다. 중단의 롤아웃 대기에는 예산이 없다(끝날 때까지 다음 단계로
+  가지 않는다).
+- **업그레이드 중단이 기록되지 않은 FCV commit 위로 바이너리를 내릴 수 있었다** —
+  `setFeatureCompatibilityVersion` 은 성공했는데 status 기록이 실패하면 `status.fcvVersion` 은
+  옛 값이라, 중단이 새 FCV 위에서 옛 바이너리로 되돌렸다(옛 바이너리는 그 FCV 로 뜨지
+  못한다). 이제 중단은 컴포넌트를 내리기 전과 끝날 때까지의 reconcile 마다 cfg · 모든 shard
+  의 mongod 멤버 하나하나에 직접 붙어 FCV 를 읽고, 전원이 옛 버전의 FCV 로 확정돼 있을 때만
+  진행한다. 전원이 새 FCV 면 내리지 않고 `status.fcvVersion` 을 고친 뒤
+  `UpgradeAborted=False/FCVCommitted` 를 남긴다. 읽기 실패 · 전환 중(`targetVersion`) · 멤버
+  불일치는 `False/FCVUnconfirmed` 로 멈추고 다시 읽는다. 백업 단계 취소는 읽지 않는다.
 
 ## [1.16.12] - 2026-11-14
 
