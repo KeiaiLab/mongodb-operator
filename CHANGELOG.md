@@ -4,6 +4,12 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.12] - 2026-11-14
+
+### Security
+
+- Go toolchain 1.26.11 + 빌더 `golang:1.26.11`(digest 고정) — GO-2026-6859(net/http) 해소.
+
 ### Added
 
 - **`MongoDBSharded.spec.shards.setParameters`** — shard mongod 기동 파라미터를 키 정렬

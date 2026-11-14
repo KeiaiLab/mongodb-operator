@@ -2,7 +2,7 @@ module github.com/keiailab/mongodb-operator
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	// TODO(#236): keiailab-commons v1.0.0 안정 릴리스 시 업그레이드 예정.
