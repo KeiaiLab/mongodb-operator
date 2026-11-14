@@ -13,6 +13,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	mongodbv1alpha1 "github.com/keiailab/mongodb-operator/api/v1alpha1"
+	"github.com/keiailab/mongodb-operator/internal/mongodb"
 )
 
 const (
@@ -28,6 +30,7 @@ const (
 	abortReasonDone        = "Reverted"
 	abortReasonCancelled   = "CancelledBeforeRollout"
 	abortReasonFCVBlocked  = "FCVCommitted"
+	abortReasonFCVUnknown  = "FCVUnconfirmed"
 	abortRevertedSpecGen   = int64(2)
 	abortFailedUpgradeGen  = int64(1)
 	abortSteadyReconciles  = 3
@@ -75,7 +78,25 @@ func newAbortReconciler(t *testing.T, probe *rolloutProbe, mdbsh *mongodbv1alpha
 	t.Helper()
 	s := newTestScheme(t)
 	cl := newRolloutClient(t, s, probe, append(workloadsOn(mdbsh, onNew...), mdbsh)...)
-	return &MongoDBShardedReconciler{Client: cl, APIReader: cl, Scheme: s}, cl
+	live := &liveFCVStub{states: fcvOnAllMembers(fcvMajorMinor(rolloutOldVersion))}
+	return &MongoDBShardedReconciler{Client: cl, APIReader: cl, Scheme: s, fcvReader: live.read}, cl
+}
+
+// liveFCVStub 은 mongod 멤버들이 보고하는 FCV 를 대신한다.
+type liveFCVStub struct {
+	states []mongodb.FCVState
+	err    error
+	reads  int
+}
+
+func (l *liveFCVStub) read(context.Context, *mongodbv1alpha1.MongoDBSharded) ([]mongodb.FCVState, error) {
+	l.reads++
+	return l.states, l.err
+}
+
+// fcvOnAllMembers 는 cfg · shard-0 · shard-1 primary 가 같은 확정 FCV 를 보고하는 상태다.
+func fcvOnAllMembers(fcv string) []mongodb.FCVState {
+	return []mongodb.FCVState{{Version: fcv}, {Version: fcv}, {Version: fcv}}
 }
 
 // finishMongosRollout 은 Deployment 컨트롤러가 롤링을 끝낸 상태를 쓴다.
@@ -248,9 +269,14 @@ func TestShardedUpgradeRevert_BackingUpCancels(t *testing.T) {
 	mdbsh := newRevertedSharded(UpgradePhaseBackingUp, abortBackupStartedAgo)
 	mdbsh.Spec.UpgradeStrategy = &mongodbv1alpha1.UpgradeStrategySpec{PreUpgradeBackup: true}
 	r, cl := newAbortReconciler(t, &rolloutProbe{}, mdbsh)
+	live := &liveFCVStub{err: errors.New("mongod unreachable")}
+	r.fcvReader = live.read
 
 	if _, handled, err := r.reconcileShardedUpgrade(context.Background(), mdbsh); err != nil || !handled {
 		t.Fatalf("handled=%v err=%v, want the cancel handled", handled, err)
+	}
+	if live.reads != 0 {
+		t.Errorf("cancel before rollout read the live FCV %d time(s), want none", live.reads)
 	}
 
 	assertAbortClosed(t, cl, abortReasonCancelled)
@@ -353,5 +379,160 @@ func TestShardedUpgradeRevert_ReappliedSpecWaitsForAbort(t *testing.T) {
 	if restarted.Status.UpgradePhase != UpgradePhaseUpgrading || restarted.Status.EffectiveVersion != rolloutNewVersion {
 		t.Errorf("phase=%q effectiveVersion=%q, want a fresh upgrade to %q",
 			restarted.Status.UpgradePhase, restarted.Status.EffectiveVersion, rolloutNewVersion)
+	}
+}
+
+// TestShardedUpgradeRevert_LiveFCVGuardsStart — setFCV 는 성공했는데 status 기록이 실패했으면
+// status 는 옛 FCV 를 말한다. 중단은 status 가 아니라 라이브 FCV 로 판정한다: 옛 FCV 로
+// 확정됐을 때만 내리고, 새 FCV 면 막고 status 를 고치고, 모르면 멈춘다.
+func TestShardedUpgradeRevert_LiveFCVGuardsStart(t *testing.T) {
+	oldFCV := fcvMajorMinor(rolloutOldVersion)
+	newFCV := fcvMajorMinor(rolloutNewVersion)
+	cases := []struct {
+		name       string
+		live       liveFCVStub
+		wantReason string
+		wantFCV    string
+	}{
+		{"new FCV committed, status still old", liveFCVStub{states: fcvOnAllMembers(newFCV)}, abortReasonFCVBlocked, newFCV},
+		{"read fails", liveFCVStub{err: errors.New("mongod unreachable")}, abortReasonFCVUnknown, oldFCV},
+		{"setFCV in transition", liveFCVStub{states: []mongodb.FCVState{
+			{Version: oldFCV}, {Version: oldFCV, TargetVersion: newFCV}, {Version: oldFCV},
+		}}, abortReasonFCVUnknown, oldFCV},
+		{"members disagree", liveFCVStub{states: []mongodb.FCVState{
+			{Version: newFCV}, {Version: oldFCV}, {Version: oldFCV},
+		}}, abortReasonFCVUnknown, oldFCV},
+		{"no member reported", liveFCVStub{}, abortReasonFCVUnknown, oldFCV},
+		{"unrelated FCV", liveFCVStub{states: fcvOnAllMembers("8.0")}, abortReasonFCVUnknown, oldFCV},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mdbsh := newRevertedSharded(UpgradePhaseValidating, abortValidationStarted)
+			all := []string{rolloutCfgName, rolloutShard0Name, rolloutShard1Name, rolloutMongosName}
+			r, cl := newAbortReconciler(t, &rolloutProbe{}, mdbsh, all...)
+			live := tc.live
+			r.fcvReader = live.read
+
+			for i := 0; i < abortSteadyReconciles; i++ {
+				if res := reconcileRollout(t, r); res.RequeueAfter <= 0 {
+					t.Errorf("no requeue while the abort is held: %+v", res)
+				}
+			}
+
+			for _, name := range all {
+				assertImages(t, cl, "abort held on live FCV", map[string]string{name: rolloutNewVersion})
+			}
+			stored := getSharded(t, cl)
+			if stored.Status.EffectiveVersion != rolloutNewVersion {
+				t.Errorf("effectiveVersion = %q, want %q kept", stored.Status.EffectiveVersion, rolloutNewVersion)
+			}
+			if stored.Status.FCVVersion != tc.wantFCV {
+				t.Errorf("status.fcvVersion = %q, want %q", stored.Status.FCVVersion, tc.wantFCV)
+			}
+			if !hasCondition(stored.Status.Conditions, abortConditionType, metav1.ConditionFalse, tc.wantReason) {
+				t.Errorf("no %s=False/%s condition: %+v", abortConditionType, tc.wantReason, stored.Status.Conditions)
+			}
+		})
+	}
+}
+
+// TestShardedUpgradeRevert_LiveFCVReadEveryStep — 중단이 끝날 때까지 reconcile 마다 라이브
+// FCV 를 다시 읽는다. 도중에 확정이 깨지면 다음 컴포넌트로 가지 않고, 풀리면 이어 간다.
+func TestShardedUpgradeRevert_LiveFCVReadEveryStep(t *testing.T) {
+	r, cl := newAbortReconciler(t, &rolloutProbe{}, newAbortingSharded(),
+		rolloutCfgName, rolloutShard0Name, rolloutShard1Name)
+	live := &liveFCVStub{err: errors.New("mongod unreachable")}
+	r.fcvReader = live.read
+	shardsStillNew := map[string]string{
+		rolloutShard0Name: rolloutNewVersion,
+		rolloutShard1Name: rolloutNewVersion,
+		rolloutCfgName:    rolloutNewVersion,
+	}
+
+	for i := 0; i < abortSteadyReconciles; i++ {
+		reconcileRollout(t, r)
+	}
+	assertImages(t, cl, "FCV unreadable mid-abort", shardsStillNew)
+	if live.reads != abortSteadyReconciles {
+		t.Errorf("live FCV read %d time(s) over %d reconciles", live.reads, abortSteadyReconciles)
+	}
+	if !hasCondition(getSharded(t, cl).Status.Conditions, abortConditionType, metav1.ConditionFalse, abortReasonFCVUnknown) {
+		t.Errorf("no %s=False/%s condition mid-abort", abortConditionType, abortReasonFCVUnknown)
+	}
+
+	// 누가 도중에 FCV 를 올렸다 — 더 내리지 않고 status 를 고친다.
+	live.err = nil
+	live.states = fcvOnAllMembers(fcvMajorMinor(rolloutNewVersion))
+	reconcileRollout(t, r)
+	assertImages(t, cl, "FCV committed mid-abort", shardsStillNew)
+	blocked := getSharded(t, cl)
+	if blocked.Status.FCVVersion != fcvMajorMinor(rolloutNewVersion) ||
+		!hasCondition(blocked.Status.Conditions, abortConditionType, metav1.ConditionFalse, abortReasonFCVBlocked) {
+		t.Errorf("fcvVersion=%q conditions=%+v, want repaired FCV and %s",
+			blocked.Status.FCVVersion, blocked.Status.Conditions, abortReasonFCVBlocked)
+	}
+}
+
+// TestShardedUpgradeRevert_LiveFCVConfirmedResumes — 읽기가 돌아와 옛 FCV 로 확정되면 멈췄던
+// 중단이 이어 간다.
+func TestShardedUpgradeRevert_LiveFCVConfirmedResumes(t *testing.T) {
+	r, cl := newAbortReconciler(t, &rolloutProbe{}, newAbortingSharded(),
+		rolloutCfgName, rolloutShard0Name, rolloutShard1Name)
+	live := &liveFCVStub{err: errors.New("mongod unreachable")}
+	r.fcvReader = live.read
+	reconcileRollout(t, r)
+
+	live.err = nil
+	live.states = fcvOnAllMembers(fcvMajorMinor(rolloutOldVersion))
+	reconcileRollout(t, r)
+
+	assertImages(t, cl, "abort resumed", map[string]string{
+		rolloutShard0Name: rolloutOldVersion,
+		rolloutShard1Name: rolloutOldVersion,
+		rolloutCfgName:    rolloutNewVersion,
+	})
+	if !hasConditionReason(getSharded(t, cl).Status.Conditions, abortConditionType, abortReasonInProgress) {
+		t.Errorf("condition not back to %s after the FCV was confirmed", abortReasonInProgress)
+	}
+}
+
+// TestShardedUpgradeRevert_CommittedMidAbortRollsForward — 중단 도중 FCV 가 올라간 것으로
+// 읽히면 멈춘다. spec.version 을 그 FCV 의 버전으로 돌려놓으면 중단을 버리고 평소 순서 게이트로
+// 다시 올라간다(cfg 먼저, 내려갔던 mongos 는 shard 뒤).
+func TestShardedUpgradeRevert_CommittedMidAbortRollsForward(t *testing.T) {
+	mdbsh := newAbortingSharded()
+	mdbsh.Spec.Version.Version = rolloutNewVersion
+	r, cl := newAbortReconciler(t, &rolloutProbe{}, mdbsh, rolloutCfgName, rolloutShard0Name, rolloutShard1Name)
+	live := &liveFCVStub{states: fcvOnAllMembers(fcvMajorMinor(rolloutNewVersion))}
+	r.fcvReader = live.read
+
+	reconcileRollout(t, r)
+
+	forward := getSharded(t, cl)
+	if forward.Status.UpgradePhase != UpgradePhaseUpgrading || forward.Status.EffectiveVersion != rolloutNewVersion ||
+		forward.Status.FCVVersion != fcvMajorMinor(rolloutNewVersion) || forward.Status.UpgradeStartTime == nil {
+		t.Fatalf("phase=%q effectiveVersion=%q fcv=%q startTime=%v, want a forward upgrade to %q",
+			forward.Status.UpgradePhase, forward.Status.EffectiveVersion, forward.Status.FCVVersion,
+			forward.Status.UpgradeStartTime, rolloutNewVersion)
+	}
+	assertImages(t, cl, "before the forward roll", map[string]string{rolloutMongosName: rolloutOldVersion})
+}
+
+// TestShardedUpgradeRevert_DefaultReaderFailsClosed — reader 를 끼우지 않으면 mongod 에 직접
+// 읽는다. 읽을 수 없으면(여기서는 admin secret 부재) 내리지 않고 멈춘다.
+func TestShardedUpgradeRevert_DefaultReaderFailsClosed(t *testing.T) {
+	mdbsh := newRevertedSharded(UpgradePhaseValidating, abortValidationStarted)
+	all := []string{rolloutCfgName, rolloutShard0Name, rolloutShard1Name, rolloutMongosName}
+	r, cl := newAbortReconciler(t, &rolloutProbe{}, mdbsh, all...)
+	r.fcvReader = nil
+
+	reconcileRollout(t, r)
+
+	for _, name := range all {
+		assertImages(t, cl, "live FCV unreadable", map[string]string{name: rolloutNewVersion})
+	}
+	if !hasCondition(getSharded(t, cl).Status.Conditions, abortConditionType, metav1.ConditionFalse, abortReasonFCVUnknown) {
+		t.Errorf("no %s=False/%s condition", abortConditionType, abortReasonFCVUnknown)
 	}
 }

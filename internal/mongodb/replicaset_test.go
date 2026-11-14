@@ -404,3 +404,47 @@ func TestWaitForPrimary_ContextCanceled(t *testing.T) {
 	err := mgr.WaitForPrimary(ctx, "mongo-0", "ns")
 	assert.Error(t, err)
 }
+
+// TestFCVStateFromReply — getParameter 응답에서 FCV 문서를 읽는다. targetVersion 이 있으면
+// setFCV 전환 중이라 Stable 이 아니다.
+func TestFCVStateFromReply(t *testing.T) {
+	cases := []struct {
+		name       string
+		fcv        bson.D
+		want       FCVState
+		wantStable bool
+	}{
+		{"committed", bson.D{{Key: "version", Value: "9.0"}}, FCVState{Version: "9.0"}, true},
+		{"upgrading", bson.D{{Key: "version", Value: "8.3"}, {Key: "targetVersion", Value: "9.0"}},
+			FCVState{Version: "8.3", TargetVersion: "9.0"}, false},
+		{"downgrading", bson.D{
+			{Key: "version", Value: "8.3"}, {Key: "targetVersion", Value: "8.3"}, {Key: "previousVersion", Value: "9.0"},
+		}, FCVState{Version: "8.3", TargetVersion: "8.3"}, false},
+		{"missing document", nil, FCVState{}, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := bson.D{{Key: "ok", Value: 1}}
+			if tc.fcv != nil {
+				doc = append(doc, bson.E{Key: "featureCompatibilityVersion", Value: tc.fcv})
+			}
+			reply, err := bson.Marshal(doc)
+			assert.NoError(t, err)
+
+			got, err := fcvStateFromReply(reply)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+			assert.Equal(t, tc.wantStable, got.Stable())
+		})
+	}
+}
+
+func TestGetFCVState_ConnectError(t *testing.T) {
+	mgr := NewReplicaSetManagerWithFactory(failingFactory("dial fail"))
+
+	_, err := mgr.GetFCVState(context.Background(), "mongo-0", "ns")
+
+	assert.ErrorContains(t, err, "connect for GetFCVState")
+}

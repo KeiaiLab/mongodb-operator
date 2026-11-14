@@ -60,6 +60,9 @@ type MongoDBShardedReconciler struct {
 	// Recorder는 K8s Events 발행용. SetupWithManager에서 자동 주입.
 	// nil-safe (helpers.go::applyErrorCondition에서 nil 체크).
 	Recorder events.EventRecorder
+	// fcvReader 는 업그레이드 중단이 쓰는 라이브 FCV 읽기다. nil 이면 mongod 에 직접 붙어
+	// 읽는다(readShardedFCV). 시험이 바꿔 끼운다.
+	fcvReader shardedFCVReader
 }
 
 // ensureShardedUpgradeStartTime은 업그레이드 시작 시각이 아직 없을 때만 현재

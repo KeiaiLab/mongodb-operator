@@ -101,6 +101,11 @@ func (r *MongoDBShardedReconciler) reconcileShardedRevert(ctx context.Context, m
 	case revertCancel:
 		return r.cancelShardedUpgrade(ctx, mdbsh)
 	case revertStart:
+		// status 가 아니라 라이브 FCV 로 판정한다 — setFCV 성공 뒤 status 기록만 실패했을 수 있다.
+		verdict, detail := r.confirmAbortFCV(ctx, mdbsh, fcvMajorMinor(mdbsh.Status.EffectiveVersion))
+		if verdict != liveFCVOld {
+			return r.holdAbortOnFCV(ctx, mdbsh, verdict, detail)
+		}
 		return r.startShardedAbort(ctx, mdbsh)
 	}
 	return ctrl.Result{}, false, nil
@@ -188,6 +193,18 @@ func (r *MongoDBShardedReconciler) startShardedAbort(ctx context.Context, mdbsh 
 // 목표는 spec 이 아니라 status.version 이다 — 중단 도중 spec 이 다시 바뀌어도 중단을 끝낸 뒤에
 // 새 업그레이드를 감지한다.
 func (r *MongoDBShardedReconciler) continueShardedAbort(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded) (ctrl.Result, bool, error) {
+	// 컴포넌트를 내리기 전마다 라이브 FCV 가 옛 것으로 확정돼 있는지 다시 본다.
+	verdict, detail := r.confirmAbortFCV(ctx, mdbsh, "")
+	if verdict == liveFCVCommitted && fcvMajorMinor(mdbsh.Spec.Version.Version) == detail {
+		return r.rollForwardFromAbort(ctx, mdbsh, detail)
+	}
+	if verdict != liveFCVOld {
+		return r.holdAbortOnFCV(ctx, mdbsh, verdict, detail)
+	}
+	if err := r.resumeAbortCondition(ctx, mdbsh); err != nil {
+		return ctrl.Result{}, false, err
+	}
+
 	target := mdbsh.DeepCopy()
 	target.Spec.Version.Version = mdbsh.Status.Version
 
