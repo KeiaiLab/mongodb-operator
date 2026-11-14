@@ -4,6 +4,25 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`MongoDBSharded` 업그레이드가 롤링 도중 FCV 를 올렸다** — 검증이 `status` 의 Ready
+  수만 봤는데, 그 값은 Upgrading · Validating 동안 갱신되지 않아 업그레이드 전 3/3 으로
+  굳어 있었다. `validationInterval`(기본 60초)이 지나면 cfg · shard StatefulSet 과 mongos
+  Deployment 가 아직 구르는 중에도 `setFeatureCompatibilityVersion` 을 실행했고, 옛
+  바이너리로 남은 멤버는 끊긴다(`IncompatibleWithUpgradedServer`). 이제 검증은 워크로드를
+  API 에서 직접 읽어 전부 다 굴렀을 때만 FCV 를 commit 한다 — StatefulSet 은
+  `observedGeneration` 최신 · `updatedReplicas == readyReplicas == replicas` ·
+  `currentRevision == updateRevision`, mongos Deployment 는 `observedGeneration` 최신 ·
+  `updatedReplicas == replicas == availableReplicas`(옛 pod 0). 읽기 실패 · 부재 · 빈
+  revision 은 미완료로 본다.
+- **`MongoDBSharded` 업그레이드가 cfg · shard · mongos 를 한꺼번에 굴렸다** — 순서 대기가
+  `readyReplicas` 만 봐서 apply 직후(아직 전부 ready)에 통과했다. 업그레이드 중에는 cfg 가
+  새 revision 으로 다 구른 뒤 shard 를, 모든 shard 가 다 구른 뒤 mongos 를 갱신한다.
+  대기가 기존 검증 예산(`validationInterval` + 멤버 × 3분, 시계 · 값 그대로)을 넘기면
+  검증 timeout 과 같은 길(롤백 또는 `UpgradeFailed`)로 간다. 업그레이드가 아닌 reconcile 은
+  그대로다.
+
 ## [1.16.12] - 2026-11-14
 
 ### Security

@@ -149,6 +149,14 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.updateStatusError(ctx, mdbsh, "ConfigServer", err)
 	}
 
+	// 2.5. 업그레이드 중에는 cfg 가 새 revision 으로 다 구른 뒤에만 shard 로 넘어간다.
+	// ReadyReplicas 만 보면 apply 직후(아직 전부 ready)에 통과해 cfg · shard · mongos 가
+	// 한꺼번에 구른다.
+	upgrading := mdbsh.Status.UpgradePhase == UpgradePhaseUpgrading
+	if upgrading && !r.configServerRolledOut(ctx, mdbsh) {
+		return r.awaitShardedRollout(ctx, mdbsh, "config server")
+	}
+
 	// 3. Wait for Config Server to be ready
 	if !r.isConfigServerReady(ctx, mdbsh) {
 		logger.Info("Waiting for config server to be ready")
@@ -160,6 +168,11 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		if err := r.reconcileShard(ctx, mdbsh, i); err != nil {
 			return r.updateStatusError(ctx, mdbsh, fmt.Sprintf("Shard-%d", i), err)
 		}
+	}
+
+	// 4.5. 업그레이드 중에는 모든 shard 가 다 구른 뒤에만 mongos 로 넘어간다.
+	if upgrading && !r.shardsRolledOut(ctx, mdbsh) {
+		return r.awaitShardedRollout(ctx, mdbsh, "shards")
 	}
 
 	// 5. Wait for Shards to be ready
@@ -174,7 +187,7 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	// 6.1. Transition to Validating after all components updated
-	if mdbsh.Status.UpgradePhase == UpgradePhaseUpgrading {
+	if upgrading {
 		setValidating := func() {
 			mdbsh.Status.UpgradePhase = UpgradePhaseValidating
 			// 기존 시작 시각 보존 — 이미 기록돼 있으면 덮어쓰지 않는다(결함 #12).
