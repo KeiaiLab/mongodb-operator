@@ -480,7 +480,27 @@ type MonitoringSpec struct {
 	// sidecar 정적 정의로 cover.
 	// +optional
 	Exporter *ExporterSpec `json:"exporter,omitempty"`
+
+	// Members 는 MongoDBSharded shard · config server 파드마다 mongodb_exporter
+	// 사이드카(:9216, localhost directConnection)를 둘지다. Enabled 면 operator 가
+	// admin 자격으로 `<cr>-member-exporter-uri` Secret(키 shard · configsvr)을 만들고
+	// 사이드카가 그 멤버의 replica set 상태 · 복제 지연 · oplog 창 · dbStats 를 낸다.
+	// Disabled(비우면 같음)면 렌더는 바이트 동일. MongoDB(RS) 는 이 칸을 읽지 않는다.
+	// 값을 바꾸면 shard · cfg 가 롤링 재시작한다.
+	// +optional
+	Members MemberMonitoring `json:"members,omitempty"`
 }
+
+// MemberMonitoring 은 shard · cfg 멤버 exporter 사이드카를 둘지다.
+// +kubebuilder:validation:Enum=Disabled;Enabled
+type MemberMonitoring string
+
+const (
+	// MemberMonitoringDisabled — 사이드카 없음(기본).
+	MemberMonitoringDisabled MemberMonitoring = "Disabled"
+	// MemberMonitoringEnabled — shard · cfg 파드마다 exporter 사이드카.
+	MemberMonitoringEnabled MemberMonitoring = "Enabled"
+)
 
 // ServiceMonitorSpec defines ServiceMonitor configuration
 type ServiceMonitorSpec struct {

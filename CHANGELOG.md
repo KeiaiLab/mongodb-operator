@@ -47,6 +47,15 @@ All notable changes to mongodb-operator will be documented in this file.
   않는다(fail-closed). 비운 뒤에만 값을 써서 중간에 죽으면 다음 기동이 다시 비운다.
   operator 는 ConfigMap 을 만들거나 쓰지 않는다(쓰는 쪽은 converger). 비우거나 `Disabled` 면
   렌더는 바이트 동일(롤링 0). 값을 바꾸면 롤링 재시작한다.
+- **shard · cfg 멤버마다 exporter 사이드카** — `spec.monitoring.members`(`Disabled` · `Enabled`, 두
+  API 버전). `Enabled` 면 shard · cfg 파드에 `percona/mongodb_exporter:0.53.0` 사이드카(`exporter`,
+  :9216)를 붙이고 자기 mongod 에 localhost directConnection 으로 붙는다 — collector
+  `replicasetstatus`(멤버 상태 · optime → 복제 지연) · `diagnosticdata`(oplog head/tail → oplog
+  창) · `dbstats`(fsUsedSize · fsTotalSize), `--compatible-mode`. collstats · indexstats 는 끈다
+  (스크레이프마다 모든 컬렉션을 돈다). URI 는 operator 가 admin 자격으로 만드는 Secret
+  `<cr>-member-exporter-uri`(키 `shard` = :27018 · `configsvr` = :27019, 비밀번호 변경을 따른다).
+  admin 자격 Secret 이 없으면 reconcile 오류(사이드카가 뜰 수 없다). 비우거나 `Disabled` 면 렌더는
+  바이트 동일(롤링 0) · Secret 도 만들지 않는다. MongoDB(RS) 는 이 칸을 읽지 않는다.
 
 ### Fixed
 

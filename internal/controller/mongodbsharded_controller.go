@@ -144,6 +144,11 @@ func (r *MongoDBShardedReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return r.updateStatusError(ctx, mdbsh, "KeyfileSecret", err)
 	}
 
+	// 1.2. Member exporter URI Secret (spec.monitoring.members=Enabled)
+	if err := r.reconcileMemberExporterSecret(ctx, mdbsh); err != nil {
+		return r.updateStatusError(ctx, mdbsh, "MemberExporterSecret", err)
+	}
+
 	// 1.5. Upgrade orchestration
 	if result, handled, err := r.reconcileShardedUpgrade(ctx, mdbsh); err != nil {
 		return r.updateStatusError(ctx, mdbsh, "Upgrade", err)
