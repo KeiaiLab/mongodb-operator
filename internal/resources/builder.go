@@ -1059,7 +1059,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 						},
 					},
 					Volumes:  volumes,
-					Affinity: buildDefaultAffinity(mdbsh.Name),
+					Affinity: buildPodAffinity(mdbsh.Name, mdbsh.Spec.ConfigServer.Pod),
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
@@ -1316,7 +1316,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 						},
 					},
 					Volumes:  volumes,
-					Affinity: buildDefaultAffinity(mdbsh.Name),
+					Affinity: buildPodAffinity(mdbsh.Name, mdbsh.Spec.Shards.Pod),
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
