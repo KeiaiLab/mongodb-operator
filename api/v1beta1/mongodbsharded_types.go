@@ -292,8 +292,10 @@ type ShardSpec struct {
 	// (STARTUP · STARTUP2 · RECOVERING · ROLLBACK 은 NotReady — initial sync 중인
 	// 멤버가 PDB 의 가용 멤버로 세어지지 않는다). headless Service 는 NotReady
 	// 주소도 낸다. 값을 바꾸면 롤링 재시작한다. MemberState 이고 이 shard 가
-	// mongot router shard 면 이 멤버의 search 색인이 전부 queryable 이어야 Ready 다
-	// (admin 자격 Secret 이 필요하다 — 없으면 NotReady 로 남는다).
+	// mongot router shard 면 컨테이너가 처음 Ready 가 될 때 이 멤버의 search 색인이
+	// 전부 queryable 이어야 한다(admin 자격 Secret 이 필요하다 — 없으면 NotReady 로
+	// 남는다). 그 뒤에는 멤버 상태만 본다 — 피어 재시작으로 색인이 잠시 queryable 이
+	// 아니어도 Ready 다.
 	// +optional
 	Readiness ReadinessMode `json:"readiness,omitempty"`
 
