@@ -181,6 +181,15 @@ type ConfigServerSpec struct {
 	// +optional
 	Readiness ReadinessMode `json:"readiness,omitempty"`
 
+	// Resync 는 재동기 표지를 따를지다. Disabled(비우면 같음) = 따르지 않는다.
+	// Marker = init container 가 선택적 ConfigMap `<cr>-resync` 의 자기 pod 이름 키
+	// 값을 dbpath 의 `.keiailab-resync-token` 과 비교해, 다르면 dbpath 를 비우고 그
+	// 값을 쓴다 — 멤버가 빈 데이터로 떠 피어에서 initial sync 한다. 값이 모호하면
+	// (빈 값 · 여러 줄 · [A-Za-z0-9._-] 1–128자 밖) 지우지 않고 pod 이 뜨지 않는다.
+	// 값을 바꾸면 롤링 재시작한다.
+	// +optional
+	Resync ResyncMode `json:"resync,omitempty"`
+
 	// External configures an external (pre-existing) config server replica set.
 	// When set, the operator skips creating ConfigServer StatefulSet/Service
 	// and uses the provided connection string for mongos --configdb.
@@ -287,6 +296,15 @@ type ShardSpec struct {
 	// (admin 자격 Secret 이 필요하다 — 없으면 NotReady 로 남는다).
 	// +optional
 	Readiness ReadinessMode `json:"readiness,omitempty"`
+
+	// Resync 는 재동기 표지를 따를지다. Disabled(비우면 같음) = 따르지 않는다.
+	// Marker = init container 가 선택적 ConfigMap `<cr>-resync` 의 자기 pod 이름 키
+	// 값을 dbpath 의 `.keiailab-resync-token` 과 비교해, 다르면 dbpath 를 비우고 그
+	// 값을 쓴다 — 멤버가 빈 데이터로 떠 피어에서 initial sync 한다. 값이 모호하면
+	// (빈 값 · 여러 줄 · [A-Za-z0-9._-] 1–128자 밖) 지우지 않고 pod 이 뜨지 않는다.
+	// 값을 바꾸면 롤링 재시작한다.
+	// +optional
+	Resync ResyncMode `json:"resync,omitempty"`
 }
 
 // ReadinessMode 는 shard · cfg mongod readiness 판정 방식이다.
@@ -298,6 +316,17 @@ const (
 	ReadinessPing ReadinessMode = "Ping"
 	// ReadinessMemberState — 멤버 상태가 PRIMARY · SECONDARY 일 때만 Ready.
 	ReadinessMemberState ReadinessMode = "MemberState"
+)
+
+// ResyncMode 는 shard · cfg 멤버가 재동기 표지를 따를지다.
+// +kubebuilder:validation:Enum=Disabled;Marker
+type ResyncMode string
+
+const (
+	// ResyncDisabled — 표지를 보지 않는다(기본).
+	ResyncDisabled ResyncMode = "Disabled"
+	// ResyncMarker — 표지가 새 값이면 dbpath 를 비워 initial sync 한다.
+	ResyncMarker ResyncMode = "Marker"
 )
 
 // SetParameterValue 는 mongod --setParameter 값 하나다. 비지 않고 줄바꿈이 없다.

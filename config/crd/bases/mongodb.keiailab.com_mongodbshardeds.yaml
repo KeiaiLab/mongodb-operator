@@ -7798,6 +7798,18 @@ spec:
                         description: Requests describes minimum resources required
                         type: object
                     type: object
+                  resync:
+                    description: |-
+                      Resync 는 재동기 표지를 따를지다. Disabled(비우면 같음) = 따르지 않는다.
+                      Marker = init container 가 선택적 ConfigMap `<cr>-resync` 의 자기 pod 이름 키
+                      값을 dbpath 의 `.keiailab-resync-token` 과 비교해, 다르면 dbpath 를 비우고 그
+                      값을 쓴다 — 멤버가 빈 데이터로 떠 피어에서 initial sync 한다. 값이 모호하면
+                      (빈 값 · 여러 줄 · [A-Za-z0-9._-] 1–128자 밖) 지우지 않고 pod 이 뜨지 않는다.
+                      값을 바꾸면 롤링 재시작한다.
+                    enum:
+                    - Disabled
+                    - Marker
+                    type: string
                   scalePolicy:
                     description: |-
                       ScalePolicy는 멤버 수 변경 가드. deliberate=true 없이는 spec.Members 변경
@@ -23165,6 +23177,18 @@ spec:
                         description: Requests describes minimum resources required
                         type: object
                     type: object
+                  resync:
+                    description: |-
+                      Resync 는 재동기 표지를 따를지다. Disabled(비우면 같음) = 따르지 않는다.
+                      Marker = init container 가 선택적 ConfigMap `<cr>-resync` 의 자기 pod 이름 키
+                      값을 dbpath 의 `.keiailab-resync-token` 과 비교해, 다르면 dbpath 를 비우고 그
+                      값을 쓴다 — 멤버가 빈 데이터로 떠 피어에서 initial sync 한다. 값이 모호하면
+                      (빈 값 · 여러 줄 · [A-Za-z0-9._-] 1–128자 밖) 지우지 않고 pod 이 뜨지 않는다.
+                      값을 바꾸면 롤링 재시작한다.
+                    enum:
+                    - Disabled
+                    - Marker
+                    type: string
                   scalePolicy:
                     description: |-
                       ScalePolicy는 멤버 수 변경 가드(membersPerShard 또는 향후 멤버 단위 HPA).
@@ -31799,6 +31823,18 @@ spec:
                         description: Requests describes minimum resources required
                         type: object
                     type: object
+                  resync:
+                    description: |-
+                      Resync 는 재동기 표지를 따를지다. Disabled(비우면 같음) = 따르지 않는다.
+                      Marker = init container 가 선택적 ConfigMap `<cr>-resync` 의 자기 pod 이름 키
+                      값을 dbpath 의 `.keiailab-resync-token` 과 비교해, 다르면 dbpath 를 비우고 그
+                      값을 쓴다 — 멤버가 빈 데이터로 떠 피어에서 initial sync 한다. 값이 모호하면
+                      (빈 값 · 여러 줄 · [A-Za-z0-9._-] 1–128자 밖) 지우지 않고 pod 이 뜨지 않는다.
+                      값을 바꾸면 롤링 재시작한다.
+                    enum:
+                    - Disabled
+                    - Marker
+                    type: string
                   scalePolicy:
                     description: |-
                       ScalePolicy는 멤버 수 변경 가드. deliberate=true 없이는 spec.Members 변경
@@ -47166,6 +47202,18 @@ spec:
                         description: Requests describes minimum resources required
                         type: object
                     type: object
+                  resync:
+                    description: |-
+                      Resync 는 재동기 표지를 따를지다. Disabled(비우면 같음) = 따르지 않는다.
+                      Marker = init container 가 선택적 ConfigMap `<cr>-resync` 의 자기 pod 이름 키
+                      값을 dbpath 의 `.keiailab-resync-token` 과 비교해, 다르면 dbpath 를 비우고 그
+                      값을 쓴다 — 멤버가 빈 데이터로 떠 피어에서 initial sync 한다. 값이 모호하면
+                      (빈 값 · 여러 줄 · [A-Za-z0-9._-] 1–128자 밖) 지우지 않고 pod 이 뜨지 않는다.
+                      값을 바꾸면 롤링 재시작한다.
+                    enum:
+                    - Disabled
+                    - Marker
+                    type: string
                   scalePolicy:
                     description: |-
                       ScalePolicy는 멤버 수 변경 가드(membersPerShard 또는 향후 멤버 단위 HPA).
