@@ -4,6 +4,17 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.15] - 2026-11-15
+
+### Changed
+
+- **DB pod resolver 옵션 `timeout:1` · `attempts:3`** — RS · cfg · shard · mongos pod 에
+  `dnsConfig.options` 를 고정 기본으로 붙인다. glibc 기본(timeout 5s)에서는 UDP 질의 하나가
+  유실되면 해석이 5초 멈췄다(2026-11-15 LAN 순단 실측 `dnsResolutionTimeMillis` 5003). 이제
+  유실 1건 ~1s. nameservers · searches 는 `dnsPolicy: ClusterFirst` 그대로. pod template 이
+  바뀌므로 이 판으로 올리면 모든 멤버가 한 번 롤링된다(StatefulSet RollingUpdate · mongos
+  maxUnavailable 1).
+
 ## [1.16.14] - 2026-11-15
 
 ### Added
