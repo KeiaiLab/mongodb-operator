@@ -687,6 +687,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 					Volumes:                   volumes,
 					Affinity:                  buildDefaultAffinity(mdb.Name),
 					TopologySpreadConstraints: commonstopology.Defaulted(nil, mdb.Spec.Members, labels),
+					DNSConfig:                 buildPodDNSConfig(),
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
@@ -1005,6 +1006,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 				},
 				Spec: corev1.PodSpec{
 					SecurityContext: buildDefaultSecurityContext(),
+					DNSConfig:       buildPodDNSConfig(),
 					InitContainers: []corev1.Container{
 						{
 							Name:  "copy-keyfile",
@@ -1265,6 +1267,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 				},
 				Spec: corev1.PodSpec{
 					SecurityContext: buildDefaultSecurityContext(),
+					DNSConfig:       buildPodDNSConfig(),
 					InitContainers: []corev1.Container{
 						{
 							Name:  "copy-keyfile",
@@ -1769,6 +1772,7 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 				},
 				Spec: corev1.PodSpec{
 					SecurityContext: buildDefaultSecurityContext(),
+					DNSConfig:       buildPodDNSConfig(),
 					InitContainers: []corev1.Container{
 						{
 							Name:  "copy-keyfile",
