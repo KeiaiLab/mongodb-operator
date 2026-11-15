@@ -355,7 +355,8 @@ func (r *MongoDBShardedReconciler) isConfigServerReady(ctx context.Context, mdbs
 	if err := r.Get(ctx, types.NamespacedName{Name: mdbsh.Name + "-cfg", Namespace: mdbsh.Namespace}, sts); err != nil {
 		return false
 	}
-	return sts.Status.ReadyReplicas == mdbsh.Spec.ConfigServer.Members
+	cfg := mdbsh.Spec.ConfigServer
+	return r.replicaSetUp(ctx, sts, cfg.Members, cfg.Readiness, mdbsh.Status.ConfigServerInitialized)
 }
 
 func (r *MongoDBShardedReconciler) reconcileShard(ctx context.Context, mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int32) error {
@@ -416,7 +417,8 @@ func (r *MongoDBShardedReconciler) areShardsReady(ctx context.Context, mdbsh *mo
 		if err := r.Get(ctx, types.NamespacedName{Name: stsName, Namespace: mdbsh.Namespace}, sts); err != nil {
 			return false
 		}
-		if sts.Status.ReadyReplicas != mdbsh.Spec.Shards.MembersPerShard {
+		initialized := int(i) < len(mdbsh.Status.ShardsInitialized) && mdbsh.Status.ShardsInitialized[i]
+		if !r.replicaSetUp(ctx, sts, mdbsh.Spec.Shards.MembersPerShard, mdbsh.Spec.Shards.Readiness, initialized) {
 			return false
 		}
 	}

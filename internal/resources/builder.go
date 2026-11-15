@@ -1048,7 +1048,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
-										Command: mongoshPing(27019),
+										Command: mongodReadiness(27019, mdbsh.Spec.ConfigServer.Readiness, searchGateOff),
 									},
 								},
 								InitialDelaySeconds: 10,
@@ -1305,7 +1305,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
-										Command: mongoshPing(27018),
+										Command: mongodReadiness(27018, mdbsh.Spec.Shards.Readiness, shardSearchGate(mdbsh, shardIndex)),
 									},
 								},
 								InitialDelaySeconds: 10,

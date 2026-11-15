@@ -25,6 +25,17 @@ All notable changes to mongodb-operator will be documented in this file.
   달라 재생성이 그 값을 잃게 되면 지우지 않고 reconcile 오류로 거절한다(fail-closed). 차이가
   없으면 무동작. RS 에서 `storage.size` 를 늘려 PVC 를 키운 적이 있으면 이 판에서
   StatefulSet 이 한 번 다시 만들어진다(롤링 0).
+- **shard · cfg readiness 를 replica set 멤버 상태로 판정할 수 있다** — `spec.shards.readiness` ·
+  `spec.configServer.readiness`(`Ping` · `MemberState`, 두 API 버전). `MemberState` 면 mongod
+  readiness 가 `hello` 로 PRIMARY · SECONDARY 일 때만 Ready 다 — STARTUP · STARTUP2(initial
+  sync) · RECOVERING · ROLLBACK · 미초기화 멤버는 NotReady 라 PDB 가 가용 멤버로 세지 않는다.
+  shard 가 mongot router shard(mongot Service 가 고르는 shard)이고 mongot 사이드카가 있으면 그
+  멤버의 모든 사용자 컬렉션 search 색인이 `queryable` 이어야 Ready 다(admin 자격 Secret 으로
+  인증 — 인증 · mongot 오류는 NotReady, fail-closed) → 짓는 동안 mongot Service 밖. liveness 는
+  ping 그대로. shard · cfg headless Service 는 계속 NotReady 주소를 내 initial sync 중인 멤버에
+  피어 · operator 가 닿는다. operator 가 `rs.initiate` 하는 경로는 init 전 대기를 「mongod
+  컨테이너가 전부 실행 중」으로 연다(미초기화 멤버는 Ready 가 될 수 없어 영영 막히던 자리).
+  비우거나 `Ping` 이면 렌더는 바이트 동일(롤링 0). 값을 바꾸면 롤링 재시작한다.
 
 ### Fixed
 

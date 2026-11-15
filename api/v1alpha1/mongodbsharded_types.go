@@ -175,6 +175,14 @@ type ConfigServerSpec struct {
 	// +optional
 	ScalePolicy *ScalePolicy `json:"scalePolicy,omitempty"`
 
+	// Readiness 는 mongod readiness 판정이다. Ping(비우면 같음) = ping 응답.
+	// MemberState = replica set 멤버 상태가 PRIMARY · SECONDARY 일 때만 Ready
+	// (STARTUP · STARTUP2 · RECOVERING · ROLLBACK 은 NotReady — initial sync 중인
+	// 멤버가 PDB 의 가용 멤버로 세어지지 않는다). headless Service 는 NotReady
+	// 주소도 낸다. 값을 바꾸면 롤링 재시작한다.
+	// +optional
+	Readiness ReadinessMode `json:"readiness,omitempty"`
+
 	// External configures an external (pre-existing) config server replica set.
 	// When set, the operator skips creating ConfigServer StatefulSet/Service
 	// and uses the provided connection string for mongos --configdb.
@@ -271,7 +279,28 @@ type ShardSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self.all(k, k.matches('^[A-Za-z][A-Za-z0-9_.]*$'))",message="setParameters keys must match ^[A-Za-z][A-Za-z0-9_.]*$"
 	// +optional
 	SetParameters map[string]SetParameterValue `json:"setParameters,omitempty"`
+
+	// Readiness 는 mongod readiness 판정이다. Ping(비우면 같음) = ping 응답.
+	// MemberState = replica set 멤버 상태가 PRIMARY · SECONDARY 일 때만 Ready
+	// (STARTUP · STARTUP2 · RECOVERING · ROLLBACK 은 NotReady — initial sync 중인
+	// 멤버가 PDB 의 가용 멤버로 세어지지 않는다). headless Service 는 NotReady
+	// 주소도 낸다. 값을 바꾸면 롤링 재시작한다. MemberState 이고 이 shard 가
+	// mongot router shard 면 이 멤버의 search 색인이 전부 queryable 이어야 Ready 다
+	// (admin 자격 Secret 이 필요하다 — 없으면 NotReady 로 남는다).
+	// +optional
+	Readiness ReadinessMode `json:"readiness,omitempty"`
 }
+
+// ReadinessMode 는 shard · cfg mongod readiness 판정 방식이다.
+// +kubebuilder:validation:Enum=Ping;MemberState
+type ReadinessMode string
+
+const (
+	// ReadinessPing — mongod 가 ping 에 응답하면 Ready(기본).
+	ReadinessPing ReadinessMode = "Ping"
+	// ReadinessMemberState — 멤버 상태가 PRIMARY · SECONDARY 일 때만 Ready.
+	ReadinessMemberState ReadinessMode = "MemberState"
+)
 
 // SetParameterValue 는 mongod --setParameter 값 하나다. 비지 않고 줄바꿈이 없다.
 // +kubebuilder:validation:MinLength=1
