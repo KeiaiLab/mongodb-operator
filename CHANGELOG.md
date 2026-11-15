@@ -4,6 +4,17 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **router shard 의 search 색인 readiness 가 컨테이너의 첫 Ready 에만 걸린다** — 1.16.15
+  롤링(2026-11-15 12:10–12:15Z)에서 shard-1(mongot router shard) 의 세 멤버가 동시에
+  NotReady 였다(PDB available 0). 피어 하나가 재시작하면 남은 멤버의 mongot 이 initial sync
+  호스트를 바꾸며 replication 을 다시 세워 색인이 잠시 `queryable` 이 아니었고, 매 probe 가
+  그것을 봤다. 이제 search 검사를 통과하면 컨테이너 쓰기 층에 `/tmp/keiailab-search-ready`
+  를 남기고, 그 뒤 probe 는 멤버 상태(PRIMARY · SECONDARY)만 본다. 새 컨테이너(pod · mongod
+  재시작)는 표지가 없어 다시 색인을 기다린다. 멤버 상태 판정 · 인증 실패 fail-closed 는
+  그대로. probe 명령이 바뀌므로 router shard 가 한 번 롤링된다.
+
 ## [1.16.15] - 2026-11-15
 
 ### Changed

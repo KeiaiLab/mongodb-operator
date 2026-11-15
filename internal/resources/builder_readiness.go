@@ -40,6 +40,19 @@ const (
 		"if(c.name.startsWith('system.')){continue}" +
 		"if(s.getCollection(c.name).aggregate([{$listSearchIndexes:{}}]).toArray().some(i=>!i.queryable)){quit(1)}" +
 		"}}"
+
+	// searchReadyMarker lives in the container's writable layer: a new
+	// container (pod or mongod restart) starts without it.
+	searchReadyMarker = "/tmp/keiailab-search-ready"
+
+	// searchOnceJS gates only the container's first Ready on its search
+	// indexes. A Ready member's mongot rebuilds replication when a peer
+	// restarts and its indexes are briefly not queryable; gating on that took
+	// every member of the shard NotReady at once (2026-11-15).
+	searchOnceJS = "const f=require('fs');" +
+		"if(f.existsSync('" + searchReadyMarker + "')){quit(0)}" +
+		searchQueryableJS +
+		"f.writeFileSync('" + searchReadyMarker + "','')"
 )
 
 // mongodReadiness is the mongod readiness exec command for a shard or config
@@ -51,7 +64,7 @@ func mongodReadiness(port int, mode mongodbv1alpha1.ReadinessMode, gate searchGa
 
 	js := memberStateJS
 	if gate == searchGateOn {
-		js += searchQueryableJS
+		js += searchOnceJS
 	}
 	return []string{"mongosh", "--norc", "--quiet", "--port", strconv.Itoa(port), "--eval", js}
 }
