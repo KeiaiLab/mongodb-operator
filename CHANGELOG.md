@@ -4,6 +4,8 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.14] - 2026-11-15
+
 ### Added
 
 - **`MongoDBSharded` shard · cfg StatefulSet 이 `spec.shards.pod.affinity` ·
