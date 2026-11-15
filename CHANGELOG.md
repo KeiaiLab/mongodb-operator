@@ -14,6 +14,17 @@ All notable changes to mongodb-operator will be documented in this file.
   (`labelSelector: app.kubernetes.io/instance=<cr>`, `matchLabelKeys: [app.kubernetes.io/component]`,
   `topologyKey: kubernetes.io/hostname` — component 가 `shard-N` · `configsvr` 라 RS 마다 따로
   선다). 칸이 비면 렌더는 바이트 동일(롤링 0).
+- **CR 의 storage class · 크기 변경이 StatefulSet 에 닿는다** — `volumeClaimTemplates` 는
+  immutable 이라 operator 는 생성 때만 썼고, 이후 `spec.*.storage.storageClassName` · `size` 를
+  바꿔도 새 멤버는 옛 템플릿으로 PVC 를 받았다. 이제 RS · cfg · shard StatefulSet 의 VCT
+  storageClassName 또는 크기가 CR 과 다르면 StatefulSet 을 orphan 으로 지우고(UID ·
+  resourceVersion precondition) 다음 reconcile 에 다시 만든다. pod · PVC 는 건드리지 않는다 —
+  새 StatefulSet 이 그대로 입양하고, 기존 PVC 는 옛 class 그대로, 새로 만들어지는 PVC 만 새
+  템플릿을 탄다. Event · condition `VolumeClaimTemplatesRecreated` 를 남긴다. VCT 이름 · 개수 ·
+  accessModes 가 다르거나, 보존 중인 replicas(HPA · `scalePolicy.deliberate=false`)가 CR 과
+  달라 재생성이 그 값을 잃게 되면 지우지 않고 reconcile 오류로 거절한다(fail-closed). 차이가
+  없으면 무동작. RS 에서 `storage.size` 를 늘려 PVC 를 키운 적이 있으면 이 판에서
+  StatefulSet 이 한 번 다시 만들어진다(롤링 0).
 
 ### Fixed
 

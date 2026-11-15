@@ -350,7 +350,12 @@ func (r *MongoDBReconciler) reconcileClientService(ctx context.Context, mdb *mon
 func (r *MongoDBReconciler) reconcileStatefulSet(ctx context.Context, mdb *mongodbv1alpha1.MongoDB) error {
 	// HPA 활성 또는 ScalePolicy.Deliberate=false 시 STS replicas를 보존(ADR-0007/0008).
 	preserve := resources.IsRSHPAActive(mdb) || !resources.IsRSScaleDeliberate(mdb)
-	return commonsapply.StatefulSet(ctx, r.Client, r.Scheme, mdb, resources.BuildReplicaSetStatefulSet(mdb), preserve)
+	sts := resources.BuildReplicaSetStatefulSet(mdb)
+	state, err := syncVCT(ctx, vctSync{client: r.Client, recorder: r.Recorder, owner: mdb, desired: sts, preserve: preserve})
+	if err != nil || state == vctWait {
+		return err
+	}
+	return commonsapply.StatefulSet(ctx, r.Client, r.Scheme, mdb, sts, preserve)
 }
 
 // reconcileNetworkPolicy는 spec.networkPolicy가 enabled일 때만 NetworkPolicy를 생성한다.
