@@ -4,6 +4,8 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.16] - 2026-11-15
+
 ### Fixed
 
 - **router shard 의 search 색인 readiness 가 컨테이너의 첫 Ready 에만 걸린다** — 1.16.15
