@@ -332,6 +332,10 @@ func (r *MongoDBShardedReconciler) reconcileConfigServer(ctx context.Context, md
 	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, resources.BuildPEMMergeInitContainer())
 	}
+	state, err := syncVCT(ctx, vctSync{client: r.Client, recorder: r.Recorder, owner: mdbsh, desired: sts, preserve: preserve})
+	if err != nil || state == vctWait {
+		return err
+	}
 	return commonsapply.StatefulSet(ctx, r.Client, r.Scheme, mdbsh, sts, preserve)
 }
 
@@ -370,6 +374,10 @@ func (r *MongoDBShardedReconciler) reconcileShard(ctx context.Context, mdbsh *mo
 	sts := resources.BuildShardStatefulSet(mdbsh, shardIndex)
 	if mdbsh.Spec.TLS != nil && mdbsh.Spec.TLS.Enabled {
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, resources.BuildPEMMergeInitContainer())
+	}
+	state, err := syncVCT(ctx, vctSync{client: r.Client, recorder: r.Recorder, owner: mdbsh, desired: sts, preserve: preserve})
+	if err != nil || state == vctWait {
+		return err
 	}
 	return commonsapply.StatefulSet(ctx, r.Client, r.Scheme, mdbsh, sts, preserve)
 }
