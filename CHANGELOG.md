@@ -4,6 +4,17 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **`MongoDBSharded` shard · cfg StatefulSet 이 `spec.shards.pod.affinity` ·
+  `spec.configServer.pod.affinity` 를 따른다** — 지금까지 sharded 빌더는 이 칸을 읽지 않고
+  인스턴스 전체 공통 preferred host spread 만 썼다. 이제 기본 spread 에 CR 의 affinity 를
+  합친다: `nodeAffinity` · `podAffinity` · `podAntiAffinity.required` 는 그대로, `podAntiAffinity.preferred`
+  는 기본 항 뒤에 붙는다. RS 단위 hard host anti-affinity 는 required 항 하나로 준다
+  (`labelSelector: app.kubernetes.io/instance=<cr>`, `matchLabelKeys: [app.kubernetes.io/component]`,
+  `topologyKey: kubernetes.io/hostname` — component 가 `shard-N` · `configsvr` 라 RS 마다 따로
+  선다). 칸이 비면 렌더는 바이트 동일(롤링 0).
+
 ## [1.16.13] - 2026-11-14
 
 ### Fixed
