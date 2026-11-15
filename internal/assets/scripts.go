@@ -58,6 +58,12 @@ func RenderStepDown(port int) (string, error) {
 	return render("scripts/prestop-stepdown.sh.tpl", stepDownData{Port: port})
 }
 
+// RenderResyncMarker는 재동기 표지 init 스크립트를 반환한다. 이 pod 의 표지 token 이
+// dbpath 의 token 과 다르면 dbpath 를 비우고 token 을 쓴다(멤버가 피어에서 initial sync).
+func RenderResyncMarker() (string, error) {
+	return render("scripts/resync-marker.sh.tpl", nil)
+}
+
 // RenderBackup는 mongodump → S3 또는 PVC 분기로 백업 스크립트를 반환.
 // storageType은 "s3" 또는 "pvc". compressionFlag는 "--gzip" / "--archive" 등.
 func RenderBackup(storageType, clusterName, compressionFlag string) (string, error) {

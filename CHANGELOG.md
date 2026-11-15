@@ -36,6 +36,17 @@ All notable changes to mongodb-operator will be documented in this file.
   피어 · operator 가 닿는다. operator 가 `rs.initiate` 하는 경로는 init 전 대기를 「mongod
   컨테이너가 전부 실행 중」으로 연다(미초기화 멤버는 Ready 가 될 수 없어 영영 막히던 자리).
   비우거나 `Ping` 이면 렌더는 바이트 동일(롤링 0). 값을 바꾸면 롤링 재시작한다.
+- **재동기 표지로 shard · cfg 멤버를 빈 볼륨에서 다시 짓는다** — `spec.shards.resync` ·
+  `spec.configServer.resync`(`Disabled` · `Marker`, 두 API 버전). `Marker` 면 init container
+  `resync-marker`(copy-keyfile 바로 뒤)가 선택적 ConfigMap `<cr>-resync` 의 자기 pod 이름 키
+  값을 dbpath(shard `/data/db` — mongot `search-index` 포함, cfg `/data/configdb`)의
+  `.keiailab-resync-token` 과 비교한다: 키가 없으면 그대로, 같으면 이미 했으니 그대로, 다르면
+  dbpath 를 비운 뒤(`lost+found` 제외) 그 값을 쓴다 → mongod 가 빈 데이터로 떠 피어에서
+  initial sync(O3 피어 가드가 ordinal-0 의 재-initiate 를 막는다). 값이 모호하면(빈 값 · 여러
+  줄 · `[A-Za-z0-9._-]` 1–128자 밖 · 파일 아님) 아무것도 지우지 않고 exit 1 — pod 이 뜨지
+  않는다(fail-closed). 비운 뒤에만 값을 써서 중간에 죽으면 다음 기동이 다시 비운다.
+  operator 는 ConfigMap 을 만들거나 쓰지 않는다(쓰는 쪽은 converger). 비우거나 `Disabled` 면
+  렌더는 바이트 동일(롤링 0). 값을 바꾸면 롤링 재시작한다.
 
 ### Fixed
 
