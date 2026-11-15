@@ -573,14 +573,14 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 		}
 
 		containers = append(containers, corev1.Container{
-			Name:  "exporter",
+			Name:  exporterContainer,
 			Image: exporterImg,
 			Ports: []corev1.ContainerPort{
 				{Name: metricsPortName, ContainerPort: metricsPort, Protocol: corev1.ProtocolTCP},
 			},
 			Args: []string{
 				"--collect-all",
-				"--compatible-mode",
+				exporterCompatFlag,
 			},
 			Env: []corev1.EnvVar{
 				{
@@ -1079,6 +1079,7 @@ func BuildConfigServerStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1
 	}
 
 	applyResyncMarker(sts, mdbsh.Spec.ConfigServer.Resync, mdbsh.Name, "/data/configdb")
+	applyMemberExporter(sts, mdbsh, MemberExporterConfigKey)
 
 	// cycle 16: sharded ConfigServer 에도 oplog tailer / audit forwarder sidecar.
 	if IsOplogTailerEnabled(mdbsh.Spec.Backup) {
@@ -1338,6 +1339,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 	}
 
 	applyResyncMarker(sts, mdbsh.Spec.Shards.Resync, mdbsh.Name, "/data/db")
+	applyMemberExporter(sts, mdbsh, MemberExporterShardKey)
 
 	// mongot(MongoDB Search) sidecar — shard 별 주입(annotation 시). 각 shard replicaSet 의 mongot 은
 	// 자기 shard 데이터만 인덱싱하며 localhost mongod(27018) 로 topology 연결(별도 STS 비호환).
@@ -1690,12 +1692,12 @@ func BuildMongosDeployment(mdbsh *mongodbv1alpha1.MongoDBSharded) *appsv1.Deploy
 	// Add exporter sidecar if monitoring enabled
 	if mdbsh.Spec.Monitoring != nil && mdbsh.Spec.Monitoring.Enabled {
 		containers = append(containers, corev1.Container{
-			Name:  "exporter",
+			Name:  exporterContainer,
 			Image: exporterImage,
 			Ports: []corev1.ContainerPort{
 				{Name: metricsPortName, ContainerPort: metricsPort},
 			},
-			Args: []string{"--collect-all", "--compatible-mode"},
+			Args: []string{"--collect-all", exporterCompatFlag},
 			Env: []corev1.EnvVar{
 				{
 					Name: envMongoDBURI,
