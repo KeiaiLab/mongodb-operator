@@ -35,6 +35,36 @@ if [ -z "$RS_NAME" ] || [ -z "$MEMBERS" ]; then
   echo "FATAL: MONGO_REPLSET or MONGO_MEMBERS unset" >&2
   exit 1
 fi
+
+# 피어 가드 (fail-closed). 빈 dbpath 로 다시 뜬 ordinal-0 도 94 를 낸다 — 피어가
+# 이미 RS 에 있으면 initiate 는 같은 이름의 딴 RS 를 만든다.
+#   피어 하나라도 setName  -> RS 가 있다. initiate 하지 않고 exit 0 (하트비트로 합류)
+#   응답 없는 피어가 있음   -> 판정 불가. 기한(초) 뒤에도 그대로면 exit 1 (재시작이 재시도)
+#   전원 응답 · setName 0   -> 최초 부트스트랩. initiate
+PEER_DEADLINE=$((SECONDS + ${MONGO_PEER_WAIT_SECONDS:-60}))
+while :; do
+  SILENT=""
+  for m in $(echo "$MEMBERS" | tr ',' ' '); do
+    case "$m" in "$HOSTNAME".*) continue ;; esac
+    if ! SET=$(mongosh --quiet "mongodb://$m/?directConnection=true&serverSelectionTimeoutMS=5000&connectTimeoutMS=5000" \
+      --eval "print(db.adminCommand({hello:1}).setName || '')" 2>/dev/null); then
+      SILENT="$SILENT $m"
+      continue
+    fi
+    if [ -n "$SET" ]; then
+      echo "peer $m reports setName=$SET — replica set exists, rs.initiate skipped, exit 0"
+      exit 0
+    fi
+  done
+  [ -z "$SILENT" ] && break
+  [ "$SECONDS" -ge "$PEER_DEADLINE" ] && break
+  sleep 2
+done
+if [ -n "$SILENT" ]; then
+  echo "FATAL: peers silent:$SILENT — rs.initiate refused (fail-closed), retry on restart" >&2
+  exit 1
+fi
+
 echo "rs.initiate: replSet=$RS_NAME members=$MEMBERS configsvr=$CONFIGSVR_FLAG"
 # JS literal 안에 환경변수를 안전하게 주입 (process.env 사용).
 RS_NAME="$RS_NAME" MEMBERS="$MEMBERS" CONFIGSVR_FLAG="$CONFIGSVR_FLAG" \
