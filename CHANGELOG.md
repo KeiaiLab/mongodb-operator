@@ -15,6 +15,19 @@ All notable changes to mongodb-operator will be documented in this file.
   `topologyKey: kubernetes.io/hostname` — component 가 `shard-N` · `configsvr` 라 RS 마다 따로
   선다). 칸이 비면 렌더는 바이트 동일(롤링 0).
 
+### Fixed
+
+- **빈 데이터로 다시 뜬 ordinal-0 이 같은 이름의 딴 replica set 을 만들 수 있었다** —
+  `bootstrap-admin.sh` 는 자기 mongod 의 `rs.status()` 가 94(NotYetInitialized)면 바로
+  `rs.initiate` 를 쳤다. dbpath 가 빈 볼륨(새 볼륨 · 대체 볼륨 · 재동기)으로 뜬 ordinal-0 도
+  피어 하트비트를 받기 전엔 94 를 낸다. 이제 initiate 전에 `MONGO_MEMBERS` 의 다른 멤버에
+  `hello` 를 묻는다: 하나라도 `setName` 을 내면 RS 가 있는 것이라 initiate 하지 않고 exit 0
+  (하트비트로 합류해 initial sync), 응답 없는 피어가 있으면 판정하지 않는다 — 2초 간격으로
+  최대 60초(`MONGO_PEER_WAIT_SECONDS`) 다시 묻고, 그 뒤에도 그대로면 exit 1 (postStart 실패 →
+  컨테이너 재시작이 재시도). 피어 하나의 질의는 5초에서 끊는다. 전원이 응답하고
+  아무도 `setName` 이 없을 때만 initiate 한다. 최초 부트스트랩은 피어가 다 뜰 때까지 늦어질
+  뿐이다(Parallel 이라 보통 수 초).
+
 ## [1.16.13] - 2026-11-14
 
 ### Fixed
