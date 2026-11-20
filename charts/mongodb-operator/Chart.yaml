@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for MongoDB — ReplicaSets, Sharded Clusters with auto scale-out, S3/PVC Backup, TLS, and LDAP. MIT licensed.
 type: application
-version: 1.16.17
-appVersion: "1.16.17"
+version: 1.16.18
+appVersion: "1.16.18"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -151,7 +151,7 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:v1.16.17
+      image: ghcr.io/keiailab/mongodb-operator:v1.16.18
     - name: mongodb
       image: mongo:9.0.2
       whitelisted: true
@@ -161,7 +161,7 @@ annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
     - kind: added
-      description: "Annotation search.mongodb.keiailab.com/mongot-data-memory puts mongot data in a memory emptyDir of that sizeLimit instead of the mongod data PVC subPath. mongot rewrites and fsyncs configJournal.json about once a second, which on a network block volume is a steady stream of replicated writes. Unset or invalid values change nothing and roll nothing."
+      description: "MongoDBSharded member exporter sidecars (monitoring.members: Enabled) read spec.monitoring.exporter.resources, one entry at a time. An unset entry keeps the built-in value (requests 50m/64Mi, limits 200m/256Mi), a limit of 0 removes that limit, and a value that is set wins over a built-in one. With the block unset the pod spec is unchanged and nothing rolls."
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
