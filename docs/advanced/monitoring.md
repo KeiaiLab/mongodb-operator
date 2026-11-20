@@ -111,8 +111,11 @@ a time:
   only the CPU limit.
 - A limit of `0` removes that limit (`limits: {cpu: "0"}` runs the exporter
   without a CPU limit).
-- A request above its limit is lowered to the limit, so `limits: {cpu: 30m}`
-  alone also sets the CPU request to `30m`.
+- A value you set wins over a built-in one. `limits: {cpu: 30m}` alone also
+  lowers the CPU request to `30m`, and `requests: {memory: 1Gi}` alone also
+  raises the memory limit to `1Gi`.
+- With both set for the same resource, a request above its limit is lowered to
+  the limit.
 - Other resource names (for example `ephemeral-storage`) pass through.
 
 A scrape is a short CPU burst. If `container_cpu_cfs_throttled_periods_total`

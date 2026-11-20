@@ -438,20 +438,13 @@ type MongoDBRole struct {
 	DB string `json:"db"`
 }
 
-// MonitoringSpec defines Prometheus monitoring configuration
 // MonitoringSpec defines monitoring configuration.
 //
-// Deprecated: spec 정의되어 있으나 *현 controller 미구현* — 사용자가 본 영역
-// 설정해도 silent ignore (UX 함정). ADR-0018 Phase 1 단계.
-//
-// 단계적 해소:
-//   - Phase 1 (즉시): godoc deprecation marker (본 코드).
-//   - Phase 2 (C25 Prometheus 도입 후): 사용 빈도 측정 후 옵션 결정.
-//   - Phase 3 (조건부): v2alpha1 삭제 또는 valkey 패턴 controller 구현.
-//
-// 임시 우회: chart-level `templates/servicemonitor.yaml` 정적 manifest 가
-// operator pod 의 metrics endpoint scrape 만 cover (CR 인스턴스 metrics 는
-// 별도 외부 ServiceMonitor 작성 필요).
+// enabled, exporter and members are read by the controllers. serviceMonitor
+// and prometheusRules are not: setting them has no effect, and each carries
+// its own Deprecated note (ADR-0018 Phase 1). Until they are resolved, write
+// a ServiceMonitor for the CR instances by hand; the chart's
+// `templates/servicemonitor.yaml` covers only the operator pod.
 type MonitoringSpec struct {
 	// Enabled enables Prometheus monitoring
 	// +kubebuilder:default=true
@@ -536,8 +529,11 @@ type ExporterSpec struct {
 	// Resources overrides the resources of the MongoDBSharded member exporter
 	// sidecars, one entry at a time. An unset entry keeps the built-in value:
 	// requests cpu 50m, memory 64Mi; limits cpu 200m, memory 256Mi. A limit of
-	// 0 removes that limit. A request above its limit is lowered to the
-	// limit. Changing a value rolls the shard and config server pods.
+	// 0 removes that limit. A value that is set wins over a built-in one: a
+	// limit set below the built-in request lowers the request, and a request
+	// set above the built-in limit raises the limit. With both set, a request
+	// above its limit is lowered to the limit. Changing a value rolls the
+	// shard and config server pods.
 	// +optional
 	Resources ResourcesSpec `json:"resources,omitempty"`
 }

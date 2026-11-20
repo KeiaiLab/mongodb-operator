@@ -15562,8 +15562,11 @@ spec:
                           Resources overrides the resources of the MongoDBSharded member exporter
                           sidecars, one entry at a time. An unset entry keeps the built-in value:
                           requests cpu 50m, memory 64Mi; limits cpu 200m, memory 256Mi. A limit of
-                          0 removes that limit. A request above its limit is lowered to the
-                          limit. Changing a value rolls the shard and config server pods.
+                          0 removes that limit. A value that is set wins over a built-in one: a
+                          limit set below the built-in request lowers the request, and a request
+                          set above the built-in limit raises the limit. With both set, a request
+                          above its limit is lowered to the limit. Changing a value rolls the
+                          shard and config server pods.
                         properties:
                           limits:
                             additionalProperties:
@@ -39606,8 +39609,11 @@ spec:
                           Resources overrides the resources of the MongoDBSharded member exporter
                           sidecars, one entry at a time. An unset entry keeps the built-in value:
                           requests cpu 50m, memory 64Mi; limits cpu 200m, memory 256Mi. A limit of
-                          0 removes that limit. A request above its limit is lowered to the
-                          limit. Changing a value rolls the shard and config server pods.
+                          0 removes that limit. A value that is set wins over a built-in one: a
+                          limit set below the built-in request lowers the request, and a request
+                          set above the built-in limit raises the limit. With both set, a request
+                          above its limit is lowered to the limit. Changing a value rolls the
+                          shard and config server pods.
                         properties:
                           limits:
                             additionalProperties:

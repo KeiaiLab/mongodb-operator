@@ -107,9 +107,10 @@ func TestMemberExporterResources_ZeroLimitRemoves(t *testing.T) {
 		map[string]string{"memory": "256Mi"})
 }
 
-// A limit below the request lowers the request to it, so the pod template
-// stays valid whichever side was left at its built-in value.
-func TestMemberExporterResources_RequestCappedByLimit(t *testing.T) {
+// A value that is set wins over a built-in one, so the pod template stays
+// valid whichever side was left out: a limit below the built-in request lowers
+// the request, a request above the built-in limit raises the limit.
+func TestMemberExporterResources_SetValueMovesBuiltIn(t *testing.T) {
 	sh := withExporterResources(nil, corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("30m")})
 	requireExporterResources(t, BuildShardStatefulSet(sh, 0),
 		map[string]string{"cpu": "30m", "memory": "64Mi"},
@@ -117,8 +118,35 @@ func TestMemberExporterResources_RequestCappedByLimit(t *testing.T) {
 
 	sh = withExporterResources(corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("1Gi")}, nil)
 	requireExporterResources(t, BuildShardStatefulSet(sh, 0),
-		map[string]string{"cpu": "50m", "memory": "256Mi"},
-		map[string]string{"cpu": "200m", "memory": "256Mi"})
+		map[string]string{"cpu": "50m", "memory": "1Gi"},
+		map[string]string{"cpu": "200m", "memory": "1Gi"})
+
+	sh = withExporterResources(corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("500m")}, nil)
+	requireExporterResources(t, BuildConfigServerStatefulSet(sh),
+		map[string]string{"cpu": "500m", "memory": "64Mi"},
+		map[string]string{"cpu": "500m", "memory": "256Mi"})
+}
+
+// With both sides set and the request above the limit, the limit wins.
+func TestMemberExporterResources_SetRequestCappedBySetLimit(t *testing.T) {
+	sh := withExporterResources(
+		corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2"), corev1.ResourceMemory: resource.MustParse("1Gi")},
+		corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1"), corev1.ResourceMemory: resource.MustParse("128Mi")},
+	)
+	requireExporterResources(t, BuildShardStatefulSet(sh, 0),
+		map[string]string{"cpu": "1", "memory": "128Mi"},
+		map[string]string{"cpu": "1", "memory": "128Mi"})
+}
+
+// A request above the built-in limit with that limit removed stays as set.
+func TestMemberExporterResources_RequestAboveRemovedLimit(t *testing.T) {
+	sh := withExporterResources(
+		corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("500m")},
+		corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("0")},
+	)
+	requireExporterResources(t, BuildShardStatefulSet(sh, 0),
+		map[string]string{"cpu": "500m", "memory": "64Mi"},
+		map[string]string{"memory": "256Mi"})
 }
 
 // Resource names without a built-in value pass through.
@@ -134,8 +162,7 @@ func TestMemberExporterResources_OtherNames(t *testing.T) {
 // next build or back into the spec.
 func TestMemberExporterResources_NoSideEffects(t *testing.T) {
 	off := goldenShardSharded()
-	//lint:ignore SA1019 the member exporter fields of MonitoringSpec are read.
-	off.Spec.Monitoring = &mongodbv1alpha1.MonitoringSpec{ //nolint:staticcheck
+	off.Spec.Monitoring = &mongodbv1alpha1.MonitoringSpec{
 		Exporter: &mongodbv1alpha1.ExporterSpec{Resources: mongodbv1alpha1.ResourcesSpec{
 			Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1")},
 		}},

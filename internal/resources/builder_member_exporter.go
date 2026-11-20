@@ -114,6 +114,7 @@ func applyMemberExporter(sts *appsv1.StatefulSet, mdbsh *mongodbv1alpha1.MongoDB
 //	limits.cpu: 1           requests 50m/64Mi   limits 1/256Mi
 //	limits.cpu: 0           requests 50m/64Mi   limits -/256Mi
 //	limits.cpu: 30m         requests 30m/64Mi   limits 30m/256Mi
+//	requests.memory: 1Gi    requests 50m/1Gi    limits 200m/1Gi
 func memberExporterResources(exporter *mongodbv1alpha1.ExporterSpec) corev1.ResourceRequirements {
 	res := corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
@@ -142,10 +143,17 @@ func memberExporterResources(exporter *mongodbv1alpha1.ExporterSpec) corev1.Reso
 		res.Limits[name] = q.DeepCopy()
 	}
 
-	// The API server rejects a request above its limit; lower the request.
+	// The API server rejects a request above its limit. A limit from the spec
+	// lowers the request; a built-in limit rises to the request from the spec.
 	for name, limit := range res.Limits {
-		if req, ok := res.Requests[name]; ok && req.Cmp(limit) > 0 {
+		req, ok := res.Requests[name]
+		if !ok || req.Cmp(limit) <= 0 {
+			continue
+		}
+		if _, set := exporter.Resources.Limits[name]; set {
 			res.Requests[name] = limit.DeepCopy()
+		} else {
+			res.Limits[name] = req.DeepCopy()
 		}
 	}
 

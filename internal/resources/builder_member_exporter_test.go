@@ -30,7 +30,7 @@ func containerNamed(sts *appsv1.StatefulSet, name string) *corev1.Container {
 }
 
 func withMemberMonitoring(sh *mongodbv1alpha1.MongoDBSharded, mode mongodbv1alpha1.MemberMonitoring) *mongodbv1alpha1.MongoDBSharded {
-	sh.Spec.Monitoring = &mongodbv1alpha1.MonitoringSpec{Members: mode} //nolint:staticcheck
+	sh.Spec.Monitoring = &mongodbv1alpha1.MonitoringSpec{Members: mode}
 	return sh
 }
 
@@ -64,7 +64,7 @@ func TestMemberExporter_DisabledKeepsGolden(t *testing.T) {
 	require.Equal(t, want, string(shardStatefulSetJSON(t, sh)))
 
 	on := goldenShardSharded()
-	on.Spec.Monitoring = &mongodbv1alpha1.MonitoringSpec{Enabled: true} //nolint:staticcheck
+	on.Spec.Monitoring = &mongodbv1alpha1.MonitoringSpec{Enabled: true}
 	require.Equal(t, want, string(shardStatefulSetJSON(t, on)))
 	require.Equal(t, BuildConfigServerStatefulSet(goldenShardSharded()), BuildConfigServerStatefulSet(on))
 }
