@@ -567,10 +567,8 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 	// Add exporter sidecar if monitoring enabled
 	if mdb.Spec.Monitoring != nil && mdb.Spec.Monitoring.Enabled {
 		exporterImg := exporterImage
-		//lint:ignore SA1019 ADR-0018 Phase 1: deprecated Exporter 필드는 Phase 2 결정 전까지 읽기 호환성 보존.
-		if mdb.Spec.Monitoring.Exporter != nil && mdb.Spec.Monitoring.Exporter.Image != "" { //nolint:staticcheck
-			//lint:ignore SA1019 ADR-0018 Phase 1: deprecated Exporter.Image 읽기 호환성 보존.
-			exporterImg = mdb.Spec.Monitoring.Exporter.Image //nolint:staticcheck
+		if mdb.Spec.Monitoring.Exporter != nil && mdb.Spec.Monitoring.Exporter.Image != "" {
+			exporterImg = mdb.Spec.Monitoring.Exporter.Image
 		}
 
 		containers = append(containers, corev1.Container{

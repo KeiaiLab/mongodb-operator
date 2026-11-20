@@ -473,11 +473,11 @@ type MonitoringSpec struct {
 	// +optional
 	PrometheusRules *PrometheusRulesSpec `json:"prometheusRules,omitempty"`
 
-	// Exporter configures the MongoDB exporter sidecar
+	// Exporter configures the MongoDB exporter sidecars.
 	//
-	// Deprecated: ADR-0018 Phase 1 — controller 미구현. keiailab 운영의 mongodb
-	// exporter 는 chart values `mongodb.exporterImage` + sharded mongos pod 의
-	// sidecar 정적 정의로 cover.
+	// MongoDB (replica set) reads image only. MongoDBSharded reads resources
+	// only, and only for the shard and config server member exporters
+	// (members: Enabled); the mongos exporter keeps its built-in values.
 	// +optional
 	Exporter *ExporterSpec `json:"exporter,omitempty"`
 
@@ -533,7 +533,11 @@ type ExporterSpec struct {
 	// +kubebuilder:default="percona/mongodb_exporter:0.53.0"
 	Image string `json:"image,omitempty"`
 
-	// Resources defines exporter resource requirements
+	// Resources overrides the resources of the MongoDBSharded member exporter
+	// sidecars, one entry at a time. An unset entry keeps the built-in value:
+	// requests cpu 50m, memory 64Mi; limits cpu 200m, memory 256Mi. A limit of
+	// 0 removes that limit. A request above its limit is lowered to the
+	// limit. Changing a value rolls the shard and config server pods.
 	// +optional
 	Resources ResourcesSpec `json:"resources,omitempty"`
 }

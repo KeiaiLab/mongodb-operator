@@ -81,6 +81,47 @@ spec:
     enabled: true
 ```
 
+### Member Exporters for a Sharded Cluster
+
+`spec.monitoring.members: Enabled` adds a `mongodb_exporter` sidecar (port `9216`)
+to every shard and config server pod. Each one reads only its own `mongod` and
+reports replica set state, replication lag, oplog window and `dbStats`.
+
+```yaml
+  monitoring:
+    enabled: true
+    members: Enabled
+    exporter:
+      resources:
+        limits:
+          cpu: "1"
+```
+
+`spec.monitoring.exporter.resources` overrides the sidecar resources one entry at
+a time:
+
+| Entry | Built-in value |
+|---|---|
+| `requests.cpu` | `50m` |
+| `requests.memory` | `64Mi` |
+| `limits.cpu` | `200m` |
+| `limits.memory` | `256Mi` |
+
+- An entry you leave out keeps its built-in value. The example above changes
+  only the CPU limit.
+- A limit of `0` removes that limit (`limits: {cpu: "0"}` runs the exporter
+  without a CPU limit).
+- A request above its limit is lowered to the limit, so `limits: {cpu: 30m}`
+  alone also sets the CPU request to `30m`.
+- Other resource names (for example `ephemeral-storage`) pass through.
+
+A scrape is a short CPU burst. If `container_cpu_cfs_throttled_periods_total`
+grows for the `exporter` container, raise or remove the CPU limit.
+
+Changing `members` or `exporter.resources` rolls the shard and config server
+pods. With the block unset the pod spec is unchanged. The mongos and replica set
+exporters do not read `exporter.resources`.
+
 ## ServiceMonitor Configuration
 
 > **⚠️ Important (ADR-0018)**: `spec.monitoring.serviceMonitor` field 는 *현재

@@ -84,6 +84,9 @@ dead code 보존 < Prometheus 부재 환경의 즉시 결정 cost. C25 해소 + 
 ### 후속 작업
 
 - Phase 1 PR (별 cycle): godoc deprecation marker + chart docs.
+- 2026-11-21: `spec.monitoring.exporter` 는 더 이상 orphan 이 아니다 — `image` 는 RS exporter,
+  `resources` 는 MongoDBSharded member exporter 가 읽는다. 필드의 `Deprecated:` 표기 제거.
+  `serviceMonitor` · `prometheusRules` 는 Phase 1 그대로.
 - C25 해소 (Prometheus 도입) 후 Phase 2 trigger event.
 - ADR-0017 의 *cross-cut audit metric* 에 *orphan deprecation 30일 audit*
   추가 candidate.

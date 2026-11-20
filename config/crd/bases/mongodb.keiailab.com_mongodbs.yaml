@@ -610,18 +610,23 @@ spec:
                     type: boolean
                   exporter:
                     description: |-
-                      Exporter configures the MongoDB exporter sidecar
+                      Exporter configures the MongoDB exporter sidecars.
 
-                      Deprecated: ADR-0018 Phase 1 — controller 미구현. keiailab 운영의 mongodb
-                      exporter 는 chart values `mongodb.exporterImage` + sharded mongos pod 의
-                      sidecar 정적 정의로 cover.
+                      MongoDB (replica set) reads image only. MongoDBSharded reads resources
+                      only, and only for the shard and config server member exporters
+                      (members: Enabled); the mongos exporter keeps its built-in values.
                     properties:
                       image:
                         default: percona/mongodb_exporter:0.53.0
                         description: Image is the exporter image
                         type: string
                       resources:
-                        description: Resources defines exporter resource requirements
+                        description: |-
+                          Resources overrides the resources of the MongoDBSharded member exporter
+                          sidecars, one entry at a time. An unset entry keeps the built-in value:
+                          requests cpu 50m, memory 64Mi; limits cpu 200m, memory 256Mi. A limit of
+                          0 removes that limit. A request above its limit is lowered to the
+                          limit. Changing a value rolls the shard and config server pods.
                         properties:
                           limits:
                             additionalProperties:
@@ -9256,18 +9261,23 @@ spec:
                     type: boolean
                   exporter:
                     description: |-
-                      Exporter configures the MongoDB exporter sidecar
+                      Exporter configures the MongoDB exporter sidecars.
 
-                      Deprecated: ADR-0018 Phase 1 — controller 미구현. keiailab 운영의 mongodb
-                      exporter 는 chart values `mongodb.exporterImage` + sharded mongos pod 의
-                      sidecar 정적 정의로 cover.
+                      MongoDB (replica set) reads image only. MongoDBSharded reads resources
+                      only, and only for the shard and config server member exporters
+                      (members: Enabled); the mongos exporter keeps its built-in values.
                     properties:
                       image:
                         default: percona/mongodb_exporter:0.53.0
                         description: Image is the exporter image
                         type: string
                       resources:
-                        description: Resources defines exporter resource requirements
+                        description: |-
+                          Resources overrides the resources of the MongoDBSharded member exporter
+                          sidecars, one entry at a time. An unset entry keeps the built-in value:
+                          requests cpu 50m, memory 64Mi; limits cpu 200m, memory 256Mi. A limit of
+                          0 removes that limit. A request above its limit is lowered to the
+                          limit. Changing a value rolls the shard and config server pods.
                         properties:
                           limits:
                             additionalProperties:
