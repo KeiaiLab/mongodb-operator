@@ -2,8 +2,8 @@ apiVersion: v2
 name: mongodb-operator
 description: A Kubernetes Operator for MongoDB — ReplicaSets, Sharded Clusters with auto scale-out, S3/PVC Backup, TLS, and LDAP. MIT licensed.
 type: application
-version: 1.16.16
-appVersion: "1.16.16"
+version: 1.16.17
+appVersion: "1.16.17"
 kubeVersion: ">=1.26.0-0"
 
 keywords:
@@ -151,7 +151,7 @@ annotations:
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/images: |
     - name: mongodb-operator
-      image: ghcr.io/keiailab/mongodb-operator:v1.16.16
+      image: ghcr.io/keiailab/mongodb-operator:v1.16.17
     - name: mongodb
       image: mongo:9.0.2
       whitelisted: true
@@ -160,8 +160,8 @@ annotations:
       whitelisted: true
   artifacthub.io/prerelease: "false"
   artifacthub.io/changes: |
-    - kind: fixed
-      description: "On the mongot router shard, MemberState readiness checks search indexes only until the container is first Ready; later probes check member state only, so a peer restart no longer takes every member NotReady. The router shard rolls once."
+    - kind: added
+      description: "Annotation search.mongodb.keiailab.com/mongot-data-memory puts mongot data in a memory emptyDir of that sizeLimit instead of the mongod data PVC subPath. mongot rewrites and fsyncs configJournal.json about once a second, which on a network block volume is a steady stream of replicated writes. Unset or invalid values change nothing and roll nothing."
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack
     - url: https://artifacthub.io/packages/helm/cert-manager/cert-manager
