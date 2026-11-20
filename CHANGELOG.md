@@ -4,6 +4,8 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.18] - 2026-11-20
+
 ### Added
 
 - **member exporter 자원을 `spec.monitoring.exporter.resources` 로 정한다** — MongoDBSharded 의
