@@ -4,6 +4,8 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+## [1.16.17] - 2026-11-20
+
 ### Added
 
 - **mongot data 를 메모리 emptyDir 에 두는 annotation `search.mongodb.keiailab.com/mongot-data-memory`**
