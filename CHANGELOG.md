@@ -4,6 +4,18 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **mongot data 를 메모리 emptyDir 에 두는 annotation `search.mongodb.keiailab.com/mongot-data-memory`**
+  — 값이 양의 quantity(예 `2Gi`)면 mongot 사이드카의 `/var/lib/mongot` 이 그 `sizeLimit` 의
+  `emptyDir{medium: Memory}` 가 되고 mongod data PVC 의 `search-index` subPath 는 mount 하지
+  않는다. mongot 은 내용이 같아도 `configJournal.json` 을 초당 1회 이상 다시 쓰고 파일 ·
+  디렉터리를 fsync 한다(0.69.1 · 1.70.6 · 1.79.1 실측). 네트워크 블록 볼륨(Ceph RBD)에서는
+  그 fsync 가 ext4 저널 커밋이 되어 멤버당 초당 13–16건의 복제 쓰기였다 — 5 shard × 3 멤버
+  클러스터에서 풀 전체 쓰기 건수의 절반. data 는 mongod 에서 다시 만드는 파생물이라 pod 가
+  재시작하면 initial sync 로 복구한다(42만 건 · 72차원 36초 실측). annotation 이 없거나 값이
+  틀리면 pod spec 은 이전 판과 같다(무롤링). RS · Sharded 양쪽. ADR-0043.
+
 ## [1.16.16] - 2026-11-15
 
 ### Fixed

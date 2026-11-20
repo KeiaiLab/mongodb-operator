@@ -466,6 +466,7 @@ func BuildReplicaSetStatefulSet(mdb *mongodbv1alpha1.MongoDB) *appsv1.StatefulSe
 	var mongotSidecar, mongotInit *corev1.Container
 	if img := mdb.Annotations[MongotSidecarImageAnnotation]; img != "" {
 		mc, ic, mvols := MongotSidecar(mdb.Name, img, mdb.Annotations[MongotSyncSecretAnnotation])
+		mvols = mongotDataMemory(&mc, mvols, mdb.Annotations[MongotDataMemoryAnnotation])
 		mongotSidecar, mongotInit = &mc, &ic
 		volumes = append(volumes, mvols...)
 		args = append(args, MongotSetParameterArgs(fmt.Sprintf("localhost:%d", mongotGRPCPort), mdb.Annotations[MongotTLSModeAnnotation])...)
@@ -1353,6 +1354,7 @@ func BuildShardStatefulSet(mdbsh *mongodbv1alpha1.MongoDBSharded, shardIndex int
 	// RS 와 동일하게 data PVC subPath(search-index) 공유 — VCT 불변 보존(신규 VCT 없음).
 	if img := mdbsh.Annotations[MongotSidecarImageAnnotation]; img != "" {
 		mc, ic, mvols := MongotSidecar(name, img, mdbsh.Annotations[MongotSyncSecretAnnotation])
+		mvols = mongotDataMemory(&mc, mvols, mdbsh.Annotations[MongotDataMemoryAnnotation])
 		// mongod(Containers[0]) args 에 setParameter(mongotHost=localhost:27028) 추가.
 		sts.Spec.Template.Spec.Containers[0].Args = append(sts.Spec.Template.Spec.Containers[0].Args,
 			MongotSetParameterArgs(fmt.Sprintf("localhost:%d", mongotGRPCPort), mdbsh.Annotations[MongotTLSModeAnnotation])...)
