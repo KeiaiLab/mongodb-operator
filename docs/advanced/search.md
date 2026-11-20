@@ -190,6 +190,35 @@ Notes:
 - Enabling search on a running sharded cluster rolls each shard sequentially to add
   the sidecar; a maintenance window is recommended for large shard counts.
 
+## Keeping `mongot` data off the data volume
+
+By default `mongot` stores its data (`/var/lib/mongot`) in the `search-index` subPath of
+the `mongod` data PVC, so indexes survive pod restarts.
+
+`mongot` rewrites `configJournal.json` about once a second and fsyncs the file and its
+directory each time, even when nothing changed (measured on 0.69.1, 1.70.6 and 1.79.1).
+On a network block volume every one of those fsyncs is a replicated write. If that load
+matters, put the data in memory instead by annotating the source `MongoDB` or
+`MongoDBSharded`:
+
+```yaml
+metadata:
+  annotations:
+    search.mongodb.keiailab.com/mongot-data-memory: "2Gi"
+```
+
+The value is the `sizeLimit` of an `emptyDir` with `medium: Memory`. It must be a positive
+quantity; anything else is ignored and the PVC subPath stays.
+
+- Adding or removing the annotation changes the pod template, so members roll once.
+- Indexes are rebuilt by initial sync on every pod restart (36 s for 420k 72-dimension
+  vectors in our test). Queries return an error while the index is not yet queryable.
+- The index counts against the `mongot` container's memory. Size the limit and the
+  container memory limit for your indexes.
+- The old `search-index` directory on the PVC is left in place and unused.
+
+See ADR-0043 for the measurements.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Action |

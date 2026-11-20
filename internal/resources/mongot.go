@@ -83,6 +83,14 @@ const (
 	// search controller 가 MongoDBSearch.spec.router.mongotShard 를 그대로 전달한다.
 	// mongot Service 의 selector(= 단일 shard) 를 결정한다 — 부재 시 DefaultMongotRouterShard.
 	MongotRouterShardAnnotation = "search.mongodb.keiailab.com/router-shard"
+	// MongotDataMemoryAnnotation — 값이 양의 quantity(예 "2Gi")면 mongot data 를 그 sizeLimit 의
+	// 메모리 emptyDir 에 둔다. mongot 은 내용이 같아도 configJournal.json 을 초당 1회 이상 다시
+	// 쓰고 fsync 한다(0.69.1 · 1.70.6 · 1.79.1 실측) — 네트워크 블록 볼륨에서는 그 fsync 가 전부
+	// 복제 쓰기다. data 는 mongod 에서 다시 만들 수 있는 파생물이라 pod 재시작 때 initial sync 로
+	// 복구한다. 부재 · 틀린 값 = mongod data PVC subPath(영속, 무롤링).
+	MongotDataMemoryAnnotation = "search.mongodb.keiailab.com/mongot-data-memory"
+	// mongotDataMemoryVolume — 위 annotation 이 만드는 메모리 emptyDir volume 이름.
+	mongotDataMemoryVolume = "mongot-data"
 	// DefaultMongotRouterShard — router shard 미지정 시 기본 pin.
 	DefaultMongotRouterShard = "shard-0"
 
@@ -272,6 +280,26 @@ func MongotSidecar(mdbName, image, syncSecretName string) (corev1.Container, cor
 		},
 	}
 	return mongotC, initC, volumes
+}
+
+// mongotDataMemory — MongotDataMemoryAnnotation 값이 양의 quantity 면 mongot 컨테이너의 data
+// mount 를 메모리 emptyDir 로 바꾸고 그 volume 을 더한 목록을 돌려준다. 아니면 그대로 둔다.
+func mongotDataMemory(mongotC *corev1.Container, volumes []corev1.Volume, value string) []corev1.Volume {
+	if value == "" {
+		return volumes
+	}
+	limit, err := resource.ParseQuantity(value)
+	if err != nil || limit.Sign() <= 0 {
+		return volumes
+	}
+	for i := range mongotC.VolumeMounts {
+		if mongotC.VolumeMounts[i].MountPath == mongotBasePath {
+			mongotC.VolumeMounts[i] = corev1.VolumeMount{Name: mongotDataMemoryVolume, MountPath: mongotBasePath}
+		}
+	}
+	return append(volumes, corev1.Volume{Name: mongotDataMemoryVolume, VolumeSource: corev1.VolumeSource{
+		EmptyDir: &corev1.EmptyDirVolumeSource{Medium: corev1.StorageMediumMemory, SizeLimit: &limit},
+	}})
 }
 
 // MongotServiceName — Sharded mongot ClusterIP Service 이름(mongos → mongot 진입점).
