@@ -4,6 +4,17 @@ All notable changes to mongodb-operator will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- **member exporter 자원을 `spec.monitoring.exporter.resources` 로 정한다** — MongoDBSharded 의
+  shard · config server exporter 사이드카(`monitoring.members: Enabled`)는 requests 50m/64Mi ·
+  limits 200m/256Mi 가 코드에 고정이었고 CRD 의 이 칸은 읽히지 않았다. 스크레이프 때 몰리는
+  CPU 가 200m 리밋에서 스로틀됐다. 이제 항목 단위로 덮어쓴다: 적지 않은 항목은 기본값 그대로,
+  리밋 `0` 은 그 리밋을 없애고, 적은 값이 기본값을 이긴다(리밋만 기본 요청보다 낮게 적으면
+  요청이 내려가고, 요청만 기본 리밋보다 높게 적으면 리밋이 올라간다). 둘 다 적었는데 요청이
+  더 크면 요청을 리밋으로 낮춘다. 칸을 비우면 pod spec 은
+  이전 판과 같다(무롤링). 값을 바꾸면 shard · cfg 가 롤링된다. mongos · RS exporter 는 그대로.
+
 ## [1.16.17] - 2026-11-20
 
 ### Added

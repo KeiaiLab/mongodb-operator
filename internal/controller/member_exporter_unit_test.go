@@ -34,7 +34,7 @@ func exporterSharded(mode mongodbv1alpha1.MemberMonitoring) *mongodbv1alpha1.Mon
 	mdbsh := newAdoptedSharded(exporterCR, "9.0.8")
 	mdbsh.UID = "exp-uid"
 	mdbsh.Spec.Auth.AdminCredentialsSecretRef.Name = exporterAdmin
-	mdbsh.Spec.Monitoring = &mongodbv1alpha1.MonitoringSpec{Members: mode} //nolint:staticcheck
+	mdbsh.Spec.Monitoring = &mongodbv1alpha1.MonitoringSpec{Members: mode}
 	return mdbsh
 }
 
@@ -107,7 +107,7 @@ func TestMemberExporterSecret_NoAdminFails(t *testing.T) {
 
 // TestMemberExporterSecret_Disabled — 아무것도 만들지 않는다.
 func TestMemberExporterSecret_Disabled(t *testing.T) {
-	for _, m := range []*mongodbv1alpha1.MonitoringSpec{nil, {Enabled: true}, {Members: mongodbv1alpha1.MemberMonitoringDisabled}} { //nolint:staticcheck
+	for _, m := range []*mongodbv1alpha1.MonitoringSpec{nil, {Enabled: true}, {Members: mongodbv1alpha1.MemberMonitoringDisabled}} {
 		mdbsh := exporterSharded(mongodbv1alpha1.MemberMonitoringDisabled)
 		mdbsh.Spec.Monitoring = m
 		r := exporterReconciler(t, mdbsh, adminSecret())

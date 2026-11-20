@@ -29,6 +29,13 @@ const (
 	// exporter sidecars.
 	exporterContainer  = "exporter"
 	exporterCompatFlag = "--compatible-mode"
+
+	// Member exporter resources when spec.monitoring.exporter.resources
+	// leaves the entry unset.
+	memberExporterCPURequest    = "50m"
+	memberExporterMemoryRequest = "64Mi"
+	memberExporterCPULimit      = "200m"
+	memberExporterMemoryLimit   = "256Mi"
 )
 
 // memberExporterArgs: replica set state and lag (replicasetstatus), oplog
@@ -94,16 +101,61 @@ func applyMemberExporter(sts *appsv1.StatefulSet, mdbsh *mongodbv1alpha1.MongoDB
 				Key:                  key,
 			}},
 		}},
-		Resources: corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("50m"),
-				corev1.ResourceMemory: resource.MustParse("64Mi"),
-			},
-			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("200m"),
-				corev1.ResourceMemory: resource.MustParse("256Mi"),
-			},
-		},
+		Resources:       memberExporterResources(mdbsh.Spec.Monitoring.Exporter),
 		SecurityContext: buildDefaultContainerSecurityContext(),
 	})
+}
+
+// memberExporterResources overlays spec.monitoring.exporter.resources on the
+// built-in values, one entry at a time.
+//
+//	spec                    result
+//	(unset)                 requests 50m/64Mi   limits 200m/256Mi
+//	limits.cpu: 1           requests 50m/64Mi   limits 1/256Mi
+//	limits.cpu: 0           requests 50m/64Mi   limits -/256Mi
+//	limits.cpu: 30m         requests 30m/64Mi   limits 30m/256Mi
+//	requests.memory: 1Gi    requests 50m/1Gi    limits 200m/1Gi
+func memberExporterResources(exporter *mongodbv1alpha1.ExporterSpec) corev1.ResourceRequirements {
+	res := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse(memberExporterCPURequest),
+			corev1.ResourceMemory: resource.MustParse(memberExporterMemoryRequest),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse(memberExporterCPULimit),
+			corev1.ResourceMemory: resource.MustParse(memberExporterMemoryLimit),
+		},
+	}
+	if exporter == nil {
+		return res
+	}
+
+	for name, q := range exporter.Resources.Requests {
+		res.Requests[name] = q.DeepCopy()
+	}
+
+	// A zero limit means no limit: the entry is dropped, not rendered as 0.
+	for name, q := range exporter.Resources.Limits {
+		if q.IsZero() {
+			delete(res.Limits, name)
+			continue
+		}
+		res.Limits[name] = q.DeepCopy()
+	}
+
+	// The API server rejects a request above its limit. A limit from the spec
+	// lowers the request; a built-in limit rises to the request from the spec.
+	for name, limit := range res.Limits {
+		req, ok := res.Requests[name]
+		if !ok || req.Cmp(limit) <= 0 {
+			continue
+		}
+		if _, set := exporter.Resources.Limits[name]; set {
+			res.Requests[name] = limit.DeepCopy()
+		} else {
+			res.Limits[name] = req.DeepCopy()
+		}
+	}
+
+	return res
 }
